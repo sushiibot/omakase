@@ -1,6 +1,6 @@
 # web
 
-Personal agent web app: a SvelteKit SPA (adapter-static, `ssr = false`) installed as a PWA. The bot serves `build/` and the `/api` endpoints.
+Personal agent web app: a SvelteKit SPA (adapter-static, `ssr = false`) installed as a PWA. The personal gateway (`src/personal.ts`, `bun run dev:personal` at the repo root) serves `build/` and the `/api` endpoints.
 
 ```sh
 bun install

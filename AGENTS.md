@@ -7,7 +7,8 @@ AI agent Discord bot with guild config and OpenRouter.
 - **Runtime:** Bun
 - **Type check:** `bunx tsc --noEmit`
 - **Install:** `bun install`
-- **Dev:** `bun dev`
+- **Dev:** `bun dev` (community bot), `bun run dev:personal` (personal gateway). Give each its own
+  `DATABASE_PATH`: both default to `./data/sushii-agent.db`.
 
 ## Web app (`web/`)
 

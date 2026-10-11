@@ -5,6 +5,7 @@
   "scripts": {
     "start": "bun src/index.ts",
     "dev": "bun --watch src/index.ts | pino-pretty",
+    "dev:personal": "bun --watch src/personal.ts | pino-pretty",
     "workspace": "bun src/workspace/index.ts",
     "machine": "bun src/workspace/machine/index.ts",
     "test": "bun test",
