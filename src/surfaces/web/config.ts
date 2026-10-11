@@ -25,7 +25,7 @@ function optionalPort(env: Record<string, string | undefined>, name: string, def
 }
 
 export function parsePersonalConfig(env: Record<string, string | undefined>): PersonalConfig {
-  const databasePath = env["DATABASE_PATH"] ?? "./data/sushii-agent.db";
+  const databasePath = env["DATABASE_PATH"] || "./data/personal.db";
   return {
     webUploadsDir: env["WEB_UPLOADS_DIR"] ?? join(dirname(databasePath), "web-uploads"),
     orchPort: optionalPort(env, "ORCH_PORT", 8788),

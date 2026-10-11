@@ -74,7 +74,7 @@ Create `teams.json` from `teams.example.json` — it's the only source of per-sp
 
 ```bash
 bun src/index.ts          # run the community bot
-bun src/personal.ts       # run the personal gateway (web app + workspace control plane), own DATABASE_PATH
+bun src/personal.ts       # run the personal gateway (web app + workspace control plane), DB ./data/personal.db
 docker compose up -d      # or Docker (./data volume for SQLite)
 ```
 
@@ -87,7 +87,7 @@ docker compose up -d      # or Docker (./data volume for SQLite)
 | `OPENAI_API_KEY` | yes | — | API key for your LLM provider |
 | `OPENAI_BASE_URL` | no | `https://api.anthropic.com/v1` | OpenAI-compatible endpoint |
 | `OPENAI_MODEL` | no | `claude-opus-4-6` | Model name |
-| `DATABASE_PATH` | no | `./data/sushii-agent.db` | SQLite path |
+| `DATABASE_PATH` | no | `./data/sushii-agent.db` (bot), `./data/personal.db` (`src/personal.ts`) | SQLite path |
 | `PRINCIPALS_PATH` | no | `./principals.json` | Path to the manual cross-platform identity registry; missing file = unconfigured |
 | `TEAMS_PATH` | no | `./teams.json` | Path to the team grouping config — the only source of per-space configuration; missing file = unconfigured |
 
