@@ -43,8 +43,8 @@ jobs:
           curl -fsSL "https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-unknown-linux-gnu.tar.gz" \
             | tar -xz -C /usr/local/bin --strip-components=1 "lychee-x86_64-unknown-linux-gnu/lychee"
       # The workspace image ships ripgrep for history/search; without it those tests skip rather than run.
-      - name: Install ripgrep
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep
+      - name: Install ripgrep and ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep ffmpeg
       - run: bun install --frozen-lockfile
       # Keep Git subprocess tests on Bun's established sequential runner within each shard.
       - run: bun run test --shard=${{ matrix.shard }}/2

@@ -14,6 +14,42 @@ Captions show the latest exchange and do not replace durable chat messages.
 **End call**, navigation, a hidden page, or the 15-minute limit ends the call and releases the microphone.
 Dictate remains available outside calls. During a call, the live session owns the microphone.
 
+## Recorded speech
+
+Discord voice messages and web dictation use the same transcription path.
+The server decodes recordings locally with ffmpeg before upload. Docker includes ffmpeg.
+For local development, install ffmpeg and make it available on `PATH`.
+
+The transcription path accepts files up to 50 MiB and recordings up to 30 minutes.
+Web dictation keeps its existing 8 MiB upload limit and five-minute recording limit.
+The server rejects recordings above these limits without submitting incomplete audio.
+
+Short recordings keep their original compressed format.
+Long recordings split into ordered WAV chunks of at most 450 seconds each.
+Each chunk stays below 25 MiB. The splitter prefers quiet boundaries within the last 15 seconds.
+It preserves every sample, including pauses. Transcripts join in recording order.
+If any chunk fails, the entire transcription fails instead of returning incomplete text.
+Cancellation stops decoding and subsequent uploads. Decoding has a 30-second timeout.
+The whole transcription has a five-minute timeout. Web dictation retains its shorter 90-second request timeout.
+
+To skip digitally silent recordings before a paid upload, set `TRANSCRIPTION_SKIP_SILENCE=1` on the bot server.
+This option is off by default. The gate preserves quiet speech and passes background noise through.
+It does not classify speech or remove silent packets from live calls.
+Silent dictation returns the existing `no_speech` response.
+
+### Reference PRs
+
+The [Hermes voice infographic](https://pbs.twimg.com/media/HUAR2DcaMAALZkP?format=jpg&name=medium) points to these PRs:
+
+| Hermes PR                                                                                              | Application to Sushii                                                                                    |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| [#133825: long recordings and upload limits](https://github.com/NousResearch/hermes-agent/pull/133825) | Bounded decoding and ordered chunks near pauses, with conservative upload and duration limits.           |
+| [#133853: streaming transcription](https://github.com/NousResearch/hermes-agent/pull/133853)           | Live calls already show provider captions. Streaming dictation remains future work.                      |
+| [#134135: local turbo catalog](https://github.com/NousResearch/hermes-agent/pull/134135)               | Requires a local STT provider. Sushii currently uses cloud transcription.                                |
+| [#133986: voice turn model](https://github.com/NousResearch/hermes-agent/pull/133986)                  | Live calls already have a separate voice model. Backend requests retain the conversation model.          |
+| [#134176: local transcript previews](https://github.com/NousResearch/hermes-agent/pull/134176)         | Requires local STT. Any future preview must retain full-recording transcription as the final source.     |
+| [#127190: cloud speech gate](https://github.com/NousResearch/hermes-agent/pull/127190)                 | Sushii adds an optional digital-silence gate. Speech detection in background noise requires a VAD model. |
+
 ## Provider setup
 
 Set credentials on the bot server through its secret configuration. Never put keys in browser code.

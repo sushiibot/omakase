@@ -16,7 +16,8 @@ FROM oven/bun:1 AS tools
 # git itself, for simple-git's clone/fetch/push. Neither ships in the base image.
 # poppler-utils: pdftotext/pdftoppm for wiki-sync PDF attachment handling.
 # ripgrep: targeted search over the synced wiki for the search_wiki agent tool (src/modules/wiki-sync/search.ts).
-RUN apt-get update && apt-get install -y --no-install-recommends openssh-client git curl poppler-utils ripgrep \
+# ffmpeg: bounded local decoding and silence-aware chunks for speech transcription.
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client git curl poppler-utils ripgrep ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # lychee: link checker wiki-sync's commit_and_push tool runs before every commit to catch dead
