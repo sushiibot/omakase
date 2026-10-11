@@ -21,7 +21,6 @@ export const KNOWN_PROXIED_TOOLS: readonly string[] = [
   "get_issue_status",
   "list_triaged_issues",
   "file_linear_issue",
-  "team_config",
   "request_current_location",
   "task_manage",
   "machine_files",

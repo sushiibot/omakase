@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { WebConfig } from "../../config.ts";
+import type { WebConfig } from "./config.ts";
 import { applySchema } from "../../db/index.ts";
 import { uploadReadResult } from "../../orchestration/contracts.ts";
 import type { ConnectionInfo } from "../../orchestration/transport/server.ts";

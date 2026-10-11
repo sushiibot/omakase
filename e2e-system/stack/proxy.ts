@@ -13,7 +13,7 @@ http
     headers["tailscale-user-login"] = ownerLogin;
     headers["x-forwarded-for"] = req.socket.remoteAddress;
     const up = http.request(
-      { host: addrs.bot, port: ports.web, localAddress: addrs.trustedPeer, method: req.method, path: req.url, headers },
+      { host: addrs.gateway, port: ports.web, localAddress: addrs.trustedPeer, method: req.method, path: req.url, headers },
       (ur) => {
         res.writeHead(ur.statusCode ?? 502, ur.headers);
         ur.pipe(res);
@@ -31,7 +31,7 @@ http
     for (const [key, value] of Object.entries(req.headers)) if (!/^tailscale-/i.test(key)) headers[key] = value;
     headers["tailscale-user-login"] = ownerLogin;
     headers["x-forwarded-for"] = req.socket.remoteAddress;
-    const upstream = http.request({ host: addrs.bot, port: ports.web, localAddress: addrs.trustedPeer, method: req.method, path: req.url, headers });
+    const upstream = http.request({ host: addrs.gateway, port: ports.web, localAddress: addrs.trustedPeer, method: req.method, path: req.url, headers });
     upstream.on("upgrade", (response, peer, initial) => {
       const lines = [`HTTP/1.1 ${response.statusCode} ${response.statusMessage}`];
       for (let i = 0; i < response.rawHeaders.length; i += 2) lines.push(`${response.rawHeaders[i]}: ${response.rawHeaders[i + 1]}`);
@@ -50,5 +50,5 @@ http
     upstream.end();
   })
   .listen(ports.proxy, addrs.proxy, () => {
-    console.log(`proxy ${addrs.proxy}:${ports.proxy} -> ${addrs.bot}:${ports.web} from ${addrs.trustedPeer}`);
+    console.log(`proxy ${addrs.proxy}:${ports.proxy} -> ${addrs.gateway}:${ports.web} from ${addrs.trustedPeer}`);
   });

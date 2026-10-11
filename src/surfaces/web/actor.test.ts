@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Glob } from "bun";
 import { join } from "node:path";
-import { isVerifiedWebActor, mintWebActor } from "./actor.ts";
+import { resolveOwnerPrincipals } from "../../config.ts";
+import { isVerifiedWebActor, mintWebActor, normalizeLogin, WEB_SURFACE } from "./actor.ts";
 
 describe("web actor", () => {
   test("only the minted object is verified: not a copy, not a look-alike", () => {
@@ -22,4 +23,10 @@ describe("web actor", () => {
     }
     expect(callers).toEqual([join("surfaces", "web", "server.ts")]);
   });
+});
+
+test("principals.json web identities are normalized the way web actors are", () => {
+  const login = "  MixedCase@GitHub ";
+  const out = resolveOwnerPrincipals({ me: { owner: true, identities: { [WEB_SURFACE]: login } } }, undefined, () => {});
+  expect(out.me!.identities[WEB_SURFACE]).toBe(normalizeLogin(login));
 });

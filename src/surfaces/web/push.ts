@@ -4,7 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { buildPushPayload, type PushSubscription as WebPushSubscription } from "@block65/webcrypto-web-push";
 import { webPushSubscriptions } from "../../db/schema.ts";
-import type { WebPushConfig } from "../../config.ts";
+import type { WebPushConfig } from "./config.ts";
 import { getLogger } from "../../logger.ts";
 
 const logger = getLogger("web-push");

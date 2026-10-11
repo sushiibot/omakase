@@ -22,7 +22,7 @@ test("the pre-web Main conversation is imported once and shows like live chat", 
   await expect(answer).toHaveCount(1);
 
   // A second workspace connect finds the import done and adds nothing.
-  await stack.restartBot({ waitReady: true });
+  await stack.restartPersonal({ waitReady: true });
   await page.reload();
   await expect(textbox(page)).toBeVisible();
   await expect(answer).toHaveCount(1);

@@ -1,4 +1,4 @@
-// Real-process e2e runner: builds web/, starts the fake model, proxy, bot and workspace, then runs the
+// Real-process e2e runner: builds web/, starts the fake model, proxy, personal gateway and workspace, then runs the
 // Playwright flows against them. Usage: bun --no-env-file e2e-system/run.ts [playwright args...]
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -36,8 +36,8 @@ function makeTmp(): string {
 const TMP = makeTmp();
 const P = {
   logs: join(TMP, "logs"),
-  botData: join(TMP, "bot-data"),
-  botHome: join(TMP, "bot-home"),
+  personalData: join(TMP, "personal-data"),
+  personalHome: join(TMP, "personal-home"),
   config: join(TMP, "config"),
   wsHome: join(TMP, "ws-data", "home"),
   wsState: join(TMP, "ws-data", "state"),
@@ -45,13 +45,15 @@ const P = {
   pwOut: join(TMP, "playwright"),
 };
 for (const d of Object.values(P)) mkdirSync(d, { recursive: true });
-const DB_PATH = join(P.botData, "sushii-agent.db");
+const DB_PATH = join(P.personalData, "personal.db");
+// The community bot's database, which the gateway imports its tables from on first boot (flows/bot-import).
+const BOT_DB_PATH = join(TMP, "bot-data", "sushii-agent.db");
 const PUSH_CAPTURE = join(TMP, "push.jsonl");
-// The bot's link probe (stack/link-probe.preload.ts) listens here; the control server forwards to it.
+// The gateway's link probe (stack/link-probe.preload.ts) listens here; the control server forwards to it.
 const LINK_SOCKET = join(TMP, "link.sock");
 const SCHEDULER_SOCKET = join(TMP, "scheduler.sock");
 
-/** A Main session from before the web app, which the bot imports once from the workspace (flows/history-import). */
+/** A Main session from before the web app, which the gateway imports once from the workspace (flows/history-import). */
 function seedPreWebSession(): void {
   mkdirSync(join(P.piAgent, "chat"), { recursive: true });
   const at = (s: number) => new Date(Date.UTC(2025, 0, 1, 12, 0, s)).toISOString();
@@ -132,9 +134,9 @@ async function waitFor(what: string, p: Proc, check: () => Promise<boolean> | bo
 }
 
 const proxyURL = `http://${addrs.proxy}:${ports.proxy}`;
-const botUp = async () => (await fetch(`${proxyURL}/api/me`, { headers: { "Sec-Fetch-Site": "same-origin" } })).status === 200;
+const personalUp = async () => (await fetch(`${proxyURL}/api/me`, { headers: { "Sec-Fetch-Site": "same-origin" } })).status === 200;
 const registeredSince = (offset: number) => () => {
-  const buf = readFileSync(logPath("bot")).subarray(offset).toString("utf8");
+  const buf = readFileSync(logPath("personal")).subarray(offset).toString("utf8");
   return buf.includes('"msg":"workspace registered"');
 };
 
@@ -165,23 +167,22 @@ async function preflight(): Promise<void> {
   for (const local of [addrs.trustedPeer, addrs.untrusted]) {
     let got = "";
     try {
-      got = await dialFrom(local, addrs.bot);
+      got = await dialFrom(local, addrs.gateway);
     } catch (err) {
       got = String(err);
     }
     if (got !== local) {
       throw new Error(
-        `loopback aliases unusable: dialing ${addrs.bot} from ${local} gave "${got}". Linux routes all of 127.0.0.0/8 to lo; ` +
-          `on macOS run: sudo ifconfig lo0 alias ${addrs.bot} && sudo ifconfig lo0 alias ${addrs.trustedPeer} && sudo ifconfig lo0 alias ${addrs.untrusted}`,
+        `loopback aliases unusable: dialing ${addrs.gateway} from ${local} gave "${got}". Linux routes all of 127.0.0.0/8 to lo; ` +
+          `on macOS run: sudo ifconfig lo0 alias ${addrs.gateway} && sudo ifconfig lo0 alias ${addrs.trustedPeer} && sudo ifconfig lo0 alias ${addrs.untrusted}`,
       );
     }
   }
   const want: [string, string, number][] = [
     ["proxy", addrs.proxy, ports.proxy],
-    ["web", addrs.bot, ports.web],
+    ["web", addrs.gateway, ports.web],
     ["llm", addrs.local, ports.llm],
-    // The bot binds these two on every interface.
-    ["mcp", "0.0.0.0", ports.mcp],
+    // The gateway binds the workspace transport on every interface.
     ["orch", "0.0.0.0", ports.orch],
     ["control", addrs.local, ports.control],
   ];
@@ -191,7 +192,7 @@ async function preflight(): Promise<void> {
 }
 
 // ── control server: what flows use to reach into the stack ────────────────────────────────────────
-function controlServer(bot: Proc, ws: Proc, llmURL: string) {
+function controlServer(personal: Proc, ws: Proc, llmURL: string) {
   return Bun.serve({
     port: ports.control,
     hostname: addrs.local,
@@ -229,21 +230,21 @@ function controlServer(bot: Proc, ws: Proc, llmURL: string) {
           await ws.exited;
         } else await stop(ws);
         if (tornDown) return new Response("tearing down", { status: 503 });
-        const offset = logSize("bot");
+        const offset = logSize("personal");
         start(ws);
         await waitFor("workspace re-registration", ws, registeredSince(offset));
         return Response.json({ ok: true, pid: ws.child?.pid });
       }
-      if (req.method === "POST" && url.pathname === "/bot/restart") {
-        await stop(bot);
+      if (req.method === "POST" && url.pathname === "/personal/restart") {
+        await stop(personal);
         if (tornDown) return new Response("tearing down", { status: 503 });
-        const offset = logSize("bot");
-        start(bot);
+        const offset = logSize("personal");
+        start(personal);
         if (url.searchParams.get("wait") === "ready") {
-          await waitFor("bot web gateway", bot, botUp);
-          await waitFor("workspace re-registration", bot, registeredSince(offset));
+          await waitFor("personal web gateway", personal, personalUp);
+          await waitFor("workspace re-registration", personal, registeredSince(offset));
         }
-        return Response.json({ ok: true, pid: bot.child?.pid });
+        return Response.json({ ok: true, pid: personal.child?.pid });
       }
       return new Response("not found", { status: 404 });
     },
@@ -321,6 +322,10 @@ async function main(): Promise<number> {
   const distDir = join(REPO, "web", "build");
   if (!existsSync(join(distDir, "index.html"))) throw new Error(`${distDir} has no index.html; build web/ first`);
 
+  mkdirSync(join(TMP, "bot-data"), { recursive: true });
+  const seeded = await runToExit([BUN, "--no-env-file", join(HERE, "stack", "seed-bot-db.ts"), BOT_DB_PATH], REPO, { PATH: process.env["PATH"] ?? "/usr/bin:/bin", OPENAI_API_KEY: "e2e-stub" });
+  if (seeded !== 0) throw new Error(`seeding the bot database failed (${seeded})`);
+
   const vapid = await vapidPair();
   const orchSecret = crypto.randomUUID();
   const ownerDiscordId = "100000000000000001";
@@ -335,28 +340,25 @@ async function main(): Promise<number> {
   const portEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => /^E2E_/.test(k))) as Record<string, string>;
   const guard = join(HERE, "stack", "net-guard.preload.ts");
 
-  const llm: Proc = { name: "llm", cmd: [BUN, "--no-env-file", join(HERE, "stack", "fake-llm.ts")], cwd: HERE, env: { ...common, ...portEnv, HOME: P.botHome } };
-  const proxy: Proc = { name: "proxy", cmd: [BUN, "--no-env-file", join(HERE, "stack", "proxy.ts")], cwd: HERE, env: { ...common, ...portEnv, HOME: P.botHome } };
-  const bot: Proc = {
-    name: "bot",
+  const llm: Proc = { name: "llm", cmd: [BUN, "--no-env-file", join(HERE, "stack", "fake-llm.ts")], cwd: HERE, env: { ...common, ...portEnv, HOME: P.personalHome } };
+  const proxy: Proc = { name: "proxy", cmd: [BUN, "--no-env-file", join(HERE, "stack", "proxy.ts")], cwd: HERE, env: { ...common, ...portEnv, HOME: P.personalHome } };
+  // The personal gateway with the personal service's env only: no Discord, Slack or buzz settings.
+  const personal: Proc = {
+    name: "personal",
     // cwd is the repo: the drizzle migrations folder resolves from it.
-    cmd: [BUN, "--no-env-file", "--preload", join(HERE, "stack", "discord-stub.preload.ts"), "--preload", join(HERE, "stack", "link-probe.preload.ts"), "--preload", guard, "src/index.ts"],
+    cmd: [BUN, "--no-env-file", "--preload", join(HERE, "stack", "link-probe.preload.ts"), "--preload", guard, "src/personal.ts"],
     cwd: REPO,
     env: {
       ...common,
-      HOME: P.botHome,
+      HOME: P.personalHome,
       NODE_ENV: "production",
       APP_VERSION: "e2e",
-      DISCORD_BOT_TOKEN: "e2e-stub",
       OPENAI_API_KEY: "e2e-stub",
       OPENAI_BASE_URL: `${llmURL}/v1`,
-      OPENAI_MODEL: cfg.model,
-      COMPACTION_MODEL: cfg.model,
       DATABASE_PATH: DB_PATH,
-      FEEDBACK_PATH: join(P.botData, "feedback"),
+      IMPORT_FROM_DATABASE_PATH: BOT_DB_PATH,
       PRINCIPALS_PATH: principals,
       TEAMS_PATH: teams,
-      MCP_BRIDGE_PORT: String(ports.mcp),
       OWNER_DISCORD_ID: ownerDiscordId,
       // Only so file_linear_issue is in the manifest; the flows deny it, so Linear is never called.
       LINEAR_API_KEY: "e2e-stub",
@@ -366,7 +368,7 @@ async function main(): Promise<number> {
       DM_WORKSPACE_ENABLED: "true",
       WORKSPACE_TZ: "UTC",
       WEB_PORT: String(ports.web),
-      WEB_BIND_ADDR: addrs.bot,
+      WEB_BIND_ADDR: addrs.gateway,
       WEB_TRUSTED_PEERS: addrs.trustedPeer,
       WEB_OWNER_LOGIN: cfg.ownerLogin,
       WEB_DIST_DIR: distDir,
@@ -404,15 +406,15 @@ async function main(): Promise<number> {
   start(llm);
   await waitFor("fake model", llm, async () => (await fetch(`${llmURL}/__log`)).ok);
   start(proxy);
-  start(bot);
-  await waitFor("bot web gateway through the proxy", bot, botUp);
-  const offset = logSize("bot");
+  start(personal);
+  await waitFor("personal web gateway through the proxy", personal, personalUp);
+  const offset = logSize("personal");
   start(ws);
-  await waitFor("workspace registration", bot, async () => {
+  await waitFor("workspace registration", personal, async () => {
     if (!alive(ws)) throw new Error(`workspace exited\n--- ws.log ---\n${tail("ws")}`);
     return registeredSince(offset)();
   });
-  control = controlServer(bot, ws, llmURL);
+  control = controlServer(personal, ws, llmURL);
   console.log("[e2e] stack ready; running flows");
 
   return runToExit([join(HERE, "node_modules", ".bin", "playwright"), "test", ...process.argv.slice(2)], HERE, callerEnv({ E2E_TMP: TMP, E2E_WS_HOME: P.wsHome, E2E_WS_STATE: P.wsState, E2E_PW_OUT: P.pwOut }));

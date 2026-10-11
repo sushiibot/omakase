@@ -3,7 +3,7 @@ import { BrowserRelay, createBrowserRoutes } from "./browserRoutes.ts";
 import type { ServerWebSocket } from "bun";
 import type { VoiceSocketData } from "./voice/session.ts";
 import { createWebHandler } from "./server.ts";
-import type { WebConfig } from "../../config.ts";
+import type { WebConfig } from "./config.ts";
 
 const status = { id: "browser-one", conversationId: "main", state: "active" as const, runId: "run", action: "Reading page" };
 test("browser upgrades require exact browser origin; cross-site and anonymous requests cannot view", async () => {

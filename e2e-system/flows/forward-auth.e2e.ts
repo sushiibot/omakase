@@ -6,7 +6,7 @@ const { addrs, ports, ownerLogin } = stack.config;
 /** A raw request straight to the bot, bypassing the proxy, from a chosen loopback address. */
 function direct(localAddress: string, path: string, headers: Record<string, string>): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
-    const req = http.get({ host: addrs.bot, port: ports.web, localAddress, path, headers }, (res) => {
+    const req = http.get({ host: addrs.gateway, port: ports.web, localAddress, path, headers }, (res) => {
       let body = "";
       res.on("data", (d) => (body += d));
       res.on("end", () => resolve({ status: res.statusCode ?? 0, body }));

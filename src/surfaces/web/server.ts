@@ -4,7 +4,7 @@ import type { BrowserRoutes } from "./browserRoutes.ts";
 import type { Database } from "bun:sqlite";
 import type { Server } from "bun";
 import { z } from "zod";
-import { parseWebConfig, type WebConfig } from "../../config.ts";
+import { parseWebConfig, type WebConfig } from "./config.ts";
 import { getLogger } from "../../logger.ts";
 import type { SurfaceActor } from "../../orchestration/workspace/surface.ts";
 import { mintWebActor, normalizeLogin } from "./actor.ts";

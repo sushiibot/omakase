@@ -73,7 +73,8 @@ Create `teams.json` from `teams.example.json` — it's the only source of per-sp
 **Finding IDs:** Enable Developer Mode (Settings → Advanced), then right-click any server/user/channel to copy its ID.
 
 ```bash
-bun src/index.ts          # run
+bun src/index.ts          # run the community bot
+bun src/personal.ts       # run the personal gateway (web app + workspace control plane), own DATABASE_PATH
 docker compose up -d      # or Docker (./data volume for SQLite)
 ```
 
@@ -81,7 +82,7 @@ docker compose up -d      # or Docker (./data volume for SQLite)
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `DISCORD_BOT_TOKEN` | yes | — | Bot token from Discord Developer Portal |
+| `DISCORD_BOT_TOKEN` | bot only | — | Bot token from Discord Developer Portal; `src/personal.ts` never reads it |
 | `DISCORD_MESSAGE_CONTENT` | no | `false` | Set to `true` once the privileged Message Content intent is approved. Off, the bot reads only messages that mention it; message caching, wiki-sync, server auto-scan, screening and the auto-mod trigger stand down |
 | `OPENAI_API_KEY` | yes | — | API key for your LLM provider |
 | `OPENAI_BASE_URL` | no | `https://api.anthropic.com/v1` | OpenAI-compatible endpoint |
@@ -254,11 +255,12 @@ If transcripts move to SQLite, these interfaces must retain original messages an
 including entries removed from the model's context by compaction. Markdown history can remain a derived export.
 The agent reads history through these interfaces without direct database write access.
 
-Deploy: pushing to `main` builds both images, deploys the bot, then deploys the workspace (CI bumps
-`workspace_image_tag` in sushii-ansible). A manual redeploy is
+Deploy: pushing to `main` builds both images, deploys the bot, then the personal gateway
+(`private-bots/sushii-agent-personal`, the bot image running `bun src/personal.ts`), then the workspace
+(CI bumps `workspace_image_tag` in sushii-ansible). The workspace connects to the personal gateway, not the bot. A manual redeploy is
 `./deploy.sh -y apps private-bots/sushii-agent-workspace`. Tunables (`WORKSPACE_MODELS`,
 `WORKSPACE_COMPACT_TOKENS`, `WORKSPACE_TASK_*`, …; defaults in `src/workspace/config.ts`) go in
-`workspace_env_overrides` there. `DM_WORKSPACE_ENABLED` on the bot routes the owner's web chat to it.
+`workspace_env_overrides` there. `DM_WORKSPACE_ENABLED` on the personal gateway routes the owner's web chat to it.
 
 ## Development
 

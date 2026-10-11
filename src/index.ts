@@ -1,16 +1,9 @@
-import { FileStores } from "./orchestration/workspace/fileStores/service.ts";
-import { FileStoreRoutes } from "./surfaces/web/fileStoreRoutes.ts";
-import { MachineHub, machineGrants } from "./orchestration/machines/hub.ts";
-import { MachineControl } from "./orchestration/machines/control.ts";
-import { MachineRoutes } from "./surfaces/web/machineRoutes.ts";
 import { exitAfterBackoff } from "./crashBackoff.ts";
-import { TaskRoutes } from "./surfaces/web/taskRoutes.ts";
-import { createBrowserRoutes } from "./surfaces/web/browserRoutes.ts";
 import type { Client } from "discord.js";
 import { otelSDK } from "./telemetry.ts";
 import { initDb, closeDb, getDb } from "./db/index.ts";
 import { client } from "./discordClient.ts";
-import { config } from "./config.ts";
+import { config, requireDiscordBotToken } from "./config.ts";
 import { buildMcpHttpApp } from "./mcp/server/http.ts";
 import logger from "./logger.ts";
 import { openaiProvider } from "./agent/client.ts";
@@ -29,10 +22,6 @@ import type { LanguageModelProvider } from "./core/contracts.ts";
 import { BEHAVIOR_INSTRUCTIONS } from "./modules/moderation/prompt.ts";
 import { buildCapabilitySections } from "./orchestration/capabilityPrompt.ts";
 import { startDiscordSurface } from "./surfaces/discord/gateway.ts";
-import { createDiscordBreakGlass } from "./surfaces/discord/breakGlass.ts";
-import { bootWorkspace, listenWorkspace } from "./orchestration/workspace/boot.ts";
-import { resolveOwnerPrincipalId } from "./orchestration/transport/server.ts";
-import { WorkspaceLinkStore } from "./db/workspaceLink.ts";
 import { closeSharedSushiMcpClients } from "./surfaces/discord/hosts/sushiMcpHost.ts";
 import { startWikiSyncScheduler } from "./modules/wiki-sync/index.ts";
 import { createWikiFsHost } from "./modules/wiki-sync/wikiHost.ts";
@@ -52,17 +41,10 @@ import { startSlackAgentLoop, type SlackAgentClient } from "./surfaces/slack/gat
 import { registerSlackProgressHooks } from "./surfaces/slack/progress.ts";
 import { SLACK_BEHAVIOR_INSTRUCTIONS } from "./surfaces/slack/prompt.ts";
 import type { App as SlackApp } from "@slack/bolt";
-import { transcribeAudio } from "./agent/transcribe.ts";
-import { createDictationRoutes } from "./surfaces/web/dictationRoutes.ts";
-import { createVoiceRoutes } from "./surfaces/web/voice/routes.ts";
-import { createVoiceAgent } from "./surfaces/web/voice/agent.ts";
-import { startWebGateway } from "./surfaces/web/server.ts";
-import { createWebChat } from "./surfaces/web/chat.ts";
-import { createUploadReadHandler } from "./surfaces/web/uploadRoutes.ts";
-import { DiskUploadStore } from "./surfaces/web/uploads.ts";
 
 async function main() {
   logger.info("Starting sushii-agent...");
+  const discordBotToken = requireDiscordBotToken();
 
   await initDb();
   logger.info("Database initialized");
@@ -120,26 +102,6 @@ async function main() {
     getSlack: () => slackWiki,
   });
 
-  const breakGlass = createDiscordBreakGlass(client);
-  const ownerPrincipalId = resolveOwnerPrincipalId();
-  const uploads = new DiskUploadStore({
-    root: config.webUploadsDir,
-    db,
-    // Fires only on an upload, which needs the web chat created below.
-    onPhotoQuotaWarning: (used, cap) => void webChat.adapter.notifyPhotoQuota(used, cap),
-  });
-  const workspace = bootWorkspace({
-    principalId: ownerPrincipalId,
-    enabled: config.dmWorkspaceEnabled,
-    orchPort: config.orchPort,
-    ownerDiscordId: config.ownerDiscordId,
-    webOwnerLogin: process.env["WEB_OWNER_LOGIN"],
-    store,
-    memory,
-    linkStore: new WorkspaceLinkStore(db),
-    breakGlass: (nonce) => breakGlass(nonce, "held"),
-    uploadRead: createUploadReadHandler(uploads, ownerPrincipalId),
-  });
   startDiscordSurface({
     client: client as Client<true>,
     core,
@@ -148,47 +110,7 @@ async function main() {
     hookBus,
     makeWikiSourceContext,
   });
-  // Before the workspace transport listens, so the web adapter is registered by the time a workspace
-  // connects and drains its outbox. It is registered only when the gateway started.
-  const webChat = createWebChat({
-    db,
-    link: workspace.link,
-    tools: workspace.tools,
-    workspaceEnabled: config.dmWorkspaceEnabled,
-    breakGlass: (nonce) => breakGlass(nonce),
-    uploads,
-  });
-  const machines = new MachineHub(machineGrants.parse(JSON.parse(process.env.SUSHII_MACHINES_JSON ?? "[]")));
-  workspace.server.setMachineHub(machines);
-  const machineControl = new MachineControl(machines, workspace.link);
-  const machineRoutes = new MachineRoutes(machineControl, workspace.link);
-  const fileStores = new FileStores(db);
-  workspace.tools.setExternalFiles(raw => fileStores.action(raw));
-  workspace.tools.setMachineFiles(async raw => (raw as { action?: string })?.action === "list_machines" ? { machines: machineControl.list() } : machineControl.files(raw));
-  const taskRoutes = new TaskRoutes(workspace.link, webChat.threads, machineControl);
-  workspace.tools.setChannelRequests(() => webChat.threads.pendingRequests());
-  workspace.tools.setTaskControl((args, actor, conversationId) => taskRoutes.action(args, actor, conversationId));
-  const webVoice = createVoiceRoutes(process.env, createVoiceAgent(webChat.threads));
-  const webServer = await startWebGateway(process.env, db, {
-    chat: webChat.routes,
-    threads: webChat.threads,
-    tasks: taskRoutes,
-    machines: machineRoutes,
-    fileStores: new FileStoreRoutes(fileStores),
-    home: webChat.home,
-    uploads,
-    browser: createBrowserRoutes(workspace.link),
-    reads: { db, link: workspace.link, connectors: workspace.link, memory: workspace.link, workspaceEnabled: config.dmWorkspaceEnabled },
-    dictation: createDictationRoutes({ transcribe: transcribeAudio }),
-    voice: webVoice,
-  });
-  const stopWebChat = webServer ? webChat.start() : undefined;
-  if (webServer) {
-    workspace.registry.register(webChat.adapter);
-    workspace.tools.setLocationRequests(webChat.location);
-  }
-  listenWorkspace(workspace, config.orchPort);
-  await client.login(config.discordBotToken);
+  await client.login(discordBotToken);
 
   // Non-conversational drivers bootstrap here, not inside a surface, so they don't depend on the
   // Discord gateway lifecycle (C14).
@@ -307,13 +229,6 @@ async function main() {
     logger.info("Shutting down...");
     client.destroy();
     mcpServer.stop();
-    // Open chat streams never end on their own, so a graceful stop would wait out its whole bound.
-    webVoice.close();
-    stopWebChat?.();
-    // Graceful so in-flight push writes finish before the DB closes, but bounded to stay inside docker's 10s stop grace.
-    const webStopped = webServer
-      ? Promise.race([webServer.stop(), Bun.sleep(5000).then(() => webServer.stop(true))])
-      : undefined;
     try {
       await slackApp?.stop();
     } catch (err) {
@@ -324,11 +239,6 @@ async function main() {
     } catch (err) {
       logger.error({ err }, "sushii-mcp client close failed");
     }
-    await webStopped;
-    // A message still being routed marks itself routed in the DB; bounded, inside docker's 10s grace.
-    if (webServer) await Promise.all([webChat.routes.drain(), webChat.threads.drain()]);
-    // Before the DB closes, so no late workspace delivery writes to it.
-    workspace.server.stop();
     closeDb();
     try {
       await otelSDK?.shutdown();

@@ -15,7 +15,7 @@ import {
   type ToolManifestEntry,
   type WorkspaceRegisterResult,
 } from "../contracts.ts";
-import { config } from "../../config.ts";
+import { personalConfig } from "../../surfaces/web/config.ts";
 import { ownerPrincipalId } from "../principals.ts";
 import { getLogger } from "../../logger.ts";
 
@@ -93,7 +93,7 @@ export interface SecretGrant {
 
 /** secret → grant, built from config: ORCH_SECRET registers the owner's workspace. */
 export function defaultSecretGrants(): Record<string, SecretGrant> {
-  return config.orchSecret ? { [config.orchSecret]: { principalId: resolveOwnerPrincipalId() } } : {};
+  return personalConfig.orchSecret ? { [personalConfig.orchSecret]: { principalId: resolveOwnerPrincipalId() } } : {};
 }
 
 /** Looks a presented secret up against every configured one without short-circuiting, so timing

@@ -173,7 +173,6 @@ describe("manifest", () => {
         ["get_trace", "none"],
         ["list_triaged_issues", "none"],
         ["search_logs", "none"],
-        ["team_config", "none"],
         ["web_search", "none"],
       ].sort(),
     );
@@ -184,10 +183,10 @@ describe("manifest", () => {
 
   test("config gates drop unconfigured tools", () => {
     const names = (a: ToolAvailability) => setup({ registry: createToolRegistry(undefined, () => a) }).tools.manifest().map((t) => t.name).sort();
-    expect(names({ exa: false, grafanaBaseUrl: false, linear: false })).toEqual(["team_config"]);
-    expect(names({ exa: true, grafanaBaseUrl: false, linear: false })).toEqual(["fetch_url_content", "team_config", "web_search"]);
-    expect(names({ exa: false, grafanaBaseUrl: true, linear: false })).toEqual(["get_trace", "search_logs", "team_config"]);
-    expect(names({ exa: false, grafanaBaseUrl: false, linear: true })).toEqual(["file_linear_issue", "get_issue_status", "list_triaged_issues", "team_config"]);
+    expect(names({ exa: false, grafanaBaseUrl: false, linear: false })).toEqual([]);
+    expect(names({ exa: true, grafanaBaseUrl: false, linear: false })).toEqual(["fetch_url_content", "web_search"]);
+    expect(names({ exa: false, grafanaBaseUrl: true, linear: false })).toEqual(["get_trace", "search_logs"]);
+    expect(names({ exa: false, grafanaBaseUrl: false, linear: true })).toEqual(["file_linear_issue", "get_issue_status", "list_triaged_issues"]);
   });
 
   test("no owner configured → no tools", () => {
@@ -231,14 +230,10 @@ describe("tool/call — approval none", () => {
     expect(surface.prompts).toHaveLength(0);
   });
 
-  test("team_config: the list and the detail form are both reads, run without a prompt", async () => {
-    expect(PROXIED_TOOLS.team_config!.approval).toBe("none");
-    const { tools, surface } = setup({ registry: createToolRegistry(undefined, () => ALL_ON) });
-    const list = await tools.handleCall(conn(), call("team_config", undefined));
-    expect(list.ok).toBe(true);
-    const detail = await tools.handleCall(conn(), call("team_config", { team: "nope" }));
-    expect(detail).toEqual({ ok: true, result: 'No team "nope".' });
-    expect(surface.prompts).toHaveLength(0);
+  test("team_config belongs to the community bot and is never proxied", async () => {
+    expect(Object.hasOwn(PROXIED_TOOLS, "team_config")).toBe(false);
+    const { tools } = setup({ registry: createToolRegistry(undefined, () => ALL_ON) });
+    expect(tools.manifest().map((t) => t.name)).not.toContain("team_config");
   });
 
   test("the tool runs in the owner's private space", async () => {

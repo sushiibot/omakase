@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import type { WebConfig } from "../../config.ts";
+import type { WebConfig } from "./config.ts";
 import { applySchema } from "../../db/index.ts";
 import { UNKNOWN_MODEL_CODE, historyDayResult, runsGetResult, type HistoryDayResult, type HistorySearchResult, type RunSummary, type RunsGetResult } from "../../orchestration/contracts.ts";
 import { WorkspaceBadResponseError } from "../../orchestration/workspace/link.ts";

@@ -41,7 +41,7 @@ export type ProxiedTool = { approval: "none" } | { approval: "ask"; display: rea
 
 /** The only tools a workspace can reach, and whether each needs the owner's click. A tool must be listed
  *  here to be proxied, whatever the registry offers. An ask tool's prompt shows only its `display`
- *  fields, and its args may hold no other keys. team_config is read-only, so it is `none`. */
+ *  fields, and its args may hold no other keys. */
 export const PROXIED_TOOLS: Readonly<Record<string, ProxiedTool>> = {
   web_search: { approval: "none" },
   fetch_url_content: { approval: "none" },
@@ -57,7 +57,6 @@ export const PROXIED_TOOLS: Readonly<Record<string, ProxiedTool>> = {
       { key: "description", kind: "body" },
     ],
   },
-  team_config: { approval: "none" },
 };
 
 export interface ToolCallAudit {

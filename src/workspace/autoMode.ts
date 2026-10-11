@@ -63,7 +63,6 @@ export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "get_trace",
   "get_issue_status",
   "list_triaged_issues",
-  "team_config",
   // The bot already asks drk before running this one; judging it too would prompt twice.
   "file_linear_issue",
 ]);

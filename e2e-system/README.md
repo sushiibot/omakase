@@ -4,10 +4,10 @@ End-to-end tests against the real processes. The runner builds `web/` and starts
 
 | Production piece | Here |
 |---|---|
-| bot (`src/index.ts`, `NODE_ENV=production`) | a bot process bound to `E2E_BOT_ADDR` (127.0.0.2), with `WEB_TRUSTED_PEERS` set to the proxy's peer address and all live web routes available. The Discord login is stubbed (`stack/discord-stub.preload.ts`). |
-| workspace (`src/workspace/index.ts`) | a workspace process running the real Pi session, connected to the bot over the real orchestration WebSocket |
+| personal gateway (`src/personal.ts`, `NODE_ENV=production`) | a gateway process bound to `E2E_GATEWAY_ADDR` (127.0.0.2), with `WEB_TRUSTED_PEERS` set to the proxy's peer address, all live web routes available, and only the personal service's env (no Discord, Slack or buzz). It boots with `IMPORT_FROM_DATABASE_PATH` pointing at a bot DB seeded by `stack/seed-bot-db.ts`, so the one-shot import runs (`flows/bot-import.e2e.ts`). The community bot (`src/index.ts`) is not part of this stack. |
+| workspace (`src/workspace/index.ts`) | a workspace process running the real Pi session, connected to the gateway over the real orchestration WebSocket |
 | OpenRouter | `stack/fake-llm.ts`, which returns scripted streaming chat completions |
-| Traefik + Tailscale whois shim | `stack/proxy.ts`. It strips client `Tailscale-*` headers, sets the owner login, and dials the bot from `E2E_PEER_ADDR` (127.0.0.3). |
+| Traefik + Tailscale whois shim | `stack/proxy.ts`. It strips client `Tailscale-*` headers, sets the owner login, and dials the gateway from `E2E_PEER_ADDR` (127.0.0.3). |
 | attacker on the network | requests from `E2E_UNTRUSTED_ADDR` (127.0.0.5) |
 
 Chromium runs at 412×915 (mobile, touch) and goes through the proxy.
@@ -22,7 +22,7 @@ bun run e2e:system approval           # extra args go to `playwright test`
 E2E_SKIP_BUILD=1 bun run e2e:system   # reuse web/build
 ```
 
-Each run gets a fresh temp dir holding the bot DB, the workspace home, the generated VAPID pair and secrets, the logs (`logs/{llm,proxy,bot,ws}.log`) and Playwright's output (traces and screenshots of failures).
+Each run gets a fresh temp dir holding the gateway DB, the seeded bot DB, the workspace home, the generated VAPID pair and secrets, the logs (`logs/{llm,proxy,personal,ws}.log`) and Playwright's output (traces and screenshots of failures).
 - The dir is deleted after a green run.
 - It is kept after a failure or with `E2E_KEEP=1`; the runner prints its path.
 
@@ -32,11 +32,11 @@ Every process is stopped on exit, including a failed start or Ctrl-C.
 
 | Env | Default | |
 |---|---|---|
-| `E2E_PORT_BASE` | one of 16 slots in 4500–4595, from a hash of the repo path | proxy = base, web = +1, llm = +2, mcp = +3, orch = +4, control = +5. Each worktree gets its own default slot. The runner prints the base, and the preflight names any busy port, so pick another base if two worktrees land on the same slot. |
-| `E2E_PROXY_PORT`, `E2E_WEB_PORT`, `E2E_LLM_PORT`, `E2E_MCP_PORT`, `E2E_ORCH_PORT`, `E2E_CONTROL_PORT` | from the base | set a single port |
-| `E2E_LOCAL_ADDR` | `127.0.0.1` | the fake model, the control server, and the address the workspace dials the bot's orchestration port on. The bot binds its orchestration and MCP ports on every interface (product code), so the preflight checks those two on `0.0.0.0`. |
+| `E2E_PORT_BASE` | one of 16 slots in 4500–4595, from a hash of the repo path | proxy = base, web = +1, llm = +2, orch = +4, control = +5 (+3 is unused). Each worktree gets its own default slot. The runner prints the base, and the preflight names any busy port, so pick another base if two worktrees land on the same slot. |
+| `E2E_PROXY_PORT`, `E2E_WEB_PORT`, `E2E_LLM_PORT`, `E2E_ORCH_PORT`, `E2E_CONTROL_PORT` | from the base | set a single port |
+| `E2E_LOCAL_ADDR` | `127.0.0.1` | the fake model, the control server, and the address the workspace dials the gateway's orchestration port on. The gateway binds that port on every interface (product code), so the preflight checks it on `0.0.0.0`. |
 | `E2E_PROXY_ADDR` | `127.0.0.1` | where the browser reaches the proxy. Not `localhost`: GitHub's runners resolve it to `::1` first. |
-| `E2E_BOT_ADDR`, `E2E_PEER_ADDR`, `E2E_UNTRUSTED_ADDR` | `127.0.0.2`, `.3`, `.5` | must all be in 127.0.0.0/8 |
+| `E2E_GATEWAY_ADDR`, `E2E_PEER_ADDR`, `E2E_UNTRUSTED_ADDR` | `127.0.0.2`, `.3`, `.5` | must all be in 127.0.0.0/8 |
 | `E2E_OWNER_LOGIN` | `owner@e2e` | |
 | `E2E_TMP_DIR` | a new `$TMPDIR/sushii-e2e-*` | must be empty or absent (CI sets it to upload the dir) |
 | `E2E_SKIP_BUILD`, `E2E_KEEP` | unset | `1` to enable |
@@ -46,14 +46,13 @@ Every process is stopped on exit, including a failed start or Ctrl-C.
 **Isolation.**
 - Each process gets an env built from scratch and runs with `bun --no-env-file`, so neither the repo `.env` nor the caller's tokens reach the stack.
 - `stack/net-guard.preload.ts` answers the OpenRouter model catalog locally. The URL is hard-coded in `src/agentRuntime/piShared.ts`, and the catalog has to list `image` or the workspace drops photos. It refuses every other non-loopback `fetch` and logs `[e2e-net] blocked …`.
-- discord.js REST uses undici directly, so the guard does not cover it. With the login stubbed, the bot sends nothing.
 
 ## Adding a flow
 
 Add one file per flow, `flows/<name>.e2e.ts`. Don't use `.test.ts`: the root `bun test` would pick that up. Flows run one at a time against one shared stack and database, in file-name order. So:
 - Put `#<nonce>` in every message you send. The fake model then starts each reply to that message with `re-<nonce>`, including tool-result replies.
 - Match your own messages with `bubble(page, text)` and your replies with `` bubble(page, `re-${tag}`) ``. Never use a page-wide `getByText(...).first()`: earlier flows leave the same texts behind.
-- Leave the stack running. `restartBot` waits for it to come back.
+- Leave the stack running. `restartPersonal` waits for it to come back.
 
 ```ts
 import { bubble, openChat, send } from "../lib/chat.ts";
@@ -74,11 +73,11 @@ test("my flow", async ({ page, watch }) => {
 `lib/harness.ts`:
 - `test` adds the `watch` fixture, which records CSP and Trusted Types violations and console errors.
 - `stack.llmLog()` and `stack.waitForLlm(match)` return what the fake model received.
-- `stack.query(sql, ...params)` runs a read-only query on the bot DB. It uses `bun:sqlite` in the runner, because flows run in node.
-- `stack.restartBot({ waitReady })` sends the bot SIGTERM and starts it again on the same data.
+- `stack.query(sql, ...params)` runs a read-only query on the gateway DB. It uses `bun:sqlite` in the runner, because flows run in node.
+- `stack.restartPersonal({ waitReady })` sends the gateway SIGTERM and starts it again on the same data.
 - `stack.wsHome` is the workspace `$HOME`, and `stack.wsState` its state dir (a scheduler request is `requests/<job>.request` there). `stack.config` holds the ports and addresses.
-- `stack.pushes()` returns every Web Push request the bot sent. The bot's net guard answers a push service host with 201 and records the encrypted body, so a flow that registered its own subscription keys can decrypt it (`flows/job-alerts.e2e.ts`).
-- `stack.linkRequest(method, params)` sends a bot → workspace RPC over the real link, through `stack/link-probe.preload.ts` in the bot process. It returns the result and the pinned contract schema's verdict on it. Use it for workspace RPCs the bot has no HTTP route for yet.
+- `stack.pushes()` returns every Web Push request the gateway sent. The gateway's net guard answers a push service host with 201 and records the encrypted body, so a flow that registered its own subscription keys can decrypt it (`flows/job-alerts.e2e.ts`).
+- `stack.linkRequest(method, params)` sends a gateway → workspace RPC over the real link, through `stack/link-probe.preload.ts` in the gateway process. It returns the result and the pinned contract schema's verdict on it. Use it for workspace RPCs the gateway has no HTTP route for yet.
 - `stack.wsHome` is the workspace `$HOME`. `stack.config` holds the ports and addresses.
 
 The workspace starts with seeded runs, a job transcript and `~/history` files, plus links planted into `~/history` that must never be read (`stack/seed-runs.ts`). Flows assert on the seeded ids and date, never on counts, since other flows add runs too.

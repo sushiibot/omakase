@@ -33,7 +33,7 @@ export const stack = {
   get wsState() {
     return required("E2E_WS_STATE");
   },
-  /** Every Web Push request the bot sent, oldest first; `body` is the encrypted payload in base64. */
+  /** Every Web Push request the personal gateway sent, oldest first; `body` is the encrypted payload in base64. */
   async pushes(): Promise<CapturedPush[]> {
     return (await call("/push/log")).json() as Promise<CapturedPush[]>;
   },
@@ -55,13 +55,13 @@ export const stack = {
       await new Promise((r) => setTimeout(r, 200));
     }
   },
-  /** Read-only query against the bot's SQLite database. */
+  /** Read-only query against the personal gateway's SQLite database. */
   async query<T = Record<string, unknown>>(sql: string, ...params: (string | number | null)[]): Promise<T[]> {
     return (await call("/db/query", { method: "POST", body: JSON.stringify({ sql, params }) })).json() as Promise<T[]>;
   },
   /**
-   * Sends a bot → workspace RPC over the real orchestration link (through the bot process) and returns the
-   * result plus the contract schema's verdict on it, so flows can exercise workspace RPCs the bot doesn't route yet.
+   * Sends a gateway → workspace RPC over the real orchestration link (through the gateway process) and returns the
+   * result plus the contract schema's verdict on it, so flows can exercise workspace RPCs the gateway doesn't route yet.
    */
   async linkRequest<T = unknown>(method: string, params: Record<string, unknown>): Promise<LinkResult<T>> {
     const body = JSON.stringify({ principalId: "owner", method, params: { principalId: "owner", ...params } });
@@ -74,9 +74,9 @@ export const stack = {
   async restartWorkspace(opts: { crash?: boolean } = {}): Promise<void> {
     await call(`/workspace/restart${opts.crash ? "?crash=true" : ""}`, { method: "POST" });
   },
-  /** SIGTERMs the bot and starts it again on the same data. `waitReady` also waits for the workspace to re-register. */
-  async restartBot(opts: { waitReady?: boolean } = {}): Promise<void> {
-    await call(`/bot/restart${opts.waitReady ? "?wait=ready" : ""}`, { method: "POST" });
+  /** SIGTERMs the personal gateway and starts it again on the same data. `waitReady` also waits for the workspace to re-register. */
+  async restartPersonal(opts: { waitReady?: boolean } = {}): Promise<void> {
+    await call(`/personal/restart${opts.waitReady ? "?wait=ready" : ""}`, { method: "POST" });
   },
 };
 

@@ -22,16 +22,15 @@ export function stackConfig() {
       proxy: int("E2E_PROXY_PORT", base),
       web: int("E2E_WEB_PORT", base + 1),
       llm: int("E2E_LLM_PORT", base + 2),
-      mcp: int("E2E_MCP_PORT", base + 3),
       orch: int("E2E_ORCH_PORT", base + 4),
       control: int("E2E_CONTROL_PORT", base + 5),
     },
     addrs: {
-      // The fake model, the control server, and the bot's orchestration and MCP ports as dialed.
+      // The fake model, the control server, and the gateway's orchestration port as dialed.
       local: addr("E2E_LOCAL_ADDR", "127.0.0.1"),
       // Where the browser reaches the proxy. Not "localhost": GitHub's runners resolve it to ::1 first.
       proxy: addr("E2E_PROXY_ADDR", "127.0.0.1"),
-      bot: addr("E2E_BOT_ADDR", "127.0.0.2"),
+      gateway: addr("E2E_GATEWAY_ADDR", "127.0.0.2"),
       trustedPeer: addr("E2E_PEER_ADDR", "127.0.0.3"),
       untrusted: addr("E2E_UNTRUSTED_ADDR", "127.0.0.5"),
     },

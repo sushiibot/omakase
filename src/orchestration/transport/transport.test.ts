@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import crypto from "node:crypto";
-import { config } from "../../config.ts";
+import { personalConfig } from "../../surfaces/web/config.ts";
 import { ORCH_CLOSE } from "../contracts.ts";
 import { ownerPrincipalId } from "../principals.ts";
 import { OrchestrationClient } from "./client.ts";
@@ -294,15 +294,15 @@ describe("workspace registration auth", () => {
   });
 
   test("defaultSecretGrants binds ORCH_SECRET to the owner principal", () => {
-    const saved = config.orchSecret;
+    const saved = personalConfig.orchSecret;
     const principalId = ownerPrincipalId() ?? DEFAULT_OWNER_PRINCIPAL_ID;
     try {
-      config.orchSecret = undefined;
+      personalConfig.orchSecret = undefined;
       expect(defaultSecretGrants()).toEqual({});
-      config.orchSecret = SECRET;
+      personalConfig.orchSecret = SECRET;
       expect(defaultSecretGrants()).toEqual({ [SECRET]: { principalId } });
     } finally {
-      config.orchSecret = saved;
+      personalConfig.orchSecret = saved;
     }
   });
 

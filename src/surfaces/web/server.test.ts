@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { WebConfig } from "../../config.ts";
+import type { WebConfig } from "./config.ts";
 import { applySchema } from "../../db/index.ts";
 import { createPeerMatcher } from "./peers.ts";
 import { PushSubscriptionStore, createPushSender, type PushTransport } from "./push.ts";
@@ -122,13 +122,13 @@ describe("auth", () => {
   test("the dev login is ignored unless the server binds to loopback", async () => {
     const offLoopback = setup({ devLogin: OWNER, bindAddr: "172.31.250.2", trustedPeers: [GW] }).handler;
     expect((await offLoopback(req("/api/me", { login: null }), GW)).status).toBe(403);
-    const { parseWebConfig } = await import("../../config.ts");
+    const { parseWebConfig } = await import("./config.ts");
     expect(parseWebConfig({ WEB_OWNER_LOGIN: OWNER, WEB_DEV_LOGIN: OWNER, WEB_BIND_ADDR: "172.31.250.2" })?.devLogin).toBeUndefined();
     expect(parseWebConfig({ WEB_OWNER_LOGIN: OWNER, WEB_DEV_LOGIN: OWNER, NODE_ENV: "Production" })?.devLogin).toBeUndefined();
   });
 
   test("the dev login is ignored in production", async () => {
-    const { parseWebConfig } = await import("../../config.ts");
+    const { parseWebConfig } = await import("./config.ts");
     const prod = parseWebConfig({ WEB_OWNER_LOGIN: OWNER, WEB_DEV_LOGIN: OWNER, NODE_ENV: "production", WEB_DIST_DIR: dist, WEB_TRUSTED_PEERS: "127.0.0.1" })!;
     const h = setup(prod).handler;
     expect((await h(req("/api/me", { login: null }), "127.0.0.1")).status).toBe(403);

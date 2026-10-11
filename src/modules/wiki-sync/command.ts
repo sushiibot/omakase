@@ -1,5 +1,5 @@
 import { REST, Routes, SlashCommandBuilder, type ChatInputCommandInteraction, type Client } from "discord.js";
-import { config } from "../../config.ts";
+import { config, requireDiscordBotToken } from "../../config.ts";
 import { getLogger } from "../../logger.ts";
 import { resolveWikiIdForGuild, wikiFor } from "./sources.ts";
 import type { MakeWikiSourceContext } from "./scheduler.ts";
@@ -26,7 +26,7 @@ export async function registerWikiSyncCommands(client: Client<true>): Promise<vo
   const guildIds = wikiSyncCommandGuildIds();
   if (guildIds.length === 0) return;
 
-  const rest = new REST().setToken(config.discordBotToken);
+  const rest = new REST().setToken(requireDiscordBotToken());
   for (const guildId of guildIds) {
     try {
       await rest.put(Routes.applicationGuildCommands(client.application.id, guildId), { body: [WIKI_SYNC_COMMAND] });

@@ -14,7 +14,7 @@ const outbox = (page: Page) =>
       }),
   );
 
-test("a bot restart mid-turn leaves exactly one copy of each message", async ({ page, context, watch }) => {
+test("a gateway restart mid-turn leaves exactly one copy of each message", async ({ page, context, watch }) => {
   test.setTimeout(180_000);
   await openChat(page);
   const tag = nonce();
@@ -32,7 +32,7 @@ test("a bot restart mid-turn leaves exactly one copy of each message", async ({ 
   await page.getByRole("button", { name: "Send message" }).click();
   await expect.poll(() => outbox(page)).toContainEqual(queued);
 
-  await stack.restartBot({ waitReady: true });
+  await stack.restartPersonal({ waitReady: true });
   // The held turn stays running across the restart while the outbox sends its queued message.
   const resent = page.waitForResponse((r) => r.url().endsWith("/api/chat/messages") && r.request().method() === "POST" && (r.request().postData() ?? "").includes(queued));
   await context.setOffline(false);

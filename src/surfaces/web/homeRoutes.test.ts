@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import type { WebConfig } from "../../config.ts";
+import type { WebConfig } from "./config.ts";
 import { applySchema } from "../../db/index.ts";
 import type { RunSummary, RunsListResult } from "../../orchestration/contracts.ts";
 import { RpcErrorReply, RpcTimeoutError } from "../../orchestration/transport/server.ts";
