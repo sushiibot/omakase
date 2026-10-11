@@ -24,6 +24,7 @@
 		onactive?: (active: boolean) => void;
 	} = $props();
 	let closeOnReady = $state(false);
+	let trigger = $state<HTMLButtonElement | null>(null);
 	$effect(() => {
 		if (closeOnReady && (voice.state === 'listening' || voice.state === 'speaking')) {
 			closeOnReady = false;
@@ -34,7 +35,7 @@
 		onactive?.(voice.state !== 'idle');
 	});
 	$effect(() => {
-		if (open) void voice.load();
+		if (open && voice.state === 'idle') void voice.load();
 	});
 	$effect(() => {
 		conversation;
@@ -44,6 +45,7 @@
 </script>
 
 <Button
+	bind:ref={trigger}
 	variant={voice.state === 'idle' ? 'ghost' : 'secondary'}
 	class="size-12 px-0"
 	aria-label={voice.state === 'idle'
@@ -63,7 +65,7 @@
 			aria-hidden="true"
 		/>{/if}
 </Button>
-<RoutedSheet {open} label="Voice chat" {onclose}>
+<RoutedSheet {open} label="Voice chat" {onclose} returnFocus={trigger}>
 	<VoicePanel
 		models={voice.models}
 		provider={voice.provider}

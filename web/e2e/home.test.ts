@@ -218,7 +218,7 @@ test('approving from the sheet posts the decision and says what happened', async
 	await expect(sheet(page).getByText('Approved. The agent carries on.')).toBeVisible();
 	await push(page, 'approval_resolved', { nonce: 'n1', decision: 'approve' }, 5);
 	await expect(sheet(page).getByText('Approved. The agent carries on.')).toBeVisible();
-	await sheet(page).getByRole('button', { name: 'Close' }).click();
+	await sheet(page).getByRole('button', { name: 'Close', exact: true }).click();
 	await expect(sheet(page)).toBeHidden();
 	await expect(page.getByText('Approve send_email')).toBeHidden();
 });
@@ -317,7 +317,7 @@ test('a cold link to something already handled says so instead of waiting', asyn
 	await page.goto('/inbox?approve=gone');
 	await expect(sheet(page).getByRole('heading', { name: 'Already handled' })).toBeVisible();
 	await expect(sheet(page).getByText("This isn't waiting any more.")).toBeVisible();
-	await sheet(page).getByRole('button', { name: 'Close' }).click();
+	await sheet(page).getByRole('button', { name: 'Close', exact: true }).click();
 	await expect(sheet(page)).toBeHidden();
 	await page.reload();
 	await expect(page.getByText('nightly-sync failed')).toBeVisible();

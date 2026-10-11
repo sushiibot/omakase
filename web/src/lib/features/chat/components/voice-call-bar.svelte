@@ -31,7 +31,7 @@
 </script>
 
 {#if state !== 'idle'}
-	<section aria-label="Voice call" class="shrink-0 border-b bg-muted/30 px-3 py-1">
+	<section aria-label="Voice call" class="shrink-0 border-t bg-muted/30 px-3 py-1">
 		<div class="flex items-center justify-between gap-2">
 			<p class="min-w-0 text-sm font-medium">
 				<span role="status">
@@ -47,7 +47,7 @@
 					· {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
 				</span>
 			</p>
-			<div class="flex shrink-0 items-center gap-1">
+			<div class="flex shrink-0 items-center gap-2">
 				<Button
 					variant="ghost"
 					class="size-12 px-0"
@@ -60,11 +60,11 @@
 				<Button
 					variant="ghost"
 					class="size-12 px-0"
-					aria-label="Show voice captions"
+					aria-label={captionsVisible ? 'Hide voice captions' : 'Show voice captions'}
 					aria-pressed={captionsVisible}
 					onclick={oncaptions}><Captions aria-hidden="true" /></Button
 				>
-				<Button variant="ghost" class="size-12 px-0" aria-label="End call" onclick={onstop}
+				<Button variant="destructive" class="size-12 px-0" aria-label="End call" onclick={onstop}
 					><PhoneOff aria-hidden="true" /></Button
 				>
 			</div>
@@ -74,7 +74,7 @@
 			</p>{/if}
 	</section>
 {:else if error}
-	<div class="flex items-center justify-between gap-2 border-b px-3 py-1">
+	<div class="flex items-center justify-between gap-2 border-t px-3 py-1">
 		<p role="alert" class="text-sm text-failed">{error}</p>
 		<Button variant="ghost" class="size-12 px-0" aria-label="Voice settings" onclick={ondetails}
 			><Settings2 aria-hidden="true" /></Button

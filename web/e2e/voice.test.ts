@@ -183,7 +183,7 @@ test('PCM streams in both directions, interruption stops playback, mute and end 
 	connection.send(JSON.stringify({ type: 'turn_done' }));
 	await expect(captions.getByText('I will check.', { exact: true })).not.toHaveClass(/italic/);
 	await expect(captions.getByText('Voice', { exact: true })).toHaveCount(2);
-	await page.getByRole('button', { name: 'Show voice captions' }).click();
+	await page.getByRole('button', { name: 'Hide voice captions' }).click();
 	await expect(captions).toBeHidden();
 	await page.getByRole('button', { name: 'Show voice captions' }).click();
 	await expect(captions).toBeVisible();
@@ -195,6 +195,14 @@ test('PCM streams in both directions, interruption stops playback, mute and end 
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await page.screenshot({ path: '/tmp/voice-captions-desktop.png' });
 	await page.setViewportSize({ width: 320, height: 740 });
+	const callBounds = await page
+		.getByRole('region', { name: 'Voice call', exact: true })
+		.boundingBox();
+	const composerBounds = await page
+		.getByRole('textbox', { name: 'Message', exact: true })
+		.boundingBox();
+	expect(callBounds!.y).toBeGreaterThan(740 / 2);
+	expect(callBounds!.y + callBounds!.height).toBeLessThanOrEqual(composerBounds!.y);
 	await page.screenshot({ path: '/tmp/voice-captions-mobile.png' });
 	await checkScreen(page);
 	await page.getByRole('button', { name: 'Mute microphone' }).click();

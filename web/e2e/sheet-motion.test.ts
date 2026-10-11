@@ -110,3 +110,54 @@ test('reduced motion dismisses without animating or delaying navigation', async 
 	await expect(page).toHaveURL(/\/chats\/reduced-motion$/);
 	await expect(sheet).toBeHidden();
 });
+
+test('phone sheets follow a drag, snap back on a short drag, and dismiss on a full drag', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await page.goto('/chats');
+	await page.getByRole('button', { name: 'New conversation' }).click();
+	const sheet = page.getByRole('dialog', { name: 'Start a conversation' });
+	await sheet.evaluate(async (element) => {
+		await Promise.allSettled(element.getAnimations().map((animation) => animation.finished));
+	});
+	const handle = sheet.getByRole('button', { name: 'Close Start a conversation' });
+	const bounds = (await handle.boundingBox())!;
+	const start = (await sheet.boundingBox())!.y;
+	const x = bounds.x + bounds.width / 2;
+	const y = bounds.y + bounds.height / 2;
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	await page.mouse.move(x, y + 32, { steps: 4 });
+	expect((await sheet.boundingBox())!.y - start).toBeCloseTo(32, 0);
+	await page.mouse.up();
+	await expect(sheet).toBeVisible();
+	await expect.poll(async () => Math.abs((await sheet.boundingBox())!.y - start)).toBeLessThan(1);
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	await page.mouse.move(x, y + 160, { steps: 8 });
+	await page.mouse.up();
+	await expect(sheet).toBeHidden();
+	await expect(page).toHaveURL(/\/chats$/);
+	// A fresh opening must not inherit the last drag's translation.
+	await page.getByRole('button', { name: 'New conversation' }).click();
+	await expect(sheet).toBeVisible();
+	await sheet.evaluate(async (element) => {
+		await Promise.allSettled(element.getAnimations().map((animation) => animation.finished));
+	});
+	// Cancelling a touch drag must snap back and still allow keyboard dismissal.
+	const session = await context.newCDPSession(page);
+	const reopened = (await handle.boundingBox())!;
+	const touch = { x: reopened.x + reopened.width / 2, y: reopened.y + reopened.height / 2 };
+	await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch] });
+	await session.send('Input.dispatchTouchEvent', {
+		type: 'touchMove',
+		touchPoints: [{ ...touch, y: touch.y + 32 }]
+	});
+	await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+	await expect(sheet).toBeVisible();
+	await handle.focus();
+	await page.keyboard.press('Enter');
+	await expect(sheet).toBeHidden();
+});

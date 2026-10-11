@@ -504,7 +504,7 @@
 
 {#snippet banner()}
 	{#if connection}<ConnectionBanner state={connection} />{/if}
-	{#if !readOnly}{@render voiceStatus?.()}{@render browserPreview?.()}{/if}
+	{#if !readOnly}{@render browserPreview?.()}{/if}
 {/snippet}
 
 {#snippet toastBody()}
@@ -525,6 +525,7 @@
 	{#if readOnly}
 		<div class="border-t">{@render readOnly()}</div>
 	{:else}
+		{@render voiceStatus?.()}
 		<div class="border-t">
 			<Composer
 				bind:value={() => draft, (v) => ondraft?.(v)}

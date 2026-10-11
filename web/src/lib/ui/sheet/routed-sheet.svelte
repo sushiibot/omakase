@@ -27,6 +27,43 @@
 	let content = $state<HTMLElement | null>(null);
 	let probe = $state<HTMLElement | null>(null);
 	let wide = $state(false);
+	let dragOffset = $state(0);
+	let dragging = $state(false);
+	let gesture: { id: number; y: number } | null = null;
+	let suppressClick = false;
+	$effect(() => {
+		if (open) {
+			dragOffset = 0;
+			dragging = false;
+			gesture = null;
+		}
+	});
+
+	function startDrag(event: PointerEvent) {
+		if (wide || !event.isPrimary || event.button !== 0) return;
+		gesture = { id: event.pointerId, y: event.clientY };
+		suppressClick = false;
+		dragging = true;
+		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+	}
+	function moveDrag(event: PointerEvent) {
+		if (gesture?.id !== event.pointerId) return;
+		dragOffset = Math.max(0, event.clientY - gesture.y);
+		if (Math.abs(event.clientY - gesture.y) > 8) suppressClick = true;
+	}
+	function endDrag(event: PointerEvent) {
+		if (gesture?.id !== event.pointerId) return;
+		gesture = null;
+		dragging = false;
+		if (dragOffset >= Math.min(120, (content?.clientHeight ?? 480) / 4)) onclose?.();
+		else dragOffset = 0;
+	}
+	function cancelDrag() {
+		gesture = null;
+		dragging = false;
+		dragOffset = 0;
+		suppressClick = true;
+	}
 	const shown = $derived(open && (desktop || !wide));
 	// A sheet that can't show must not keep its history entry, or Back is spent on nothing.
 	$effect(() => {
@@ -62,6 +99,9 @@
 		<SheetPrimitive.Content
 			bind:ref={content}
 			data-routed-sheet
+			style={wide
+				? undefined
+				: `translate: 0 ${dragOffset}px; transition: translate ${dragging ? '0ms' : 'var(--duration-medium)'} var(--ease-standard)`}
 			aria-label={label}
 			onOpenAutoFocus={focusFirst}
 			onCloseAutoFocus={(e) => {
@@ -72,17 +112,30 @@
 			}}
 			class={cn(
 				'fixed inset-x-0 bottom-(--kb) z-20 flex max-h-[88%] flex-col overflow-y-auto overscroll-contain rounded-t-3xl bg-background pb-(--safe-bottom) text-foreground shadow-[0_-12px_40px_-12px_rgb(0_0_0/0.4)] outline-none kb:pb-0',
-				'duration-(--duration-medium) ease-(--ease-standard) motion-reduce:animate-none! data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-10 data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-bottom-full',
+				'duration-(--duration-medium) ease-(--ease-standard) motion-reduce:animate-none! motion-reduce:transition-none! data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-10 data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-bottom-full',
 				desktop &&
 					'@3xl:inset-x-auto @3xl:top-1/2 @3xl:bottom-auto @3xl:left-1/2 @3xl:w-full @3xl:max-w-md @3xl:-translate-x-1/2 @3xl:-translate-y-1/2 @3xl:rounded-3xl @3xl:pb-0 @3xl:data-open:slide-in-from-bottom-0 @3xl:data-open:zoom-in-95 @3xl:data-closed:slide-out-to-bottom-0 @3xl:data-closed:zoom-out-95'
 			)}
 		>
-			<span
+			<button
+				type="button"
+				aria-label={`Close ${label}`}
 				class={cn(
-					'mx-auto mt-2 mb-1 h-1 w-9 shrink-0 rounded-full bg-muted-foreground/35',
-					desktop && '@3xl:invisible'
+					'flex h-12 shrink-0 touch-none items-center justify-center rounded-t-3xl outline-none focus-visible:ring-2 focus-visible:ring-ring',
+					desktop && '@3xl:hidden'
 				)}
-			></span>
+				onpointerdown={startDrag}
+				onpointermove={moveDrag}
+				onpointerup={endDrag}
+				onpointercancel={cancelDrag}
+				onlostpointercapture={() => gesture && cancelDrag()}
+				onclick={(event) => {
+					if (!suppressClick || event.detail === 0) onclose?.();
+					suppressClick = false;
+				}}
+			>
+				<span class="h-1 w-9 rounded-full bg-muted-foreground/35" aria-hidden="true"></span>
+			</button>
 			{@render children()}
 		</SheetPrimitive.Content>
 	</Sheet.Portal>
