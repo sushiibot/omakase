@@ -211,3 +211,16 @@ export interface VoiceModel {
 	audioOutputUsd: number;
 	configured: boolean;
 }
+
+export interface SpeechModel {
+	id: string;
+	name: string;
+	description: string;
+	voices: string[];
+	curated: string | null;
+	price: {
+		unit: 'characters' | 'tokens' | 'seconds';
+		input: number | null;
+		output: number | null;
+	};
+}

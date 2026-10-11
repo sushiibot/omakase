@@ -2,7 +2,7 @@ import type { ServerWebSocket } from "bun";
 import type { SurfaceActor } from "../../../orchestration/workspace/surface.ts";
 import { adapterFor, type VoiceConfig, type VoiceEvent } from "./providers.ts";
 export type VoiceSocketData =
-  | { voice: VoiceSession }
+  | { voice: VoiceSession | import("./turnSession.ts").TurnVoiceSession }
   | { browser: import("../browserRoutes.ts").BrowserRelay };
 export type AskAgent = (
   request: string,

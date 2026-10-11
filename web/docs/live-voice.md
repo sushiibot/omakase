@@ -1,8 +1,10 @@
 # Live voice
 
 Use the **Voice chat** phone button at the top right in the owner web app.
-Choose a configured voice model, then select **Start voice chat** and allow microphone access.
-The setup sheet closes when the call connects. A compact bar below the header shows the call state,
+Choose **Talk in turns** or **Live conversation**.
+Choose a configured voice model, then select **Start voice chat**.
+Allow microphone access.
+The setup sheet closes when the call connects. A compact bar above the composer shows the call state,
 time, microphone control, caption toggle, and **End call**. Chat messages, tools, and approvals stay visible.
 You can interrupt spoken replies. Open the phone button to review settings; **Back to chat** keeps the call open.
 
@@ -12,7 +14,46 @@ The empty-thread greeting disappears once voice text arrives. Providers control 
 The adapters accept input transcript deltas, interim revisions, and completed text where the provider sends them.
 Captions show the latest exchange and do not replace durable chat messages.
 **End call**, navigation, a hidden page, or the 15-minute limit ends the call and releases the microphone.
-Dictate remains available outside calls. During a call, the live session owns the microphone.
+Dictate remains available outside calls. During a call, the voice session owns the microphone.
+
+## Talk in turns
+
+Talk in turns is the default mode on a new device.
+Speak, then select **Send voice turn**.
+The server transcribes the recording and sends the text to the existing conversation agent.
+The selected speech model reads the reply through OpenRouter.
+Tools and approvals stay in the chat.
+Select **Stop speaking** to stop the spoken reply.
+The next turn starts after the reply ends or you stop speech.
+The microphone does not submit another recording while the agent works or speech plays.
+
+The picker shows suggested models with budget, value, speed, and premium labels.
+These labels describe evaluation candidates, not measured quality guarantees.
+**Browse all OpenRouter speech models** searches every model with text input and speech output in the current catalog.
+Each model shows its supported voices and catalog price.
+Prices retain their billing units: characters, text/audio tokens, or generated seconds.
+Provider rates and temporary offers can change the charge.
+Transcription and agent usage add costs.
+The catalog refreshes after five minutes and shows its last update time.
+The selected mode, model, and voice stay on this device.
+
+Speech uses `OPENROUTER_API_KEY`, or the existing `OPENAI_API_KEY` when the dedicated key is absent.
+Speech requests use OpenRouter's `/api/v1/audio/speech` endpoint.
+Transcription retains the existing `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `TRANSCRIPTION_MODEL` settings.
+Live conversation retains its direct provider credentials and voices.
+Cartesia, Inworld, and Chatterbox appear only if OpenRouter adds compatible models to its catalog.
+This feature does not add direct billing accounts for those providers.
+
+Each turn accepts up to five minutes of 16 kHz PCM audio.
+Digitally silent turns do not incur transcription charges.
+The server reads at most 24,000 reply characters aloud in small utterances.
+Each utterance uses MP3 so the browser decodes the provider's sample rate.
+Playback starts after the first utterance downloads, rather than after the entire reply downloads.
+The server waits for playback before it generates the next utterance.
+Stopping speech cancels further generation. Ending the call releases audio and result listeners.
+An agent request already accepted into chat can continue after the call ends.
+
+Catalog and speech behavior follow the [OpenRouter speech API](https://openrouter.ai/docs/guides/overview/multimodal/tts).
 
 ## Recorded speech
 
@@ -115,7 +156,7 @@ Check current [Qwen pricing](https://www.alibabacloud.com/help/en/model-studio/q
 
 ## Tools and architecture
 
-All adapters expose `ask_sushii`. It submits the spoken request through the same durable input route as typed chat.
+Live adapters expose `ask_sushii`. It submits the spoken request through the same durable input route as typed chat.
 The existing agent owns tools, memory, conversation isolation, and approvals.
 The voice model receives an immediate acknowledgment while the agent works.
 The relay announces the matching result after speech and playback finish.
@@ -123,7 +164,9 @@ Approvals remain in the web chat. Ending a call stops its result listener; an ac
 
 The browser sends PCM audio through an authenticated WebSocket on the existing web gateway.
 Provider keys and protocol differences stay on the server.
-The relay accepts audio and playback acknowledgments only; clients cannot change provider instructions or tool definitions.
+The live relay accepts audio and playback acknowledgments only.
+The turn relay also accepts explicit turn submission and speech interruption.
+Clients cannot change provider instructions or tool definitions.
 One owner call can run at a time. The gateway verifies the owner and the WebSocket Origin before upgrading.
 
 The [Qwen audio agent reference](https://github.com/QwenAudio/qwen-audio-agent) informed the separation between

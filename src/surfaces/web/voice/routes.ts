@@ -3,13 +3,18 @@ import type { RequestTimeouts } from "../server.ts";
 import type { SurfaceActor } from "../../../orchestration/workspace/surface.ts";
 import { publicModels, voiceConfigs } from "./providers.ts";
 import { VoiceSession, type AskAgent } from "./session.ts";
+import { createSpeechCatalog } from "./speech.ts";
+import { TurnVoiceSession } from "./turnSession.ts";
 export function createVoiceRoutes(
   env: Record<string, string | undefined>,
   ask: AskAgent,
   connect?: ConstructorParameters<typeof VoiceSession>[5],
+  catalog = createSpeechCatalog(),
 ) {
   const configs = voiceConfigs(env);
-  const sessions = new Set<VoiceSession>();
+  const speechKey =
+    env.OPENROUTER_API_KEY?.trim() || env.OPENAI_API_KEY?.trim() || "";
+  const sessions = new Set<VoiceSession | TurnVoiceSession>();
   return {
     async handle(
       req: Request,
@@ -25,6 +30,18 @@ export function createVoiceRoutes(
           models,
           defaultProvider: models.find((m) => m.configured)?.id ?? null,
         });
+      }
+      if (path === "/api/voice/speech-models") {
+        if (req.method !== "GET")
+          return json({ error: "method not allowed" }, 405);
+        try {
+          return json({ ...(await catalog()), configured: !!speechKey });
+        } catch {
+          return json(
+            { error: "Couldn't load OpenRouter speech models. Try again." },
+            503,
+          );
+        }
       }
       if (path !== "/api/voice/connect") return null;
       if (
@@ -47,11 +64,18 @@ export function createVoiceRoutes(
       )
         return json({ error: "forbidden" }, 403);
       const url = new URL(req.url);
+      const turnMode = url.searchParams.get("mode") === "turns";
+      if (
+        url.searchParams.has("mode") &&
+        !["turns", "live"].includes(url.searchParams.get("mode")!)
+      )
+        return json({ error: "Unknown voice mode" }, 400);
       const provider = configs.find(
         (c) => c.id === url.searchParams.get("provider"),
       );
-      if (!provider) return json({ error: "Unknown voice provider" }, 400);
-      if (!provider.configured)
+      if (!turnMode && !provider)
+        return json({ error: "Unknown voice provider" }, 400);
+      if (turnMode ? !speechKey : !provider!.configured)
         return json(
           { error: "Voice provider credentials are not configured" },
           503,
@@ -64,14 +88,45 @@ export function createVoiceRoutes(
           { error: "End the current voice call before starting another" },
           409,
         );
-      const session = new VoiceSession(
-        provider,
-        actor,
-        conversation,
-        ask,
-        () => sessions.delete(session),
-        connect,
-      );
+      let speechModel;
+      const speechVoice = url.searchParams.get("voice") ?? "";
+      if (turnMode) {
+        try {
+          speechModel = (await catalog()).models.find(
+            (m) => m.id === url.searchParams.get("model"),
+          );
+        } catch {
+          return json({ error: "Speech catalog unavailable. Try again." }, 503);
+        }
+        if (!speechModel)
+          return json({ error: "Unknown OpenRouter speech model" }, 400);
+        if (speechVoice && !speechModel.voices.includes(speechVoice))
+          return json({ error: "Unknown speech voice" }, 400);
+        // Catalog fetch above can yield; recheck the single-session limit before reserving.
+        if (sessions.size)
+          return json(
+            { error: "End the current voice call before starting another" },
+            409,
+          );
+      }
+      const session: VoiceSession | TurnVoiceSession = turnMode
+        ? new TurnVoiceSession(
+            speechModel!,
+            speechVoice,
+            speechKey,
+            actor,
+            conversation,
+            ask,
+            () => sessions.delete(session),
+          )
+        : new VoiceSession(
+            provider!,
+            actor,
+            conversation,
+            ask,
+            () => sessions.delete(session),
+            connect,
+          );
       sessions.add(session);
       if (!server?.upgrade?.(req, { voice: session })) {
         session.close();

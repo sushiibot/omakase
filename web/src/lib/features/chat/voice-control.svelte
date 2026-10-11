@@ -67,6 +67,25 @@
 </Button>
 <RoutedSheet {open} label="Voice chat" {onclose} returnFocus={trigger}>
 	<VoicePanel
+		mode={voice.mode}
+		speechModels={voice.speechModels}
+		speechModel={voice.speechModel}
+		speechVoice={voice.speechVoice}
+		speechConfigured={voice.speechConfigured}
+		speechError={voice.speechError}
+		pricesUpdatedAt={voice.pricesUpdatedAt}
+		turnBusy={voice.turnBusy}
+		onmode={(mode) => {
+			voice.mode = mode;
+			voice.persist();
+		}}
+		onspeech={(id) => voice.selectSpeech(id)}
+		onvoice={(name) => {
+			voice.speechVoice = name;
+			voice.persist();
+		}}
+		onturn={() => voice.finishTurn()}
+		oninterrupt={() => voice.interrupt()}
 		models={voice.models}
 		provider={voice.provider}
 		loading={voice.loading}
@@ -77,7 +96,10 @@
 		userText={voice.userText}
 		assistantText={voice.assistantText}
 		seconds={voice.seconds}
-		onprovider={(id) => (voice.provider = id)}
+		onprovider={(id) => {
+			voice.provider = id;
+			voice.persist();
+		}}
 		onstart={() => {
 			onstarting?.();
 			closeOnReady = true;

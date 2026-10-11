@@ -15,7 +15,11 @@
 		onmute,
 		onstop,
 		oncaptions,
-		ondetails
+		ondetails,
+		mode = 'live',
+		turnBusy = false,
+		onturn,
+		oninterrupt
 	}: {
 		state: 'idle' | 'connecting' | 'listening' | 'speaking';
 		muted: boolean;
@@ -27,6 +31,10 @@
 		onstop: () => void;
 		oncaptions: () => void;
 		ondetails: () => void;
+		mode?: 'live' | 'turns';
+		turnBusy?: boolean;
+		onturn?: () => void;
+		oninterrupt?: () => void;
 	} = $props();
 </script>
 
@@ -41,7 +49,9 @@
 							? 'Microphone muted'
 							: state === 'speaking'
 								? 'Speaking'
-								: 'Listening'}
+								: mode === 'turns' && turnBusy
+									? 'Preparing reply'
+									: 'Listening'}
 				</span>
 				<span class="text-xs text-muted-foreground" aria-live="off">
 					· {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
@@ -69,9 +79,22 @@
 				>
 			</div>
 		</div>
+		{#if mode === 'turns'}
+			<Button
+				class="mb-2 w-full"
+				disabled={state === 'connecting' || (state !== 'speaking' && (turnBusy || muted))}
+				onclick={state === 'speaking' ? oninterrupt : onturn}
+				>{state === 'speaking'
+					? 'Stop speaking'
+					: turnBusy
+						? 'Working…'
+						: 'Send voice turn'}</Button
+			>
+		{/if}
 		{#if agentWorking}<p role="status" class="pb-1 text-xs text-muted-foreground">
 				Sushii is working · tools and approvals appear in chat
 			</p>{/if}
+		{#if error}<p role="alert" class="pb-2 text-sm text-failed">{error}</p>{/if}
 	</section>
 {:else if error}
 	<div class="flex items-center justify-between gap-2 border-t px-3 py-1">

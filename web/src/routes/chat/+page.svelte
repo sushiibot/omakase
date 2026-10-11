@@ -200,6 +200,10 @@
 
 {#snippet voiceStatus()}
 	<VoiceCallBar
+		mode={voice.mode}
+		turnBusy={voice.turnBusy}
+		onturn={() => voice.finishTurn()}
+		oninterrupt={() => voice.interrupt()}
 		state={voice.state}
 		muted={voice.muted}
 		seconds={voice.seconds}

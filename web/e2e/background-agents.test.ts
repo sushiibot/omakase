@@ -126,6 +126,7 @@ test('starting saves the visible brief, and a failed save never starts work', as
 		.getByRole('textbox', { name: 'Brief', exact: true })
 		.fill('Find an appointment after 3pm.');
 	let starts = 0;
+	await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
 	await context.route('**/api/tasks', async (route) => {
 		if (route.request().method() !== 'POST') return route.fallback();
 		const action = route.request().postDataJSON();

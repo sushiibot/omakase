@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { Button } from '$lib/ui/button';
-	import type { VoiceModel } from '../types';
+	import type { SpeechModel, VoiceModel } from '../types';
+	import { speechPrice } from '../render/speech-price';
+	import { Input } from '$lib/ui/input';
 	let {
 		models,
 		provider,
 		loading,
-		state,
+		state: callState,
 		error,
 		muted,
 		agentWorking,
@@ -17,7 +19,20 @@
 		onstop,
 		onmute,
 		onretry,
-		onclose
+		onclose,
+		mode = 'live',
+		speechModels = [],
+		speechModel = '',
+		speechVoice = '',
+		speechConfigured = false,
+		speechError = null,
+		pricesUpdatedAt = null,
+		turnBusy = false,
+		onmode,
+		onspeech,
+		onvoice,
+		onturn,
+		oninterrupt
 	}: {
 		models: VoiceModel[];
 		provider: string;
@@ -35,18 +50,43 @@
 		onmute: () => void;
 		onretry: () => void;
 		onclose: () => void;
+		mode?: 'turns' | 'live';
+		speechModels?: SpeechModel[];
+		speechModel?: string;
+		speechVoice?: string;
+		speechConfigured?: boolean;
+		speechError?: string | null;
+		pricesUpdatedAt?: string | null;
+		turnBusy?: boolean;
+		onmode?: (mode: 'turns' | 'live') => void;
+		onspeech?: (id: string) => void;
+		onvoice?: (voice: string) => void;
+		onturn?: () => void;
+		oninterrupt?: () => void;
 	} = $props();
-	const active = $derived(state !== 'idle');
+	const active = $derived(callState !== 'idle');
 	const selected = $derived(models.find((m) => m.id === provider));
+	const speech = $derived(speechModels.find((m) => m.id === speechModel));
+	let query = $state('');
+	const found = $derived(
+		speechModels.filter((m) =>
+			`${m.name} ${m.id}`.toLowerCase().includes(query.toLowerCase().trim())
+		)
+	);
+	const canStart = $derived(mode === 'turns' ? speechConfigured && !!speech : selected?.configured);
 	const status = $derived(
-		state === 'connecting'
+		callState === 'connecting'
 			? 'Connecting…'
 			: muted
 				? 'Microphone muted'
 				: agentWorking
-					? 'Sushii is working — you can keep talking'
-					: state === 'speaking'
-						? 'Speaking — interrupt anytime'
+					? mode === 'turns'
+						? 'Sushii is working — approvals appear in chat'
+						: 'Sushii is working — you can keep talking'
+					: callState === 'speaking'
+						? mode === 'turns'
+							? 'Speaking — tap Stop speaking to interrupt'
+							: 'Speaking — interrupt anytime'
 						: 'Listening'
 	);
 </script>
@@ -57,35 +97,138 @@
 		<Button variant="ghost" onclick={onclose}>Back to chat</Button>
 	</div>
 	<p class="text-sm text-muted-foreground">
-		Talk naturally and interrupt anytime. Sushii uses the same memory, tools and approvals as this
-		chat.
+		Sushii uses the same memory, tools and approvals as this chat.
 	</p>
-	<div class="flex flex-col gap-2">
-		<label for="voice-provider" class="text-sm font-medium">Voice model</label>
-		<select
-			id="voice-provider"
-			class="h-12 w-full rounded-lg border bg-background px-3 text-base"
-			value={provider}
-			disabled={active || loading}
-			onchange={(event) => onprovider(event.currentTarget.value)}
+	<div role="group" aria-label="Voice mode" class="grid grid-cols-2 gap-2">
+		<Button
+			variant={mode === 'turns' ? 'secondary' : 'outline'}
+			class="h-auto min-h-12 px-2 py-2 whitespace-normal"
+			aria-pressed={mode === 'turns'}
+			disabled={active}
+			onclick={() => onmode?.('turns')}>Talk in turns</Button
 		>
-			{#if !provider}<option value="">Choose a configured model</option>{/if}
-			{#each models as model}
-				<option value={model.id} disabled={!model.configured}
-					>{model.name}{model.configured ? '' : ' (not configured)'}</option
-				>
-			{/each}
-		</select>
-		{#if selected}
-			<p class="text-sm text-muted-foreground">{selected.description}</p>
-			<p class="text-xs text-muted-foreground">
-				Audio: ${selected.audioInputUsd} input / ${selected.audioOutputUsd} output per million tokens.
-				Text, transcription and agent usage may add costs.
-			</p>
-		{/if}
+		<Button
+			variant={mode === 'live' ? 'secondary' : 'outline'}
+			class="h-auto min-h-12 px-2 py-2 whitespace-normal"
+			aria-pressed={mode === 'live'}
+			disabled={active}
+			onclick={() => onmode?.('live')}>Live conversation</Button
+		>
 	</div>
+	{#if mode === 'turns'}
+		<p class="text-sm text-muted-foreground">
+			Speak, then tap Send voice turn. Your chosen speech model reads the reply. Tap Stop speaking
+			to interrupt.
+		</p>
+		{#if speech}
+			<div class="flex flex-col gap-2">
+				<h3 class="font-medium [overflow-wrap:anywhere]">{speech.name}</h3>
+				<p class="text-sm text-muted-foreground tabular-nums">{speechPrice(speech)}</p>
+				{#if speech.voices.length}
+					<label for="speech-voice" class="text-sm font-medium">Speaking voice</label>
+					<select
+						id="speech-voice"
+						class="h-12 w-full rounded-lg border bg-background px-3 text-base"
+						value={speechVoice}
+						disabled={active || loading}
+						onchange={(e) => onvoice?.(e.currentTarget.value)}
+					>
+						{#each speech.voices as name}<option value={name}>{name}</option>{/each}
+					</select>
+				{:else}<p class="text-sm text-muted-foreground">
+						This model chooses its default voice.
+					</p>{/if}
+			</div>
+		{/if}
+		<section aria-label="Curated speech models" class="flex flex-col gap-2">
+			<h3 class="text-sm font-medium">Suggested speech models</h3>
+			{#each speechModels.filter((m) => m.curated) as model (model.id)}
+				<button
+					type="button"
+					class="flex min-h-12 w-full flex-col gap-1 rounded-lg px-3 py-2 text-left hover:bg-muted disabled:opacity-50 aria-pressed:bg-muted"
+					aria-pressed={speechModel === model.id}
+					disabled={active || loading}
+					onclick={() => onspeech?.(model.id)}
+				>
+					<span class="text-sm font-medium [overflow-wrap:anywhere]"
+						>{model.name} · {model.curated}</span
+					>
+					<span class="text-sm text-muted-foreground tabular-nums">{speechPrice(model)}</span>
+				</button>
+			{/each}
+		</section>
+		<details>
+			<summary class="min-h-12 cursor-pointer py-3 font-medium"
+				>Browse all OpenRouter speech models</summary
+			>
+			<div class="flex flex-col gap-2">
+				<Input
+					class="h-12 text-base"
+					type="search"
+					aria-label="Search speech models"
+					placeholder="Search by name or model ID"
+					bind:value={query}
+					disabled={active || loading}
+				/>
+				{#each found as model (model.id)}
+					<button
+						type="button"
+						class="flex min-h-12 w-full flex-col gap-1 rounded-lg px-3 py-2 text-left hover:bg-muted disabled:opacity-50 aria-pressed:bg-muted"
+						aria-pressed={speechModel === model.id}
+						disabled={active || loading}
+						onclick={() => onspeech?.(model.id)}
+					>
+						<span class="text-sm font-medium [overflow-wrap:anywhere]">{model.name}</span>
+						<span class="text-sm [overflow-wrap:anywhere] text-muted-foreground">{model.id}</span>
+						<span class="text-sm text-muted-foreground tabular-nums">{speechPrice(model)}</span>
+					</button>
+				{:else}{#if !loading}<p role="status" class="text-sm text-muted-foreground">
+							No speech models match this search.
+						</p>{/if}{/each}
+			</div>
+		</details>
+		<p class="text-xs text-muted-foreground">
+			OpenRouter catalog prices{pricesUpdatedAt
+				? ` · checked ${new Date(pricesUpdatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+				: ''}. Rates vary by provider and may include offers. Transcription and agent usage add
+			costs.
+		</p>
+		{#if !speechConfigured && !loading}<p class="text-sm text-muted-foreground">
+				Talk in turns needs an OpenRouter API key on the server.
+			</p>{/if}
+		{#if speechError}<p role="alert" class="text-sm text-failed">{speechError}</p>
+			<Button variant="outline" onclick={onretry}>Retry speech models</Button>{/if}
+	{:else}
+		<p class="text-sm text-muted-foreground">
+			Talk naturally and interrupt anytime. The live model supplies its own voice.
+		</p>
+		<div class="flex flex-col gap-2">
+			<label for="voice-provider" class="text-sm font-medium">Voice model</label>
+			<select
+				id="voice-provider"
+				class="h-12 w-full rounded-lg border bg-background px-3 text-base"
+				value={provider}
+				disabled={active || loading}
+				onchange={(event) => onprovider(event.currentTarget.value)}
+			>
+				{#if !provider}<option value="">Choose a configured model</option>{/if}
+				{#each models as model}
+					<option value={model.id} disabled={!model.configured}
+						>{model.name}{model.configured ? '' : ' (not configured)'}</option
+					>
+				{/each}
+			</select>
+			{#if selected}
+				<p class="text-sm text-muted-foreground">{selected.description}</p>
+				<p class="text-xs text-muted-foreground">
+					Audio: ${selected.audioInputUsd} input / ${selected.audioOutputUsd} output per million tokens.
+					Text, transcription and agent usage may add costs.
+				</p>
+			{/if}
+		</div>
+	{/if}
 	{#if loading}<p role="status" class="text-sm text-muted-foreground">Loading voice models…</p>{/if}
-	{#if !loading && !models.some((m) => m.configured)}
+	{#if mode === 'live' && !loading && !models.some((m) => m.configured)}
 		<p class="text-sm text-muted-foreground">
 			Voice needs a provider API key on the server. Dictation is still available in the composer.
 		</p>
@@ -101,21 +244,34 @@
 				{assistantText}
 			</p>{/if}
 		<div class="flex gap-2">
-			<Button variant="outline" disabled={state === 'connecting'} onclick={onmute}
+			<Button variant="outline" disabled={callState === 'connecting'} onclick={onmute}
 				>{muted ? 'Unmute microphone' : 'Mute microphone'}</Button
 			>
 			<Button variant="outline" onclick={onstop}>End call</Button>
 		</div>
+		{#if mode === 'turns'}
+			<Button
+				disabled={callState === 'connecting' || (callState !== 'speaking' && (turnBusy || muted))}
+				onclick={callState === 'speaking' ? oninterrupt : onturn}
+				>{callState === 'speaking'
+					? 'Stop speaking'
+					: turnBusy
+						? 'Working…'
+						: 'Send voice turn'}</Button
+			>
+		{/if}
 		<p class="text-xs text-muted-foreground">
 			Use Back to chat for approvals while the call stays open. Calls end when you leave the app or
 			after 15 minutes.
 		</p>
 	{:else}
-		<div class="flex gap-2">
-			<Button disabled={loading || !selected?.configured} onclick={onstart}>Start voice chat</Button
+		<div class="sticky bottom-0 -mx-4 -mb-4 flex gap-2 border-t bg-background p-4">
+			<Button class="flex-1" disabled={loading || !canStart} onclick={onstart}
+				>Start voice chat</Button
 			>
-			{#if error || !models.some((m) => m.configured)}<Button variant="outline" onclick={onretry}
-					>Retry</Button
+			{#if error || (mode === 'live' && !models.some((m) => m.configured))}<Button
+					variant="outline"
+					onclick={onretry}>Retry</Button
 				>{/if}
 		</div>
 	{/if}
