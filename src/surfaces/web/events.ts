@@ -780,3 +780,22 @@ export interface SearchResponse {
 	/** Sources that could not be searched this time (offline, older workspace, or busy). */
 	unavailable: ('chat' | 'notes')[];
 }
+
+/** Persistent assignments, separate from execution attempts. */
+export interface TaskRecord {
+	id: string;
+	title: string;
+	brief: string;
+	status: 'todo' | 'in-progress' | 'needs-you' | 'done' | 'cancelled';
+	checklist: { id: string; title: string; done: boolean }[];
+	sourceConversationId: string;
+	workConversationId?: string;
+	parentTaskId?: string;
+	agent?: string;
+	runIds: string[];
+	result?: string;
+	createdAt: string;
+	updatedAt: string;
+	revision: number;
+	legacyKey?: string;
+}

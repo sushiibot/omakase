@@ -1,3 +1,4 @@
+import { TASKS_MANAGE, tasksParams, tasksResult, type TaskRequest } from "../taskContracts.ts";
 import { BROWSER_READ, browserReadParams, browserReadResult, type BrowserReadResult } from "../browserContracts.ts";
 import { memoryParams, memoryOverview, memoryDetail } from "../memoryContracts.ts";
 import { runsStopParams, runsStopResult } from "../contracts.ts";
@@ -362,6 +363,10 @@ export class WorkspaceLink {
 
   async browserRead(conversationId: string, frames = false): Promise<BrowserReadResult> {
     return this.read(BROWSER_READ, browserReadParams, browserReadResult, { conversationId, frames }, 5000);
+  }
+
+  async tasksManage(request: TaskRequest) {
+    return this.read(TASKS_MANAGE, tasksParams, tasksResult, { request }, RUNS_TIMEOUT_MS);
   }
 
   async memoryRead(id?: string) {

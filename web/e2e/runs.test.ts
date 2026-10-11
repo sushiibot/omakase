@@ -43,7 +43,7 @@ test('the list groups runs by day, each with its status and what started it', as
 	await page.clock.setFixedTime(now);
 	await server(context, undefined, { now: now.getTime() });
 	await page.goto('/runs');
-	await expect(page.getByRole('heading', { name: 'Work', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
 	const sync = rows(page).filter({ hasText: 'Back up projects to the home server' }).first();
 	await expect(sync).toContainText('Failed');

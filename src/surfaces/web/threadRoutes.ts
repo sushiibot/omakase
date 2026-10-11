@@ -206,6 +206,18 @@ export class WebThreads {
       },
     });
   }
+  /** Stable task conversation, shared by UI and assistant task controls. */
+  async ensureTask(id: string, title: string, brief: string): Promise<void> {
+    return this.exclusive(async () => {
+      const existing = this.row(id);
+      if (existing) { if (existing.archived_at) await this.resume(existing); return; }
+      await this.deps.link.topicManage({ id, action: "create", title, brief });
+      this.deps.db.run("INSERT INTO web_threads (id, title, brief, created_at) VALUES (?, ?, ?, ?)", [id, title, JSON.stringify({ known: [brief], open: [title], recentFromMain: 0 }), Date.now()]);
+      this.channel(id).log.append("session", { kind: "new", initialContext: brief });
+      this.changed(id);
+    });
+  }
+
   private summary(row: ThreadRow) {
     const c = this.channel(row.id);
     const latest = c.log.page(["user", "reply", "proactive"], { limit: 1 })[0];
@@ -309,7 +321,7 @@ export class WebThreads {
             ? (latest.data as { text: string }).text.slice(0, 200)
             : "Main conversation",
         },
-        threads: this.rows().map((r) => this.summary(r)),
+        threads: this.rows().filter(r => !r.id.startsWith("task-t-")).map((r) => this.summary(r)),
         archiveAfterDays: IDLE_DAYS,
       });
     }
@@ -409,6 +421,11 @@ export class WebThreads {
     }
     return json({ error: "not found" }, 404);
   }
+  taskNeedsInput(id: string): boolean {
+    if (!this.row(id)) return false;
+    const pending = this.channel(id).log.pending({ approvalsSince: 0, asks: 100 });
+    return pending.asks.length > 0 || pending.approvals.length > 0;
+  }
   workspaceConnected() {
     for (const c of this.channels.values()) c.routes.workspaceConnected();
   }
@@ -420,6 +437,7 @@ export class WebThreads {
       const c = this.channel(r.id);
       c.log.prune(Date.now());
       if (
+        !r.id.startsWith("task-t-") &&
         !r.archived_at &&
         this.summary(r).state === "idle" &&
         Date.parse(this.summary(r).lastActivity) <

@@ -9,7 +9,7 @@ export async function smallTargets(page: Page) {
 		'a, button, [role=button], [role=switch], [role=radio], input, textarea, summary',
 		(els) =>
 			els
-				.filter((e) => !(e.tagName === 'A' && e.closest('p')))
+				.filter((e) => !e.closest('[inert]') && !(e.tagName === 'A' && e.closest('p')))
 				.map((e) => ({ e, r: e.getBoundingClientRect() }))
 				.filter(({ r }) => r.width > 0 && (r.width < 48 || r.height < 48))
 				.map(({ e }) => e.outerHTML.slice(0, 100))
@@ -56,7 +56,8 @@ export async function horizontalOverflow(page: Page) {
 		for (const el of document.body.querySelectorAll('*')) {
 			// Pager tracks, inactive panels and scrollable tab labels intentionally sit inside clipped viewports.
 			if (
-				el.matches('[data-tab-track]') ||
+				el.matches('[data-tab-track],[data-task-track]') ||
+				el.closest('[inert]') ||
 				el.closest('[data-tab-panel][aria-hidden=true]') ||
 				el.closest('[data-tab-strip]')
 			)

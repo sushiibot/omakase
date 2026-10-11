@@ -45,7 +45,7 @@ export function threadIndex(stateDir: string) {
     .filter(
       ([id, r]) =>
         id !== "main" &&
-        TOPIC_ID_RE.test(id) &&
+        !id.startsWith("task-t-") && TOPIC_ID_RE.test(id) &&
         r &&
         typeof r.title === "string",
     )

@@ -1,4 +1,5 @@
 import { exitAfterBackoff } from "../crashBackoff.ts";
+import { TaskStore } from "./taskStore.ts";
 import { BrowserManager, localBrowserDriver } from "./browser.ts";
 import { runsStopParams, RPC_METHODS } from "../orchestration/contracts.ts";
 // First: initialises OTel (when OTEL_EXPORTER_OTLP_ENDPOINT is set) before anything creates spans.
@@ -65,7 +66,19 @@ async function main(): Promise<void> {
   const historyLog = getLogger("workspace.history");
   const history = new HistoryWriter({ home: config.home, agentDir: config.agentDir, tz: config.tz });
   let client: OrchestrationClient | null = null;
-  const runs = notifyRunChanges(recordHistory(runLog, history, historyLog), (method, params) => client?.notify(method, params), config.principalId, log);
+  const taskStore = new TaskStore(config.stateDir, config.home);
+  const recordedRuns = notifyRunChanges(recordHistory(runLog, history, historyLog), (method, params) => client?.notify(method, params), config.principalId, log);
+  taskStore.setRunActivity(id => recordedRuns.getRun(id)?.status === "running");
+  const runs: import("./runLog.ts").RunRecorder = {
+    startRun(input) {
+      const id = recordedRuns.startRun(input);
+      const task = !input.parentRunId && taskStore.list().find(t => t.workConversationId === input.conversationId);
+      if (task) taskStore.attachRun(task.id, id, "Sushii");
+      return id;
+    },
+    endRun(id, end) { recordedRuns.endRun(id, end); taskStore.settleRun(id, end.status, end.resultSummary); },
+    listRuns: q => recordedRuns.listRuns(q), getRun: id => recordedRuns.getRun(id),
+  };
   const toolStubs = new ToolStubs({
     principalId: config.principalId,
     request: (method, params, timeoutMs) => (client ? client.request(method, params, { timeoutMs }) : Promise.reject(new NotConnectedError())),
@@ -111,6 +124,7 @@ async function main(): Promise<void> {
   const durableState = new DurableState(config.stateDir);
   const subagents = new SubagentHost({
     config,
+    tasks: taskStore,
     runs,
     selector,
     toolStubs,
@@ -121,6 +135,7 @@ async function main(): Promise<void> {
     wake: (r, consumed) => (topicsRef ?? personalRef)?.wake({ id: r.runId, text: r.text, origin: r.origin, onConsumed: consumed }),
   });
   watchRef = subagents.watch;
+  taskStore.setProjectionLease(() => subagents.watch.mainWrite(["TASKS.md"]));
   const connectors = new ConnectorManager(config.agentDir);
   await connectors.start();
   const personalOptions = {
@@ -132,7 +147,7 @@ async function main(): Promise<void> {
     conversationId: "main",
     tz: config.tz,
     uploads: { dir: join(config.home, UPLOADS_DIR) },
-    factory: createPiChatSessionFactory(config, { runs, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = personalTurn?.currentTurnId(); return turnId ? turns.get(turnId) : null; }, mainTurnId: () => personalTurn?.currentTurnId() }),
+    factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = personalTurn?.currentTurnId(); return turnId ? turns.get(turnId) : null; }, mainTurnId: () => personalTurn?.currentTurnId() }),
     memory: {
       compactionTrigger,
       reload: reloadContext,
@@ -209,7 +224,7 @@ async function main(): Promise<void> {
         ...personalOptions,
         stateDir: join(config.stateDir, "topics", id),
         conversationId: id,
-        factory: createPiChatSessionFactory(config, { runs, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = topic.currentTurnId(); return turnId ? { turnId, origin: { surface: "web", conversationId: id } } : null; }, origin: { surface: "web", conversationId: id }, sessionDir: join(config.agentDir, "topics", id), agentName: `topic:${id}`, mainTurnId: () => topic.currentTurnId() }),
+        factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = topic.currentTurnId(); return turnId ? { turnId, origin: { surface: "web", conversationId: id } } : null; }, origin: { surface: "web", conversationId: id }, sessionDir: join(config.agentDir, "topics", id), agentName: `topic:${id}`, mainTurnId: () => topic.currentTurnId() }),
         context: { ...personalOptions.context, busy: () => subagents.isBusy({ surface: "web", conversationId: id }) },
       });
       return topic;
@@ -278,6 +293,7 @@ async function main(): Promise<void> {
     state: () => topics.state,
     handlers: {
       ...personal.handlers(),
+      ...taskStore.handlers(config.principalId),
       ...browsers.handlers(config.principalId),
       ...connectors.handlers(config.principalId),
       ...chatExportHandlers({ principalId: config.principalId, reader: new ChatExportReader({ agentDir: config.agentDir }) }),

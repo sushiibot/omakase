@@ -64,6 +64,7 @@ const pastTheEdge = (page: Page) =>
 			`${el.tagName.toLowerCase()}.${[...el.classList].slice(0, 3).join('.')}`;
 		const out: string[] = [];
 		for (const el of document.body.querySelectorAll('*')) {
+			if (el.closest('[inert]') || el.matches('[data-task-track]')) continue;
 			const r = el.getBoundingClientRect();
 			if (r.width > 1 && r.right > width + 0.5 && !inScroller(el)) out.push(name(el));
 		}
@@ -76,7 +77,7 @@ const pastTheEdge = (page: Page) =>
 			if (
 				r.width > 1 &&
 				r.right > width + 0.5 &&
-				!host.closest('.sr-only') &&
+				!host.closest('.sr-only,[inert]') &&
 				!inScroller(node as unknown as Element)
 			) {
 				out.push(`text in ${name(host)}`);

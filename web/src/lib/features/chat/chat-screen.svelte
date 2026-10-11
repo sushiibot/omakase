@@ -493,12 +493,12 @@
 	{@render headerActions?.()}
 	{#if !readOnly}
 		{@render voice?.()}
-		<Button
-			variant="ghost"
-			class="size-12 px-0"
-			aria-label="Chat commands"
-			onclick={() => onopensheet?.('commands')}><EllipsisVertical class="size-5" /></Button
-		>
+		{#if onopensheet}<Button
+				variant="ghost"
+				class="size-12 px-0"
+				aria-label="Chat commands"
+				onclick={() => onopensheet?.('commands')}><EllipsisVertical class="size-5" /></Button
+			>{/if}
 	{/if}
 {/snippet}
 
@@ -543,7 +543,7 @@
 				context={models?.context?.percent ?? null}
 				contextEstimated={models?.context?.estimated ?? false}
 				fallback={answeringFallback}
-				onmodel={() => onopensheet?.('model')}
+				onmodel={onopensheet ? () => onopensheet?.('model') : undefined}
 				{dictation}
 				{ondictate}
 			/>

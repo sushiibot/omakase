@@ -1,3 +1,5 @@
+import { taskAwareness } from "./taskAwareness.ts";
+import type { TaskStore } from "./taskStore.ts";
 import type { BrowserManager, BrowserBinding } from "./browser.ts";
 import { relative } from "node:path";
 import { threadAwareness, threadContextTools } from "./threadContext.ts";
@@ -172,6 +174,7 @@ export function createPiChatSessionFactory(
   config: WorkspaceConfig,
   opts: {
     runs?: RunRecorder;
+    tasks?: TaskStore;
     toolStubs?: ToolStubs;
     selector?: BackendSelector;
     subagents?: SubagentHost;
@@ -279,6 +282,7 @@ export function createPiChatSessionFactory(
       // Only the factories below: the agent can write ~/.pi and <cwd>/.pi, so discovered extensions would run its code in-process.
       noExtensions: true,
       extensionFactories: [
+        ...(opts.tasks ? [{ name: "sushii-tasks", factory: taskAwareness(opts.tasks, opts.origin?.conversationId ?? "main") }] : []),
         ...(checkpoint ? [{ name: "sushii-durable-input", factory: createInputCheckpointExtension(checkpoint) }] : []),
         ...(!opts.origin || opts.origin.conversationId === "main" ? [{ name: "sushii-thread-awareness", factory: threadAwareness(config.stateDir) }] : []),
         // First: tool_call stops at the first block, so a guard ahead of it would hide repeats from it.

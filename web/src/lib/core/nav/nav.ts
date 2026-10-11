@@ -1,3 +1,4 @@
+import ListChecks from '@lucide/svelte/icons/list-checks';
 import Activity from '@lucide/svelte/icons/activity';
 import BookMarked from '@lucide/svelte/icons/book-marked';
 import CalendarClock from '@lucide/svelte/icons/calendar-clock';
@@ -30,6 +31,13 @@ const chats: NavEntry = {
 /** The More screen, top to bottom. */
 const moreEntries: NavEntry[] = [
 	{
+		id: 'tasks',
+		href: '/tasks',
+		label: 'Tasks',
+		icon: ListChecks,
+		description: 'Your to-dos, checklists and delegated work'
+	},
+	{
 		id: 'briefing',
 		href: '/briefing',
 		label: 'Briefing',
@@ -40,9 +48,9 @@ const moreEntries: NavEntry[] = [
 	{
 		id: 'runs',
 		href: '/runs',
-		label: 'Work',
+		label: 'Activity',
 		icon: Activity,
-		description: 'Tasks, delegated agents and execution activity'
+		description: 'Execution records, delegated agents and scheduled runs'
 	},
 	{
 		id: 'history',

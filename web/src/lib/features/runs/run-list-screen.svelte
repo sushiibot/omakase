@@ -138,7 +138,7 @@
 {/snippet}
 
 <TabbedScreen
-	title="Work"
+	title="Activity"
 	{back}
 	{banner}
 	{tabs}

@@ -10,3 +10,6 @@ test-results/
 
 # ad-hoc secret staging files (never commit)
 .env.temp*
+
+# Generated visual review captures
+.impeccable/review/

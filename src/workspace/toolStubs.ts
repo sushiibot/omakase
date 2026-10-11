@@ -20,6 +20,7 @@ export const KNOWN_PROXIED_TOOLS: readonly string[] = [
   "file_linear_issue",
   "team_config",
   "request_current_location",
+  "task_manage",
 ];
 
 /** Above the bot's 30 min approval wait plus its 120 s execution cap. */

@@ -1,3 +1,4 @@
+import { createFixtureTasksApi } from '../src/lib/features/tasks/fake';
 // The routes the not-yet-built backends will serve (threads, memory, skills, schedules, browser,
 // briefing, connectors), answered by each feature's fixture API, as the app build never holds them.
 import type { BrowserContext, Route } from '@playwright/test';
@@ -29,6 +30,7 @@ export async function fixtureRoutes(
 ): Promise<FixtureRoutes> {
 	const scenarios: Record<string, FixtureScenario> = { ...initial };
 	const pick = (f: FixtureFeature) => () => scenarios[f] ?? 'normal';
+	const tasks = createFixtureTasksApi();
 	const threads = createFixtureThreadsApi(pick('threads'));
 	const memory = createFixtureMemoryApi(pick('memory'));
 	const skills = createFixtureSkillsApi(pick('skills'));
@@ -62,6 +64,19 @@ export async function fixtureRoutes(
 		const m = (re: RegExp) => re.exec(path);
 		let hit: RegExpExecArray | null;
 
+		if (path === '/tasks')
+			return route.fulfill({ json: await (post ? tasks.action(body) : tasks.list()) });
+		if ((hit = m(/^\/tasks\/([^/]+)\/chat\/(.*)$/))) {
+			if (hit[2] === 'history') return route.fulfill({ json: { items: [], before: null } });
+			if (hit[2] === 'stream')
+				return route.fulfill({
+					contentType: 'text/event-stream',
+					body: `event: hello\ndata: ${JSON.stringify({ headSeq: 0, workspace: 'online', openTurns: [], pending: { approvals: [], asks: [] } })}\n\n`
+				});
+			if (hit[2] === 'messages')
+				return route.fulfill({ status: 202, json: { seq: 1, routed: true } });
+			return route.fulfill({ status: 204 });
+		}
 		if ((hit = m(/^\/threads\/([^/]+)\/chat\/(.*)$/))) {
 			const id = hit[1];
 			const sub = hit[2];

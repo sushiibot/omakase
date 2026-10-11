@@ -1,3 +1,4 @@
+import type { TaskStore } from "../taskStore.ts";
 import type { BrowserManager, BrowserBinding } from "../browser.ts";
 import { autoCompactionSettings } from "../contextEconomy.ts";
 import { existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
@@ -86,6 +87,7 @@ export const DEFAULT_LIMITS: SubagentLimits = {
 
 export interface SubagentHostOptions {
   config: WorkspaceConfig;
+  tasks?: TaskStore;
   runs: RunRecorder;
   /** The process-wide backend selector: children start on its backend, and a child's ChatGPT failure flips it for everyone. */
   selector: BackendSelector;
@@ -305,7 +307,7 @@ export class SubagentHost {
         continue: Type.Optional(Type.String({ description: "runId of a finished child to prompt again." })),
         background: Type.Optional(Type.Boolean({ description: "Return at once; the result is delivered later." })),
         repo: Type.Optional(Type.String({ description: "For writer agents: the repo directory under projects/." })),
-        taskId: Type.Optional(Type.String({ description: "With background: the TASKS.md item id (t-…) or project slug this run works on." })),
+        taskId: Type.Optional(Type.String({ description: "With background: the persistent task ID (t-…) this run works on." })),
       }) as ToolDefinition["parameters"],
       execute: async (toolCallId: string, params: unknown, signal: AbortSignal | undefined, _onUpdate: unknown, ctx: ExtensionContext) => {
         const out = await this.delegate(params as DelegateArgs, { parent, pi, toolCallId, signal, ctx });
@@ -324,8 +326,8 @@ export class SubagentHost {
     if (!parentRunId) throw new Error("delegate: no parent run in progress");
     const task = args.task?.trim();
     if (!task) throw new Error("delegate: `task` is empty");
-    const taskId = args.taskId?.trim().toLowerCase();
-    if (taskId !== undefined && !TASK_ID.test(taskId)) throw new Error("delegate: `taskId` must be a TASKS.md id (t-…) or a project slug");
+    let taskId = args.taskId?.trim().toLowerCase();
+    if (taskId !== undefined && !TASK_ID.test(taskId)) throw new Error("delegate: `taskId` must be a persistent task ID (t-…) or a legacy project slug");
     const depth = call.parent.depth + 1;
     const turn = call.parent.currentTurn ? call.parent.currentTurn() : this.opts.currentTurn?.() ?? null;
 
@@ -359,6 +361,14 @@ export class SubagentHost {
       if (worktree) log.warn({ worktree: worktree.path }, "subagent run not recorded; its new worktree is left in place");
       throw err;
     }
+    try { if (this.opts.tasks) {
+      const parentTask = this.opts.tasks.list().find(t => t.workConversationId === turn?.origin?.conversationId);
+      const prior = args.continue ? this.opts.tasks.forRun(args.continue) : undefined;
+      const existing = prior ?? this.opts.tasks.list().find(t => t.id === taskId || t.legacyKey === taskId);
+      const assigned = existing ?? this.opts.tasks.manage({ action: "create", title: task.slice(0, 120), brief: task.slice(0, 16000), conversationId: parentTask?.sourceConversationId ?? turn?.origin?.conversationId ?? "main", ...(parentTask ? { parentTaskId: parentTask.id } : {}) }).tasks[0]!;
+      taskId = assigned.id;
+      this.opts.tasks.attachRun(taskId, runId, def.name);
+    } } catch (err) { release(); this.opts.runs.endRun(runId, { status: "failed", resultSummary: "Task assignment could not be saved." }); throw err; }
     const spawnKey = `${def.name}#${ulid()}`;
     this.defsBySpawn.set(spawnKey, def);
 
@@ -513,7 +523,7 @@ export class SubagentHost {
     const attrs = `runId="${outcome.runId}" agent="${spawn.def.name}" status="${outcome.status}"`;
     const body = outcome.text.replace(/<\/?subagent-result/gi, (m) => m.replace("<", "&lt;"));
     const taskNote = spawn.taskId
-      ? `\n[This background run was for task ${spawn.taskId}: note its outcome and run:${outcome.runId} on that item's TASKS.md line (or in its project file), keeping the note to one line.]`
+      ? `\n[This background run was for task ${spawn.taskId}: use task_manage to update its outcome and checklist. TASKS.md is generated; do not edit it.]`
       : "";
     const result: PendingResult = {
       runId: outcome.runId,
@@ -954,6 +964,7 @@ function childSystemPrompt(spawn: Spawn, cwd: string, home: string, cap: number)
     spawn.def.prompt,
     "",
     "## Subagent rules",
+    ...(spawn.taskId ? [`Persistent task: ${spawn.taskId}. Use task_manage to update the checklist and task status when appropriate. TASKS.md is generated; do not edit it.`] : []),
     `You are the \`${spawn.def.name}\` subagent (runId ${spawn.runId}), working for drk's personal agent, not for drk directly.`,
     `Your final message is your result: the main agent sees only it, cut at ${cap} chars. Make it a self-contained summary with concrete findings (paths, commands, links).`,
     "You can't ask questions or message anyone; if something is ambiguous, state your assumption and carry on.",

@@ -198,7 +198,7 @@ export interface StaleEntry {
 /** Open quick items and projects past their staleness age. */
 export function staleEntries(home: string, rules: TaskRules, now: Date): StaleEntry[] {
   const text = readTasks(home);
-  if (text === null) return [];
+  if (text === null || text.includes("<!-- tasks-v2:")) return [];
   const index = parseTasksIndex(text, home);
   const out: StaleEntry[] = [];
   for (const q of index.quick) {
@@ -293,6 +293,7 @@ export interface MaintenanceResult {
 export function maintainTasks(home: string, rules: TaskRules, now: Date): MaintenanceResult {
   const text = readTasks(home);
   const actions: string[] = [];
+  if (text?.includes("<!-- tasks-v2:")) return { changed: false, actions, overCap: false };
   if (text === null) return { changed: false, actions, overCap: false };
   const date = today(now);
   const index = parseTasksIndex(text, home);

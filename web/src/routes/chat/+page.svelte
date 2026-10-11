@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { TaskWorkspace } from '$lib/features/tasks';
+	import { Button } from '$lib/ui/button';
+	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import { BrowserPreview, BrowserPreviewPanel } from '$lib/features/browser';
-	import { BackgroundAgents } from '$lib/features/runs';
 	import { onMount, tick, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -30,6 +32,7 @@
 	const threads = threadsStore();
 	const branch = routedSheet('branch');
 	const browserSheet = routedSheet('browser-preview');
+	const taskPane = routedSheet('tasks');
 	const browser = new BrowserPreview('main');
 	$effect(() => {
 		const preview = browser;
@@ -179,15 +182,6 @@
 
 <svelte:head><title>Chat · sushii</title></svelte:head>
 
-{#snippet backgroundActivity()}<BackgroundAgents
-		onrun={(id) => goto(resolve('/runs/[id]', { id }))}
-		compact
-	/>{/snippet}
-{#snippet delegatedActivity(turnId: string)}<BackgroundAgents
-		onrun={(id) => goto(resolve('/runs/[id]', { id }))}
-		{turnId}
-	/>{/snippet}
-
 {#snippet browserPreview()}
 	<BrowserPreviewPanel
 		status={browser.status}
@@ -238,84 +232,99 @@
 	/>
 {/snippet}
 
-<ChatScreen
-	contextBoundaryId={sheets['context-boundary'].arg}
-	title="Sushii"
-	{backgroundActivity}
-	{delegatedActivity}
-	approvalSubmitting={s.trayPhase === 'submitting'}
-	messages={s.messages}
-	history={s.history}
-	hasOlder={s.hasOlder}
-	olderLoading={s.olderLoading}
-	olderError={s.olderError}
-	running={s.running}
-	stopping={s.stopping}
-	approvals={store.approvals}
-	draft={s.draft}
-	photos={s.photos}
-	quotaFull={s.quotaFull}
-	usage={s.usage}
-	models={models.remote.data ?? null}
-	modelPicking={models.picking}
-	modelError={models.error}
-	{modelRole}
-	modelQuery={models.query}
-	modelResults={models.results}
-	modelSearching={models.searching}
-	modelSearchError={models.searchError}
-	onmodelrole={(r) => (modelRole = r)}
-	onmodelquery={(q) => models.setQuery(q)}
-	dictation={{
-		state: dictation.state,
-		seconds: dictation.seconds,
-		error: dictation.error,
-		disabled: voiceActive
-	}}
-	ondictate={() => dictation.toggle()}
-	voice={voiceControls}
-	{voiceStatus}
-	{browserPreview}
-	{voiceCaptions}
-	voiceHasContent={voice.state !== 'idle' && !!(voice.userText || voice.assistantText)}
-	onpickmodel={(alias, role) => void models.pick(alias, role).then((ok) => ok && closeSheet())}
-	{connection}
-	commandsOffline={s.workspace === 'offline'}
-	toast={s.toast}
-	updateReady={!!pwa.waiting}
-	canInstall={pwa.canInstall}
-	announce={s.announce}
-	{focusAsk}
-	{sheet}
-	{viewer}
-	onbranch={openBranch}
-	onopensheet={openSheet}
-	onclosesheet={closeSheet}
-	onopenfile={(f) => {
-		viewer = f;
-		openSheet('viewer');
-	}}
-	ondraft={(v) => s.setDraft(v)}
-	onsend={() => void s.send(s.draft)}
-	onstop={() => s.stopTurn()}
-	oncommand={async (c) => {
-		await s.command(c);
-		models.refresh();
-	}}
-	onattach={(files) => void s.attach(files)}
-	onremovephoto={(id) => s.removePhoto(id)}
-	onretryphoto={(id) => s.retryPhoto(id)}
-	onloadolder={() => s.loadOlder()}
-	onretryhistory={() => s.retryHistory()}
-	onretrysend={(id) => s.retry(id)}
-	onsteersend={(id) => s.steerNow(id)}
-	ondeletesend={(id) => void s.discard(id)}
-	onanswer={(askId, answer) => s.answer(askId, answer)}
-	onapprove={(nonce, location) => void s.decide(nonce, 'approve', location)}
-	ondeny={(nonce) => void s.decide(nonce, 'deny')}
-	oninstall={() => pwa.install()}
-	onreload={() => pwa.reload()}
-/>
+<TaskWorkspace
+	open={taskPane.open}
+	onopen={() => taskPane.openWith()}
+	onclose={() => taskPane.close()}
+>
+	{#snippet children(toggle: () => void, count: number)}
+		{#snippet taskActions()}<Button
+				variant="ghost"
+				class="min-w-12 gap-1 px-2"
+				aria-label="Tasks, {count} open"
+				aria-expanded={taskPane.open}
+				onclick={toggle}
+				><ListTodo class="size-5" /><span class="text-sm">{count || 'Tasks'}</span></Button
+			>{/snippet}
+		<ChatScreen
+			headerActions={taskActions}
+			contextBoundaryId={sheets['context-boundary'].arg}
+			title="Sushii"
+			approvalSubmitting={s.trayPhase === 'submitting'}
+			messages={s.messages}
+			history={s.history}
+			hasOlder={s.hasOlder}
+			olderLoading={s.olderLoading}
+			olderError={s.olderError}
+			running={s.running}
+			stopping={s.stopping}
+			approvals={store.approvals}
+			draft={s.draft}
+			photos={s.photos}
+			quotaFull={s.quotaFull}
+			usage={s.usage}
+			models={models.remote.data ?? null}
+			modelPicking={models.picking}
+			modelError={models.error}
+			{modelRole}
+			modelQuery={models.query}
+			modelResults={models.results}
+			modelSearching={models.searching}
+			modelSearchError={models.searchError}
+			onmodelrole={(r) => (modelRole = r)}
+			onmodelquery={(q) => models.setQuery(q)}
+			dictation={{
+				state: dictation.state,
+				seconds: dictation.seconds,
+				error: dictation.error,
+				disabled: voiceActive
+			}}
+			ondictate={() => dictation.toggle()}
+			voice={voiceControls}
+			{voiceStatus}
+			{browserPreview}
+			{voiceCaptions}
+			voiceHasContent={voice.state !== 'idle' && !!(voice.userText || voice.assistantText)}
+			onpickmodel={(alias, role) => void models.pick(alias, role).then((ok) => ok && closeSheet())}
+			{connection}
+			commandsOffline={s.workspace === 'offline'}
+			toast={s.toast}
+			updateReady={!!pwa.waiting}
+			canInstall={pwa.canInstall}
+			announce={s.announce}
+			{focusAsk}
+			{sheet}
+			{viewer}
+			onbranch={openBranch}
+			onopensheet={openSheet}
+			onclosesheet={closeSheet}
+			onopenfile={(f) => {
+				viewer = f;
+				openSheet('viewer');
+			}}
+			ondraft={(v) => s.setDraft(v)}
+			onsend={() => void s.send(s.draft)}
+			onstop={() => s.stopTurn()}
+			oncommand={async (c) => {
+				await s.command(c);
+				models.refresh();
+			}}
+			onattach={(files) => void s.attach(files)}
+			onremovephoto={(id) => s.removePhoto(id)}
+			onretryphoto={(id) => s.retryPhoto(id)}
+			onloadolder={() => s.loadOlder()}
+			onretryhistory={() => s.retryHistory()}
+			onretrysend={(id) => s.retry(id)}
+			onsteersend={(id) => s.steerNow(id)}
+			ondeletesend={(id) => void s.discard(id)}
+			onanswer={(askId, answer) => s.answer(askId, answer)}
+			onapprove={(nonce, location) => void s.decide(nonce, 'approve', location)}
+			ondeny={(nonce) => void s.decide(nonce, 'deny')}
+			oninstall={() => pwa.install()}
+			onreload={() => pwa.reload()}
+		/>
+	{/snippet}
+</TaskWorkspace>
 <ClearNotifications store={s} />
 
 <BranchSheet

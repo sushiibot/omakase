@@ -1,346 +1,143 @@
-import { expect, test, type BrowserContext } from '@playwright/test';
-import { axe, fixtureApp, push } from './helpers';
-import type { RunDetailResponse, RunSummary } from '../src/lib/core/realtime/events';
-test.beforeEach(async ({ page }) => {
-	page.on('pageerror', (error) =>
-		console.error('BACKGROUND PAGE ERROR:', error.stack ?? error.message)
-	);
-	page.on('requestfailed', (request) =>
-		console.error('BACKGROUND REQUEST FAILED:', request.url(), request.failure()?.errorText)
-	);
-});
-const MAIN = '01K6B2N8W3J5Q7R9T1V3X5Z7A9';
-const TRIP = '01K6B2N8W3J5Q7R9T1V3X5Z7AA';
-const TURN = 'parent-turn';
-const at = new Date().toISOString();
-const reply = {
-	type: 'assistant',
-	id: 'parent-reply',
-	turnId: TURN,
-	at,
-	text: 'I started the code changes.',
-	tools: [],
-	files: []
-};
-async function agents(
-	context: BrowserContext,
-	history: unknown[] = [reply],
-	mainOutsideRecent = false,
-	taskBrief?: string
-) {
-	await fixtureApp(context, { history });
-	const listCalls: string[] = [],
-		stops: string[] = [];
-	const runs: RunSummary[] = [
-		{
-			runId: MAIN,
-			conversationId: 'main',
-			turnId: TURN,
-			kind: 'subagent',
-			agentName: 'coder',
-			repo: 'sushiibot-sushii-agent',
-			title: taskBrief ? `${taskBrief.slice(0, 240)}…` : 'Implement thread UX changes',
-			status: 'running',
-			startedAt: at
-		},
-		{
-			runId: TRIP,
-			conversationId: 'oct-trip',
-			turnId: 'trip-parent',
-			kind: 'subagent',
-			agentName: 'researcher',
-			title: 'Check train options',
-			status: 'running',
-			startedAt: at
-		}
-	];
-	await context.route('**/api/runs**', async (route) => {
-		const url = new URL(route.request().url());
-		if (url.pathname === '/api/runs') {
-			const conversation = url.searchParams.get('conversationId') ?? '';
-			listCalls.push(conversation);
-			return route.fulfill({
-				json: {
-					runs: runs.filter(
-						(r) =>
-							r.conversationId === conversation &&
-							(url.searchParams.get('status') !== 'running' || r.status === 'running') &&
-							(!mainOutsideRecent ||
-								url.searchParams.get('status') === 'running' ||
-								r.runId !== MAIN)
-					),
-					before: null,
-					truncated: false
-				}
-			});
-		}
-		const run = runs.find((r) => r.runId === url.pathname.split('/')[3]);
-		if (!run) return route.fulfill({ status: 404 });
-		if (url.pathname.endsWith('/stop')) {
-			expect(route.request().method()).toBe('POST');
-			stops.push(run.runId);
-			run.status = 'aborted';
-			run.endedAt = new Date().toISOString();
-			return route.fulfill({ json: { stopped: true } });
-		}
-		const detail: RunDetailResponse = {
-			run,
-			children: [],
-			session: 'ok',
-			steps: [
-				...(taskBrief ? [{ id: 'brief', type: 'user' as const, at, text: taskBrief }] : []),
-				{
-					id: 'step1',
-					type: 'assistant',
-					at,
-					text: run.runId === MAIN ? 'Reading thread routes.' : 'Checking rail schedules.'
-				}
-			],
-			after: null,
-			approvals: [],
-			files: []
-		};
-		return route.fulfill({ json: detail });
-	});
-	return { runs, listCalls, stops };
-}
-test('delegated work stays on its originating turn after the parent finishes and survives reload', async ({
-	page,
-	context
-}) => {
-	await agents(context, []);
+import { expect, test } from '@playwright/test';
+import { axe, fixtureApp, horizontalOverflow, smallTargets } from './helpers';
+
+test('tasks live beside chat; mobile back restores the main draft', async ({ page, context }) => {
+	await fixtureApp(context);
 	await page.goto('/chat');
-	await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
-	await push(page, 'snapshot', {
-		turnId: TURN,
-		view: { turnId: TURN, startedAt: Date.now(), lines: [], toolCount: 0, text: reply.text }
-	});
-	const card = page.locator('[data-delegated-agents]');
-	await expect(card).toContainText('Implement thread UX changes');
-	await expect(card).toContainText('coder · sushiibot-sushii-agent · Running');
-	await expect(card).toContainText('Reading thread routes.');
-	await expect(
-		page
-			.locator('[data-message-id]')
-			.filter({ hasText: reply.text })
-			.locator('[data-delegated-agents]')
-	).toHaveCount(1);
-	await push(page, 'reply', { key: 'parent-reply', turnId: TURN, text: reply.text, files: [] }, 1);
-	await push(page, 'turn_final', { turnId: TURN, outcome: 'done', summary: null }, 2);
-	await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeHidden();
-	await expect(card).toBeVisible();
-	await expect(page.locator('[data-background-work]')).toContainText('Delegated tasks · 1 running');
-	await context.route('**/api/chat/history**', (route) =>
-		route.fulfill({ json: { items: [reply], before: null } })
-	);
-	await page.reload();
-	await expect(page.locator('[data-delegated-agents]')).toContainText(
-		'Implement thread UX changes'
-	);
-	await expect(page.locator('[data-background-work]')).toContainText('1 running');
-	await page.screenshot({ path: '/tmp/background-mobile.png' });
-	await page.setViewportSize({ width: 1280, height: 800 });
-	await page.screenshot({ path: '/tmp/background-desktop.png' });
-});
-test('task activity opens in a sheet, back closes it, and Stop targets only that agent', async ({
-	page,
-	context
-}) => {
-	const backend = await agents(context);
-	await page.goto('/chat');
-	const card = page.locator('[data-delegated-agents]').getByRole('button');
-	await card.click();
-	const sheet = page.getByRole('dialog', { name: 'Agent activity' });
-	await expect(sheet).toBeVisible();
-	await expect(sheet).toContainText('Reading thread routes.');
-	await page.screenshot({ path: '/tmp/background-sheet-mobile.png' });
-	await expect(sheet.getByRole('link', { name: 'Open task' })).toHaveAttribute(
+	const composer = page.getByRole('textbox', { name: 'Message', exact: true });
+	await composer.fill('Keep this main draft');
+	await page.getByRole('button', { name: 'Tasks, 3 open' }).click();
+	const panel = page.getByRole('complementary', { name: 'Conversation tasks' });
+	await expect(panel).toBeVisible();
+	await expect(panel).toContainText('Fix login redirect');
+	await expect(panel).not.toContainText('Check train options');
+	await expect(page.locator('.workspace-chat')).toHaveAttribute('aria-hidden', 'true');
+	await expect(page.locator('[data-delegated-agents]')).toHaveCount(0);
+	await page.goBack();
+	await expect(composer).toBeVisible();
+	await expect(composer).toHaveValue('Keep this main draft');
+	await page.getByRole('button', { name: 'Tasks, 3 open' }).click();
+	await panel.getByRole('button', { name: /Fix login redirect/ }).click();
+	await expect(panel.getByRole('checkbox', { name: 'Test expired sessions' })).not.toBeChecked();
+	await panel.getByRole('checkbox', { name: 'Test expired sessions' }).check();
+	await expect(panel.getByRole('checkbox', { name: 'Test expired sessions' })).toBeChecked();
+	await expect(panel.getByRole('heading', { name: 'Latest result' })).toBeVisible();
+	await panel.getByRole('button', { name: 'Runs', exact: true }).click();
+	await expect(panel.locator('a[href="/runs/01K6B2N8W3J5Q7R9T1V3X5Z7A9"]')).toHaveAttribute(
 		'href',
-		`/runs/${MAIN}`
+		'/runs/01K6B2N8W3J5Q7R9T1V3X5Z7A9'
 	);
-	await page.goBack();
-	await expect(sheet).toBeHidden();
-	await expect(page).toHaveURL(/\/chat$/);
-	await expect(card).toBeVisible();
-	await card.click();
-	await sheet.getByRole('link', { name: 'Open task' }).click();
-	await expect(page).toHaveURL(new RegExp(`/runs/${MAIN}$`));
-	await page.goBack();
-	await expect(page).toHaveURL(/\/chat$/);
-	await expect(sheet).toBeHidden();
-	await expect(card).toBeVisible();
-	await card.click();
-	await sheet.getByRole('button', { name: 'Stop this agent' }).click();
-	await expect.poll(() => backend.stops).toEqual([MAIN]);
-	await expect(sheet).toContainText('Stopped');
-	await expect(sheet.getByRole('button', { name: 'Stop this agent' })).toBeHidden();
-	await expect(page.locator('[data-background-work]')).toBeHidden();
-	expect(backend.runs.find((r) => r.runId === TRIP)?.status).toBe('running');
+	await panel.getByRole('button', { name: 'Overview', exact: true }).click();
+	await expect.poll(() => horizontalOverflow(page)).toEqual([]);
+	await expect.poll(() => smallTargets(page)).toEqual([]);
+	expect(await axe(page)).toEqual([]);
 });
-test('Main and topic conversations show only their own background work', async ({
+test('the task list saves a to-do without starting work and keeps its checklist', async ({
 	page,
 	context
 }) => {
-	const backend = await agents(context);
-	await page.goto('/chat');
-	await expect(page.locator('[data-background-work]')).toContainText('1 running');
-	await expect(page.locator('[data-delegated-agents]')).not.toContainText('Check train options');
+	await fixtureApp(context);
+	await page.goto('/tasks');
+	await page.getByRole('textbox', { name: 'New task' }).fill('Renew passport');
+	await page.getByRole('button', { name: 'Add task', exact: true }).click();
+	await page.getByRole('button', { name: 'Renew passport', exact: true }).click();
+	await expect(page).toHaveURL(/\/tasks\/t-/);
+	await page
+		.getByRole('textbox', { name: 'Brief', exact: true })
+		.fill('Check the renewal requirements.');
+	await page.getByRole('button', { name: 'Save changes' }).click();
+	await page.getByRole('textbox', { name: 'New checklist step' }).fill('Find appointment times');
+	await page.getByRole('button', { name: 'Add checklist step' }).click();
+	await expect(page.getByRole('checkbox', { name: 'Find appointment times' })).not.toBeChecked();
+	await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Start with Sushii' })).toBeVisible();
+	await page.getByRole('button', { name: 'Overview', exact: true }).click();
+	await page.getByRole('button', { name: 'Mark done', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Reopen task' })).toBeVisible();
+});
+test('topic task panels scope assignments, and desktop keeps chat visible', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
 	await page.goto('/chats/oct-trip');
-	await expect(page.getByRole('heading', { name: 'October trip', level: 1 })).toBeVisible();
-	const strip = page.locator('[data-background-work]');
-	await expect(strip).toContainText('1 running');
-	await strip.locator('summary').click();
-	await expect(strip).toContainText('Check train options');
-	await expect(strip).not.toContainText('Implement thread UX changes');
-	await strip.getByRole('button', { name: 'Check train options' }).click();
-	await expect(page.getByRole('dialog', { name: 'Agent activity' })).toContainText(
-		'Checking rail schedules.'
-	);
-	expect(backend.listCalls).toContain('main');
-	expect(backend.listCalls).toContain('oct-trip');
-	expect(backend.listCalls).not.toContain('');
+	await page.getByRole('button', { name: 'Tasks, 1 open' }).click();
+	const panel = page.getByRole('complementary', { name: 'Conversation tasks' });
+	await expect(panel).toContainText('Check train options');
+	await expect(panel).not.toContainText('Fix login redirect');
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeVisible();
+	await expect(panel).toBeVisible();
 });
-
-test('an active agent remains visible when newer finished runs push it beyond the recent page', async ({
+test('task prompts use their task channel and preserve the main composer draft', async ({
 	page,
 	context
 }) => {
-	await agents(context, [reply], true);
-	await page.goto('/chat');
-	await expect(page.locator('[data-delegated-agents]')).toContainText(
-		'Implement thread UX changes'
-	);
-	await expect(page.locator('[data-background-work]')).toContainText('1 running');
-});
-
-test('cards and the activity sheet follow later pages and retain the latest activity after an empty poll', async ({
-	page,
-	context
-}) => {
-	await agents(context);
-	const cursors: (string | null)[] = [];
-	await context.route(`**/api/runs/${MAIN}**`, (route) => {
-		const after = new URL(route.request().url()).searchParams.get('after');
-		cursors.push(after);
-		const steps = !after
-			? Array.from({ length: 100 }, (_, i) => ({
-					id: `step${i + 1}`,
-					type: 'assistant',
-					at,
-					text: `Earlier activity ${i + 1}`
-				}))
-			: after === 'step100'
-				? [{ id: 'step101', type: 'assistant', at, text: 'Later activity beyond the first page.' }]
-				: [];
-		return route.fulfill({
-			json: {
-				run: {
-					runId: MAIN,
-					conversationId: 'main',
-					turnId: TURN,
-					kind: 'subagent',
-					agentName: 'coder',
-					title: 'Implement thread UX changes',
-					status: 'running',
-					startedAt: at
-				},
-				steps,
-				after: !after ? 'step100' : null,
-				children: [],
-				session: 'ok',
-				approvals: [],
-				files: []
-			}
-		});
+	await fixtureApp(context);
+	const sends: string[] = [];
+	await context.route('**/api/tasks/*/chat/messages', async (route) => {
+		sends.push(route.request().url());
+		return route.fulfill({ status: 202, json: { seq: 1, routed: true } });
 	});
 	await page.goto('/chat');
-	const card = page.locator('[data-delegated-agents]');
-	await expect(card).toContainText('Later activity beyond the first page.');
-	await card.getByRole('button').click();
-	const sheet = page.getByRole('dialog', { name: 'Agent activity' });
-	await expect(sheet).toContainText('Later activity beyond the first page.');
-	await expect(sheet.getByRole('link', { name: 'Open task' })).toHaveAttribute(
-		'href',
-		`/runs/${MAIN}`
+	await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Main draft');
+	await page.getByRole('button', { name: 'Tasks, 3 open' }).click();
+	const panel = page.getByRole('complementary', { name: 'Conversation tasks' });
+	await panel.getByRole('button', { name: /Fix login redirect/ }).click();
+	await panel.getByRole('button', { name: 'Conversation', exact: true }).click();
+	await panel
+		.getByRole('textbox', { name: 'Message', exact: true })
+		.fill('Also test expired sessions');
+	await panel.getByRole('button', { name: 'Send message', exact: true }).click();
+	await expect.poll(() => sends.length).toBe(1);
+	expect(sends[0]).toContain('/api/tasks/t-login/chat/messages');
+	await page.goBack();
+	await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue(
+		'Main draft'
 	);
-	await expect.poll(() => cursors.includes('step101')).toBe(true);
-	await expect(card).toContainText('Later activity beyond the first page.');
-	expect(cursors.filter((cursor) => cursor === null)).toHaveLength(1);
 });
-
-for (const width of [320, 412, 1280]) {
-	for (const theme of ['light', 'dark'] as const) {
-		test(`a long task stays below the activity heading at ${width}px in ${theme}`, async ({
-			page,
-			context
-		}) => {
-			const brief =
-				'Replace the Roosvicee concentrate photo with a ready-to-drink carton. ' +
-				'Read the repository instructions and check image sources. '.repeat(12) +
-				'Keep all other drink photos unchanged.';
-			await agents(context, [reply], false, brief);
+for (const width of [320, 412])
+	for (const theme of ['light', 'dark'] as const)
+		test(`tasks reflow and accessibility ${width} ${theme}`, async ({ page, context }) => {
+			await fixtureApp(context);
 			await page.setViewportSize({ width, height: 915 });
 			await page.emulateMedia({ colorScheme: theme });
-			await page.goto('/chat');
-			await page.locator('[data-delegated-agents]').getByRole('button').click();
-			const sheet = page.getByRole('dialog', { name: 'Agent activity' });
-			await expect(
-				sheet.getByRole('heading', { name: 'Agent activity', exact: true })
-			).toBeVisible();
-			await expect(sheet.locator('[data-task-brief] p')).not.toBeVisible();
-			await expect(sheet.getByRole('button', { name: 'Stop this agent' })).toBeVisible();
-			expect((await sheet.getByRole('heading').boundingBox())!.height).toBeLessThan(40);
-			expect(await axe(page)).toEqual([]);
-			await page.screenshot({ path: `/tmp/agent-activity-${width}-${theme}.png` });
-			await sheet.locator('[data-task-brief] summary').click();
-			await expect(sheet.locator('[data-task-brief] p')).toHaveText(brief);
-			expect(await axe(page)).toEqual([]);
+			await page.goto('/tasks');
+			await page.getByRole('button', { name: /Fix login redirect/ }).click();
+			await expect(page.getByRole('heading', { name: /Checklist/ })).toBeVisible();
 			expect(
-				await page.evaluate(
-					() => document.documentElement.scrollWidth <= document.documentElement.clientWidth
-				)
+				await page
+					.locator('input[type="text"],input:not([type]),textarea')
+					.evaluateAll((els) => els.every((el) => parseFloat(getComputedStyle(el).fontSize) >= 16))
 			).toBe(true);
-			await expect(sheet.getByRole('button', { name: 'Stop this agent' })).toBeVisible();
+			await expect.poll(() => horizontalOverflow(page)).toEqual([]);
+			await expect.poll(() => smallTargets(page)).toEqual([]);
+			expect(await axe(page)).toEqual([]);
 		});
-	}
-}
 
-test('delegation shows tool progress once and background navigation does not spin', async ({
+test('starting saves the visible brief, and a failed save never starts work', async ({
 	page,
 	context
 }) => {
-	await agents(context, []);
-	await page.goto('/chat');
-	await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
-	await push(page, 'snapshot', {
-		turnId: TURN,
-		view: {
-			turnId: TURN,
-			startedAt: Date.now(),
-			lines: [
-				{ id: 'search-call', name: 'web_search', summary: 'Find drink image', state: 'ok' },
-				{ id: 'delegate-call', name: 'delegate', summary: 'Replace drink photo', state: 'run' }
-			],
-			toolCount: 2,
-			text: ''
-		}
+	await fixtureApp(context);
+	await page.goto('/tasks');
+	await page.getByRole('button', { name: 'Book a dentist appointment', exact: true }).click();
+	await page
+		.getByRole('textbox', { name: 'Brief', exact: true })
+		.fill('Find an appointment after 3pm.');
+	let starts = 0;
+	await context.route('**/api/tasks', async (route) => {
+		if (route.request().method() !== 'POST') return route.fallback();
+		const action = route.request().postDataJSON();
+		if (action.action === 'start') starts++;
+		if (action.action === 'update')
+			return route.fulfill({ status: 409, json: { error: 'This task changed.' } });
+		return route.fallback();
 	});
-	await expect(page.locator('[data-tool-activity] > summary')).toContainText('Running');
-	await expect(page.locator('[data-typing]')).toHaveCount(0);
-	await expect(page.locator('[data-background-work]')).toContainText('1 running');
-	await expect(page.locator('[data-background-work] .animate-spin')).toHaveCount(0);
-	await expect(page.locator('[data-delegated-agents]')).toBeVisible();
-	await push(
-		page,
-		'tool',
-		{
-			turnId: TURN,
-			id: 'delegate-call',
-			name: 'delegate',
-			summary: 'Replace drink photo',
-			ok: true
-		},
-		1
+	await page.getByRole('button', { name: 'Ask Sushii to work on this', exact: true }).click();
+	await expect(page.getByRole('alert')).toContainText('Your draft is kept');
+	await expect(page.getByRole('textbox', { name: 'Brief', exact: true })).toHaveValue(
+		'Find an appointment after 3pm.'
 	);
-	await expect(page.locator('[data-typing]')).toBeVisible();
+	expect(starts).toBe(0);
 });

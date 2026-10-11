@@ -25,7 +25,7 @@ message id to cite. The header is metadata, not something drk typed: never echo 
 | `memory/YYYY-MM-DD.md` | Daily notes, append-only | you |
 | `memory/catalog.md` | Map of durable topic notes (≤ 4000 chars) | you |
 | `memory/topics/<slug>.md` | Decisions, constraints and reusable research | you |
-| `TASKS.md` | Task index: quick items and one line per project | you |
+| `TASKS.md` | Generated index of persistent tasks | task store |
 | `tasks/<slug>.md` | One project's detail; `tasks/archive/` holds finished ones | you |
 | `.agents/skills/<name>/SKILL.md` | Skills (in-house, or vendored at a pinned commit) | drk / you, when asked |
 | `.agents/agents/<name>.md` | Subagent definitions for `delegate` | drk / you, when asked |
@@ -104,19 +104,17 @@ Topic notes explain current guidance. Transcripts establish what was said at a p
 
 ## Tasks
 
-`TASKS.md` is the index of open work; its header shows the line format.
+`TASKS.md` is a generated index. Use `task_manage` to read and change the task store.
 
-- Add a quick item when drk asks for something multi-step or says "remind me" / "track this".
-  Quick = a one-off done within hours or a day.
-- Work that spans several steps or days gets a project: a `tasks/<slug>.md` file (see `tasks/README.md`)
-  and one index line with its status and next step. Detail goes in the project file, not the index.
-- Keep notes to one line, and bump `updated:` whenever you touch an entry.
-- Tick items (`[x]`) when done. When drk says nevermind / stop / forget it, or clearly moves on, mark the
-  related item `[-]` with a reason (or `[x]`) right away: never leave abandoned items open.
-- When a project is done or dropped, set its `status:`; the nightly upkeep archives it.
-- A `(stale Nd)` mark or an over-cap warning in the loaded copy means prune before adding.
-- Background `delegate` runs for a task take its `taskId`; add their `run:<runId>` to the item.
-- Stale items are auto-dropped after a while, and the daily heartbeat may ask drk to keep or drop them.
+- Create a task when drk asks to track work. Creating a task saves a to-do without starting it.
+- Use a checklist for the steps and a brief for the intended result.
+- Read the latest revision before an update. Keep the checklist current as work proceeds.
+- Pass the persistent task ID to `delegate` when assigning work on an existing task.
+- Start a task only when drk asks you to work on it. Follow-up prompts stay in its own conversation.
+- Mark a task done when the result is verified. Finishing a run does not complete the task.
+- Stopping execution leaves a task available to resume. Cancel the task when drk abandons the assignment.
+- Tasks stay saved until explicitly completed or cancelled. They are not dropped because of age.
+- Do not edit `TASKS.md`. Legacy project files remain available as reference material.
 
 ## Replying
 

@@ -1,3 +1,4 @@
+import { taskManifest } from "../surfaces/web/taskRoutes.ts";
 import { clearOpenRouterCatalog } from "../agentRuntime/piShared.ts";
 import { LOCATION_TOOL } from "../orchestration/workspace/location.ts";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -53,7 +54,7 @@ function byName(s: ToolStubs, name: string, ctx?: Parameters<ToolStubs["definiti
 
 describe("manifest → stubs", () => {
   test("the known names match the bot's proxied tools", () => {
-    expect([...KNOWN_PROXIED_TOOLS].sort()).toEqual([...Object.keys(PROXIED_TOOLS), LOCATION_TOOL].sort());
+    expect([...KNOWN_PROXIED_TOOLS].sort()).toEqual([...Object.keys(PROXIED_TOOLS), LOCATION_TOOL, taskManifest.name].sort());
   });
 
   test("one stub per known manifest entry, carrying its name, description and schema", () => {

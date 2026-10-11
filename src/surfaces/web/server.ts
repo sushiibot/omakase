@@ -49,6 +49,7 @@ export interface WebHandlerDeps {
   /** The /api/chat routes; absent when the chat surface is not wired. */
   chat?: ChatRoutes;
   threads?: import("./threadRoutes.ts").WebThreads;
+  tasks?: import("./taskRoutes.ts").TaskRoutes;
   /** The /api/home routes. */
   home?: HomeRoutes;
   /** /api/runs, /api/history and /api/search; absent: they answer 404. */
@@ -117,6 +118,10 @@ export function createWebHandler(deps: WebHandlerDeps): WebHandler {
       if (!deps.threads) return json({ error: "not found" }, 404);
       try { return (await deps.threads.handle(req, path, actor, server)) ?? json({ error: "not found" }, 404); }
       catch (err) { logger.warn({ err }, "thread request failed"); return json({ error: err instanceof Error ? err.message : "Thread request failed" }, 409); }
+    }
+    if (deps.tasks) {
+      const res = await deps.tasks.handle(req, path, actor, server);
+      if (res) return res;
     }
     if (chat) {
       const res = await chat.handle(req, path, actor, server);
@@ -232,6 +237,7 @@ export interface WebServerOptions {
   uploads?: DiskUploadStore;
   chat?: ChatRoutes;
   threads?: import("./threadRoutes.ts").WebThreads;
+  tasks?: import("./taskRoutes.ts").TaskRoutes;
   home?: HomeRoutes;
   /** Sources for the live read-only routes. */
   reads?: ReadRouteDeps;
@@ -265,6 +271,7 @@ export async function startWebServer(config: WebConfig, db: Database, opts: WebS
     ...(opts.uploads ? { uploads: opts.uploads } : {}),
     ...(opts.chat ? { chat: opts.chat } : {}),
     ...(opts.threads ? { threads: opts.threads } : {}),
+    ...(opts.tasks ? { tasks: opts.tasks } : {}),
     ...(opts.home ? { home: opts.home } : {}),
     ...(opts.reads ? { reads: createReadRoutes(opts.reads) } : {}),
     ...(opts.dictation ? { dictation: opts.dictation } : {}),

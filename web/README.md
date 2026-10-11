@@ -122,3 +122,9 @@ when internet works but the tailnet gateway cannot be reached. Live API errors r
 visible. A permission refusal clears snapshots, and a missing thread removes its cache.
 The offline Threads list shows only locally available conversations. Reconnection
 refreshes the list and any open conversation loaded from a snapshot.
+
+## Tasks
+
+Tasks is a live screen with manual to-dos, checklists, task conversations, and execution history.
+Main and topic chats also expose tasks in a right panel.
+See [Tasks](docs/tasks.md) for lifecycle, migration, routing, and verification.

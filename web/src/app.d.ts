@@ -11,7 +11,13 @@ declare global {
 		// interface PageData {}
 		/** Every sheet a route can open; each feature adds its own union. */
 		type SheetId =
-			ChatSheet | HomeSheet | ThreadSheet | 'agent-activity' | 'voice' | 'browser-preview';
+			| ChatSheet
+			| HomeSheet
+			| ThreadSheet
+			| 'tasks'
+			| 'agent-activity'
+			| 'voice'
+			| 'browser-preview';
 		interface PageState {
 			sheet?: SheetId;
 			/** What the sheet is about, such as a message id. */

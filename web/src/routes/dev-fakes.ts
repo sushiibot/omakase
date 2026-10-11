@@ -1,3 +1,5 @@
+import { configureTasks } from '$lib/features/tasks';
+import { createFixtureTasksApi } from '$lib/features/tasks/fake';
 // Dev only (`bun dev` with ?fake); +layout.ts imports it behind import.meta.env.DEV.
 import { CLIENT_FEATURES, features } from '$lib/core/features.svelte';
 import { createHub, hub } from '$lib/core/realtime/hub.svelte';
@@ -31,6 +33,21 @@ export function installFakes() {
 	configureChat({ api: fake.api });
 	configureModels(createFixtureModelsApi());
 	configureHome({ api: fixtureHomeApi });
+	configureTasks(createFixtureTasksApi(), (task) => {
+		const fakeTask = createFakeBackend({
+			reply: 'I kept this follow-up with the task and updated its plan.'
+		});
+		return {
+			approvals: true,
+			hub: createHub({
+				transport: fakeTask.transport,
+				carries: `thread:${task.workConversationId}`
+			}),
+			api: fakeTask.api,
+			outbox: memoryKeyValue<OutboxEntry>((e) => e.clientId),
+			drafts: memoryKeyValue<Draft>((d) => d.id)
+		};
+	});
 	configureRuns(fixtureRunsApi);
 	configureHistory(fixtureHistoryApi);
 	configureMemory(createFixtureMemoryApi());

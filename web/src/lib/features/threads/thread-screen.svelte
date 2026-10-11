@@ -39,13 +39,7 @@
 		/** The chat screen's props for this thread's conversation. */
 		chat?: Omit<
 			ChatProps,
-			| 'title'
-			| 'placeholder'
-			| 'subtitle'
-			| 'headerActions'
-			| 'commandActions'
-			| 'readOnly'
-			| 'back'
+			'title' | 'placeholder' | 'subtitle' | 'commandActions' | 'readOnly' | 'back'
 		>;
 		now: number;
 		back: { href: string; label: string; onclick?: (e: MouseEvent) => void };

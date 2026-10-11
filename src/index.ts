@@ -1,4 +1,5 @@
 import { exitAfterBackoff } from "./crashBackoff.ts";
+import { TaskRoutes } from "./surfaces/web/taskRoutes.ts";
 import { createBrowserRoutes } from "./surfaces/web/browserRoutes.ts";
 import type { Client } from "discord.js";
 import { otelSDK } from "./telemetry.ts";
@@ -159,10 +160,13 @@ async function main() {
     breakGlass: (nonce) => discordWorkspace.breakGlass(nonce),
     uploads,
   });
+  const taskRoutes = new TaskRoutes(workspace.link, webChat.threads);
+  workspace.tools.setTaskControl((args, actor, conversationId) => taskRoutes.action(args, actor, conversationId));
   const webVoice = createVoiceRoutes(process.env, createVoiceAgent(webChat.threads));
   const webServer = await startWebGateway(process.env, db, {
     chat: webChat.routes,
     threads: webChat.threads,
+    tasks: taskRoutes,
     home: webChat.home,
     uploads,
     browser: createBrowserRoutes(workspace.link),

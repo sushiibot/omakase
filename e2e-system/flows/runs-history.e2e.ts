@@ -94,7 +94,7 @@ test("the inbox, a run, a History day and search open in the app on the workspac
   await expect(page.getByRole("heading", { name: "Conversations", level: 1 })).toBeVisible();
   await expect(page.getByText(/Couldn't load|Can't reach the agent|couldn't be read/)).toHaveCount(0);
   await page.getByRole("button", { name: /^Menu/ }).click();
-  await page.getByRole("dialog", { name: "Menu" }).getByRole("link", { name: /Work/ }).click();
+  await page.getByRole("dialog", { name: "Menu" }).getByRole("link", { name: /Activity/ }).click();
   await expect(page.getByRole("main").getByRole("listitem").filter({ hasText: "Run the nightly check" }).first()).toBeVisible();
 
   await page.goto(`/runs/${SEED.jobRunId}`);

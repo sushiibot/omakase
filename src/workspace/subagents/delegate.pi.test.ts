@@ -308,8 +308,9 @@ describe("delegate on real Pi sessions", () => {
     const woke = bodies.filter((b) => !isChild(b))[2];
     expect(lastMessage(woke)).toContain("subagent-result");
     const runId = h.runs.listRuns({ agentName: "explore" })[0].runId;
-    // Started for a task: the result tells main to note it on that TASKS.md item.
-    expect(lastMessage(woke)).toContain(`was for task t-dig1: note its outcome and run:${runId}`);
+    // A task result directs the coordinator to the structured store.
+    expect(lastMessage(woke)).toContain("was for task t-dig1: use task_manage to update its outcome and checklist");
+    expect(lastMessage(woke)).toContain(runId);
     expect(h.runs.listRuns({ agentName: "explore" })[0].status).toBe("done");
     await h.dispose();
   }, 30_000);

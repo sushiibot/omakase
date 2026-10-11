@@ -13,7 +13,7 @@ A task represents a delegated assignment, separate agent assignment or scheduled
 A turn contains one reply cycle, its tool calls and any steering messages. A run records one execution attempt.
 A session holds the model context and transcript. A session change does not create a new visible conversation.
 
-- **Use one Conversations destination for chat and inbox navigation, and Work for task navigation.** Approvals, questions and sign-in requests appear first under Needs you, with their conversation named. Main chat stays first within the conversation list with a message icon and a visible label. A shared Inbox below the conversations holds work and scheduled updates, including heartbeats. Delivery to Main does not assign an inbox item to that conversation. Discuss opens a picker for Main, an existing thread or a new conversation, then adds the quoted item to a draft without sending it. Keep existing draft text. Recorded conversation IDs describe the source of action requests; do not guess topic associations from titles. Each section loads and recovers independently in one scroll container. Legacy inbox URLs preserve item links and open Conversations. Work opens on Tasks. Replies and system events appear in Activity. Check: `pw` (`e2e/runs.test.ts`, `e2e/nav.test.ts`).
+- **Use one Conversations destination for chat and inbox navigation, Tasks for persistent assignments, and Activity for execution history.** Approvals, questions and sign-in requests appear first under Needs you, with their conversation named. Main chat stays first within the conversation list with a message icon and a visible label. A shared Inbox below the conversations holds work and scheduled updates, including heartbeats. Delivery to Main does not assign an inbox item to that conversation. Discuss opens a picker for Main, an existing thread or a new conversation, then adds the quoted item to a draft without sending it. Keep existing draft text. Recorded conversation IDs describe the source of action requests; do not guess topic associations from titles. Each section loads and recovers independently in one scroll container. Legacy inbox URLs preserve item links and open Conversations. Manual tasks and checklists live in Tasks. Activity opens on work runs; replies and system events remain in its Activity tab. Check: `pw` (`e2e/runs.test.ts`, `e2e/nav.test.ts`).
 - **Use Activity, Results and Details for execution records.** Activity shows chronological steps. Results combines the recorded outcome, checks, outputs and approvals. Details contains the full request, delegation links and execution metadata. Check: `pw` (`e2e/runs.test.ts`).
 - **Keep the brief out of the fixed heading.** Short existing titles can identify tasks. Long prompts use a compact agent/task label. Check: `pw` at 320px and 412px.
 - **Keep chronological activity stable through completion.** Both the preview sheet and detail page show the oldest step first. Completion preserves the selected section and expanded steps. Check: `pw` (`e2e/runs.test.ts`, `e2e/background-agents.test.ts`).
@@ -487,3 +487,14 @@ Every frame on the board is a shipped feature screen, so the board breaks no rul
 - axe: [`@axe-core/playwright`](https://github.com/dequelabs/axe-core-npm/tree/develop/packages/playwright), [axe-core rule descriptions](https://github.com/dequelabs/axe-core/blob/develop/doc/rule-descriptions.md)
 - One-handed use: [Hoober, How do users really hold mobile devices](https://www.uxmatters.com/mt/archives/2013/02/how-do-users-really-hold-mobile-devices.php)
 - Agent products: [Claude routines](https://code.claude.com/docs/en/routines), [ChatGPT Dots](https://learn.chatgpt.com/docs/dots), [Grok Bot approvals](https://docs.x.ai/grok-bot/approvals-security-and-privacy)
+
+## Tasks beside chat
+
+Use the task workspace for conversation-scoped assignments.
+On desktop, the right panel shares the available width with chat.
+On mobile, the panel slides into view and chat becomes inert until the panel closes.
+Keep drafts and task conversations mounted across panel changes.
+Reserve screen edges for system gestures and ignore swipes that start on interactive controls.
+Manual task creation saves a to-do without starting work.
+Keep checklist completion separate from execution status.
+See [Tasks](tasks.md) for lifecycle and storage behavior.

@@ -1,7 +1,15 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { axe, horizontalOverflow, smallTargets, stubStream, fixtureApp } from './helpers';
 
-const LIVE_NAV = ['Conversations', 'Work', 'History', 'Memory', 'Connectors', 'Settings'];
+const LIVE_NAV = [
+	'Conversations',
+	'Tasks',
+	'Activity',
+	'History',
+	'Memory',
+	'Connectors',
+	'Settings'
+];
 
 /** Live navigation never depends on /api/me; overrides enable only fixture previews. */
 async function server(context: BrowserContext, opts: { override?: string; me?: 'hang' } = {}) {
@@ -51,8 +59,9 @@ test('the fixture override adds preview screens alongside every live screen', as
 	await page.goto('/chat');
 	const all = [
 		'Conversations',
+		'Tasks',
 		'Briefing',
-		'Work',
+		'Activity',
 		'History',
 		'Memory',
 		'Skills',
@@ -75,7 +84,7 @@ test('picking from the drawer closes it; back from there returns to the chat, th
 }) => {
 	await server(context);
 	await page.goto('/chat');
-	await (await drawer(page)).getByRole('link', { name: 'Work' }).click();
+	await (await drawer(page)).getByRole('link', { name: 'Activity' }).click();
 	await expect(page).toHaveURL(/\/runs$/);
 	await expect(page.getByRole('dialog', { name: 'Menu' })).toBeHidden();
 	await (await drawer(page)).getByRole('link', { name: 'History' }).click();
@@ -120,7 +129,7 @@ test('drawer navigation keeps the old screen covered until the destination mount
 		});
 	});
 	try {
-		await menu.getByRole('link', { name: 'Work', exact: true }).click();
+		await menu.getByRole('link', { name: 'Activity', exact: true }).click();
 		await loading;
 		await expect(menu).toBeVisible();
 		await expect(page).toHaveURL(/\/chat$/);
@@ -129,7 +138,7 @@ test('drawer navigation keeps the old screen covered until the destination mount
 		await expect(menu).toBeHidden();
 		await expect(page.getByRole('dialog', { name: 'Menu', includeHidden: true })).toHaveAttribute(
 			'data-closed-over',
-			'Work'
+			'Activity'
 		);
 	} finally {
 		release();
@@ -152,7 +161,7 @@ test('choosing the current drawer destination dismisses it without navigating', 
 			{ once: true }
 		);
 	});
-	await menu.getByRole('link', { name: 'Work', exact: true }).click();
+	await menu.getByRole('link', { name: 'Activity', exact: true }).click();
 	await expect(page.locator('html')).toHaveAttribute('data-dismiss-prevented', 'true');
 	await expect(menu).toBeHidden();
 	await expect(page).toHaveURL(/\/runs$/);
@@ -161,7 +170,7 @@ test('choosing the current drawer destination dismisses it without navigating', 
 test('a live deep link renders while /api/me is unavailable', async ({ page, context }) => {
 	await server(context, { me: 'hang' });
 	await page.goto('/runs');
-	await expect(page.getByRole('heading', { name: 'Work', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
 	await page.waitForTimeout(500);
 	await expect(page).toHaveURL(/\/runs$/);
 });
@@ -236,7 +245,11 @@ test('widening past the sidebar breakpoint closes an open drawer, so the page st
 	await drawer(page);
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await expect(page.getByRole('dialog', { name: 'Menu' })).toBeHidden();
-	await page.locator('nav[aria-label="Main"]').first().getByRole('link', { name: 'Work' }).click();
+	await page
+		.locator('nav[aria-label="Main"]')
+		.first()
+		.getByRole('link', { name: 'Activity' })
+		.click();
 	await expect(page).toHaveURL(/\/runs$/);
 });
 

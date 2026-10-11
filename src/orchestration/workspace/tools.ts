@@ -1,3 +1,4 @@
+import { taskManifest } from "../../surfaces/web/taskRoutes.ts";
 // Bot side of `tool/call`: the workspace runs its model elsewhere but calls these secret-holding tools
 // here, executed with the bot's keys in the principal's private tool context. Owner approval is asked on
 // the principal's preferred surface, since a tool/call carries no origin.
@@ -198,6 +199,8 @@ export class WorkspaceTools {
     return out;
   }
 
+  private taskControl?: (args: unknown, actor: SurfaceActor, conversationId?: string) => Promise<unknown>;
+  setTaskControl(control: NonNullable<WorkspaceTools["taskControl"]>) { this.taskControl = control; }
   private location?: BrowserLocationRequests;
 
   setLocationRequests(location: BrowserLocationRequests): void { this.location = location; }
@@ -210,6 +213,7 @@ export class WorkspaceTools {
       approval: PROXIED_TOOLS[entry.name]!.approval,
     }));
     if (this.location) tools.push(locationManifest);
+    if (this.taskControl) tools.push(taskManifest);
     return tools;
   }
 
@@ -246,6 +250,14 @@ export class WorkspaceTools {
 
   private async dispatch(conn: ConnectionInfo, p: ToolCallParams): Promise<ToolCallResult> {
     if (p.principalId !== this.opts.principalId || conn.principalId !== this.opts.principalId) return { ok: false, error: "principal mismatch" };
+    if (p.name === "task_manage") {
+      const ownerId = this.opts.ownerUserId();
+      if (!this.taskControl || !ownerId || this.closed.has(conn)) return { ok: false, error: "Tasks are unavailable." };
+      try {
+        const result = await this.taskControl(p.args, { surface: this.opts.toolSpace.surface, userId: ownerId, name: "owner" }, p.origin?.conversationId);
+        return { ok: true, result: JSON.stringify(result) };
+      } catch (err) { return { ok: false, error: errorText(err) }; }
+    }
     if (p.name === LOCATION_TOOL) {
       if (!this.location || this.closed.has(conn)) return { ok: false, error: "browser location is unavailable" };
       if (hasInvisible(p.args)) return { ok: false, error: INVISIBLE_ERROR };

@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { TaskWorkspace } from '$lib/features/tasks';
+	import { Button } from '$lib/ui/button';
+	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import { BrowserPreview, BrowserPreviewPanel } from '$lib/features/browser';
 	import { goto } from '$app/navigation';
-	import { BackgroundAgents } from '$lib/features/runs';
 	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -33,6 +35,7 @@
 	const detail = $derived(remote.data);
 	const store = $derived(detail ? threads.chat(detail) : null);
 	const browserSheet = routedSheet('browser-preview');
+	const taskPane = routedSheet('tasks');
 	const browser = $derived(new BrowserPreview(id));
 	$effect(() => {
 		const preview = browser;
@@ -132,17 +135,6 @@
 
 <svelte:head><title>{detail?.summary.title ?? 'Thread'} · sushii</title></svelte:head>
 
-{#snippet backgroundActivity()}<BackgroundAgents
-		onrun={(id) => goto(resolve('/runs/[id]', { id }))}
-		conversationId={id}
-		compact
-	/>{/snippet}
-{#snippet delegatedActivity(turnId: string)}<BackgroundAgents
-		onrun={(id) => goto(resolve('/runs/[id]', { id }))}
-		conversationId={id}
-		{turnId}
-	/>{/snippet}
-
 {#snippet browserPreview()}
 	<BrowserPreviewPanel
 		status={browser.status}
@@ -194,111 +186,127 @@
 	/>
 {/snippet}
 
-<ThreadScreen
-	{remote}
-	{detail}
-	{now}
-	{sheet}
-	busy={threads.busy}
-	error={threads.error}
-	sendable={threads.canSend}
-	back={{ href: resolve('/chats'), label: 'Back to Conversations', onclick: goBack }}
-	writeHref={(w) => resolve('/memory/writes/[id]', { id: w })}
-	memoryHref={resolve('/memory/writes')}
-	chat={store
-		? {
-				approvals: store.approvals,
-				messages: threadMessages(detail!, store.messages),
-				history: store.history,
-				hasOlder: store.hasOlder,
-				olderLoading: store.olderLoading,
-				backgroundActivity,
-				delegatedActivity,
-				approvalSubmitting: store.trayPhase === 'submitting',
-				olderError: store.olderError,
-				running: store.running,
-				stopping: store.stopping,
-				draft: store.draft,
-				photos: store.photos,
-				quotaFull: store.quotaFull,
-				dictation: {
-					state: dictation.state,
-					seconds: dictation.seconds,
-					error: dictation.error,
-					disabled: voiceActive
-				},
-				ondictate: () => dictation.toggle(),
-				voice: voiceControls,
-				voiceStatus,
-				browserPreview,
-				voiceCaptions,
-				voiceHasContent: voice.state !== 'idle' && !!(voice.userText || voice.assistantText),
-				usage: store.usage,
-				models: models.remote.data ?? null,
-				modelPicking: models.picking,
-				modelError: models.error,
-				modelRole,
-				modelQuery: models.query,
-				modelResults: models.results,
-				modelSearching: models.searching,
-				modelSearchError: models.searchError,
-				onmodelrole: (r) => (modelRole = r),
-				onmodelquery: (q) => models.setQuery(q),
-				onpickmodel: (alias, role) =>
-					void models.pick(alias, role).then((ok) => ok && closeSheet()),
-				connection:
-					!pwa.online || offlineBrowsing.unreachable
-						? { kind: 'offline' }
-						: store.workspace === 'offline'
-							? { kind: 'agent-offline' }
-							: store.reset
-								? { kind: 'reset' }
-								: undefined,
-				toast: store.toast,
-				announce: store.announce,
-				viewer,
-				contextBoundaryId: sheets['context-boundary'].arg,
-				onopensheet: (s, arg) => {
-					if (s === 'model') {
-						models.refresh();
-						modelRole = 'main';
+<TaskWorkspace
+	conversationId={id}
+	open={taskPane.open}
+	onopen={() => taskPane.openWith()}
+	onclose={() => taskPane.close()}
+>
+	{#snippet children(toggle: () => void, count: number)}
+		{#snippet taskActions()}<Button
+				variant="ghost"
+				class="min-w-12 gap-1 px-2"
+				aria-label="Tasks, {count} open"
+				aria-expanded={taskPane.open}
+				onclick={toggle}
+				><ListTodo class="size-5" /><span class="text-sm">{count || 'Tasks'}</span></Button
+			>{/snippet}
+		<ThreadScreen
+			{remote}
+			{detail}
+			{now}
+			{sheet}
+			busy={threads.busy}
+			error={threads.error}
+			sendable={threads.canSend}
+			back={{ href: resolve('/chats'), label: 'Back to Conversations', onclick: goBack }}
+			writeHref={(w) => resolve('/memory/writes/[id]', { id: w })}
+			memoryHref={resolve('/memory/writes')}
+			chat={store
+				? {
+						headerActions: taskActions,
+						approvals: store.approvals,
+						messages: threadMessages(detail!, store.messages),
+						history: store.history,
+						hasOlder: store.hasOlder,
+						olderLoading: store.olderLoading,
+						approvalSubmitting: store.trayPhase === 'submitting',
+						olderError: store.olderError,
+						running: store.running,
+						stopping: store.stopping,
+						draft: store.draft,
+						photos: store.photos,
+						quotaFull: store.quotaFull,
+						dictation: {
+							state: dictation.state,
+							seconds: dictation.seconds,
+							error: dictation.error,
+							disabled: voiceActive
+						},
+						ondictate: () => dictation.toggle(),
+						voice: voiceControls,
+						voiceStatus,
+						browserPreview,
+						voiceCaptions,
+						voiceHasContent: voice.state !== 'idle' && !!(voice.userText || voice.assistantText),
+						usage: store.usage,
+						models: models.remote.data ?? null,
+						modelPicking: models.picking,
+						modelError: models.error,
+						modelRole,
+						modelQuery: models.query,
+						modelResults: models.results,
+						modelSearching: models.searching,
+						modelSearchError: models.searchError,
+						onmodelrole: (r) => (modelRole = r),
+						onmodelquery: (q) => models.setQuery(q),
+						onpickmodel: (alias, role) =>
+							void models.pick(alias, role).then((ok) => ok && closeSheet()),
+						connection:
+							!pwa.online || offlineBrowsing.unreachable
+								? { kind: 'offline' }
+								: store.workspace === 'offline'
+									? { kind: 'agent-offline' }
+									: store.reset
+										? { kind: 'reset' }
+										: undefined,
+						toast: store.toast,
+						announce: store.announce,
+						viewer,
+						contextBoundaryId: sheets['context-boundary'].arg,
+						onopensheet: (s, arg) => {
+							if (s === 'model') {
+								models.refresh();
+								modelRole = 'main';
+							}
+							sheets[s].openWith(arg);
+						},
+						onclosesheet: closeSheet,
+						onopenfile: (f) => {
+							viewer = f;
+							sheets.viewer.openWith();
+						},
+						ondraft: (v) => store.setDraft(v),
+						onsend: () => void store.send(store.draft),
+						onstop: () => store.stopTurn(),
+						oncommand: async (c) => {
+							await store.command(c);
+							models.refresh();
+						},
+						onattach: (files) => void store.attach(files),
+						onremovephoto: (p) => store.removePhoto(p),
+						onretryphoto: (p) => store.retryPhoto(p),
+						onloadolder: () => store.loadOlder(),
+						onretryhistory: () => store.retryHistory(),
+						onretrysend: (m) => store.retry(m),
+						onsteersend: (m) => store.steerNow(m),
+						ondeletesend: (m) => void store.discard(m),
+						onanswer: (askId, answer) => store.answer(askId, answer),
+						onapprove: (nonce, location) => void store.decide(nonce, 'approve', location),
+						ondeny: (nonce) => void store.decide(nonce, 'deny')
 					}
-					sheets[s].openWith(arg);
-				},
-				onclosesheet: closeSheet,
-				onopenfile: (f) => {
-					viewer = f;
-					sheets.viewer.openWith();
-				},
-				ondraft: (v) => store.setDraft(v),
-				onsend: () => void store.send(store.draft),
-				onstop: () => store.stopTurn(),
-				oncommand: async (c) => {
-					await store.command(c);
-					models.refresh();
-				},
-				onattach: (files) => void store.attach(files),
-				onremovephoto: (p) => store.removePhoto(p),
-				onretryphoto: (p) => store.retryPhoto(p),
-				onloadolder: () => store.loadOlder(),
-				onretryhistory: () => store.retryHistory(),
-				onretrysend: (m) => store.retry(m),
-				onsteersend: (m) => store.steerNow(m),
-				ondeletesend: (m) => void store.discard(m),
-				onanswer: (askId, answer) => store.answer(askId, answer),
-				onapprove: (nonce, location) => void store.decide(nonce, 'approve', location),
-				ondeny: (nonce) => void store.decide(nonce, 'deny')
-			}
-		: undefined}
-	onopensheet={(s) => {
-		threads.clearError();
-		if (s !== 'branch') sheets[s].openWith();
-	}}
-	onclosesheet={closeSheet}
-	onclose={() => void closeThread()}
-	onrename={async (title) => {
-		if (await threads.rename(id, title)) await leaveSheet(sheets['thread-settings']);
-	}}
-	onreopen={() => void threads.reopen(id)}
-	onretry={() => void remote.refetch()}
-/>
+				: undefined}
+			onopensheet={(s) => {
+				threads.clearError();
+				if (s !== 'branch') sheets[s].openWith();
+			}}
+			onclosesheet={closeSheet}
+			onclose={() => void closeThread()}
+			onrename={async (title) => {
+				if (await threads.rename(id, title)) await leaveSheet(sheets['thread-settings']);
+			}}
+			onreopen={() => void threads.reopen(id)}
+			onretry={() => void remote.refetch()}
+		/>
+	{/snippet}
+</TaskWorkspace>
