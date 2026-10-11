@@ -4,19 +4,31 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentSessionEvent, ExtensionAPI, PromptOptions, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import type { MessageCreateOptions, MessageEditOptions } from "discord.js";
 import { applySchema } from "../db/index.ts";
 import { WorkspaceLinkStore } from "../db/workspaceLink.ts";
-import { ORCH_CLOSE, RPC_METHODS, type ChatMessageParams } from "../orchestration/contracts.ts";
+import { ORCH_CLOSE, RPC_METHODS, type ChatMessageParams, type ChatOrigin } from "../orchestration/contracts.ts";
 import { OrchestrationClient } from "../orchestration/transport/client.ts";
 import { OrchestrationServer, type WorkspaceHandler } from "../orchestration/transport/server.ts";
-import { DmConductorSession } from "../surfaces/discord/dmConductor.ts";
 import { WorkspaceLink, type WorkspaceRpc } from "../orchestration/workspace/link.ts";
 import type { Timers } from "../orchestration/workspace/progress.ts";
-import { SurfaceRegistry } from "../orchestration/workspace/surface.ts";
-import { handleOwnerDm, type DmCursor, type OwnerDmDeps, type OwnerDmMessage } from "../surfaces/discord/ownerDm.ts";
-import { handleWorkspaceAskButton, handleWorkspaceStopButton, type WorkspaceButtonInteraction } from "../surfaces/discord/workspaceButtons.ts";
-import { ACCENT, DiscordOwnerDmSurface, DiscordWorkspaceAdapter, OFFLINE_NOTICE, WS_STOP_PREFIX } from "../surfaces/discord/workspaceAdapter.ts";
+import { handleOwnerMessage, type OwnerRouterDeps } from "../orchestration/workspace/router.ts";
+import {
+  SurfaceRegistry,
+  type AckKind,
+  type ApprovalDecision,
+  type ApprovalView,
+  type AskView,
+  type AuthPromptView,
+  type InboundMessage,
+  type ProgressFinal,
+  type ProgressView,
+  type ReplyView,
+  type RouterNotice,
+  type SurfaceActor,
+  type SurfaceAdapter,
+  type SurfaceCapabilities,
+  type SurfaceMessageHandle,
+} from "../orchestration/workspace/surface.ts";
 import { PersonalSession, type ChatSession, type ChatSessionFactory } from "./personalSession.ts";
 import { readWorkspaceState } from "./state.ts";
 import { commandHandlers } from "./commands.ts";
@@ -32,13 +44,14 @@ import { wireProactiveJobs } from "./proactive.ts";
 import { RunLog } from "./runLog.ts";
 import type { WorkspaceConfig } from "./config.ts";
 
-// One process: real OrchestrationServer + WorkspaceLink + owner-DM router on the bot side, real
-// OrchestrationClient + PersonalSession on the workspace side. Only Pi and Discord are faked.
+// One process: real OrchestrationServer + WorkspaceLink + owner-message router on the bot side, real
+// OrchestrationClient + PersonalSession on the workspace side. Only Pi and the chat surface are faked.
 
 const P = "drk";
 const OWNER = "owner-1";
 const SECRET = "e2e-workspace-secret";
 const MODEL = "test/model";
+const SURFACE = "web";
 
 // ── Fake Pi chat session ──────────────────────────────────────────────────────
 // Idle prompt(): preflight, agent_start, user message, resolves at settle. Streaming prompt(): queues a steer.
@@ -176,72 +189,109 @@ class FakePi {
   }
 }
 
-// ── Fake Discord DM channel ───────────────────────────────────────────────────
-interface Sent {
+// ── Fake web surface ──────────────────────────────────────────────────────────
+interface ProgressRecord {
   id: string;
-  options: MessageCreateOptions | string;
-  edits: MessageEditOptions[];
+  views: ProgressView[];
+  final?: ProgressFinal;
 }
 
-function textOf(options: MessageCreateOptions | MessageEditOptions | string): string {
-  if (typeof options === "string") return options;
-  const components = (options.components ?? []).map((c) => ("toJSON" in c ? c.toJSON() : c));
-  return `${options.content ?? ""}${JSON.stringify(components)}`;
+interface ApprovalRecord {
+  view: ApprovalView;
+  nonce: string;
+  decisions: ApprovalDecision[];
 }
 
-class FakeDm {
-  sent: Sent[] = [];
-  reactions: Array<{ messageId: string; emoji: string }> = [];
+/** Records the structured views the link hands the surface. Shared across bot restarts, like a real chat. */
+class FakeSurface implements SurfaceAdapter {
+  readonly surface = SURFACE;
+  readonly capabilities: SurfaceCapabilities = { streaming: false, tables: true, richButtons: true, reactions: true, maxMessageChars: 4000, fileUploads: true };
+  acks: Array<{ messageId: string; kind: AckKind }> = [];
+  notices: Array<{ messageId: string; notice: RouterNotice }> = [];
+  replies: ReplyView[] = [];
+  asks: AskView[] = [];
+  auths: AuthPromptView[] = [];
+  progress: ProgressRecord[] = [];
+  approvals: ApprovalRecord[] = [];
+  fallbacks: Array<{ text: string; offline: boolean }> = [];
+  /** Everything posted to the chat, in order. */
+  posted = 0;
   private seq = 0;
 
-  async send(options: MessageCreateOptions | string) {
-    const entry: Sent = { id: `bot-${++this.seq}`, options, edits: [] };
-    this.sent.push(entry);
-    return {
-      id: entry.id,
-      edit: async (o: MessageEditOptions) => {
-        entry.edits.push(o);
-      },
-    };
+  acksOn(messageId: string): AckKind[] {
+    return this.acks.filter((a) => a.messageId === messageId).map((a) => a.kind);
   }
 
-  /** Current rendered text of a message: its last edit, else what was sent. */
-  current(s: Sent): string {
-    return textOf(s.edits.at(-1) ?? s.options);
+  /** The latest view of a progress record. */
+  current(p: ProgressRecord): ProgressView {
+    return p.views.at(-1)!;
   }
 
-  progress(): Sent[] {
-    return this.sent.filter((s) => textOf(s.options).includes(WS_STOP_PREFIX));
+  async ack(m: InboundMessage, kind: AckKind) {
+    this.acks.push({ messageId: m.id, kind });
+  }
+  async notice(m: InboundMessage, notice: RouterNotice) {
+    this.posted++;
+    this.notices.push({ messageId: m.id, notice });
+  }
+  async transcribe() {
+    return null;
+  }
+  async fallbackReply(_m: InboundMessage, text: string, opts: { offline: boolean }) {
+    this.fallbacks.push({ text, offline: opts.offline });
+    return `fallback answer to: ${text}`;
+  }
+  async resetFallback() {}
+  async sendReply(_o: ChatOrigin | null, reply: ReplyView) {
+    this.posted++;
+    this.replies.push(reply);
+  }
+  async askPrompt(_o: ChatOrigin | null, ask: AskView) {
+    this.posted++;
+    this.asks.push(ask);
+  }
+  async authPrompt(_o: ChatOrigin | null, view: AuthPromptView) {
+    this.posted++;
+    this.auths.push(view);
+  }
+  progressEditGap() {
+    return 0;
+  }
+  async progressCreate(_o: ChatOrigin | null, view: ProgressView): Promise<SurfaceMessageHandle> {
+    this.posted++;
+    const p = { id: `p${++this.seq}`, views: [structuredClone(view)] };
+    this.progress.push(p);
+    return { id: p.id };
+  }
+  async progressUpdate(handle: SurfaceMessageHandle, view: ProgressView) {
+    this.byId(handle.id)?.views.push(structuredClone(view));
+  }
+  async progressFinalize(_o: ChatOrigin | null, handle: SurfaceMessageHandle | null, final: ProgressFinal) {
+    const p = handle ? this.byId(handle.id) : undefined;
+    if (p) p.final = final;
+    else {
+      this.posted++;
+      this.progress.push({ id: `p${++this.seq}`, views: [], final });
+    }
+  }
+  async progressReopen(_o: ChatOrigin | null, id: string): Promise<SurfaceMessageHandle | null> {
+    return this.byId(id) ? { id } : null;
+  }
+  async approvalPrompt(_o: ChatOrigin | null, view: ApprovalView, nonce: string): Promise<SurfaceMessageHandle> {
+    this.posted++;
+    this.approvals.push({ view, nonce, decisions: [] });
+    return { id: nonce };
+  }
+  async resolveApproval(_h: SurfaceMessageHandle, _v: ApprovalView, nonce: string, decision: ApprovalDecision) {
+    this.approvals.find((a) => a.nonce === nonce)?.decisions.push(decision);
   }
 
-  /** Messages that aren't progress views. */
-  replies(): Sent[] {
-    return this.sent.filter((s) => !textOf(s.options).includes(WS_STOP_PREFIX));
-  }
-
-  reactionsOn(messageId: string): string[] {
-    return this.reactions.filter((r) => r.messageId === messageId).map((r) => r.emoji);
-  }
-
-  message(id: string, content: string): OwnerDmMessage {
-    return {
-      id,
-      channelId: "dm",
-      content,
-      author: { id: OWNER, name: "drk" },
-      isVoice: false,
-      attachments: [],
-      react: async (emoji) => void this.reactions.push({ messageId: id, emoji }),
-      send: (options) => this.send(options),
-    };
+  private byId(id: string | undefined): ProgressRecord | undefined {
+    return this.progress.find((p) => p.id === id);
   }
 }
 
-function turnIdOf(progress: Sent): string {
-  const m = textOf(progress.options).match(/wsstop:([A-Za-z0-9]+)/);
-  if (!m) throw new Error("progress message has no Stop button");
-  return m[1]!;
-}
+const lineOf = (view: ProgressView, name: string) => view.lines.find((l) => l.name === name);
 
 // ── Harness ───────────────────────────────────────────────────────────────────
 const immediateTimers: Timers = {
@@ -320,9 +370,11 @@ function startServer(port: number): OrchestrationServer {
   return server;
 }
 
-async function startBot(store: WorkspaceLinkStore, dm: FakeDm, port = 0, opts: { linear?: boolean } = {}): Promise<Bot> {
+const isOwner = (a: SurfaceActor) => a.surface === SURFACE && a.userId === OWNER;
+
+async function startBot(store: WorkspaceLinkStore, surface: FakeSurface, port = 0, opts: { linear?: boolean } = {}): Promise<Bot> {
   const server = startServer(port);
-  const surfaces = new SurfaceRegistry("discord").register(new DiscordWorkspaceAdapter({ ownerChannel: async () => dm }));
+  const surfaces = new SurfaceRegistry(SURFACE, { pinned: true }).register(surface);
   const searches: Array<Record<string, unknown>> = [];
   const audits: ToolCallAudit[] = [];
   const audit: AuditLog = { info: (obj) => void audits.push(obj) };
@@ -332,12 +384,13 @@ async function startBot(store: WorkspaceLinkStore, dm: FakeDm, port = 0, opts: {
     ownerUserId: () => OWNER,
     toolSpace: { surface: "discord", spaceId: "dm" },
     surfaces,
+    isOwner,
     store: {} as WorkspaceToolsOptions["store"],
     memory: { count: () => 0, getServerContext: () => null } as unknown as WorkspaceToolsOptions["memory"],
     registry: { resolve: () => [fakeWebSearch(searches), ...(opts.linear ? [fakeLinear(filed)] : [])] },
     log: audit,
   });
-  const link = new WorkspaceLink({ principalId: P, store, surfaces, owner: () => ({ id: OWNER, name: "drk" }), timers: immediateTimers, tools });
+  const link = new WorkspaceLink({ principalId: P, store, surfaces, owner: () => ({ id: OWNER, name: "drk" }), isOwner, timers: immediateTimers, tools });
   const bot: Bot = { server, link, port: 0, deliverRequests: 0, kill: "none", messages: [], searches, audits, tools, filed };
   const die = () => setTimeout(() => server.stop(), 0);
   // Wraps the real server only to observe traffic and to simulate the bot process dying at a chosen point.
@@ -507,53 +560,35 @@ async function startWorkspace(): Promise<Workspace> {
   return ws;
 }
 
-interface Router {
-  deps: OwnerDmDeps;
-  inProcess: Array<{ text: string; notice?: string }>;
-  dm(id: string, content: string): Promise<void>;
-}
+const ORIGIN: ChatOrigin = { surface: SURFACE, conversationId: "main" };
+const ACTOR: SurfaceActor = { surface: SURFACE, userId: OWNER, name: "drk" };
 
-function router(link: () => WorkspaceLink, dm: FakeDm): Router {
-  let cursor: string | null = null;
-  const memCursor: DmCursor = { get: () => cursor, set: (id) => void (cursor = id) };
-  const inProcess: Router["inProcess"] = [];
-  const deps: OwnerDmDeps = {
+/** The owner's chat message, routed as the web chat routes one. */
+function router(link: () => WorkspaceLink, surface: FakeSurface) {
+  const deps: OwnerRouterDeps<InboundMessage> = {
     workspaceEnabled: true,
     transcriptionEnabled: false,
     get link() {
       return link();
     },
-    surface: new DiscordOwnerDmSurface({
-      transcribe: async () => null,
-      // The real fallback delivery path; only the in-process agent loop is skipped.
-      runInProcess: async (_m, text, { notice }) => {
-        inProcess.push({ text, ...(notice ? { notice } : {}) });
-        const session = new DmConductorSession(dm, { id: "bot", username: "sushii" }, notice ? { notice, accentColor: ACCENT.warning } : {});
-        await session.deliver({
-          segments: [{ kind: "text", text: `fallback answer to: ${text}` }],
-          usage: { model: "fallback/model", inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, contextTokens: 1, contextLimit: 100 },
-          toolTrace: [],
-          cancelled: false,
-        });
-        return session.deliveredText;
-      },
-      resetInProcess: async () => {},
-    }),
-    cursor: memCursor,
+    surface,
+    cursor: { advance: () => {} },
   };
-  return { deps, inProcess, dm: (id, content) => handleOwnerDm(dm.message(id, content), deps) };
+  const send = (id: string, text: string) =>
+    handleOwnerMessage({ origin: ORIGIN, id, text, author: { id: OWNER, name: "drk" }, isVoice: false, attachments: [], actor: ACTOR }, deps);
+  return { send };
 }
 
 async function linked(opts: { linear?: boolean } = {}) {
-  const dm = new FakeDm();
+  const surface = new FakeSurface();
   const db = new Database(":memory:");
   applySchema(db);
   const store = new WorkspaceLinkStore(db);
-  const bot = await startBot(store, dm, 0, opts);
+  const bot = await startBot(store, surface, 0, opts);
   const ws = await startWorkspace();
   const r = { bot };
-  const route = router(() => r.bot.link, dm);
-  return { dm, store, r, ws, route, url: () => `ws://localhost:${r.bot.port}` };
+  const route = router(() => r.bot.link, surface);
+  return { surface, store, r, ws, route, url: () => `ws://localhost:${r.bot.port}` };
 }
 
 async function connected(h: Awaited<ReturnType<typeof linked>>): Promise<void> {
@@ -561,75 +596,59 @@ async function connected(h: Awaited<ReturnType<typeof linked>>): Promise<void> {
   await waitFor(() => h.r.bot.link.isConnected() && h.ws.client!.connected, "workspace registered");
 }
 
-function stopInteraction(turnId: string) {
-  const editReplies: unknown[] = [];
-  const interaction = {
-    customId: `${WS_STOP_PREFIX}${turnId}`,
-    id: `int-${turnId}`,
-    channelId: "dm",
-    user: { id: OWNER, username: "drk", globalName: "drk" },
-    component: { label: "Stop" },
-    message: { components: [], edit: async () => {} },
-    reply: async () => {},
-    deferReply: async () => {},
-    editReply: async (o: unknown) => void editReplies.push(o),
-  } as unknown as WorkspaceButtonInteraction;
-  return { interaction, editReplies };
-}
-
 const NOW = new Date("2026-09-29T12:00:00Z");
-/** The prompt text for a message whose (test) id isn't a snowflake, so it carries the receipt time. */
-const stamped = (messageId: string, text: string) => `[discord:${messageId} 2026-09-29 12:00 UTC]\n${text}`;
+/** The prompt text for a web message: its id isn't a snowflake, so it carries the receipt time. */
+const stamped = (messageId: string, text: string) => `[web:${messageId} 2026-09-29 12:00 UTC]\n${text}`;
 
 // ── Scenarios ─────────────────────────────────────────────────────────────────
 describe("workspace e2e (bot ↔ transport ↔ workspace)", () => {
-  test("1. a DM gets 👀, a live progress view, then the reply with footer and tool count; the outbox is acked", async () => {
+  test("1. a message is accepted, gets a live progress view, then the reply with usage and tool count; the outbox is acked", async () => {
     const h = await linked();
     await connected(h);
 
-    await h.route.dm("100", "what's in my home dir?");
-    expect(h.dm.reactionsOn("100")).toEqual(["👀"]);
+    await h.route.send("100", "what's in my home dir?");
+    expect(h.surface.acksOn("100")).toEqual(["accepted"]);
     expect(h.ws.pi().prompts).toEqual([stamped("100", "what's in my home dir?")]);
 
     h.ws.pi().tool("bash", { command: "ls -la ~" });
-    await waitFor(() => h.dm.progress().length === 1, "progress message");
-    const progress = h.dm.progress()[0]!;
-    expect(textOf(progress.options)).toContain("`bash` ls -la ~");
-    expect(textOf(progress.options)).toContain("started <t:");
+    await waitFor(() => h.surface.progress.length === 1, "progress view");
+    const progress = h.surface.progress[0]!;
+    expect(lineOf(progress.views[0]!, "bash")).toMatchObject({ summary: "ls -la ~" });
+    expect(progress.views[0]!.startedAt).toBeGreaterThan(0);
 
     h.ws.pi().tool("read", { path: "notes.md" });
-    await waitFor(() => h.dm.current(progress).includes("`read`"), "progress edit with the second tool");
-    expect(h.dm.current(progress)).toContain("✓ `bash`");
+    await waitFor(() => lineOf(h.surface.current(progress), "read") !== undefined, "progress update with the second tool");
+    expect(lineOf(h.surface.current(progress), "bash")?.state).toBe("ok");
 
     h.ws.pi().reply("You have notes.md and a repos/ dir.");
-    await waitFor(() => h.dm.replies().length === 1, "reply");
-    const reply = textOf(h.dm.replies()[0]!.options);
-    expect(reply).toContain("You have notes.md and a repos/ dir.");
-    expect(reply).toContain(`-# ${MODEL} · ctx 10% · 20 out · cache 50r 0w · 2 tools`);
+    await waitFor(() => h.surface.replies.length === 1, "reply");
+    const reply = h.surface.replies[0]!;
+    expect(reply.text).toContain("You have notes.md and a repos/ dir.");
+    expect(reply.toolCount).toBe(2);
+    expect(reply.usage).toMatchObject({ model: MODEL });
 
-    await waitFor(() => h.dm.current(progress).includes("✓ done"), "progress finalized");
-    expect(h.dm.current(progress)).toContain("2 tools");
-    expect(h.dm.current(progress)).not.toContain(WS_STOP_PREFIX);
+    await waitFor(() => progress.final !== undefined, "progress finalized");
+    expect(progress.final).toMatchObject({ outcome: "done", summary: { toolCount: 2 } });
     await waitFor(() => h.ws.unacked().length === 0, "outbox acked");
     expect(readFileSync(join(h.ws.stateDir, "outbox.jsonl"), "utf8")).toContain('"type":"ack"');
   });
 
-  test("2. a second DM mid-turn steers (↪️) and the single reply answers it", async () => {
+  test("2. a second message mid-turn steers and the single reply answers it", async () => {
     const h = await linked();
     await connected(h);
 
-    await h.route.dm("200", "summarize the repo");
+    await h.route.send("200", "summarize the repo");
     h.ws.pi().tool("bash", { command: "git log -5" });
-    await h.route.dm("201", "also list open PRs");
-    expect(h.dm.reactionsOn("201")).toEqual(["↪️"]);
+    await h.route.send("201", "also list open PRs");
+    expect(h.surface.acksOn("201")).toEqual(["steer"]);
     expect(h.ws.pi().steers).toEqual([stamped("201", "also list open PRs")]);
     expect(h.ws.pi().prompts).toHaveLength(2);
 
     h.ws.pi().reply("Summary + PRs.");
-    await waitFor(() => h.dm.replies().length === 1, "reply");
+    await waitFor(() => h.surface.replies.length === 1, "reply");
     await waitFor(() => h.ws.unacked().length === 0, "outbox acked");
     await new Promise((r) => setTimeout(r, 50));
-    expect(h.dm.replies()).toHaveLength(1);
+    expect(h.surface.replies).toHaveLength(1);
     expect(h.r.bot.deliverRequests).toBe(1);
   });
 
@@ -637,54 +656,51 @@ describe("workspace e2e (bot ↔ transport ↔ workspace)", () => {
     const h = await linked();
     await connected(h);
 
-    await h.route.dm("300", "first");
+    await h.route.send("300", "first");
     h.ws.pi().tool("bash", { command: "echo 1" });
-    await waitFor(() => h.dm.progress().length === 1, "turn 1 progress");
-    const stale = turnIdOf(h.dm.progress()[0]!);
+    await waitFor(() => h.surface.progress.length === 1, "turn 1 progress");
+    const stale = h.surface.progress[0]!.views[0]!.turnId;
     h.ws.pi().reply("one");
-    await waitFor(() => h.dm.replies().length === 1, "turn 1 reply");
+    await waitFor(() => h.surface.replies.length === 1, "turn 1 reply");
 
-    await h.route.dm("301", "second, long running");
+    await h.route.send("301", "second, long running");
     h.ws.pi().toolStart("bash", { command: "sleep 600" });
-    await waitFor(() => h.dm.progress().length === 2, "turn 2 progress");
-    const current = turnIdOf(h.dm.progress()[1]!);
+    await waitFor(() => h.surface.progress.length === 2, "turn 2 progress");
+    const progress2 = h.surface.progress[1]!;
+    const current = progress2.views[0]!.turnId;
     expect(current).not.toBe(stale);
 
-    const staleClick = stopInteraction(stale);
-    await handleWorkspaceStopButton(staleClick.interaction, { link: h.r.bot.link });
-    expect(staleClick.editReplies).toEqual(["That turn already finished."]);
+    expect(await h.r.bot.link.stopTurn(ORIGIN, stale, { ...ACTOR, userId: "someone" })).toEqual({ status: "forbidden" });
+    expect(await h.r.bot.link.stopTurn(ORIGIN, stale, ACTOR)).toMatchObject({ status: "ok", aborted: false });
     expect(h.ws.pi().aborts).toBe(0);
     expect(h.ws.pi().isStreaming).toBe(true);
 
-    const click = stopInteraction(current);
-    await handleWorkspaceStopButton(click.interaction, { link: h.r.bot.link });
-    expect(click.editReplies).toEqual(["Stopping…"]);
+    expect(await h.r.bot.link.stopTurn(ORIGIN, current, ACTOR)).toMatchObject({ status: "ok", aborted: true });
     expect(h.ws.pi().aborts).toBe(1);
-    const progress2 = h.dm.progress()[1]!;
-    await waitFor(() => h.dm.current(progress2).includes("⏹ stopped"), "turn 2 progress shows stopped");
+    await waitFor(() => progress2.final?.outcome === "stopped", "turn 2 progress shows stopped");
 
     await new Promise((r) => setTimeout(r, 50));
-    expect(h.dm.replies()).toHaveLength(1);
+    expect(h.surface.replies).toHaveLength(1);
     expect(h.ws.unacked()).toEqual([]);
   });
 
-  test("4. !new swaps the Pi session, records it in state.json, and later DMs prompt the new session", async () => {
+  test("4. !new swaps the Pi session, records it in state.json, and later messages prompt the new session", async () => {
     const h = await linked();
     await connected(h);
-    await h.route.dm("400", "hello");
+    await h.route.send("400", "hello");
     h.ws.pi().reply("hi");
-    await waitFor(() => h.dm.replies().length === 1, "first reply");
+    await waitFor(() => h.surface.replies.length === 1, "first reply");
     const first = h.ws.pi();
 
-    await h.route.dm("401", "!new");
-    expect(h.dm.reactionsOn("401")).toEqual(["🧠"]);
-    expect(textOf(h.dm.replies().at(-1)!.options)).toContain("✅ New session.");
+    await h.route.send("401", "!new");
+    expect(h.surface.acksOn("401")).toEqual(["newSession"]);
+    expect(h.surface.notices.at(-1)).toEqual({ messageId: "401", notice: { type: "newSessionStarted" } });
     expect(h.ws.sessions).toHaveLength(2);
     expect(first.disposed).toBe(true);
     expect(readWorkspaceState(h.ws.stateDir)?.chatSessionFile).toBe(h.ws.pi().file);
     expect(h.r.bot.messages.map((m) => m.messageId)).not.toContain("401");
 
-    await h.route.dm("402", "fresh start");
+    await h.route.send("402", "fresh start");
     expect(h.ws.pi().prompts).toEqual([stamped("402", "fresh start")]);
     expect(first.prompts).toEqual([stamped("400", "hello")]);
   });
@@ -692,76 +708,75 @@ describe("workspace e2e (bot ↔ transport ↔ workspace)", () => {
   test("5a. bot dies after sending the reply but before chat/ack: the restarted bot acks without resending", async () => {
     const h = await linked();
     await connected(h);
-    await h.route.dm("500", "do a thing");
+    await h.route.send("500", "do a thing");
     h.ws.pi().tool("bash", { command: "make" });
-    await waitFor(() => h.dm.progress().length === 1, "progress");
+    await waitFor(() => h.surface.progress.length === 1, "progress");
 
     h.r.bot.kill = "on-ack";
     h.ws.pi().reply("done the thing");
-    await waitFor(() => h.dm.replies().length === 1, "reply sent to Discord");
+    await waitFor(() => h.surface.replies.length === 1, "reply sent to the surface");
     await waitFor(() => !h.ws.client!.connected, "bot gone");
     expect(h.ws.unacked()).toHaveLength(1);
 
-    h.r.bot = await startBot(h.store, h.dm, h.r.bot.port);
+    h.r.bot = await startBot(h.store, h.surface, h.r.bot.port);
     await waitFor(() => h.r.bot.deliverRequests >= 1, "workspace resent the delivery", 5000);
     await waitFor(() => h.ws.unacked().length === 0, "outbox acked by the new bot");
-    expect(h.dm.replies()).toHaveLength(1);
+    expect(h.surface.replies).toHaveLength(1);
   });
 
   test("5b. bot dies on receiving chat/deliver: the restarted bot delivers it exactly once", async () => {
     const h = await linked();
     await connected(h);
-    await h.route.dm("510", "do a thing");
+    await h.route.send("510", "do a thing");
     h.ws.pi().tool("bash", { command: "make" });
-    await waitFor(() => h.dm.progress().length === 1, "progress");
+    await waitFor(() => h.surface.progress.length === 1, "progress");
 
     h.r.bot.kill = "on-deliver";
     h.ws.pi().reply("done the thing");
     await waitFor(() => !h.ws.client!.connected, "bot gone");
-    expect(h.dm.replies()).toHaveLength(0);
+    expect(h.surface.replies).toHaveLength(0);
     expect(h.ws.unacked()).toHaveLength(1);
 
-    h.r.bot = await startBot(h.store, h.dm, h.r.bot.port);
+    h.r.bot = await startBot(h.store, h.surface, h.r.bot.port);
     await waitFor(() => h.ws.unacked().length === 0, "outbox acked by the new bot", 5000);
     // Let the periodic resend run at least once more: it must not produce a second message.
     await new Promise((r) => setTimeout(r, 400));
-    expect(h.dm.replies()).toHaveLength(1);
-    expect(textOf(h.dm.replies()[0]!.options)).toContain("done the thing");
+    expect(h.surface.replies).toHaveLength(1);
+    expect(h.surface.replies[0]!.text).toContain("done the thing");
   });
 
   test("5c. bot dies mid-turn, the reply lands while it is down, and the restarted bot delivers it once", async () => {
     const h = await linked();
     await connected(h);
-    await h.route.dm("520", "long job");
+    await h.route.send("520", "long job");
     h.ws.pi().toolStart("bash", { command: "sleep 30" });
-    await waitFor(() => h.dm.progress().length === 1, "progress");
+    await waitFor(() => h.surface.progress.length === 1, "progress");
 
     h.r.bot.server.stop();
     await waitFor(() => !h.ws.client!.connected, "bot gone");
     h.ws.pi().reply("job finished");
     expect(h.ws.unacked()).toHaveLength(1);
 
-    h.r.bot = await startBot(h.store, h.dm, h.r.bot.port);
+    h.r.bot = await startBot(h.store, h.surface, h.r.bot.port);
     await waitFor(() => h.ws.unacked().length === 0, "outbox acked by the new bot", 5000);
     await new Promise((r) => setTimeout(r, 400));
-    expect(h.dm.replies()).toHaveLength(1);
-    expect(textOf(h.dm.replies()[0]!.options)).toContain("job finished");
+    expect(h.surface.replies).toHaveLength(1);
+    expect(h.surface.replies[0]!.text).toContain("job finished");
   });
 
-  test("6. workspace offline: fallback note + inbox row; replayed as context on reconnect without a reply", async () => {
+  test("6. workspace offline: fallback answer + inbox row; replayed as context on reconnect without a reply", async () => {
     const h = await linked();
     await connected(h);
     h.ws.disconnect();
     await waitFor(() => !h.r.bot.link.isConnected(), "workspace disconnected");
 
-    await h.route.dm("600", "are you there?");
-    expect(h.dm.reactionsOn("600")).toEqual(["👀"]);
-    expect(h.route.inProcess).toEqual([{ text: "are you there?", notice: OFFLINE_NOTICE }]);
-    expect(h.dm.replies()).toHaveLength(1);
-    expect(textOf(h.dm.replies()[0]!.options)).toContain("workspace offline");
+    await h.route.send("600", "are you there?");
+    expect(h.surface.acksOn("600")).toEqual(["accepted"]);
+    expect(h.surface.fallbacks).toEqual([{ text: "are you there?", offline: true }]);
     const rows = h.store.listInbox(P);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.userText).toBe("are you there?");
+    expect(rows[0]!.replyText).toBe("fallback answer to: are you there?");
 
     await connected(h);
     await waitFor(() => h.store.listInbox(P).length === 0, "inbox drained");
@@ -775,10 +790,10 @@ describe("workspace e2e (bot ↔ transport ↔ workspace)", () => {
     expect(pi.prompts).toEqual([]);
     await new Promise((r) => setTimeout(r, 50));
     expect(h.r.bot.deliverRequests).toBe(0);
-    expect(h.dm.replies()).toHaveLength(1);
+    expect(h.surface.replies).toHaveLength(0);
   });
 
-  test("7. a wrong secret is rejected with 4401, and the DM falls back", async () => {
+  test("7. a wrong secret is rejected with 4401, and the message falls back", async () => {
     const h = await linked();
     const bad = new OrchestrationClient({ url: h.url(), runnerId: `workspace-${P}`, kind: "pi-workspace", secret: "wrong", principalId: P, heartbeatMs: 0 });
     cleanups.push(() => bad.close());
@@ -793,8 +808,8 @@ describe("workspace e2e (bot ↔ transport ↔ workspace)", () => {
     expect(await closed).toBe(ORCH_CLOSE.unauthorized);
     expect(h.r.bot.link.isConnected()).toBe(false);
 
-    await h.route.dm("700", "hello?");
-    expect(h.route.inProcess).toEqual([{ text: "hello?", notice: OFFLINE_NOTICE }]);
+    await h.route.send("700", "hello?");
+    expect(h.surface.fallbacks).toEqual([{ text: "hello?", offline: true }]);
     expect(h.store.listInbox(P)).toHaveLength(1);
   });
 
@@ -805,28 +820,28 @@ describe("workspace e2e (bot ↔ transport ↔ workspace)", () => {
     cleanups.push(() => bad.close());
     await expect(bad.connect()).rejects.toThrow("unauthorized");
     expect(h.r.bot.link.isConnected()).toBe(true);
-    await h.route.dm("710", "still there?");
-    expect(h.dm.reactionsOn("710")).toEqual(["👀"]);
-    expect(h.route.inProcess).toEqual([]);
+    await h.route.send("710", "still there?");
+    expect(h.surface.acksOn("710")).toEqual(["accepted"]);
+    expect(h.surface.fallbacks).toEqual([]);
   });
 
   test("8. a duplicate messageId, sequential or concurrent, never prompts twice", async () => {
     const h = await linked();
     await connected(h);
 
-    await Promise.all([h.route.dm("800", "once please"), h.route.dm("800", "once please")]);
+    await Promise.all([h.route.send("800", "once please"), h.route.send("800", "once please")]);
     expect(h.ws.pi().prompts).toEqual([stamped("800", "once please")]);
-    expect(h.dm.reactionsOn("800")).toEqual(["👀"]);
+    expect(h.surface.acksOn("800")).toEqual(["accepted"]);
 
     h.ws.pi().reply("once");
-    await waitFor(() => h.dm.replies().length === 1, "reply");
-    await h.route.dm("800", "once please");
+    await waitFor(() => h.surface.replies.length === 1, "reply");
+    await h.route.send("800", "once please");
     expect(h.ws.pi().prompts).toEqual([stamped("800", "once please")]);
-    expect(h.dm.reactionsOn("800")).toEqual(["👀"]);
+    expect(h.surface.acksOn("800")).toEqual(["accepted"]);
     const modes = h.r.bot.messages.filter((m) => m.messageId === "800");
     expect(modes).toHaveLength(3);
     await new Promise((r) => setTimeout(r, 50));
-    expect(h.dm.replies()).toHaveLength(1);
+    expect(h.surface.replies).toHaveLength(1);
   });
 
   test("9. a bot tool round-trip: the manifest arrives at register, the stub calls the bot, the result lands in the transcript", async () => {
@@ -838,37 +853,36 @@ describe("workspace e2e (bot ↔ transport ↔ workspace)", () => {
     const search = h.ws.pi().tools.get("web_search")!;
     expect(search.parameters).toMatchObject({ required: ["query"], additionalProperties: false });
 
-    await h.route.dm("900", "search for bun releases");
+    await h.route.send("900", "search for bun releases");
     await h.ws.pi().runTool(search, { query: "bun releases" });
     expect(h.r.bot.searches).toEqual([{ query: "bun releases" }]);
     expect(h.r.bot.audits).toMatchObject([{ principalId: P, agentId: "main", agentName: "main", name: "web_search", ok: true, denied: false }]);
     expect(h.ws.pi().messages.at(-1)).toMatchObject({ role: "toolResult", toolName: "web_search", isError: false, content: [{ type: "text", text: "3 results for bun releases" }] });
 
-    await waitFor(() => h.dm.progress().length === 1, "progress");
-    expect(textOf(h.dm.progress()[0]!.options)).toContain("`web_search`");
+    await waitFor(() => h.surface.progress.length === 1, "progress");
+    await waitFor(() => lineOf(h.surface.current(h.surface.progress[0]!), "web_search") !== undefined, "web_search line");
     h.ws.pi().reply("Bun 2.0 is out.");
-    await waitFor(() => h.dm.replies().length === 1, "reply");
-    expect(textOf(h.dm.replies()[0]!.options)).toContain("Bun 2.0 is out.");
+    await waitFor(() => h.surface.replies.length === 1, "reply");
+    expect(h.surface.replies[0]!.text).toContain("Bun 2.0 is out.");
   });
 
-  test("10. stopping a turn mid-approval withdraws the call: the prompt shows Cancelled and a later Approve runs nothing", async () => {
+  test("10. stopping a turn mid-approval withdraws the call: the prompt resolves cancelled and a later approve runs nothing", async () => {
     const h = await linked({ linear: true });
     await connected(h);
     await waitFor(() => h.ws.pi().tools.has("file_linear_issue"), "ask stub registered in the live session");
 
-    await h.route.dm("1000", "file a bug about login");
+    await h.route.send("1000", "file a bug about login");
     const ac = new AbortController();
     const run = h.ws.pi().runTool(h.ws.pi().tools.get("file_linear_issue")!, { title: "Login crash", description: "D", repo_label: "sushii-bot" }, ac.signal);
-    const promptOf = () => h.dm.sent.find((s) => textOf(s.options).includes("wsap:"));
-    await waitFor(() => promptOf() !== undefined, "approval prompt");
-    const prompt = promptOf()!;
-    const nonce = /wsap:([A-Za-z0-9_-]{16}):approve/.exec(textOf(prompt.options))![1]!;
+    await waitFor(() => h.surface.approvals.length > 0, "approval prompt");
+    const prompt = h.surface.approvals[0]!;
+    expect(prompt.view.tool).toBe("file_linear_issue");
 
     ac.abort();
     await run;
     expect(h.ws.pi().messages.at(-1)).toMatchObject({ role: "toolResult", toolName: "file_linear_issue", isError: true });
-    await waitFor(() => h.dm.current(prompt).includes("⏹ Cancelled"), "prompt shows Cancelled");
-    expect(h.r.bot.tools.decide(nonce, "approve", { surface: "discord", userId: OWNER, name: "drk" })).toBe("expired");
+    await waitFor(() => prompt.decisions.includes("cancelled"), "prompt resolved cancelled");
+    expect(h.r.bot.tools.decide(prompt.nonce, "approve", ACTOR)).toBe("expired");
     expect(h.r.bot.filed).toEqual([]);
     h.ws.pi().reply("Stopped.");
   });
@@ -879,28 +893,30 @@ describe("workspace e2e: delegate, scheduled jobs, auto-mode asks", () => {
     const h = await linked();
     await connected(h);
 
-    await h.route.dm("1100", "research the outage");
+    await h.route.send("1100", "research the outage");
     h.ws.pi().toolStart("delegate", { agent: "researcher", task: "find the outage cause" });
-    await waitFor(() => h.dm.progress().length === 1, "progress message");
-    const progress = h.dm.progress()[0]!;
+    await waitFor(() => h.surface.progress.length === 1, "progress view");
+    const progress = h.surface.progress[0]!;
     const turn = h.ws.turns.current();
-    expect(turn?.turnId).toBe(turnIdOf(progress));
+    expect(turn?.turnId).toBe(progress.views[0]!.turnId);
 
     // What SubagentHost.emit sends for the child's calls.
     const child = (ev: { type: "tool_start"; name: string; summary: string } | { type: "tool_end"; name: string; ok: boolean }) =>
       h.ws.client!.notify(RPC_METHODS.chatEvent, { principalId: P, turnId: turn!.turnId, agentId: "run-child-1", parentRunId: "run-main-1", ev });
+    const childLine = () => h.surface.current(progress).lines.find((l) => l.agentId === "run-child-1");
     child({ type: "tool_start", name: "read", summary: "incident.md" });
-    await waitFor(() => h.dm.current(progress).includes("↳"), "nested child line");
+    await waitFor(() => childLine() !== undefined, "nested child line");
+    expect(childLine()).toMatchObject({ name: "read", summary: "incident.md", state: "run" });
     child({ type: "tool_end", name: "read", ok: true });
-    await waitFor(() => h.dm.current(progress).includes("↳ ✓ `read` incident.md"), "child line finished");
+    await waitFor(() => childLine()?.state === "ok", "child line finished");
 
     h.ws.pi().reply("The cert expired.");
-    await waitFor(() => h.dm.replies().length === 1, "reply");
-    await waitFor(() => h.dm.current(progress).includes("✓ done"), "progress finalized");
-    expect(h.dm.current(progress)).toContain("2 tools");
+    await waitFor(() => h.surface.replies.length === 1, "reply");
+    await waitFor(() => progress.final !== undefined, "progress finalized");
+    expect(progress.final).toMatchObject({ outcome: "done", summary: { toolCount: 2 } });
   });
 
-  test("12. a scheduled job's reply reaches the DM as a proactive message and lands in the chat as context, with no turn", async () => {
+  test("12. a scheduled job's reply reaches the chat as a proactive message and lands in the session as context, with no turn", async () => {
     const h = await linked();
     await connected(h);
     const home = tempDir();
@@ -935,91 +951,69 @@ describe("workspace e2e: delegate, scheduled jobs, auto-mode asks", () => {
     });
 
     expect(await scheduler.runJob("heartbeat", { trigger: "manual", force: true })).toMatchObject({ status: "sent" });
-    await waitFor(() => h.dm.replies().some((s) => textOf(s.options).includes("passport renewal")), "proactive DM");
+    await waitFor(() => h.surface.replies.some((r) => r.text.includes("passport renewal")), "proactive message");
+    expect(h.surface.replies.find((r) => r.text.includes("passport renewal"))!.kind).toBe("proactive");
     expect(h.ws.pi().prompts).toEqual([]);
     expect(JSON.stringify(h.ws.pi().customs)).toContain("You sent drk this proactive message: Your passport renewal is due Friday.");
     await waitFor(() => h.ws.unacked().length === 0, "proactive delivery acked");
 
-    const before = h.dm.sent.length;
+    const before = h.surface.posted;
     expect(await scheduler.runJob("heartbeat", { trigger: "manual", force: true })).toMatchObject({ status: "no_reply" });
-    expect(h.dm.sent).toHaveLength(before);
+    expect(h.surface.posted).toBe(before);
   });
 
-  test("13. an auto-mode ask mid-turn becomes Yes/No buttons; the owner's click answers the dialog, not the agent", async () => {
+  test("13. an auto-mode ask mid-turn becomes a Yes/No ask; the owner's answer answers the dialog, not the agent", async () => {
     const h = await linked();
     await connected(h);
 
-    await h.route.dm("1300", "clean the build dir");
+    await h.route.send("1300", "clean the build dir");
     // What the auto-mode extension does on an "ask" verdict, through the session's bound UI context.
     const allowed = h.ws.personal.ui.confirm("Auto mode: allow this tool call?", "bash: rm -rf build\n\nWhy it's asking: recursive delete");
-    const askOf = () => h.dm.sent.find((s) => textOf(s.options).includes("wsask:"));
-    await waitFor(() => askOf() !== undefined, "ask prompt");
-    const ask = askOf()!;
-    expect(textOf(ask.options)).toContain("rm -rf build");
-    const askId = /wsask:([A-Za-z0-9]+):0/.exec(textOf(ask.options))![1]!;
+    await waitFor(() => h.surface.asks.length > 0, "ask prompt");
+    const ask = h.surface.asks[0]!;
+    expect(JSON.stringify(ask)).toContain("rm -rf build");
+    expect(ask.choices[0]).toBe("Yes");
 
-    const editReplies: unknown[] = [];
-    const interaction = {
-      customId: `wsask:${askId}:0`,
-      id: "int-ask",
-      channelId: "dm",
-      user: { id: OWNER, username: "drk", globalName: "drk" },
-      component: { label: "Yes" },
-      message: { components: [], edit: async () => {} },
-      reply: async () => {},
-      deferReply: async () => {},
-      editReply: async (o: unknown) => void editReplies.push(o),
-    } as unknown as WorkspaceButtonInteraction;
-    await handleWorkspaceAskButton(interaction, { link: h.r.bot.link });
+    expect(await h.r.bot.link.answerAsk(ORIGIN, ask.askId!, { index: 0, label: "Yes" }, { ...ACTOR, userId: "someone" })).toEqual({ status: "forbidden" });
+    expect(await h.r.bot.link.answerAsk(ORIGIN, ask.askId!, { index: 0, label: "Yes" }, ACTOR)).toMatchObject({ status: "answered", answer: "Yes" });
 
     expect(await allowed).toBe(true);
-    expect(editReplies).toEqual(["Answered: Yes"]);
     expect(h.ws.pi().prompts).toEqual([stamped("1300", "clean the build dir")]);
     h.ws.pi().reply("Cleaned.");
-    await waitFor(() => h.dm.replies().some((s) => textOf(s.options).includes("Cleaned.")), "reply");
+    await waitFor(() => h.surface.replies.some((r) => r.text.includes("Cleaned.")), "reply");
   });
 });
 
 describe("workspace commands and asks outside a turn", () => {
-  test("14. !tasks, !model and !compact go over chat/command and answer in the DM without reaching the agent", async () => {
+  test("14. !tasks, !model and !compact go over chat/command and answer in the chat without reaching the agent", async () => {
     const h = await linked();
     await connected(h);
-    await h.route.dm("1400", "!tasks");
-    await waitFor(() => h.dm.sent.some((s) => textOf(s.options).includes("Book dentist")), "tasks reply");
-    await h.route.dm("1401", "!tasks osaka");
-    await waitFor(() => h.dm.sent.some((s) => textOf(s.options).includes("project osaka")), "project reply");
-    await h.route.dm("1402", "!model luna");
-    await waitFor(() => h.dm.sent.some((s) => textOf(s.options).includes("Model set to **luna**")), "model reply");
-    await h.route.dm("1403", "!compact");
-    await waitFor(() => h.dm.sent.some((s) => textOf(s.options).includes("Didn't compact")), "compact reply");
+    const results = () => h.surface.notices.flatMap((n) => (n.notice.type === "commandResult" ? [n.notice.text] : []));
+    await h.route.send("1400", "!tasks");
+    await waitFor(() => results().some((t) => t.includes("Book dentist")), "tasks reply");
+    await h.route.send("1401", "!tasks osaka");
+    await waitFor(() => results().some((t) => t.includes("project osaka")), "project reply");
+    await h.route.send("1402", "!model luna");
+    await waitFor(() => results().some((t) => t.includes("Model set to **luna**")), "model reply");
+    await h.route.send("1403", "!compact");
+    await waitFor(() => results().some((t) => t.includes("Didn't compact")), "compact reply");
     expect(h.ws.pi().prompts).toEqual([]);
   });
 
-  test("15. a workspace ask with no turn (the task review) gets buttons on the preferred surface; a click answers it", async () => {
+  test("15. a workspace ask with no turn (the task review) reaches the preferred surface; an answer settles it", async () => {
     const h = await linked();
     await connected(h);
     const answer = h.ws.personal.askOwner("Stale: 1. Dentist", ["Keep all", "Drop all"], (t) => (/^(keep|drop) all$/i.test(t) ? { value: t.toLowerCase() } : null));
-    const askOf = () => h.dm.sent.find((s) => textOf(s.options).includes("Stale: 1. Dentist"));
-    await waitFor(() => askOf() !== undefined, "review ask");
-    const askId = /wsask:([A-Za-z0-9]+):1/.exec(textOf(askOf()!.options))![1]!;
-    const interaction = {
-      customId: `wsask:${askId}:1`,
-      id: "int-review",
-      channelId: "dm",
-      user: { id: OWNER, username: "drk", globalName: "drk" },
-      component: { label: "Drop all" },
-      message: { components: [], edit: async () => {} },
-      reply: async () => {},
-      deferReply: async () => {},
-      editReply: async () => {},
-    } as unknown as WorkspaceButtonInteraction;
-    await handleWorkspaceAskButton(interaction, { link: h.r.bot.link });
+    await waitFor(() => h.surface.asks.some((a) => a.question.includes("Stale: 1. Dentist")), "review ask");
+    const ask = h.surface.asks.find((a) => a.question.includes("Stale: 1. Dentist"))!;
+    expect(ask.choices).toEqual(["Keep all", "Drop all"]);
+    expect(await h.r.bot.link.answerAsk(ORIGIN, ask.askId!, { index: 1, label: "Drop all" }, ACTOR)).toMatchObject({ status: "answered" });
     expect(await answer).toBe("drop all");
     expect(h.ws.pi().prompts).toEqual([]);
   });
 });
 
-describe("ChatGPT login from the owner's DM", () => {
+describe("ChatGPT login from the owner's chat", () => {
   test("!login chatgpt → sign-in link → pasted callback → connected; the paste never reaches the agent", async () => {
     const h = await linked();
     await connected(h);
@@ -1035,28 +1029,28 @@ describe("ChatGPT login from the owner's DM", () => {
       stored.push(url.searchParams.get("code")!);
     };
 
-    await h.route.dm("100", "!login chatgpt");
-    await waitFor(() => h.dm.sent.some((s) => textOf(s.options).includes("Sign in with ChatGPT")), "the sign-in prompt");
-    const prompt = h.dm.sent.find((s) => textOf(s.options).includes("Sign in with ChatGPT"))!;
-    expect(textOf(prompt.options)).toContain("https://auth.openai.com/api/accounts/authorize?state=st4te");
-    expect(textOf(prompt.options)).toContain("`!login cancel` to abort");
+    await h.route.send("100", "!login chatgpt");
+    await waitFor(() => h.surface.auths.length > 0, "the sign-in prompt");
+    const prompt = h.surface.auths[0]!;
+    expect(prompt.url).toBe("https://auth.openai.com/api/accounts/authorize?state=st4te");
+    expect(prompt.instructions).toContain("`!login cancel` to abort");
     expect(h.r.bot.link.isLoginPending()).toBe(true);
 
-    await h.route.dm("101", "http://localhost:1455/auth/callback?code=SECRET-CODE&state=st4te&client_id=c");
-    await waitFor(() => h.dm.sent.some((s) => textOf(s.options).includes("ChatGPT connected")), "the result reply");
-    expect(textOf(h.dm.sent.at(-1)!.options)).toContain("✅ ChatGPT connected · gpt-6.1-sol");
+    await h.route.send("101", "http://localhost:1455/auth/callback?code=SECRET-CODE&state=st4te&client_id=c");
+    await waitFor(() => h.surface.replies.some((r) => r.text.includes("ChatGPT connected")), "the result reply");
+    expect(h.surface.replies.at(-1)!.text).toBe("✅ ChatGPT connected · gpt-6.1-sol");
     expect(stored).toEqual(["SECRET-CODE"]);
 
     expect(h.r.bot.messages).toEqual([]);
     expect(h.ws.pi().prompts.join("\n")).not.toContain("SECRET-CODE");
     expect(h.store.listInbox(P)).toEqual([]);
     expect(h.r.bot.link.isLoginPending()).toBe(false);
-    expect(h.dm.reactionsOn("101")).toEqual(["👀"]);
+    expect(h.surface.acksOn("101")).toEqual(["accepted"]);
     expect(h.ws.selector.select(true)).toBe("chatgpt");
     await waitFor(() => h.ws.unacked().length === 0, "auth deliveries acked");
 
     // Afterwards an ordinary message goes to the agent again.
-    await h.route.dm("102", "hi");
+    await h.route.send("102", "hi");
     await waitFor(() => h.r.bot.messages.length === 1, "chat/message");
   });
 });

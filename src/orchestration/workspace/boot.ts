@@ -1,6 +1,5 @@
 // Personal-agent workspace wiring shared by every surface: the surface registry, the proxied tools, the link
 // and its orchestration server. Surfaces contribute adapters; index.ts registers them all before listen.
-import type { OwnerDmMode } from "../../config.ts";
 import type { ConversationStore, SpaceMemoryStore, ToolRegistry } from "../../core/contracts.ts";
 import type { WorkspaceLinkStore } from "../../db/workspaceLink.ts";
 import type { UploadReadResult } from "../contracts.ts";
@@ -19,20 +18,16 @@ import { WorkspaceTools } from "./tools.ts";
 const log = getLogger("orchestration/workspace/boot");
 
 const DISCORD = "discord";
-/** Private space the proxied tools run in, the one the in-process DM agent uses. */
+/** Private space the proxied tools run in. Its key is authz's personal space, not the Discord surface. */
 export const WORKSPACE_TOOL_SPACE = { surface: DISCORD, spaceId: "dm" } as const;
 const OUTBOX_PRUNE_MS = 24 * 60 * 60 * 1000;
 
 export interface WorkspaceConfig {
   principalId: string;
-  /** WORKSPACE_PREFERRED_SURFACE. `web` pins every personal delivery, ask and approval to web. */
-  preferredSurface: string;
   /** DM_WORKSPACE_ENABLED. Gates the tool manifest and the GitHub broker on every surface. */
   enabled: boolean;
   orchPort: number;
   ownerDiscordId: string | undefined;
-  /** OWNER_DM_MODE, only to warn at boot when it keeps Discord DMs open while web is preferred. */
-  ownerDmMode?: OwnerDmMode;
   /** WEB_OWNER_LOGIN, only to check at boot that principals.json maps it to the owner. */
   webOwnerLogin?: string;
   store: ConversationStore;
@@ -72,13 +67,12 @@ export function workspaceOwnerCheck(o: { principalId: string; ownerDiscordId: st
 }
 
 /** Builds the registry, tools, link and server with `adapters` registered. Does not listen: index.ts
- *  registers late adapters (web) first, then calls listenWorkspace. */
-export function bootWorkspace(cfg: WorkspaceConfig, adapters: SurfaceAdapter<any, any>[]): WorkspaceBoot {
-  const preferred = cfg.preferredSurface.trim().toLowerCase();
-  const registry = new SurfaceRegistry(preferred, { pinned: preferred === WEB_SURFACE });
+ *  registers late adapters (web) first, then calls listenWorkspace. Every personal delivery, ask and
+ *  approval is pinned to web, whatever surface a stored origin names. */
+export function bootWorkspace(cfg: WorkspaceConfig, adapters: SurfaceAdapter<any, any>[] = []): WorkspaceBoot {
+  const registry = new SurfaceRegistry(WEB_SURFACE, { pinned: true });
   for (const adapter of adapters) registry.register(adapter);
   checkWebOwnerMapping(cfg);
-  if (cfg.ownerDmMode) checkOwnerDmMode(preferred, cfg.ownerDmMode);
 
   const isOwner = workspaceOwnerCheck({ principalId: cfg.principalId, ownerDiscordId: cfg.ownerDiscordId });
   const tools = new WorkspaceTools({
@@ -130,17 +124,6 @@ export function listenWorkspace(boot: WorkspaceBoot, port: number): void {
   }
   boot.link.pruneOutboxSeen();
   setInterval(() => boot.link.pruneOutboxSeen(), OUTBOX_PRUNE_MS).unref?.();
-}
-
-/** Warns when owner DMs still reach the agent on Discord while personal chat is pinned to web. Only an
- *  explicit OWNER_DM_MODE=workspace gets here, since unset defaults to redirect with web preferred. */
-export function checkOwnerDmMode(preferred: string, mode: OwnerDmMode, logger: Pick<typeof log, "warn"> = log): boolean {
-  if (preferred.trim().toLowerCase() !== WEB_SURFACE || mode !== "workspace") return true;
-  logger.warn(
-    { preferred, ownerDmMode: mode },
-    "OWNER_DM_MODE=workspace with web preferred: owner Discord DMs still reach the personal agent, and run in-process when the workspace is offline",
-  );
-  return false;
 }
 
 function heldBreakGlass(breakGlass: (nonce: string) => Promise<boolean>): (nonce: string) => void {

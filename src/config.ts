@@ -65,14 +65,8 @@ export interface Config {
   orchPort: number;
   /** Secret the workspace presents on `runner/register` (ORCH_SECRET). Unset → every registration is refused. */
   orchSecret: string | undefined;
-  /** Route owner DMs to the personal-agent workspace when it is connected (DM_WORKSPACE_ENABLED). Default off. */
+  /** Route the owner's web chat to the personal-agent workspace when it is connected (DM_WORKSPACE_ENABLED). Default off. */
   dmWorkspaceEnabled: boolean;
-  /** Surface that gets the workspace's proactive messages and approval prompts (WORKSPACE_PREFERRED_SURFACE). Default discord. */
-  workspacePreferredSurface: string;
-  /** What an owner Discord DM does (OWNER_DM_MODE): `workspace` routes it to the personal agent, `redirect`
-   *  only answers with a pointer to the web app. Independent of dmWorkspaceEnabled. Default `redirect` when
-   *  the preferred surface is web, else `workspace`. */
-  ownerDmMode: OwnerDmMode;
   buzz: {
     /** Nostr private key (hex or nsec). Unset → the buzz surface is disabled entirely. */
     privateKey: string | undefined;
@@ -184,26 +178,6 @@ export function parseWebConfig(env: Record<string, string | undefined>): WebConf
     push,
     ...(reason ? { pushDisabledReason: reason } : {}),
   };
-}
-
-export type OwnerDmMode = "workspace" | "redirect";
-
-/** A typo must not quietly reopen owner DMs to the agent, nor take the bot down, so an unknown value is
- *  logged and read as `redirect`. Unset follows the preferred surface, so moving personal chat to web alone
- *  closes the Discord DM path. */
-export function parseOwnerDmMode(
-  raw: string | undefined,
-  preferredSurface: string,
-  error: (ctx: Record<string, unknown>, msg: string) => void = (ctx, msg) => logger.error(ctx, msg),
-): OwnerDmMode {
-  const value = raw?.trim().toLowerCase() || (preferredSurface.trim().toLowerCase() === "web" ? "redirect" : "workspace");
-  if (value === "workspace" || value === "redirect") return value;
-  error({ ownerDmMode: raw }, 'invalid OWNER_DM_MODE (expected "workspace" or "redirect"); owner DMs are redirected');
-  return "redirect";
-}
-
-function preferredSurface(): string {
-  return optional("WORKSPACE_PREFERRED_SURFACE", "discord").trim() || "discord";
 }
 
 function required(name: string): string {
@@ -404,8 +378,6 @@ export const config: Config = {
   orchPort: optionalPort("ORCH_PORT", 8788),
   orchSecret: process.env["ORCH_SECRET"]?.trim() || undefined,
   dmWorkspaceEnabled: ["1", "true", "yes"].includes(optional("DM_WORKSPACE_ENABLED", "false").toLowerCase()),
-  workspacePreferredSurface: preferredSurface(),
-  ownerDmMode: parseOwnerDmMode(process.env["OWNER_DM_MODE"], preferredSurface()),
   buzz: {
     privateKey: process.env["BUZZ_PRIVATE_KEY"],
     relayUrls: parseRelayUrls(process.env["BUZZ_RELAY_URL"]),

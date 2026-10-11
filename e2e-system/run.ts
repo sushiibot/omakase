@@ -361,8 +361,6 @@ async function main(): Promise<number> {
       ORCH_PORT: String(ports.orch),
       ORCH_SECRET: orchSecret,
       DM_WORKSPACE_ENABLED: "true",
-      WORKSPACE_PREFERRED_SURFACE: "web",
-      OWNER_DM_MODE: "redirect",
       WORKSPACE_TZ: "UTC",
       WEB_PORT: String(ports.web),
       WEB_BIND_ADDR: addrs.bot,

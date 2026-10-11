@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { BEHAVIOR_INSTRUCTIONS } from "../../modules/moderation/prompt.ts";
 import { DISCORD_FORMATTING } from "./conventions.ts";
-import { GENERAL_BEHAVIOR, PERSONAL_BEHAVIOR, guildBehavior } from "./personas.ts";
+import { GENERAL_BEHAVIOR, guildBehavior } from "./personas.ts";
 
 describe("Discord personas", () => {
   test("a guild without promptTemplate keeps the moderation persona", () => {
@@ -11,14 +11,11 @@ describe("Discord personas", () => {
   });
 
   test("every persona carries the shared Discord formatting rules", () => {
-    for (const p of [BEHAVIOR_INSTRUCTIONS, GENERAL_BEHAVIOR, PERSONAL_BEHAVIOR]) expect(p).toContain(DISCORD_FORMATTING);
+    for (const p of [BEHAVIOR_INSTRUCTIONS, GENERAL_BEHAVIOR]) expect(p).toContain(DISCORD_FORMATTING);
   });
 
-  test("the general and personal personas are not moderation assistants", () => {
-    for (const p of [GENERAL_BEHAVIOR, PERSONAL_BEHAVIOR]) {
-      expect(p).not.toContain("moderation intelligence assistant");
-      expect(p).not.toContain("Recommended action");
-    }
-    expect(PERSONAL_BEHAVIOR).not.toContain("runner");
+  test("the general persona is not a moderation assistant", () => {
+    expect(GENERAL_BEHAVIOR).not.toContain("moderation intelligence assistant");
+    expect(GENERAL_BEHAVIOR).not.toContain("Recommended action");
   });
 });

@@ -184,13 +184,14 @@ WAL mode. Messages older than 30 days purged daily.
 
 ## Personal agent workspace
 
-The owner's DMs go to a long-lived Pi coding-agent session in its own container
+The owner's web chat (agent.sushii.bot) goes to a long-lived Pi coding-agent session in its own container
 (`src/workspace/`, image tag `<sha>-workspace`, service `private-bots/sushii-agent-workspace`), not
 to the in-process loop. The bot is the transport: it relays chat over a JSON-RPC WebSocket
 (`src/orchestration/workspace/`), proxies bot-side tools (Exa, Grafana, Linear, `team_config`) with
 owner approval for writes, and mints GitHub App tokens so `git`/`gh` run as `sushii-runner[bot]`.
-If the workspace is down, DMs fall back to the in-process loop. Guild, thread, Slack and buzz
-traffic stays in-process.
+If the workspace is down, web messages wait and are resent once it reconnects. Discord DMs are
+ignored, the owner's included; the bot only sends the owner a fixed-text Discord DM when an approval
+can't reach the web app. Guild, thread, Slack and buzz traffic stays in-process.
 
 - **Home** (`/data/home`, git-versioned): `AGENTS.md`, `SOUL.md`, `USER.md`, `MEMORY.md`, `TASKS.md`
   and `memory/catalog.md` are loaded into every chat session. The catalog has a 4000-character cap.
@@ -205,7 +206,7 @@ traffic stays in-process.
   cached continuation) at 200K keeping 40K; after 25 idle minutes over 100K the session rotates to
   a new one seeded with a recap.
 - **Jobs:** nightly memory consolidation, heartbeat with daily task review, `~/schedule.md`.
-- **Commands** (owner DM): `!new`, `!stop`, `!compact`, `!model [alias]`, `!tasks [project]`,
+- **Commands** (web chat): `!new`, `!stop`, `!compact`, `!model [alias]`, `!tasks [project]`,
   `!login chatgpt`.
 - **Run history:** `runs.jsonl` in the state dir; `ws-runs` inside the container.
 
@@ -256,7 +257,7 @@ Deploy: pushing to `main` builds both images, deploys the bot, then deploys the 
 `workspace_image_tag` in sushii-ansible). A manual redeploy is
 `./deploy.sh -y apps private-bots/sushii-agent-workspace`. Tunables (`WORKSPACE_MODELS`,
 `WORKSPACE_COMPACT_TOKENS`, `WORKSPACE_TASK_*`, …; defaults in `src/workspace/config.ts`) go in
-`workspace_env_overrides` there. `DM_WORKSPACE_ENABLED` on the bot routes owner DMs to it.
+`workspace_env_overrides` there. `DM_WORKSPACE_ENABLED` on the bot routes the owner's web chat to it.
 
 ## Development
 

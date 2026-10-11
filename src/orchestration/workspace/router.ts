@@ -1,6 +1,5 @@
 import type { ChatCommand, ChatMessageMode } from "../contracts.ts";
 import { RpcConnectionClosedError, mayHaveBeenAccepted } from "../transport/server.ts";
-import type { WorkspaceLinkStore } from "../../db/workspaceLink.ts";
 import { getLogger } from "../../logger.ts";
 import type { WorkspaceLink } from "./link.ts";
 import type { AckKind, InboundMessage, InboundSurface, RouterNotice } from "./surface.ts";
@@ -64,11 +63,6 @@ export function detectLoginCallback(text: string): { url: string } | null {
 /** The last message the router handled on one conversation; `advance` only ever moves it forward. */
 export interface MessageCursor {
   advance(id: string): void;
-}
-
-/** A cursor persisted in the link store's kv table. */
-export function kvCursor(store: Pick<WorkspaceLinkStore, "getKv" | "setKv">, key: string): { get(): string | null; set(id: string): void } {
-  return { get: () => store.getKv(key), set: (id) => store.setKv(key, id) };
 }
 
 export interface OwnerRouterDeps<M extends InboundMessage> {
@@ -305,25 +299,6 @@ async function routeLogin<M extends InboundMessage>(
   else if (res.status === "offline") await notice({ type: "loginOffline" });
   else if (res.status === "failed") await notice({ type: "loginFailed", error: res.error });
   return true;
-}
-
-/** One message, live or caught up. Only the owner's messages are handled, and each advances the cursor. */
-export async function routeDirectMessage<T extends { id: string }>(
-  message: T,
-  deps: {
-    isOwner: boolean;
-    handleOwner: (message: T) => Promise<void>;
-    cursor: MessageCursor;
-    onOwnerDm?: (id: string) => void;
-  },
-): Promise<void> {
-  if (!deps.isOwner) return;
-  deps.onOwnerDm?.(message.id);
-  try {
-    await deps.handleOwner(message);
-  } finally {
-    deps.cursor.advance(message.id);
-  }
 }
 
 function capError(text: string): string {

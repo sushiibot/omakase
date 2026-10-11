@@ -23,7 +23,8 @@ import { createMemoryDeriver } from "./agent/memoryDeriver.ts";
 import type { LanguageModelProvider } from "./core/contracts.ts";
 import { BEHAVIOR_INSTRUCTIONS } from "./modules/moderation/prompt.ts";
 import { buildCapabilitySections } from "./orchestration/capabilityPrompt.ts";
-import { createDiscordWorkspace, startDiscordSurface } from "./surfaces/discord/gateway.ts";
+import { startDiscordSurface } from "./surfaces/discord/gateway.ts";
+import { createDiscordBreakGlass } from "./surfaces/discord/breakGlass.ts";
 import { bootWorkspace, listenWorkspace } from "./orchestration/workspace/boot.ts";
 import { resolveOwnerPrincipalId } from "./orchestration/transport/server.ts";
 import { WorkspaceLinkStore } from "./db/workspaceLink.ts";
@@ -114,7 +115,7 @@ async function main() {
     getSlack: () => slackWiki,
   });
 
-  const discordWorkspace = createDiscordWorkspace({ client: client as Client<true>, core, store });
+  const breakGlass = createDiscordBreakGlass(client);
   const ownerPrincipalId = resolveOwnerPrincipalId();
   const uploads = new DiskUploadStore({
     root: config.webUploadsDir,
@@ -122,23 +123,18 @@ async function main() {
     // Fires only on an upload, which needs the web chat created below.
     onPhotoQuotaWarning: (used, cap) => void webChat.adapter.notifyPhotoQuota(used, cap),
   });
-  const workspace = bootWorkspace(
-    {
-      principalId: ownerPrincipalId,
-      preferredSurface: config.workspacePreferredSurface,
-      enabled: config.dmWorkspaceEnabled,
-      orchPort: config.orchPort,
-      ownerDiscordId: config.ownerDiscordId,
-      ownerDmMode: config.ownerDmMode,
-      webOwnerLogin: process.env["WEB_OWNER_LOGIN"],
-      store,
-      memory,
-      linkStore: new WorkspaceLinkStore(db),
-      breakGlass: (nonce) => discordWorkspace.breakGlass(nonce, "held"),
-      uploadRead: createUploadReadHandler(uploads, ownerPrincipalId),
-    },
-    [discordWorkspace.adapter],
-  );
+  const workspace = bootWorkspace({
+    principalId: ownerPrincipalId,
+    enabled: config.dmWorkspaceEnabled,
+    orchPort: config.orchPort,
+    ownerDiscordId: config.ownerDiscordId,
+    webOwnerLogin: process.env["WEB_OWNER_LOGIN"],
+    store,
+    memory,
+    linkStore: new WorkspaceLinkStore(db),
+    breakGlass: (nonce) => breakGlass(nonce, "held"),
+    uploadRead: createUploadReadHandler(uploads, ownerPrincipalId),
+  });
   startDiscordSurface({
     client: client as Client<true>,
     core,
@@ -146,9 +142,6 @@ async function main() {
     memory,
     hookBus,
     makeWikiSourceContext,
-    workspace: discordWorkspace,
-    boot: workspace,
-    ownerDmMode: config.ownerDmMode,
   });
   // Before the workspace transport listens, so the web adapter is registered by the time a workspace
   // connects and drains its outbox. It is registered only when the gateway started.
@@ -157,7 +150,7 @@ async function main() {
     link: workspace.link,
     tools: workspace.tools,
     workspaceEnabled: config.dmWorkspaceEnabled,
-    breakGlass: (nonce) => discordWorkspace.breakGlass(nonce),
+    breakGlass: (nonce) => breakGlass(nonce),
     uploads,
   });
   const taskRoutes = new TaskRoutes(workspace.link, webChat.threads);

@@ -8,7 +8,7 @@ import { mintWebActor } from "../../surfaces/web/actor.ts";
 import { RPC_METHODS, type ChatOrigin } from "../contracts.ts";
 import type { PrincipalConfig } from "../principals.ts";
 import type { ConnectionInfo, WorkspaceHandler } from "../transport/server.ts";
-import { bootWorkspace, checkOwnerDmMode, listenWorkspace, workspaceOwnerCheck, type WorkspaceConfig } from "./boot.ts";
+import { bootWorkspace, listenWorkspace, workspaceOwnerCheck, type WorkspaceConfig } from "./boot.ts";
 import type { WorkspaceRpc } from "./link.ts";
 import type { Timers } from "./progress.ts";
 import type {
@@ -150,12 +150,11 @@ async function until(check: () => boolean): Promise<void> {
   for (let i = 0; i < 50 && !check(); i++) await tick();
 }
 
-function cfg(preferredSurface: string, timers: Timers = new ManualTimers()): WorkspaceConfig {
+function cfg(timers: Timers = new ManualTimers()): WorkspaceConfig {
   const db = new Database(":memory:");
   applySchema(db);
   return {
     principalId: P,
-    preferredSurface,
     enabled: true,
     orchPort: 0,
     ownerDiscordId: OWNER_DISCORD,
@@ -169,8 +168,8 @@ function cfg(preferredSurface: string, timers: Timers = new ManualTimers()): Wor
   };
 }
 
-function boot(preferred: string, adapters: SurfaceAdapter[], timers?: Timers) {
-  const b = bootWorkspace(cfg(preferred, timers), adapters);
+function boot(adapters: SurfaceAdapter[], timers?: Timers) {
+  const b = bootWorkspace(cfg(timers), adapters);
   const rpc = new FakeRpc();
   b.link.attach(rpc);
   const call = (callId: string) =>
@@ -216,7 +215,7 @@ describe("workspace owner check", () => {
 
   test("web: location accepts the verified gateway owner when the configured identity has mixed case and whitespace", async () => {
     config.principals = { [P]: { owner: true, identities: { discord: OWNER_DISCORD, web: `  ${OWNER_LOGIN.toUpperCase()}  ` } } };
-    const b = boot("web", [new RecordingAdapter("discord"), new RecordingAdapter("web")]);
+    const b = boot([new RecordingAdapter("discord"), new RecordingAdapter("web")]);
     expect(b.link.isOwner(mintWebActor(OWNER_LOGIN))).toBe(true);
     expect(b.tools.isOwner(mintWebActor(OWNER_LOGIN))).toBe(true);
     let nonce = "";
@@ -245,7 +244,7 @@ describe("workspace owner check", () => {
   });
 
   test("the booted tools and link use the same check", () => {
-    const b = boot("discord", [new RecordingAdapter("discord")]);
+    const b = boot([new RecordingAdapter("discord")]);
     const forged: SurfaceActor = { surface: "web", userId: OWNER_LOGIN.toLowerCase(), name: "drk" };
     expect(b.link.isOwner(forged)).toBe(false);
     expect(b.tools.isOwner(forged)).toBe(false);
@@ -258,7 +257,7 @@ describe("workspace owner check", () => {
 describe("preferred surface web", () => {
   test("a minted web owner decides a web approval; a forged one can't", async () => {
     const web = new RecordingAdapter("web");
-    const b = boot("web", [new RecordingAdapter("discord"), web]);
+    const b = boot([new RecordingAdapter("discord"), web]);
     const pending = b.call("c1");
     await until(() => web.of("approvalPrompt").length > 0);
     const { nonce } = web.of("approvalPrompt")[0]!.arg as { nonce: string };
@@ -270,7 +269,7 @@ describe("preferred surface web", () => {
   test("approvals, asks, replies and progress never go to Discord, even with a discord origin", async () => {
     const discord = new RecordingAdapter("discord");
     const web = new RecordingAdapter("web");
-    const b = boot("web", [discord, web]);
+    const b = boot([discord, web]);
     const origin: ChatOrigin = { surface: "discord", conversationId: "dm-1" };
     const pending = b.call("c1");
     await until(() => web.of("approvalPrompt").length > 0);
@@ -291,7 +290,7 @@ describe("preferred surface web", () => {
   test("web missing: nothing throws, approvals are held then denied, deliveries stay unacked, Discord is never used", async () => {
     const timers = new ManualTimers();
     const discord = new RecordingAdapter("discord");
-    const b = boot("web", [discord], timers);
+    const b = boot([discord], timers);
     expect(() => listenWorkspace(b, 0)).not.toThrow();
     try {
       const origin: ChatOrigin = { surface: "discord", conversationId: "dm-1" };
@@ -319,7 +318,7 @@ describe("preferred surface web", () => {
 
   test("a held approval is asked on web once the web adapter registers", async () => {
     const discord = new RecordingAdapter("discord");
-    const b = boot("web", [discord]);
+    const b = boot([discord]);
     const pending = b.call("c1");
     await tick();
     const web = new RecordingAdapter("web");
@@ -332,7 +331,7 @@ describe("preferred surface web", () => {
   });
 
   test("a held approval is cancelled by tool/cancel and by a closed socket", async () => {
-    const b = boot("web", [new RecordingAdapter("discord")]);
+    const b = boot([new RecordingAdapter("discord")]);
     const cancelled = b.call("c1");
     await tick();
     expect(await b.rpc.handler!.onRequest!(CONN, RPC_METHODS.toolCancel, { principalId: P, callId: "c1" })).toEqual({ cancelled: true });
@@ -348,7 +347,7 @@ describe("approval surface binding", () => {
   test("the owner on Discord can't decide an approval posted to web, even with its nonce", async () => {
     const discord = new RecordingAdapter("discord");
     const web = new RecordingAdapter("web");
-    const b = boot("web", [discord, web]);
+    const b = boot([discord, web]);
     let settled = false;
     const pending = Promise.resolve(b.call("c1")).then((r) => {
       settled = true;
@@ -363,23 +362,12 @@ describe("approval surface binding", () => {
     expect(await pending).toMatchObject({ ok: false, denied: true });
     expect(discord.calls).toEqual([]);
   });
-
-  test("the minted web owner can't decide an approval posted to Discord", async () => {
-    const discord = new RecordingAdapter("discord");
-    const b = boot("discord", [discord]);
-    const pending = b.call("c1");
-    await until(() => discord.of("approvalPrompt").length > 0);
-    const { nonce } = discord.of("approvalPrompt")[0]!.arg as { nonce: string };
-    expect(b.tools.decide(nonce, "approve", mintWebActor(OWNER_LOGIN))).toBe("forbidden");
-    expect(b.tools.decide(nonce, "approve", { surface: "discord", userId: OWNER_DISCORD, name: "drk" })).toBe("decided");
-    expect(await pending).toEqual({ ok: true, result: "filed" });
-  });
 });
 
 describe("held approvals", () => {
   test(`at most ${MAX_HELD_APPROVALS} are held; the rest are denied at once`, async () => {
     const timers = new ManualTimers();
-    const b = boot("web", [new RecordingAdapter("discord")], timers);
+    const b = boot([new RecordingAdapter("discord")], timers);
     const held = Array.from({ length: MAX_HELD_APPROVALS }, (_, i) => b.call(`c${i}`));
     await tick();
     const over = await b.call("over");
@@ -398,7 +386,7 @@ describe("held approvals", () => {
 
   test("a flushed approval gets a fresh timeout window, not what was left of the original", async () => {
     const timers = new ManualTimers();
-    const b = boot("web", [new RecordingAdapter("discord")], timers);
+    const b = boot([new RecordingAdapter("discord")], timers);
     const pending = b.call("c1");
     await tick();
     const original = [...timers.handles].filter(([, h]) => h.ms === APPROVAL_TIMEOUT_MS).map(([id]) => id);
@@ -419,7 +407,7 @@ describe("held approvals", () => {
   test("a held approval wakes the owner through break-glass once, and a posted one never does", async () => {
     const timers = new ManualTimers();
     const woken: string[] = [];
-    const b = bootWorkspace({ ...cfg("web", timers), breakGlass: async (nonce) => (woken.push(nonce), true) }, [new RecordingAdapter("discord")]);
+    const b = bootWorkspace({ ...cfg(timers), breakGlass: async (nonce) => (woken.push(nonce), true) }, [new RecordingAdapter("discord")]);
     const rpc = new FakeRpc();
     b.link.attach(rpc);
     const call = (callId: string) =>
@@ -441,7 +429,7 @@ describe("held approvals", () => {
 
   test("web registering in the same tick the hold times out posts no prompt and never approves", async () => {
     const timers = new ManualTimers();
-    const b = boot("web", [new RecordingAdapter("discord")], timers);
+    const b = boot([new RecordingAdapter("discord")], timers);
     const pending = b.call("c1");
     await tick();
     const web = new RecordingAdapter("web");
@@ -449,50 +437,5 @@ describe("held approvals", () => {
     timers.fire(APPROVAL_TIMEOUT_MS);
     expect(await pending).toMatchObject({ ok: false, denied: true });
     expect(web.of("approvalPrompt")).toEqual([]);
-  });
-});
-
-describe("OWNER_DM_MODE with web preferred", () => {
-  function recorder() {
-    const warnings: unknown[] = [];
-    return { warnings, logger: { warn: (...args: unknown[]) => void warnings.push(args) } as never };
-  }
-
-  test("an explicit workspace mode alongside web logs a warning", () => {
-    const r = recorder();
-    expect(checkOwnerDmMode(" Web ", "workspace", r.logger)).toBe(false);
-    expect(r.warnings).toHaveLength(1);
-  });
-
-  test("redirect with web, or any mode with discord, is quiet", () => {
-    const r = recorder();
-    expect(checkOwnerDmMode("web", "redirect", r.logger)).toBe(true);
-    expect(checkOwnerDmMode("discord", "workspace", r.logger)).toBe(true);
-    expect(checkOwnerDmMode("discord", "redirect", r.logger)).toBe(true);
-    expect(r.warnings).toEqual([]);
-  });
-});
-
-describe("preferred surface discord (rollback)", () => {
-  test("approvals and origin-less deliveries still go to Discord", async () => {
-    const discord = new RecordingAdapter("discord");
-    const b = boot("discord", [discord]);
-    const pending = b.call("c1");
-    await until(() => discord.of("approvalPrompt").length > 0);
-    await b.deliver("o1", null);
-    expect(discord.of("sendReply")).toHaveLength(1);
-    const { nonce } = discord.of("approvalPrompt")[0]!.arg as { nonce: string };
-    expect(b.tools.decide(nonce, "approve", { surface: "discord", userId: OWNER_DISCORD, name: "drk" })).toBe("decided");
-    expect(await pending).toEqual({ ok: true, result: "filed" });
-    expect(b.registry.pinned).toBe(false);
-  });
-
-  test("a web origin still reaches a registered web adapter", async () => {
-    const discord = new RecordingAdapter("discord");
-    const web = new RecordingAdapter("web");
-    const b = boot("discord", [discord, web]);
-    await b.deliver("o1", { surface: "web", conversationId: "main" });
-    expect(web.of("sendReply")).toHaveLength(1);
-    expect(discord.calls).toEqual([]);
   });
 });

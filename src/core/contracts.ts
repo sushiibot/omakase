@@ -242,7 +242,7 @@ export interface TurnPromptContext {
   ownerSection?: string;
   moduleExtras?: string[];
   /** Per-space persona, replacing the core's default behavior for this turn (e.g. a moderation
-   *  server vs. a general one vs. the owner's DMs, all served by one Discord core). */
+   *  server vs. a general one, both served by one Discord core). */
   behavior?: string;
   /** No Discord timestamp tokens on this surface; see SystemPromptInputs.plainTimestamps. */
   plainTimestamps?: boolean;

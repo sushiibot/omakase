@@ -38,26 +38,7 @@ import { renderDiscordText } from "./render.ts";
 import { handleFeedbackButton, handleFeedbackModal } from "./feedback.ts";
 import { SCAN_QUERY, applyAutomodDecision } from "./approvals.ts";
 import { buildTriggerText } from "./inbound.ts";
-import { createTranscriber } from "../../agent/transcribe.ts";
 import { STOP_BTN_PREFIX, ASK_BTN_PREFIX, FEEDBACK_BTN_PREFIX, FEEDBACK_MODAL_PREFIX, AUTOMOD_BTN_PREFIX, AUTOMOD_DEL_BTN_PREFIX } from "./buttonIds.ts";
-import { DM_SPACE_ID, DmConductorSession, isOwnerDm } from "./dmConductor.ts";
-import { WorkspaceLinkStore } from "../../db/workspaceLink.ts";
-import type { WorkspaceBoot } from "../../orchestration/workspace/boot.ts";
-import { kvCursor, routeDirectMessage } from "../../orchestration/workspace/router.ts";
-import type { OwnerDmMode } from "../../config.ts";
-import { WEB_SURFACE } from "../web/actor.ts";
-import { ACCENT, DiscordWorkspaceAdapter, WS_APPROVE_PREFIX, WS_ASK_PREFIX, WS_STOP_PREFIX, type DmChannelPort } from "./workspaceAdapter.ts";
-import { handleWorkspaceApprovalButton, handleWorkspaceAskButton, handleWorkspaceStopButton } from "./workspaceButtons.ts";
-import {
-  OWNER_DM_CURSOR_KEY,
-  catchUpOwnerDms,
-  dispatchOwnerDm,
-  createBreakGlass,
-  snowflakeCursor,
-  type BreakGlassReason,
-  type DmCursor,
-  type OwnerDmMessage,
-} from "./ownerDm.ts";
 import { SCREENING_IGNORE_PREFIX, handleScreeningAuditEntry, handleScreeningAutomod, handleScreeningDeletes, handleScreeningIgnore, screenDiscordMessage } from "./screening.ts";
 
 function behaviorFor(guildId: string): string {
@@ -224,111 +205,6 @@ export interface DiscordSurfaceDeps {
   /** Builds the port bag for a source of the wiki a `/wiki-sync` invocation targets. Combined
    *  (Discord + Slack) so a Discord-triggered sweep of a shared wiki can build the Slack source too. */
   makeWikiSourceContext: MakeWikiSourceContext;
-  /** The owner-DM adapter, built before the workspace boots. */
-  workspace: DiscordWorkspace;
-  boot: Pick<WorkspaceBoot, "link" | "tools" | "registry">;
-  ownerDmMode: OwnerDmMode;
-}
-
-// An owner DM as the router sees it, carrying the discord.js message the in-process fallback answers.
-type GatewayDm = OwnerDmMessage & { raw: Message };
-
-export interface DiscordWorkspace {
-  adapter: DiscordWorkspaceAdapter<GatewayDm>;
-  /** A fixed-text, non-silent, buttonless owner DM; the web adapter calls it with the approval's nonce when
-   *  its push reached no device. Deduped per nonce and rate-limited. */
-  breakGlass(nonce: string, reason?: BreakGlassReason): Promise<boolean>;
-}
-
-/** The workspace's Discord adapter (the owner's DM) and the in-process DM agent it falls back to. Built
- *  before bootWorkspace, so the registry has it from the start. */
-export function createDiscordWorkspace(deps: { client: Client<true>; core: AgentCore; store: SqliteConversationStore }): DiscordWorkspace {
-  const { client, core, store } = deps;
-  const transcriber = createTranscriber();
-  // The ORCH port binds before login, so a workspace can register (and restore progress views) before
-  // the client can reach the REST API.
-  // Typed Client<true> for convenience, but this runs before login.
-  const bootClient = client as Client;
-  const clientReady = bootClient.isReady()
-    ? Promise.resolve()
-    : new Promise<void>((resolve) => {
-        bootClient.once(Events.ClientReady, () => resolve());
-        setTimeout(resolve, 60_000).unref?.();
-      });
-  const ownerChannel = async (): Promise<DmChannelPort | null> => {
-    if (!config.ownerDiscordId) return null;
-    await clientReady;
-    const user = await client.users.fetch(config.ownerDiscordId).catch(() => null);
-    const dm = user ? await user.createDM() : null;
-    if (!dm) return null;
-    return {
-      send: (options) => dm.send(options),
-      fetchMessage: (id) => dm.messages.fetch(id).catch(() => null),
-    };
-  };
-
-  async function transcribeVoice(message: Message): Promise<string | null> {
-    const att = message.attachments.first();
-    const buf = att ? await fetch(att.url).then((r) => r.arrayBuffer()).catch(() => null) : null;
-    return buf ? await transcriber({ data: buf, mediaType: att!.contentType ?? "audio/ogg", filename: att!.name ?? "voice-message.ogg" }) : null;
-  }
-
-  /** Owner-only in-process DM turn, used when the workspace is offline or disabled: builds a personal
-   *  `spaceId` ("dm") that authz.isPersonalSpace accepts, then runs the normal core loop. Never touches
-   *  the guild path. Resolves to the reply text delivered, if any. */
-  async function runOwnerDmInProcess(message: Message, userText: string, notice: string | undefined): Promise<string | null> {
-    if (!message.channel.isSendable()) return null;
-    const channel = message.channel;
-    const conversation: ConversationRef = { surface: SURFACE, spaceId: DM_SPACE_ID, conversationId: message.channelId };
-    const author: AuthorRef = { surface: SURFACE, userId: message.author.id, username: message.author.username };
-    const session = new DmConductorSession(
-      channel,
-      { id: client.user.id, username: client.user.username },
-      notice ? { notice, accentColor: ACCENT.warning } : {},
-    );
-    const inbound: InboundMessage = { conversation, author, text: userText, sentAt: message.createdAt };
-
-    return tracer.startActiveSpan("discord.dm", {
-      attributes: { "discord.user_id": author.userId, "discord.channel_id": message.channelId },
-    }, async (span) => {
-      try {
-        const res = await core.handleInbound(inbound, session);
-        if (res.status === "error") {
-          span.setStatus({ code: SpanStatusCode.ERROR, message: res.message });
-          await channel.send(`An error occurred while processing your request.\n-# trace: ${span.spanContext().traceId}`).catch(() => {});
-        } else {
-          span.setStatus({ code: SpanStatusCode.OK });
-        }
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        span.recordException(err instanceof Error ? err : errMsg);
-        span.setStatus({ code: SpanStatusCode.ERROR, message: errMsg });
-        logger.error({ err }, "Error handling owner DM");
-        await channel.send(`An error occurred while processing your request.\n-# trace: ${span.spanContext().traceId}`).catch(() => {});
-      } finally {
-        span.end();
-      }
-      return session.deliveredText;
-    });
-  }
-
-  const adapter = new DiscordWorkspaceAdapter<GatewayDm>({
-    ownerChannel,
-    inbound: {
-      transcribe: (dm) => transcribeVoice(dm.raw),
-      runInProcess: (dm, text, { notice }) => runOwnerDmInProcess(dm.raw, text, notice),
-      // Deterministic DM session boundary. A DM has no threads (unlike guilds, where each thread is a
-      // fresh conversation), so this is the manual "start fresh" for the owner's one ever-growing DM.
-      // A `!` prefix (not `/`) avoids triggering Discord's slash-command autocomplete/registry.
-      resetInProcess: async (dm) => {
-        const conversation: ConversationRef = { surface: SURFACE, spaceId: DM_SPACE_ID, conversationId: dm.channelId };
-        store.save(conversation, { messages: [], initialThreadContext: null });
-        await dm.react("✅").catch(() => {});
-        await dm.send("Started a fresh conversation — this chat's history is cleared. Durable memory is unaffected.").catch(() => {});
-      },
-    },
-  });
-  return { adapter, breakGlass: createBreakGlass(ownerChannel) };
 }
 
 /** A paused automod approval, recovered when the amka:/amkd: button is clicked. In-memory only,
@@ -343,8 +219,6 @@ interface PendingApproval {
 
 export function startDiscordSurface(deps: DiscordSurfaceDeps): void {
   const { client, core, store, memory, hookBus, makeWikiSourceContext } = deps;
-  const discordWorkspace = deps.workspace.adapter;
-  const { link: workspaceLink, tools: workspaceTools, registry: workspaceSurfaces } = deps.boot;
   // One ToolProgressTracker per active conversation. The onToolsDispatched hook and the session
   // that renders the reply share the same instance; the gateway finalizes + removes it when the
   // turn that owns it (not a queued mid-loop message) finishes.
@@ -428,80 +302,9 @@ export function startDiscordSurface(deps: DiscordSurfaceDeps): void {
     }
   }
 
-  const dmCursor: DmCursor = kvCursor(new WorkspaceLinkStore(getDb()), OWNER_DM_CURSOR_KEY);
-
-  function ownerDmMessage(message: Message): GatewayDm | null {
-    if (!message.channel.isSendable()) return null;
-    const channel = message.channel;
-    return {
-      raw: message,
-      id: message.id,
-      channelId: message.channelId,
-      content: message.content,
-      author: { id: message.author.id, name: message.author.globalName ?? message.author.username },
-      isVoice: message.flags.has(MessageFlags.IsVoiceMessage),
-      attachments: [...message.attachments.values()].map((a) => ({ url: a.url, name: a.name, contentType: a.contentType ?? "application/octet-stream" })),
-      react: (emoji) => message.react(emoji),
-      send: (options) => channel.send(options),
-    };
-  }
-
-  // Owner DMs handled since startup, until catch-up has run; null afterwards.
-  let handledBeforeCatchUp: Set<string> | null = new Set();
-
-  async function handleOwnerDm(message: Message): Promise<void> {
-    const dm = ownerDmMessage(message);
-    if (!dm) return;
-    await dispatchOwnerDm(dm, {
-      mode: deps.ownerDmMode,
-      webUp: () => workspaceSurfaces.get(WEB_SURFACE) !== undefined,
-      workspaceEnabled: config.dmWorkspaceEnabled,
-      transcriptionEnabled: config.transcriptionEnabled,
-      link: workspaceLink,
-      surface: discordWorkspace,
-      cursor: dmCursor,
-    });
-  }
-
-  /** Replays owner DMs sent while the bot was down. The workspace dedupes by message id. */
-  async function catchUpOwnerDmsOnReady(cursor: string | null): Promise<void> {
-    if (deps.ownerDmMode === "redirect" || !config.dmWorkspaceEnabled || !config.ownerDiscordId) return;
-    const ownerId = config.ownerDiscordId;
-    // The workspace reconnects with backoff after a bot restart; give it a moment so caught-up DMs
-    // don't all land on the offline fallback.
-    await workspaceLink.waitForConnection(15_000);
-    const user = await client.users.fetch(ownerId).catch(() => null);
-    const dmChannel = user ? await user.createDM().catch(() => null) : null;
-    if (!dmChannel) return;
-    const handled = handledBeforeCatchUp ?? new Set<string>();
-    const count = await catchUpOwnerDms({
-      cursor,
-      ownerId,
-      now: Date.now(),
-      fetchAfter: async (after, limit) => [...(await dmChannel.messages.fetch({ after, limit, cache: false })).values()],
-      handle: (m) => handleDirectMessage(m),
-      alreadyHandled: (id) => handled.has(id),
-    });
-    if (count > 0) logger.info({ count }, "caught up owner DMs sent while offline");
-  }
-
-  /** Live and caught-up DMs alike go through the owner-DM router. */
-  async function handleDirectMessage(message: Message): Promise<void> {
-    if (message.author.bot) return;
-    await routeDirectMessage(message, {
-      isOwner: isOwnerDm(message, config.ownerDiscordId),
-      handleOwner: handleOwnerDm,
-      cursor: snowflakeCursor(dmCursor),
-      onOwnerDm: (id) => handledBeforeCatchUp?.add(id),
-    });
-  }
-
   // ── MessageCreate ────────────────────────────────────────────────────────────
   client.on(Events.MessageCreate, async (message: Message) => {
-    if (!message.guildId) {
-      await handleDirectMessage(message).catch((err) => logger.error({ err }, "unhandled error in DM path"));
-      return;
-    }
+    if (!message.guildId) return;
     const guildConfig = config.guildConfig[message.guildId];
     if (!guildConfig) return;
     const emojiMap = buildEmojiMap(guildConfig.emojis ?? []);
@@ -790,18 +593,6 @@ export function startDiscordSurface(deps: DiscordSurfaceDeps): void {
       await handleAskButton(btn);
       return;
     }
-    if (btn.customId.startsWith(WS_STOP_PREFIX)) {
-      await handleWorkspaceStopButton(btn, { link: workspaceLink });
-      return;
-    }
-    if (btn.customId.startsWith(WS_ASK_PREFIX)) {
-      await handleWorkspaceAskButton(btn, { link: workspaceLink });
-      return;
-    }
-    if (btn.customId.startsWith(WS_APPROVE_PREFIX)) {
-      await handleWorkspaceApprovalButton(btn, { tools: workspaceTools });
-      return;
-    }
   });
 
   async function handleStopButton(interaction: ButtonInteraction): Promise<void> {
@@ -959,13 +750,9 @@ export function startDiscordSurface(deps: DiscordSurfaceDeps): void {
   client.on(Events.AutoModerationActionExecution, (execution) => handleScreeningAutomod(client, execution));
 
   client.once(Events.ClientReady, async (c) => {
-    // Read before any await: a live DM handled meanwhile would move the stored cursor past the backlog.
-    const dmCursorAtReady = dmCursor.get();
     logger.info({ tag: c.user.tag }, "Logged in");
     logger.info({ guilds: Object.keys(config.guildConfig) }, "Watching guilds");
     await registerWikiSyncCommands(c).catch((err) => logger.error({ err }, "failed to register wiki-sync commands"));
-    await catchUpOwnerDmsOnReady(dmCursorAtReady).catch((err) => logger.error({ err }, "owner DM catch-up failed"));
-    handledBeforeCatchUp = null;
   });
 
   // Startup cleanup schedules (ported from the old startBot()).
