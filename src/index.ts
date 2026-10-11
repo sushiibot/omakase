@@ -1,3 +1,4 @@
+import { exitAfterBackoff } from "./crashBackoff.ts";
 import { createBrowserRoutes } from "./surfaces/web/browserRoutes.ts";
 import type { Client } from "discord.js";
 import { otelSDK } from "./telemetry.ts";
@@ -330,7 +331,7 @@ async function main() {
   process.on("SIGTERM", shutdown);
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   logger.error({ err }, "Fatal error");
-  process.exit(1);
+  await exitAfterBackoff("agent");
 });

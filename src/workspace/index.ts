@@ -1,3 +1,4 @@
+import { exitAfterBackoff } from "../crashBackoff.ts";
 import { BrowserManager, localBrowserDriver } from "./browser.ts";
 import { runsStopParams, RPC_METHODS } from "../orchestration/contracts.ts";
 // First: initialises OTel (when OTEL_EXPORTER_OTLP_ENDPOINT is set) before anything creates spans.
@@ -328,7 +329,7 @@ async function main(): Promise<void> {
   await client.run();
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   log.fatal({ err }, "workspace crashed");
-  process.exit(1);
+  await exitAfterBackoff("workspace");
 });
