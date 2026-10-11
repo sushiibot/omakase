@@ -146,6 +146,8 @@ export interface PromptJobDeps {
   runs: RunRecorder;
   selector: BackendSelector;
   toolStubs?: ToolStubs;
+  /** Shared follow-ups prevent broad reviews from repeating item-specific checks. */
+  scheduledChecks?: () => string;
   limiter: ProactiveLimiter;
   /** Sends `text` to drk as a proactive message from `job`. */
   deliver: (text: string, job: DeliverJob) => void;
@@ -175,7 +177,7 @@ export function createPromptJob(spec: PromptJobSpec, deps: PromptJobDeps): Sched
       if (before !== "ok") return { status: "rate_limited", summary: before };
 
       const notes = recentDailyNotes(deps.config.home);
-      const prompt = notes ? `${spec.prompt}\n\n${notes}` : spec.prompt;
+      const prompt = [spec.prompt, deps.scheduledChecks?.(), notes].filter(Boolean).join("\n\n");
       const { text, runId } = await (deps.runner ?? runToolFreeJob)(deps.config, {
         agentName,
         systemPrompt: jobPreamble(spec.name, now, deps.config.tz),
@@ -237,6 +239,8 @@ export interface ProactiveWiring {
   runs: RunRecorder;
   selector: BackendSelector;
   toolStubs?: ToolStubs;
+  /** Shared follow-ups prevent broad reviews from repeating item-specific checks. */
+  scheduledChecks?: () => string;
   deliver: (text: string, job: DeliverJob) => void;
   note: (name: string, text: string) => Promise<void>;
   /** After schedule.md is found changed, e.g. to commit it. */
@@ -257,6 +261,7 @@ export function wireProactiveJobs(scheduler: Scheduler, w: ProactiveWiring): voi
     selector: w.selector,
     ...(w.toolStubs ? { toolStubs: w.toolStubs } : {}),
     limiter,
+    ...(w.scheduledChecks ? { scheduledChecks: w.scheduledChecks } : {}),
     deliver: w.deliver,
     note: w.note,
     ...(w.runner ? { runner: w.runner } : {}),

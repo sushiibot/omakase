@@ -38,6 +38,8 @@ import { memoryHandlers } from "./memoryFiles.ts";
 import { historyHandlers } from "./historyFiles.ts";
 import { HistorySearch, historySearchHandlers } from "./historySearch.ts";
 import { DurableState } from "../agentRuntime/durableState.ts";
+import { WakeupManager, deliverScheduledCheck } from "./wakeups.ts";
+import { readJson } from "./files.ts";
 
 const log = getLogger("workspace");
 
@@ -122,6 +124,25 @@ async function main(): Promise<void> {
   let personalRef: PersonalSession | null = null;
   let topicsRef: TopicSessions | null = null;
   const durableState = new DurableState(config.stateDir);
+  const wakeups = new WakeupManager({
+    store: durableState,
+    stateDir: config.stateDir,
+    timeZone: config.tz,
+    tasks: taskStore,
+    ready: () => client?.connected ?? false,
+    conversationExists: id => id === "main" || !!readJson<Record<string, unknown>>(join(config.stateDir, "topics.json"))?.[id],
+    deliver: (check, wake) => {
+      if (!topicsRef) throw new Error("Topic sessions are not ready.");
+      return deliverScheduledCheck(topicsRef, taskStore, check, wake, async id => {
+        const entry = toolStubs.entry("task_manage");
+        if (!entry) throw new Error("Task controls are unavailable.");
+        const tool = toolStubs.definition(entry, { agentId: "main", agentName: "scheduled-check", origin: check.origin });
+        await tool.execute(`prepare:${check.id}`, { action: "prepare", id }, undefined, undefined, {} as never);
+      });
+    },
+    warn: (err, message) => log.warn({ err }, message),
+  });
+  await wakeups.open();
   const subagents = new SubagentHost({
     config,
     tasks: taskStore,
@@ -147,7 +168,7 @@ async function main(): Promise<void> {
     conversationId: "main",
     tz: config.tz,
     uploads: { dir: join(config.home, UPLOADS_DIR) },
-    factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = personalTurn?.currentTurnId(); return turnId ? turns.get(turnId) : null; }, mainTurnId: () => personalTurn?.currentTurnId() }),
+    factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, wakeups, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = personalTurn?.currentTurnId(); return turnId ? turns.get(turnId) : null; }, mainTurnId: () => personalTurn?.currentTurnId() }),
     memory: {
       compactionTrigger,
       reload: reloadContext,
@@ -224,7 +245,7 @@ async function main(): Promise<void> {
         ...personalOptions,
         stateDir: join(config.stateDir, "topics", id),
         conversationId: id,
-        factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = topic.currentTurnId(); return turnId ? { turnId, origin: { surface: "web", conversationId: id } } : null; }, origin: { surface: "web", conversationId: id }, sessionDir: join(config.agentDir, "topics", id), agentName: `topic:${id}`, mainTurnId: () => topic.currentTurnId() }),
+        factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, wakeups, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = topic.currentTurnId(); return turnId ? { turnId, origin: { surface: "web", conversationId: id } } : null; }, origin: { surface: "web", conversationId: id }, sessionDir: join(config.agentDir, "topics", id), agentName: `topic:${id}`, mainTurnId: () => topic.currentTurnId() }),
         context: { ...personalOptions.context, busy: () => subagents.isBusy({ surface: "web", conversationId: id }) },
       });
       return topic;
@@ -245,6 +266,7 @@ async function main(): Promise<void> {
   // Two idle waits and a model call can each take 10 min, so the default max runtime would flag a normal slow run.
   scheduler.register({ ...consolidation, maxRunMs: 60 * 60_000, run: (ctx) => subagents.whileMainWrites(() => consolidation.run(ctx), ["USER.md", "MEMORY.md", "DREAMS.md", "TASKS.md", "tasks"]) });
   wireProactiveJobs(scheduler, {
+    scheduledChecks: () => `Pending one-time checks: ${JSON.stringify(wakeups.list().map(({ key, title, at, conversationId, taskId }) => ({ key, title, at, conversationId, taskId })))}. These items already have follow-ups. Do not repeat them unless something urgent changed. Reuse existing unanswered requests.`,
     config,
     runs,
     selector,
@@ -314,12 +336,14 @@ async function main(): Promise<void> {
     onRegistered: (result) => {
       toolStubs.update(result?.tools ?? []);
       topics.onRegistered(result?.features ?? []);
+      void wakeups.start().catch(err => log.warn({ err }, "Wake-up startup poll failed"));
     },
   });
 
   const shutdown = async (signal: string) => {
     log.info({ signal }, "workspace shutting down");
     client?.close();
+    await wakeups.stop();
     // Children first: they record their runs and persist background results while main can still take them.
     await subagents.dispose();
     await Promise.all([scheduler.stop(), personal.dispose(), topics.dispose(), connectors.dispose()]);

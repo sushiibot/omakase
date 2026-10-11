@@ -29,7 +29,7 @@ export class TaskRoutes {
       };
     }
     const run = async () => {
-      if (request.action !== "start" && request.action !== "stop") {
+      if (request.action !== "start" && request.action !== "stop" && request.action !== "prepare") {
         return this.link.tasksManage(
           request.action === "create"
             ? {
@@ -42,6 +42,8 @@ export class TaskRoutes {
       let task = (
         await this.link.tasksManage({ action: "get", id: request.id })
       ).tasks[0]!;
+      if (request.action === "prepare" && (task.status === "done" || task.status === "cancelled"))
+        throw new Error("This task is already complete or cancelled.");
       if (request.action === "stop") {
         const all = (await this.link.tasksManage({ action: "list" })).tasks;
         const included = new Set([task.id]);
@@ -100,6 +102,8 @@ export class TaskRoutes {
             conversationId: id,
           })
         ).tasks[0]!;
+      // Scheduling prepares both bot and workspace routing without starting an agent turn.
+      if (request.action === "prepare") return { tasks: [task] };
       const res = await this.threads
         .channel(id)
         .routes.handle(
@@ -193,7 +197,7 @@ export class TaskRoutes {
 export const taskManifest = {
   name: "task_manage",
   description:
-    "Manage the owner's persistent tasks and checklists. Actions: list, get, create, update, start, stop. create saves a to-do without executing it. start starts or prompts the task's own Sushii conversation; it can delegate coding or research. update requires the latest revision from get/list. Use patch.checklist items {id,title,done}. Mark done only when the outcome is verified. Never treat a stopped run as a cancelled task. Tasks and their runs are separate; use run IDs for delegate continue.",
+    "Manage the owner's persistent tasks and checklists. Actions: list, get, create, update, prepare, start, stop. create saves a to-do without executing it. prepare opens the task's work conversation without starting a run. start starts or prompts the task's own Sushii conversation; it can delegate coding or research. update requires the latest revision from get/list. Use patch.checklist items {id,title,done}. Mark done only when the outcome is verified. Never treat a stopped run as a cancelled task. Tasks and their runs are separate; use run IDs for delegate continue.",
   approval: "none" as const,
   inputSchema: {
     type: "object",
@@ -202,7 +206,7 @@ export const taskManifest = {
     properties: {
       action: {
         type: "string",
-        enum: ["list", "get", "create", "update", "start", "stop"],
+        enum: ["list", "get", "create", "update", "prepare", "start", "stop"],
       },
       id: { type: "string" },
       title: { type: "string" },

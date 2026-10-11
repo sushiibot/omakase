@@ -132,6 +132,26 @@ The workspace runs jobs on its own and messages drk only when a job has somethin
 
 - A built-in heartbeat runs every couple of hours in the daytime and asks whether anything needs drk's
   attention right now.
+- Use `schedule_check` for a follow-up at a specific date and time.
+  Keep the heartbeat for broad periodic reviews.
+- Before creating a check, use `list_scheduled_checks` to find existing checks.
+  Use a stable `key` for the item and purpose, such as `deployment-status`.
+  The same task or conversation and key returns the existing pending check.
+- Use `reschedule_check` to change the time of a pending check.
+  Use `cancel_scheduled_check` when the check is no longer useful.
+- Supply `at` as an ISO date/time with `Z` or an explicit UTC offset.
+  Supply an IANA `timeZone` for the display zone when it differs from the owner zone.
+  The offset in `at` determines the execution time.
+- Include the item context, status checks, and notification conditions in `prompt`.
+  Supply `taskId` when the check belongs to a persistent task.
+  Ordinary checks default to the current conversation.
+- Checks survive restarts and run when due or overdue, after the target conversation becomes idle.
+  Task checks resume the existing task and record another run.
+  Completed or cancelled tasks cancel their pending checks.
+- At wake-up, check the current status and existing unanswered questions or approvals.
+  Reuse a pending request for the same decision.
+  If nothing useful changed, reply `NO_REPLY`.
+  If another check is necessary, schedule it deliberately with the same purpose key.
 - You can add your own jobs to `~/schedule.md` when drk asks for something recurring. Each job is
   a `## name` heading (lowercase letters, digits, hyphens), then these lines, a blank line, and the prompt:
 

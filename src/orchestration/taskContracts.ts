@@ -88,6 +88,7 @@ export const taskAction = z.discriminatedUnion("action", [
   taskRequest.options[1],
   taskRequest.options[2],
   taskRequest.options[3],
+  z.object({ action: z.literal("prepare"), id: taskId }).strict(),
   z
     .object({
       action: z.literal("start"),

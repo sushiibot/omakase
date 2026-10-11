@@ -255,6 +255,10 @@ export interface Wake {
   origin?: ChatOrigin;
   /** Called once the session has the message. */
   onConsumed: () => void;
+  /** A scheduled wake can be cancelled or replaced while it waits behind a live turn. */
+  isPending?: () => boolean;
+  /** Lets a durable scheduler retry a prompt that failed before the session consumed it. */
+  onFailed?: (error: unknown) => void;
 }
 
 interface WakeState extends Wake {
@@ -1025,6 +1029,13 @@ export class PersonalSession {
       if (w.state !== "idle") continue;
       w.state = "queued";
       void this.enqueue(() => this.promptWake(w)).catch((err) => {
+        // A consumed or withdrawn wake must never be rescheduled after its run fails.
+        if (this.wakes.get(w.id) !== w) return;
+        if (w.onFailed) {
+          this.wakes.delete(w.id);
+          w.onFailed(err);
+          return;
+        }
         w.state = "idle";
         if (++w.failures >= WAKE_MAX_FAILURES) {
           this.wakes.delete(w.id);
@@ -1038,9 +1049,17 @@ export class PersonalSession {
 
   private async promptWake(w: WakeState): Promise<void> {
     if (this.wakes.get(w.id) !== w || w.state !== "queued") return;
+    if (w.isPending && !w.isPending()) {
+      this.wakes.delete(w.id);
+      return;
+    }
     if (this.orphanFlush) await this.orphanFlush;
     await this.waitForCompaction();
     await this.waitForSettle();
+    if (w.isPending && !w.isPending()) {
+      this.wakes.delete(w.id);
+      return;
+    }
     // Joining a live run as a steer would answer in that run's conversation; the next settle pumps it again.
     if (this.requireSession().isStreaming || this.resetting) {
       w.state = "idle";
@@ -1109,6 +1128,11 @@ export class PersonalSession {
       // The text is exactly what Pi queues, so a stranded steer is found again by it.
       const pending: PendingInbound = { messageId, text: input.text, origin, ...(wakeId ? { wakeId } : {}), ...(input.images ? { images: input.images } : {}) };
       await this.inbox.prepare(pending);
+      const wake = wakeId ? this.wakes.get(wakeId) : undefined;
+      if (wake?.isPending && !wake.isPending()) {
+        this.wakes.delete(wake.id);
+        throw new Error("Scheduled check was cancelled or replaced before prompting.");
+      }
       if (this.closing) throw new Error("workspace session is shutting down");
       // Storage can yield while Pi settles or starts compaction. Recompute the prompt's mode
       // before registering its origin, just as after an asynchronous image resize.

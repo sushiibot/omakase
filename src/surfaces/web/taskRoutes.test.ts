@@ -104,6 +104,21 @@ test("stopping work keeps the task and checklist available to resume", async () 
   expect(result.tasks[0]!.checklist).toHaveLength(1);
 });
 
+test("prepare creates one task conversation without starting work and refuses completed tasks", async () => {
+  const { routes, store, actor, sent, channels } = setup();
+  const task = (await routes.action({ action: "create", title: "Check delivery" }, actor)).tasks[0]!;
+  await routes.action({ action: "prepare", id: task.id }, actor);
+  await routes.action({ action: "prepare", id: task.id }, actor);
+  const prepared = store.get(task.id);
+  expect(prepared.workConversationId).toBe(`task-${task.id}`);
+  expect(prepared.status).toBe("todo");
+  expect(prepared.runIds).toEqual([]);
+  expect(channels.size).toBe(1);
+  expect(sent).toEqual([]);
+  store.manage({ action: "update", id: task.id, revision: prepared.revision, patch: { status: "done" } });
+  await expect(routes.action({ action: "prepare", id: task.id }, actor)).rejects.toThrow("already complete");
+});
+
 test("stopping a parent also stops child runs and task conversations", async () => {
   const { routes, store, actor, sent, stopped } = setup();
   const parent = (await routes.action({ action: "create", title: "Ship login" }, actor)).tasks[0]!;

@@ -1973,6 +1973,39 @@ describe("PersonalSession wake", () => {
   };
   const RESULT = "<subagent-result runId=\"R1\">found it</subagent-result>";
 
+  test("a scheduled wake cancelled while waiting for a busy turn never starts", async () => {
+    const { host, sessions } = setup();
+    await host.start();
+    await host.handleMessage(msg("m1", "busy"));
+    let pending = true;
+    let consumed = 0;
+    host.wake({ id: "scheduled-1", text: "Check later", isPending: () => pending, onConsumed: () => consumed++ });
+    await sleep(10);
+    pending = false;
+    sessions[0].finish("finished");
+    await tick();
+    await sleep(20);
+    expect(sessions[0].prompts).toHaveLength(1);
+    expect(consumed).toBe(0);
+  });
+
+  test("a scheduled prompt failure releases it for a later scheduler retry", async () => {
+    const { host, sessions } = setup();
+    await host.start();
+    const realPrompt = sessions[0].prompt.bind(sessions[0]);
+    sessions[0].prompt = async () => { throw new Error("temporary model failure"); };
+    const failures: unknown[] = [];
+    let consumed = 0;
+    const wake = { id: "scheduled-1", text: "Check status", onFailed: (error: unknown) => failures.push(error), onConsumed: () => consumed++ };
+    host.wake(wake);
+    await until(() => failures.length === 1);
+    expect(consumed).toBe(0);
+    sessions[0].prompt = realPrompt;
+    host.wake(wake);
+    await until(() => consumed === 1);
+    expect(sessions[0].prompts[0].text).toBe("Check status");
+  });
+
   test("waits out a running turn, then runs as its own turn answering on the wake's origin", async () => {
     const { host, sessions, transport } = setup();
     await host.start();

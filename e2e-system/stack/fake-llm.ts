@@ -84,6 +84,7 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
   const last = msgs[msgs.length - 1];
   const tag = /#([a-z0-9]{4,16})\b/.exec(userText)?.[1];
   if (last?.role === "tool") {
+    if (userText.includes("E2E-LIST-CHECKS")) return stream([textOf(last.content)], 10, tag);
     if (userText.includes("E2E-BROWSER")) return stream(["Browser is open. ", "Browser task finished."], 50, tag, 0, false, 1);
     return stream([`Tool finished. Result: ${textOf(last.content).slice(0, 160).replace(/\n/g, " ")}`], 50, tag);
   }
@@ -91,6 +92,17 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
   // 400 is outside Pi's retryable errors, so the run fails at once.
   if (userText.includes("E2E-JOBFAIL")) return Response.json({ error: { message: "E2E-JOBFAIL scripted failure", code: 400 } }, { status: 400 });
   if (userText.includes("E2E-NOREPLY")) return stream(["NO_REPLY"], 10, undefined);
+  if (userText.includes("E2E-LIST-CHECKS")) return toolCall("list_scheduled_checks", { includeFinished: true });
+  if (userText.includes("E2E-SCHEDULE")) {
+    const key = /key-([a-z0-9]{4,16})\b/.exec(userText)?.[1] ?? tag ?? "test";
+    const taskId = /taskId:(t-[a-z0-9-]+)/.exec(userText)?.[1];
+    return toolCall("schedule_check", {
+      key: `e2e-${key}`, title: `E2E scheduled check ${key}`,
+      prompt: `E2E-ECHO checked-${key} #w${key}`,
+      at: new Date(Date.now() + 8000).toISOString(),
+      ...(taskId ? { taskId } : {}),
+    });
+  }
   if (userText.includes("E2E-APPROVE")) {
     const title = `E2E approval ${tag ?? "test"}`;
     return toolCall("file_linear_issue", { repo_label: "sushii-agent", title, description: "Filed by the e2e fake model." });

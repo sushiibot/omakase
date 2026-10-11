@@ -116,6 +116,12 @@ describe("heartbeat", () => {
     expect(input!.systemPrompt).toContain("Tue, 29/09/2026, 12:00 (UTC)");
   });
 
+  test("heartbeat sees existing scheduled checks while keeping its read-only tool boundary", async () => {
+    await createHeartbeatJob(HEARTBEAT, deps({ scheduledChecks: () => "Pending one-time checks: deployment-status at 2026-10-12T22:30:00Z. Do not repeat them unless something urgent changed." })).run(scheduled);
+    expect(runnerCalls[0]!.prompt).toContain("deployment-status at 2026-10-12T22:30:00Z");
+    expect(runnerCalls[0]!.readOnlyTools).toEqual({});
+  });
+
   test("the daily task review runs first and shares the proactive cap; a failing review can't break the heartbeat", async () => {
     const d = deps({ config: config({ proactiveDailyCap: 1 }) });
     const order: string[] = [];

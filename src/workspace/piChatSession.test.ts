@@ -9,6 +9,7 @@ import { createPiChatSessionFactory, createWorkspaceBashTool, currentRunId, relo
 import { RunLog } from "./runLog.ts";
 import { runWsRuns } from "./wsRuns.ts";
 import { ChatAsks, createHeadlessUIContext } from "./uiContext.ts";
+import { WakeupManager } from "./wakeups.ts";
 
 let root: string;
 const realFetch = globalThis.fetch;
@@ -40,6 +41,25 @@ async function realSession(): Promise<AgentSession> {
   const { session } = await createPiChatSessionFactory(testConfig())({ sessionFile: null });
   return session as AgentSession;
 }
+
+test("scheduled-check tools remain available in real Pi main and topic sessions after reload", async () => {
+  const config = testConfig();
+  const wakeups = new WakeupManager({ stateDir: config.stateDir, timeZone: "UTC", conversationExists: () => true, deliver: async () => {} });
+  for (const conversationId of ["main", "trip"]) {
+    const built = await createPiChatSessionFactory(config, { wakeups, origin: { surface: "web", conversationId } })({ sessionFile: null });
+    const session = built.session as AgentSession;
+    try {
+      for (const name of ["schedule_check", "list_scheduled_checks", "reschedule_check", "cancel_scheduled_check"])
+        expect(session.getActiveToolNames()).toContain(name);
+      await reloadContext(session);
+      expect(session.getActiveToolNames()).toContain("schedule_check");
+      const tool = session.getToolDefinition("schedule_check")!;
+      const result = await tool.execute("check", { key: "status", title: "Status", prompt: "Check status", at: "2099-01-01T10:00:00Z" }, undefined, undefined, {} as never);
+      const check = JSON.parse(result.content.map(c => "text" in c ? c.text : "").join(""));
+      expect(check.check.conversationId).toBe(conversationId);
+    } finally { session.dispose(); }
+  }
+});
 
 describe("run log", () => {
   test("a real chat turn is recorded as a main run in the run index", async () => {
