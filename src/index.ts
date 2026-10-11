@@ -164,7 +164,6 @@ async function main() {
     uploads,
     browser: createBrowserRoutes(workspace.link),
     reads: { db, link: workspace.link, connectors: workspace.link, memory: workspace.link, workspaceEnabled: config.dmWorkspaceEnabled },
-    // Web dictation is always available; VOICE_TRANSCRIPTION only controls Discord voice messages.
     dictation: createDictationRoutes({ transcribe: transcribeAudio }),
     voice: webVoice,
   });

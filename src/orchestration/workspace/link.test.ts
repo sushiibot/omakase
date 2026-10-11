@@ -5,7 +5,7 @@ import { WorkspaceLinkStore } from "../../db/workspaceLink.ts";
 import type { ToolEntry, ToolHosts } from "../../core/contracts.ts";
 import { AUTH_METHODS, LOGIN_ALREADY_PENDING, RPC_METHODS, chatDeliverParams, chatEventParams, chatMessageParams, type ChatDeliverParams, type ChatEventPayload, type ChatMessageParams, type ChatOrigin } from "../contracts.ts";
 import { RpcTimeoutError, type ConnectionInfo, type WorkspaceHandler } from "../transport/server.ts";
-import { LOGIN_PENDING_MS, MAX_OPEN_TURNS, WorkspaceLink, deliveryView, type WorkspaceRpc } from "./link.ts";
+import { DELIVERY_MAX_FAILURES, LOGIN_PENDING_MS, MAX_OPEN_TURNS, WorkspaceLink, deliveryView, type WorkspaceRpc } from "./link.ts";
 import type { Timers } from "./progress.ts";
 import { detectLoginCallback, handleOwnerMessage } from "./router.ts";
 import {
@@ -1185,4 +1185,99 @@ test("same-name tool results complete only the matching Pi call, with legacy IDs
   event("t1", { type: "tool_start", name: "read", summary: "legacy" }, TEST);
   await link.settled();
   expect((adapter.of("progressUpdate").at(-1)!.arg as { view: ProgressView }).view.lines[2]?.id).toBe("t1:2");
+});
+
+describe("delivery failures on the web surface", () => {
+  /** Fails sends on demand: the next one, or every rich (non-plain) one. */
+  class FlakyAdapter extends FakeAdapter {
+    failNext = false;
+    failRich = false;
+    attempts: boolean[] = [];
+    override async sendReply(origin: ChatOrigin | null, reply: ReplyView, attempt: SendAttempt): Promise<void> {
+      this.attempts.push(attempt.plain);
+      if (this.failNext || (this.failRich && !attempt.plain)) {
+        this.failNext = false;
+        throw new Error("render failed");
+      }
+      await super.sendReply(origin, reply, attempt);
+    }
+  }
+
+  function webLink(opts: { store?: WorkspaceLinkStore; enabled?: boolean; web?: FlakyAdapter; rpc?: FakeRpc; tools?: ConstructorParameters<typeof WorkspaceLink>[0]["tools"] } = {}) {
+    const web = opts.web ?? new FlakyAdapter("web");
+    const store = opts.store ?? newStore();
+    const rpc = opts.rpc ?? new FakeRpc();
+    const link = new WorkspaceLink({
+      principalId: P,
+      store,
+      surfaces: new SurfaceRegistry("web", { pinned: true }).register(web),
+      owner: () => ({ id: "owner-1", name: "drk" }),
+      timers: immediate,
+      ...(opts.enabled === undefined ? {} : { enabled: opts.enabled }),
+      ...(opts.tools ? { tools: opts.tools } : {}),
+    });
+    link.attach(rpc);
+    return { link, web, store, rpc };
+  }
+  const acks = (rpc: FakeRpc) => rpc.calls.filter((c) => c.method === RPC_METHODS.chatAck);
+
+  test("a failed send is neither recorded nor acked; the resend goes out and is acked", async () => {
+    const { link, web, store, rpc } = webLink();
+    web.failNext = true;
+    await link.deliver(deliverParams());
+    expect(acks(rpc)).toHaveLength(0);
+    expect(store.hasSeenOutbox("o1")).toBe(false);
+    await link.deliver(deliverParams());
+    expect(web.of("sendReply")).toHaveLength(1);
+    expect(acks(rpc)).toEqual([{ method: RPC_METHODS.chatAck, params: { outboxId: "o1" } }]);
+  });
+
+  test("concurrent resends of one outboxId post once", async () => {
+    const { link, web } = webLink();
+    await Promise.all([link.deliver(deliverParams()), link.deliver(deliverParams())]);
+    expect(web.of("sendReply")).toHaveLength(1);
+  });
+
+  test(`a delivery that keeps failing goes out as plain text on failure ${DELIVERY_MAX_FAILURES}, across restarts, then is acked`, async () => {
+    const store = newStore();
+    const rpc = new FakeRpc();
+    const web = new FlakyAdapter("web");
+    web.failRich = true;
+    // Each resend usually follows a bot restart: a fresh link over the same store.
+    for (let i = 0; i < DELIVERY_MAX_FAILURES - 1; i++) await webLink({ store, rpc, web }).link.deliver(deliverParams());
+    expect(acks(rpc)).toHaveLength(0);
+    expect(web.of("sendReply")).toHaveLength(0);
+    await webLink({ store, rpc, web }).link.deliver(deliverParams());
+    expect(web.attempts).toEqual([...Array(DELIVERY_MAX_FAILURES).fill(false), true]);
+    expect(web.of("sendReply")).toHaveLength(1);
+    expect(acks(rpc)).toHaveLength(1);
+    expect(store.getKv("workspace:deliver_failures:o1")).toBeNull();
+  });
+
+  test("with the workspace flag off the link drains deliveries but offers and serves no tools", async () => {
+    const calls: string[] = [];
+    const { rpc, web } = webLink({
+      enabled: false,
+      tools: {
+        manifest: () => [{ name: "web_search", description: "d", inputSchema: { type: "object" }, approval: "none" }],
+        handleCall: async () => (calls.push("call"), { ok: true, result: "r" }),
+        onSocketClosed: () => {},
+        handleCancel: () => ({ cancelled: false }),
+      } as never,
+    });
+    expect(rpc.handler!.toolManifest!(CONN)).toEqual([]);
+    await expect(rpc.handler!.onRequest!(CONN, RPC_METHODS.toolCall, { name: "web_search" })).rejects.toThrow("method not found");
+    await expect(rpc.handler!.onRequest!(CONN, RPC_METHODS.toolCancel, { callId: "c1" })).rejects.toThrow("method not found");
+    expect(calls).toEqual([]);
+    await rpc.handler!.onRequest!(CONN, RPC_METHODS.chatDeliver, deliverParams({ outboxId: "left-over" }));
+    for (let i = 0; i < 5; i++) await tick();
+    expect(web.of("sendReply")).toHaveLength(1);
+    expect(acks(rpc).map((c) => c.params)).toEqual([{ outboxId: "left-over" }]);
+  });
+
+  test("without a tools port, tool/call is method-not-found and the manifest is empty", async () => {
+    const { rpc } = webLink();
+    await expect(rpc.handler!.onRequest!(CONN, RPC_METHODS.toolCall, {})).rejects.toThrow("method not found");
+    expect(rpc.handler!.toolManifest!(CONN)).toEqual([]);
+  });
 });

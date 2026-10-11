@@ -13,21 +13,9 @@ export interface TranscribableAudio {
 
 /** Speech-to-text via OpenRouter's dedicated Whisper transcription endpoint (`/audio/transcriptions`,
  *  OpenAI-compatible multipart form), reusing the bot's OpenRouter key. A real ASR model, not an LLM —
- *  cheaper per second and more accurate than routing audio through a chat model. Returns the transcript,
- *  or null on failure / empty audio (callers treat null as "no usable text"). */
-export function createTranscriber(): (audio: TranscribableAudio) => Promise<string | null> {
-  return async (audio) => {
-    try {
-      return await transcribeAudio(audio);
-    } catch (err) {
-      logger.warn({ err }, "voice transcription failed");
-      return null;
-    }
-  };
-}
-
-/** The transcript; null when the audio held no words. Throws TranscriptionError when the request
- *  failed, so a caller can tell "nothing said" from "try again". */
+ *  cheaper per second and more accurate than routing audio through a chat model. The transcript; null
+ *  when the audio held no words. Throws TranscriptionError when the request failed, so a caller can tell
+ *  "nothing said" from "try again". */
 export async function transcribeAudio(audio: TranscribableAudio, signal?: AbortSignal): Promise<string | null> {
   try {
     return await transcribeRecording(audio, {

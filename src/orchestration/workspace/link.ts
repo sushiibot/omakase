@@ -265,7 +265,6 @@ export class WorkspaceLink {
   private readonly askChoices = new Map<string, string[]>();
   // Surface id → the ask whose choices a bare number answers there; only surfaces without buttons.
   private readonly numberedAsks = new Map<string, { askId: string; count: number }>();
-  private connectWaiters: Array<() => void> = [];
   private readonly connectionListeners = new Set<(connected: boolean) => void>();
   private readonly runListeners = new Set<(p: RunsChangedParams) => void>();
   private replaying: Promise<void> | null = null;
@@ -421,23 +420,6 @@ export class WorkspaceLink {
 
   isConnected(): boolean {
     return this.rpc?.getWorkspaceConnection(this.opts.principalId) !== undefined;
-  }
-
-  /** Resolves true once the workspace is connected, or false after `timeoutMs`. */
-  waitForConnection(timeoutMs: number): Promise<boolean> {
-    if (this.isConnected()) return Promise.resolve(true);
-    if (!this.rpc) return Promise.resolve(false);
-    return new Promise((resolve) => {
-      const waiter = () => {
-        this.timers.clear(handle);
-        resolve(true);
-      };
-      const handle = this.timers.set(() => {
-        this.connectWaiters = this.connectWaiters.filter((w) => w !== waiter);
-        resolve(false);
-      }, timeoutMs);
-      this.connectWaiters.push(waiter);
-    });
   }
 
   async sendMessage(input: Omit<ChatMessageParams, "principalId">): Promise<ChatMessageResult> {
@@ -749,9 +731,6 @@ export class WorkspaceLink {
   private onRegister(conn: ConnectionInfo): void {
     if (conn.principalId !== this.opts.principalId) return;
     log.info({ runnerId: conn.runnerId, state: conn.state }, "workspace registered");
-    const waiters = this.connectWaiters;
-    this.connectWaiters = [];
-    for (const w of waiters) w();
     this.notifyConnection();
     this.restoreOrphans(conn.state === "streaming");
     // An idle workspace has no run in flight, so any turn still shown as working ended unobserved.
