@@ -1,4 +1,4 @@
-import { realTimers, type Timers } from "../../orchestration/workspace/progress.ts";
+import { realTimers, type Timers } from "../../utils/timers.ts";
 import { conversationKey, type ConversationRef, type HookBus, type ToolActivity } from "../../core/contracts.ts";
 import { getLogger } from "../../logger.ts";
 import type { BuzzClient } from "./buzzClient.ts";

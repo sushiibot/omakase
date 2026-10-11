@@ -1,11 +1,9 @@
-import { autoCompactionSettings } from "../../workspace/contextEconomy.ts";
-import { resolveModelInfo } from "../../agentRuntime/piShared.ts";
 import { join, resolve, sep } from "node:path";
 import { type Span, SpanStatusCode } from "@opentelemetry/api";
 import { config } from "../../config.ts";
 import { getLogger } from "../../logger.ts";
 import { tracer } from "../../telemetry.ts";
-import { assertExactTools } from "../../agentRuntime/piShared.ts";
+import { assertExactTools, autoCompactionSettings, resolveModelInfo } from "./piShared.ts";
 import { createEmbedAttachmentTool } from "./embedTool.ts";
 import type { WikiRepo } from "./git.ts";
 import { commitAndPush } from "./git.ts";

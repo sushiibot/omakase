@@ -1,4 +1,4 @@
-import type { Timers } from "../orchestration/workspace/progress.ts";
+import type { Timers } from "../utils/timers.ts";
 
 /** A clock local to one test; no global timer mocks can leak into other suites. */
 export function manualTimers() {
