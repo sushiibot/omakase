@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { assertExactTools, autoCompactionSettings, clearOpenRouterCatalog, openRouterCatalog, reserveTokensFor, resolveModelInfo } from "./piShared.ts";
+import { assertExactTools, autoCompactionSettings, clearOpenRouterCatalog, maxOutputTokensFor, openRouterCatalog, reserveTokensFor, resolveModelInfo } from "./piShared.ts";
 
 const catalog = {
   data: [
@@ -66,6 +66,12 @@ test("reserve puts the compaction trigger at the configured tokens, capped at 75
   expect(272_000 - reserveTokensFor(272_000, 200_000)).toBe(200_000);
   expect(200_000 - reserveTokensFor(200_000, 200_000)).toBe(150_000);
   expect(128_000 - reserveTokensFor(128_000, 200_000)).toBe(96_000);
+});
+
+test("max output tokens stay under a quarter of the window, so a small window still leaves room for the prompt", () => {
+  expect(maxOutputTokensFor(1_000_000, 65_536)).toBe(65_536);
+  expect(maxOutputTokensFor(65_536, 65_536)).toBe(16_384);
+  expect(maxOutputTokensFor(32_000, 65_536)).toBe(8_000);
 });
 
 test("auto-compaction follows context size, with room for retained messages", () => {

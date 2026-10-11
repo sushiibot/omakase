@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+import ts from "typescript";
 
 /** Owner-only personal agent: web app, workspace control plane and container. */
 const PERSONAL = [
@@ -31,23 +32,24 @@ const SHARED = [
   "src/agent/transcriptionAudio.ts",
   "src/orchestration/{principals,authz,teams,teamConfig}.ts",
   "src/utils/**",
-  "src/test/manualTimers.ts",
 ];
 
 /** TEMPORARY: the personal-entrypoint unit splits these files. Empty this list once it lands. */
 const TEMPORARY_EXEMPT = ["src/index.ts", "src/config.ts", "src/surfaces/discord/breakGlass.ts"];
 
 const ROOT = resolve(import.meta.dir, "..");
-const SPECIFIER_RE = /(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']/g;
 
 const matches = (patterns: string[], path: string) => patterns.some((p) => new Bun.Glob(p).match(path));
 /** A test file sits on the same side as the file it tests, e.g. `contracts.test.ts` with `contracts.ts`. */
 const isPersonal = (path: string) => matches(PERSONAL, path.replace(/(\.\w+)?\.test\.ts$/, ".ts"));
 
+const isFile = (path: string) => existsSync(path) && statSync(path).isFile();
+
+/** The file a relative specifier loads, or null when nothing exists there (the test then fails). */
 function resolveSpecifier(fromFile: string, specifier: string): string | null {
-  if (!specifier.startsWith(".")) return null;
   const base = resolve(ROOT, dirname(fromFile), specifier);
-  const found = [base, `${base}.ts`, join(base, "index.ts")].find((c) => c.endsWith(".ts") && existsSync(c));
+  const candidates = [base.replace(/\.js$/, ".ts"), base, `${base}.ts`, join(base, "index.ts")];
+  const found = candidates.find(isFile);
   return found ? relative(ROOT, found) : null;
 }
 
@@ -57,9 +59,15 @@ test("community and personal code import across the boundary only through the sh
   for (const file of new Bun.Glob("src/**/*.ts").scanSync({ cwd: ROOT })) {
     if (TEMPORARY_EXEMPT.includes(file)) continue;
     const personal = isPersonal(file);
-    for (const [, specifier] of readFileSync(join(ROOT, file), "utf8").matchAll(SPECIFIER_RE)) {
-      const target = resolveSpecifier(file, specifier!);
-      if (!target?.startsWith("src/")) continue;
+    const { importedFiles } = ts.preProcessFile(readFileSync(join(ROOT, file), "utf8"), true, true);
+    for (const { fileName: specifier } of importedFiles) {
+      if (!specifier.startsWith(".")) continue;
+      const target = resolveSpecifier(file, specifier);
+      if (!target) {
+        violations.push(`${file} → "${specifier}" (relative import does not resolve to a file; the boundary can't classify it)`);
+        continue;
+      }
+      if (!target.startsWith("src/")) continue;
       const targetPersonal = isPersonal(target);
       if (!personal && targetPersonal) violations.push(`${file} → "${specifier}" (community must not import personal)`);
       if (personal && !targetPersonal && !matches(SHARED, target))

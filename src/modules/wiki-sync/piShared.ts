@@ -1,6 +1,6 @@
 import { getLogger } from "../../logger.ts";
 
-const log = getLogger("wiki-sync:pi:model");
+const log = getLogger("agentRuntime.pi");
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 const MODEL_METADATA_TIMEOUT_MS = 5000;
@@ -82,10 +82,19 @@ export async function resolveModelInfo(modelId: string, fallback: number): Promi
   }
 }
 
+/** A reply may use at most this share of the window: a cap as large as the window overflows on any prompt. */
+const MAX_OUTPUT_SHARE = 0.25;
+
+export function maxOutputTokensFor(contextWindow: number, budget: number): number {
+  return Math.min(budget, Math.floor(contextWindow * MAX_OUTPUT_SHARE));
+}
+
 /** Pi triggers compaction at `contextWindow - reserveTokens`; the trigger is capped at this share of the window. */
 export const COMPACT_MAX_FILL = 0.75;
 
-/** reserveTokens that puts Pi's compaction trigger at `compactTokens`, at most COMPACT_MAX_FILL of the window. */
+/** reserveTokens that puts Pi's compaction trigger at `compactTokens`, at most COMPACT_MAX_FILL of the window.
+ *  Not floored at the model's maxTokens: ChatGPT models declare 128K of a 272K window, which would pull the
+ *  trigger far below `compactTokens`; Pi's overflow recovery covers a rare reply that doesn't fit. */
 export function reserveTokensFor(contextWindow: number, compactTokens: number): number {
   if (!Number.isFinite(contextWindow) || contextWindow <= 0) throw new Error(`Cannot auto-compact: unknown model context window (${contextWindow})`);
   return contextWindow - Math.min(compactTokens, Math.floor(contextWindow * COMPACT_MAX_FILL));

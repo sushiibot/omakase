@@ -3,7 +3,7 @@ import { type Span, SpanStatusCode } from "@opentelemetry/api";
 import { config } from "../../config.ts";
 import { getLogger } from "../../logger.ts";
 import { tracer } from "../../telemetry.ts";
-import { assertExactTools, autoCompactionSettings, resolveModelInfo } from "./piShared.ts";
+import { assertExactTools, autoCompactionSettings, maxOutputTokensFor, resolveModelInfo } from "./piShared.ts";
 import { createEmbedAttachmentTool } from "./embedTool.ts";
 import type { WikiRepo } from "./git.ts";
 import { commitAndPush } from "./git.ts";
@@ -289,7 +289,7 @@ export async function runWikiSyncSession(opts: { repo: WikiRepo; prompt: string;
   // is a per-turn output budget we control, not the model's own max_completion_tokens (which
   // OpenRouter reports as equal to its context window for this model; sending that directly as
   // max_tokens is what made every prompt + max_tokens combination overflow the real ceiling).
-  const maxTokens = Math.min(config.wikiSync.maxOutputTokens, contextWindow);
+  const maxTokens = maxOutputTokensFor(contextWindow, config.wikiSync.maxOutputTokens);
   modelRuntime.registerProvider(PROVIDER_ID, {
     name: "sushii OpenRouter",
     baseUrl: config.openaiBaseUrl,
