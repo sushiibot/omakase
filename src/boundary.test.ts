@@ -35,9 +35,6 @@ const SHARED = [
   "src/utils/**",
 ];
 
-/** TEMPORARY: the personal-entrypoint unit splits these files. Empty this list once it lands. */
-const TEMPORARY_EXEMPT = ["src/index.ts", "src/config.ts", "src/surfaces/discord/breakGlass.ts"];
-
 const ROOT = resolve(import.meta.dir, "..");
 
 const matches = (patterns: string[], path: string) => patterns.some((p) => new Bun.Glob(p).match(path));
@@ -55,10 +52,8 @@ function resolveSpecifier(fromFile: string, specifier: string): string | null {
 }
 
 test("community and personal code import across the boundary only through the shared list", () => {
-  if (TEMPORARY_EXEMPT.length) console.warn(`boundary: TEMPORARY_EXEMPT skips ${TEMPORARY_EXEMPT.join(", ")}; empty it once the personal entrypoint split lands.`);
   const violations: string[] = [];
   for (const file of new Bun.Glob("src/**/*.ts").scanSync({ cwd: ROOT })) {
-    if (TEMPORARY_EXEMPT.includes(file)) continue;
     const personal = isPersonal(file);
     const { importedFiles } = ts.preProcessFile(readFileSync(join(ROOT, file), "utf8"), true, true);
     for (const { fileName: specifier } of importedFiles) {
@@ -75,9 +70,6 @@ test("community and personal code import across the boundary only through the sh
         violations.push(`${file} → "${specifier}" (personal may import only personal or shared files; ${target} is neither)`);
     }
   }
-  if (violations.length) {
-    const note = `TEMPORARY_EXEMPT still skips ${TEMPORARY_EXEMPT.join(", ")}; empty it once the personal entrypoint split lands.`;
-    throw new Error(`Import boundary violations:\n${violations.join("\n")}\n\n${note}`);
-  }
+  if (violations.length) throw new Error(`Import boundary violations:\n${violations.join("\n")}`);
   expect(violations).toEqual([]);
 });
