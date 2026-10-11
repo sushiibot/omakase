@@ -31,7 +31,7 @@ export type ImportCounts = Record<string, number>;
 
 export type ImportResult =
   | { status: "imported"; counts: ImportCounts }
-  | { status: "skipped"; reason: "already_imported" | "no_source" | "source_missing" };
+  | { status: "skipped"; reason: "already_imported" | "no_source" };
 
 /**
  * Copies the personal gateway's tables out of the bot's database into this (personal) one, once.
@@ -42,7 +42,8 @@ export function importFromBot(db: Database, sourcePath: string | undefined, now:
   const marker = db.query("SELECT value FROM kv WHERE key = ?").get(IMPORT_MARKER_KEY);
   if (marker) return { status: "skipped", reason: "already_imported" };
   if (!sourcePath) return { status: "skipped", reason: "no_source" };
-  if (!existsSync(sourcePath)) return { status: "skipped", reason: "source_missing" };
+  // A wrong mount would otherwise start empty, then refuse to merge once the mount is fixed.
+  if (!existsSync(sourcePath)) throw new Error(`bot database import: IMPORT_FROM_DATABASE_PATH ${sourcePath} does not exist`);
 
   assertTableListCovers(db);
   assertEmpty(db);
@@ -79,7 +80,6 @@ export function importFromBot(db: Database, sourcePath: string | undefined, now:
 export function runImportFromBot(db: Database, sourcePath: string | undefined): ImportResult {
   const result = importFromBot(db, sourcePath);
   if (result.status === "imported") log.info({ counts: result.counts, source: sourcePath }, "imported personal tables from the bot database");
-  else if (result.reason === "source_missing") log.warn({ source: sourcePath }, "IMPORT_FROM_DATABASE_PATH does not exist; starting without the bot's history");
   else log.info({ reason: result.reason }, "bot database import skipped");
   return result;
 }

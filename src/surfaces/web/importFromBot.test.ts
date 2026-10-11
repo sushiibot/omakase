@@ -136,11 +136,18 @@ describe("importFromBot", () => {
     db.close();
   });
 
-  test("an unset or missing source skips without writing a marker", () => {
+  test("an unset source skips without writing a marker", () => {
     const db = open(personalPath);
     expect(importFromBot(db, undefined)).toEqual({ status: "skipped", reason: "no_source" });
-    expect(importFromBot(db, join(dir, "nope.db"))).toEqual({ status: "skipped", reason: "source_missing" });
     expect(db.query("SELECT 1 FROM kv WHERE key = ?").get(IMPORT_MARKER_KEY)).toBeNull();
+    db.close();
+  });
+
+  test("a set but missing source is fatal, so a wrong mount never starts empty", () => {
+    const db = open(personalPath);
+    expect(() => importFromBot(db, join(dir, "nope.db"))).toThrow("does not exist");
+    expect(db.query("SELECT 1 FROM kv WHERE key = ?").get(IMPORT_MARKER_KEY)).toBeNull();
+    expect(db.query("PRAGMA database_list").all()).toHaveLength(1);
     db.close();
   });
 
