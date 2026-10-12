@@ -109,6 +109,16 @@ class WebDAV:
         headers = {'If-None-Match': etag} if etag else {}
         return self.request('read-revalidate' if etag else 'read', 'GET', path, headers=headers)
 
+    def read_strong(self, path):
+        # Synology may mark a just-written file's ETag weak until its timestamp
+        # settles. Never strip W/ or substitute a timestamp for a strong validator.
+        for attempt in range(9):
+            response = self.read(path)
+            etag = response[1].get('etag')
+            if not etag or not etag.startswith('W/') or attempt == 8:
+                return response
+            time.sleep(.25)
+
     def create(self, path, data):
         return self.request('create', 'PUT', path, data, {'If-None-Match': '*', 'Content-Type': 'text/plain'})
 
@@ -241,7 +251,7 @@ def webdav_spike(client, writes):
         status, _, _ = client.create(path, b'first version\n')
         require_status(status, (201,))
         owned = True
-        status, headers, first = client.read(path)
+        status, headers, first = client.read_strong(path)
         require_status(status, (200,))
         if first != b'first version\n':
             raise ProtocolError('Create readback did not match.')
@@ -263,7 +273,7 @@ def webdav_spike(client, writes):
         return result
     finally:
         if owned:
-            _, headers, _ = client.read(path)
+            _, headers, _ = client.read_strong(path)
             current_etag = headers.get('etag')
             if current_etag and not current_etag.startswith('W/'):
                 status, _, _ = client.delete(path, current_etag)

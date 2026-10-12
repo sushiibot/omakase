@@ -66,6 +66,9 @@ class NAS(BaseHTTPRequestHandler):
         if self.path not in self.server.files:
             return self.reply(404)
         etag = self.etag(self.path)
+        if self.server.weak_reads:
+            self.server.weak_reads -= 1
+            etag = 'W/' + etag
         if self.headers.get('If-None-Match') == etag:
             return self.reply(304, headers={'ETag': etag})
         self.reply(200, self.server.files[self.path], {'ETag': etag})
@@ -139,6 +142,7 @@ class SpikeTests(unittest.TestCase):
         self.server.search_fail = False
         self.server.search_cleaned = False
         self.server.logged_out = False
+        self.server.weak_reads = 0
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.transport = spike.Transport(f'http://127.0.0.1:{self.server.server_port}')
 
@@ -160,6 +164,22 @@ class SpikeTests(unittest.TestCase):
         self.assertFalse(result['stale_write_rejected'])
         self.assertIn('FAILED', result['write_test'])
         self.assertEqual(self.server.files, {})
+
+    def test_recent_file_waits_for_strong_validator(self):
+        self.server.weak_reads = 2
+        result = spike.webdav_spike(spike.WebDAV(self.transport, 'test', 'secret', '/public/Property'), True)
+        self.assertTrue(result['strong_etag'])
+        self.assertTrue(result['stale_write_rejected'])
+        self.assertEqual(self.server.files, {})
+
+    def test_persistently_weak_validator_never_allows_replace_or_delete(self):
+        self.server.weak_reads = 100
+        result = spike.webdav_spike(spike.WebDAV(self.transport, 'test', 'secret', '/public/Property'), True)
+        self.assertFalse(result['strong_etag'])
+        self.assertIn('cleanup_required', result)
+        self.assertEqual(sum(method == 'PUT' for method, _ in self.server.methods), 1)
+        self.assertFalse(any(method == 'DELETE' for method, _ in self.server.methods))
+        self.assertEqual(sum(method == 'GET' for method, _ in self.server.methods), 18)
 
     def test_filestation_search_and_write_cleanup(self):
         result = spike.filestation_spike(spike.FileStation(self.transport, 'test', 'secret', '/public/Property'), True, '*.md')
