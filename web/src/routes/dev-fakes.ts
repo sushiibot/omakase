@@ -23,6 +23,8 @@ import { createFixtureMemoryApi } from '$lib/features/memory/fake';
 import { configureRuns } from '$lib/features/runs';
 import { fixtureRunsApi } from '$lib/features/runs/fake';
 import { configureSchedules } from '$lib/features/schedules';
+import { configureSettings } from '$lib/features/settings';
+import { createFixtureSettingsApi } from '$lib/features/settings/fake';
 import { createFixtureSchedulesApi } from '$lib/features/schedules/fake';
 import { configureSkills } from '$lib/features/skills';
 import { createFixtureSkillsApi } from '$lib/features/skills/fake';
@@ -63,6 +65,7 @@ export function installFakes() {
 	configureBrowser(createFixtureBrowserApi());
 	configureBriefing(createFixtureBriefingApi());
 	configureConnectors(createFixtureConnectorsApi());
+	configureSettings(createFixtureSettingsApi());
 	// Each thread answers from its own scripted bot, seeded with its history.
 	configureThreads({
 		api: threadsApi,

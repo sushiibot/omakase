@@ -44,7 +44,23 @@ export const RPC_METHODS = {
   modelsSet: "models/set",
   // Bot → workspace request: OpenRouter's tool-capable models matching a query, for the app's picker.
   modelsSearch: "models/search",
+  // Bot → workspace request: the owner's display name changed in the app's Settings → { ok }.
+  ownerUpdate: "owner/update",
 } as const;
+
+// ── Owner display name. It lands verbatim in agent prompts, so both ends validate it. ──
+export const OWNER_NAME_MAX = 40;
+// Control characters and line/paragraph separators: a name must stay on one prompt line.
+const OWNER_NAME_FORBIDDEN = /[\p{Cc}\u2028\u2029]/u;
+export const ownerName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(OWNER_NAME_MAX)
+  .refine((s) => !OWNER_NAME_FORBIDDEN.test(s), "must not contain line breaks or control characters");
+/** `name: null` clears it. */
+export const ownerUpdateParams = z.object({ principalId: z.string(), name: ownerName.nullable() });
+export type OwnerUpdateParams = z.infer<typeof ownerUpdateParams>;
 
 // ── Chat protocol (workspace ↔ bot). ──
 // Where a chat message came from; replies/events echo it so the bot routes them back to that surface.
@@ -699,6 +715,8 @@ export const workspaceRegisterResult = z.object({
   tools: z.array(toolManifestEntry),
   /** Unknown entries are kept as strings so a newer bot's list still parses; an older bot omits the field. */
   features: z.array(z.string().max(32)).max(16).optional(),
+  /** The owner's display name; null when none is set. An older bot omits the field. */
+  ownerName: ownerName.nullable().optional(),
 });
 export type WorkspaceRegisterResult = z.infer<typeof workspaceRegisterResult>;
 

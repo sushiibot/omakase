@@ -15,10 +15,14 @@
 	import ScreenState, { type RemoteLike } from '$lib/ui/screen/screen-state.svelte';
 	import { SwitchRow } from '$lib/ui/switch';
 	import { cn } from '$lib/utils';
+	import OwnerNameField from './components/owner-name-field.svelte';
 
 	let {
 		back,
 		me,
+		ownerName,
+		nameSave = 'idle',
+		nameError = null,
 		push,
 		pushBusy = false,
 		pushError = null,
@@ -34,6 +38,8 @@
 		online = true,
 		updateReady = false,
 		onretryme,
+		onretryname,
+		onsavename,
 		ontogglepush,
 		ontest,
 		onchoosetheme,
@@ -42,6 +48,10 @@
 	}: {
 		back?: { href: string; label: string; onclick?: (e: MouseEvent) => void };
 		me: RemoteLike & { data?: { login: string; displayName?: string } };
+		/** What the agent calls you; absent in screens that don't show it. */
+		ownerName?: RemoteLike & { data?: { name: string | null } };
+		nameSave?: 'idle' | 'saving' | 'saved' | 'failed';
+		nameError?: string | null;
 		push: PushState;
 		pushBusy?: boolean;
 		pushError?: string | null;
@@ -58,6 +68,8 @@
 		online?: boolean;
 		updateReady?: boolean;
 		onretryme?: () => void;
+		onretryname?: () => void;
+		onsavename?: (name: string | null) => void;
 		ontogglepush?: () => void;
 		ontest?: () => void;
 		onchoosetheme?: (choice: ThemeChoice) => void;
@@ -132,6 +144,19 @@
 				</ScreenState>
 			</div>
 		</section>
+
+		{#if ownerName}
+			<section aria-labelledby="name" class="flex flex-col gap-2">
+				<h2 id="name" class="text-sm font-medium text-muted-foreground">Name</h2>
+				<OwnerNameField
+					remote={ownerName}
+					save={nameSave}
+					error={nameError}
+					onsave={onsavename}
+					onretry={onretryname}
+				/>
+			</section>
+		{/if}
 
 		<section aria-labelledby="notifications" class="flex flex-col gap-2">
 			<h2 id="notifications" class="text-sm font-medium text-muted-foreground">Notifications</h2>

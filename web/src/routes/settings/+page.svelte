@@ -11,6 +11,9 @@
 
 <SettingsScreen
 	me={settings.me}
+	ownerName={settings.ownerName}
+	nameSave={settings.nameSave}
+	nameError={settings.nameError}
 	push={settings.push}
 	pushBusy={settings.pushBusy}
 	pushError={settings.pushError}
@@ -26,6 +29,8 @@
 	online={pwa.online}
 	updateReady={!!pwa.waiting}
 	onretryme={() => void settings.me.refetch()}
+	onretryname={() => void settings.ownerName.refetch()}
+	onsavename={(name) => void settings.saveName(name)}
 	ontogglepush={() => void settings.togglePush()}
 	ontest={() => void settings.sendTest()}
 	onchoosetheme={(t) => settings.chooseTheme(t)}

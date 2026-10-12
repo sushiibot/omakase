@@ -10,12 +10,19 @@ import {
 import { pwa } from '$lib/core/pwa/pwa.svelte';
 import { applyTheme, readTheme, type ThemeChoice } from '$lib/core/pwa/theme';
 import { Remote } from '$lib/core/remote.svelte';
+import { httpSettingsApi, type SettingsApi } from './api';
+import type { OwnerName } from './types';
 
 const errorText = (err: unknown) =>
 	err instanceof Error ? err.message : 'Something went wrong. Try again.';
 
+export type NameSave = 'idle' | 'saving' | 'saved' | 'failed';
+
 export class SettingsStore {
 	me = new Remote<Me>(() => api.me());
+	ownerName: Remote<OwnerName>;
+	nameSave = $state<NameSave>('idle');
+	nameError = $state<string | null>(null);
 	push = $state<PushStatus | 'checking'>('checking');
 	pushBusy = $state(false);
 	pushError = $state<string | null>(null);
@@ -24,14 +31,24 @@ export class SettingsStore {
 	theme = $state<ThemeChoice>('system');
 	installFailed = $state(false);
 
+	#settings: SettingsApi;
+
+	constructor(settings: SettingsApi = httpSettingsApi) {
+		this.#settings = settings;
+		this.ownerName = new Remote(() => settings.ownerName());
+	}
+
 	/** Loads everything the screen shows; returns the cleanup for when it leaves. */
 	open(): () => void {
 		this.push = 'checking';
 		this.pushError = null;
 		this.testResult = null;
 		this.installFailed = false;
+		this.nameSave = 'idle';
+		this.nameError = null;
 		this.theme = readTheme();
 		void this.me.refetch();
+		void this.ownerName.refetch();
 		void this.#loadPush();
 		return watchPermission(() => void this.#refreshPush());
 	}
@@ -102,6 +119,20 @@ export class SettingsStore {
 		}
 	}
 
+	/** Saves the name the agent calls the owner; null or blank clears it. */
+	async saveName(name: string | null) {
+		if (this.nameSave === 'saving') return;
+		this.nameSave = 'saving';
+		this.nameError = null;
+		try {
+			this.ownerName.data = await this.#settings.setOwnerName(name?.trim() || null);
+			this.nameSave = 'saved';
+		} catch (err) {
+			this.nameError = errorText(err);
+			this.nameSave = 'failed';
+		}
+	}
+
 	chooseTheme(choice: ThemeChoice) {
 		this.theme = choice;
 		applyTheme(choice);
@@ -113,7 +144,12 @@ export class SettingsStore {
 }
 
 let store: SettingsStore | null = null;
+let configured: SettingsApi | undefined;
+
+export function configureSettings(api: SettingsApi) {
+	configured = api;
+}
 
 export function settingsStore(): SettingsStore {
-	return (store ??= new SettingsStore());
+	return (store ??= new SettingsStore(configured));
 }

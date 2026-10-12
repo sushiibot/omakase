@@ -12,6 +12,7 @@ import type { ChatRoutes } from "./chatRoutes.ts";
 import { WEB_FEATURES, type MeResponse } from "./events.ts";
 import type { HomeRoutes } from "./homeRoutes.ts";
 import type { DictationRoutes } from "./dictationRoutes.ts";
+import type { SettingsRoutes } from "./settingsRoutes.ts";
 import type { VoiceRoutes } from "./voice/routes.ts";
 import type { VoiceSocketData } from "./voice/session.ts";
 import { createReadRoutes, type ReadRouteDeps, type ReadRoutes } from "./readRoutes.ts";
@@ -60,6 +61,8 @@ export interface WebHandlerDeps {
   dictation?: DictationRoutes;
   voice?: VoiceRoutes;
   browser?: BrowserRoutes;
+  /** /api/settings/*; absent: they answer 404. */
+  settings?: SettingsRoutes;
 }
 
 /** The slice of Bun's server a route may use: lifting the idle timeout for a stream. */
@@ -151,6 +154,10 @@ export function createWebHandler(deps: WebHandlerDeps): WebHandler {
     }
     if (deps.voice) {
       const res = await deps.voice.handle(req, path, actor, server);
+      if (res) return res;
+    }
+    if (deps.settings) {
+      const res = await deps.settings.handle(req, path);
       if (res) return res;
     }
 
@@ -256,6 +263,7 @@ export interface WebServerOptions {
   dictation?: DictationRoutes;
   voice?: VoiceRoutes;
   browser?: BrowserRoutes;
+  settings?: SettingsRoutes;
 }
 
 export async function startWebServer(config: WebConfig, db: Database, opts: WebServerOptions = {}): Promise<Server<VoiceSocketData>> {
@@ -291,6 +299,7 @@ export async function startWebServer(config: WebConfig, db: Database, opts: WebS
     ...(opts.dictation ? { dictation: opts.dictation } : {}),
     ...(opts.voice ? { voice: opts.voice } : {}),
     ...(opts.browser ? { browser: opts.browser } : {}),
+    ...(opts.settings ? { settings: opts.settings } : {}),
   });
   if (config.devLogin && isLoopback(config.bindAddr)) {
     logger.warn({ devLogin: config.devLogin }, "WEB_DEV_LOGIN is active: requests without an identity header are treated as this login");

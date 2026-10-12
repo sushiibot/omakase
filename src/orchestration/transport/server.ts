@@ -37,6 +37,8 @@ export interface WorkspaceHandler {
   toolManifest?(conn: ConnectionInfo): ToolManifestEntry[];
   /** Delivery kinds beyond the base set this bot accepts, advertised in the register result. */
   features?(conn: ConnectionInfo): string[];
+  /** The owner's display name for the register result; null when none is set. */
+  ownerName?(conn: ConnectionInfo): string | null;
   /** Returns the result; throwing answers with a JSON-RPC error. Unknown methods throw MethodNotFoundError. */
   onRequest?(conn: ConnectionInfo, method: string, params: unknown): Promise<unknown>;
   onNotification?(conn: ConnectionInfo, method: string, params: unknown): void;
@@ -314,7 +316,13 @@ export class OrchestrationServer {
 
   private workspaceRegisterResult(conn: ConnectionInfo): WorkspaceRegisterResult {
     const features = this.workspaceHandler?.features?.(conn) ?? [];
-    const withFeatures = features.length ? { features } : {};
+    let name: string | null | undefined;
+    try {
+      name = this.workspaceHandler?.ownerName?.(conn);
+    } catch (err) {
+      logger.warn({ err, runnerId: conn.runnerId }, "reading the owner name failed; registering without it");
+    }
+    const withFeatures = { ...(features.length ? { features } : {}), ...(name !== undefined ? { ownerName: name } : {}) };
     try {
       return { ok: true, tools: this.workspaceHandler?.toolManifest?.(conn) ?? [], ...withFeatures };
     } catch (err) {

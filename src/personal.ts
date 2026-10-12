@@ -10,6 +10,8 @@ import { transcribeAudio } from "./agent/transcribe.ts";
 import { bootWorkspace, listenWorkspace } from "./orchestration/workspace/boot.ts";
 import { resolveOwnerPrincipalId } from "./orchestration/transport/server.ts";
 import { WorkspaceLinkStore } from "./db/workspaceLink.ts";
+import { OwnerNameStore } from "./db/ownerName.ts";
+import { createSettingsRoutes } from "./surfaces/web/settingsRoutes.ts";
 import { personalConfig } from "./surfaces/web/config.ts";
 import { TaskRoutes } from "./surfaces/web/taskRoutes.ts";
 import { FileStores } from "./orchestration/workspace/fileStores/service.ts";
@@ -36,6 +38,7 @@ async function main() {
   const store = new SqliteConversationStore(db);
   const memory = new DiscordSpaceMemoryStore(db);
   const ownerPrincipalId = resolveOwnerPrincipalId();
+  const ownerName = new OwnerNameStore(db);
   const uploads = new DiskUploadStore({
     root: personalConfig.webUploadsDir,
     db,
@@ -53,6 +56,7 @@ async function main() {
     memory,
     linkStore: new WorkspaceLinkStore(db),
     uploadRead: createUploadReadHandler(uploads, ownerPrincipalId),
+    ownerName: () => ownerName.get(),
   });
   // Before the workspace transport listens, so the web adapter is registered by the time a workspace
   // connects and drains its outbox. It is registered only when the gateway started.
@@ -86,6 +90,7 @@ async function main() {
     reads: { db, link: workspace.link, connectors: workspace.link, memory: workspace.link, workspaceEnabled: personalConfig.dmWorkspaceEnabled },
     dictation: createDictationRoutes({ transcribe: transcribeAudio }),
     voice: webVoice,
+    settings: createSettingsRoutes({ ownerName, onChange: (name) => workspace.link.ownerUpdate(name) }),
   });
   const stopWebChat = webServer ? webChat.start() : undefined;
   if (webServer) {

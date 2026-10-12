@@ -1,2 +1,4 @@
 export { default as SettingsScreen } from './settings-screen.svelte';
-export { settingsStore, type SettingsStore } from './settings.svelte';
+export { configureSettings, settingsStore, type SettingsStore } from './settings.svelte';
+export type { SettingsApi } from './api';
+export type { OwnerName } from './types';

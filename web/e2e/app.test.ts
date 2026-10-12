@@ -11,6 +11,8 @@ type ApiOptions = {
 	meStatus?: number;
 	keyStatus?: number;
 	subscribeStatus?: number;
+	ownerName?: string | null;
+	nameStatus?: number;
 };
 
 // Context-level, so requests from the service worker are mocked as well as the page's.
@@ -19,6 +21,8 @@ async function mockApi(context: BrowserContext, initial: ApiOptions = {}) {
 		meStatus: 200,
 		keyStatus: 200,
 		subscribeStatus: 200,
+		ownerName: 'Sam' as string | null,
+		nameStatus: 200,
 		...initial
 	};
 	const calls: Call[] = [];
@@ -50,6 +54,14 @@ async function mockApi(context: BrowserContext, initial: ApiOptions = {}) {
 			return json({ ok: true });
 		}
 		if (path === '/api/push/test') return json({ sent: 1, pruned: 0 });
+		if (path === '/api/settings/owner-name') {
+			if (req.method() !== 'POST') return json({ name: opts.ownerName });
+			if (opts.nameStatus !== 200)
+				return json({ error: 'Use one line, without control characters.' }, opts.nameStatus);
+			const { name } = JSON.parse(req.postData() ?? '{}') as { name: string | null };
+			opts.ownerName = name?.trim() || null;
+			return json({ name: opts.ownerName });
+		}
 		if (path === '/api/chat/history') return json({ items: [], before: null });
 		if (path === '/api/chat/seen') return route.fulfill({ status: 204 });
 		return route.fulfill({ status: 404, body: 'Not found' });
@@ -429,8 +441,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
 			await mockApi(context);
 			await stubPush(page);
 			await page.goto(path);
-			if (path === '/settings') await expect(page.getByTestId('login')).toBeVisible();
-			else await expect(page.getByText('Say hi to your agent.')).toBeVisible();
+			if (path === '/settings') {
+				await expect(page.getByTestId('login')).toBeVisible();
+				await expect(page.getByLabel('Your name')).toHaveValue('Sam');
+			} else await expect(page.getByText('Say hi to your agent.')).toBeVisible();
 
 			expect(await axe(page)).toEqual([]);
 			expect(await smallTargets(page)).toEqual([]);
@@ -442,6 +456,48 @@ for (const colorScheme of ['light', 'dark'] as const) {
 		});
 	}
 }
+
+test('settings saves and clears the name the agent calls you', async ({ page, context }) => {
+	const { calls } = await mockApi(context);
+	await stubPush(page);
+	await page.goto('/settings');
+	const field = page.getByLabel('Your name');
+	await expect(field).toHaveValue('Sam');
+	const save = page.getByRole('button', { name: 'Save name' });
+	await expect(save).toBeDisabled();
+
+	await field.fill('  Alex ');
+	await save.click();
+	await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+	const posts = () =>
+		calls.filter((c) => c.method === 'POST' && c.path === '/api/settings/owner-name');
+	expect(JSON.parse(posts().at(-1)!.body!)).toEqual({ name: 'Alex' });
+	expect(posts().at(-1)!.contentType).toBe('application/json');
+	await expect(field).toHaveValue('Alex');
+	await expect(save).toBeDisabled();
+
+	await page.getByRole('button', { name: 'Clear name' }).click();
+	await expect(page.getByText('Cleared. The agent calls you “the user”.')).toBeVisible();
+	expect(JSON.parse(posts().at(-1)!.body!)).toEqual({ name: null });
+	await expect(field).toHaveValue('');
+	await expect(page.getByRole('button', { name: 'Clear name' })).toHaveCount(0);
+});
+
+test('a refused name keeps what you typed and says why', async ({ page, context }) => {
+	await mockApi(context, { nameStatus: 422 });
+	await stubPush(page);
+	await page.goto('/settings');
+	const field = page.getByLabel('Your name');
+	await expect(field).toHaveValue('Sam');
+	await field.fill('Alex');
+	await page.getByRole('button', { name: 'Save name' }).click();
+	await expect(page.getByRole('alert')).toHaveText(
+		"Couldn't save your name. Use one line, without control characters."
+	);
+	await expect(field).toHaveValue('Alex');
+	await expect(field).toHaveAttribute('aria-invalid', 'true');
+	await expect(page.getByRole('button', { name: 'Save name' })).toBeEnabled();
+});
 
 test('the theme choices move with the arrow keys', async ({ page, context }) => {
 	await mockApi(context);

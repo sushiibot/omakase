@@ -21,6 +21,8 @@ export interface LlmRequest {
   lastImages: number;
   tools: string[];
   lastTool?: string;
+  /** The user's name as the system prompt states it, when it does. */
+  ownerName?: string;
 }
 
 type Part = { type?: string; text?: string };
@@ -167,6 +169,7 @@ Bun.serve({
       lastImages: imagesIn(lastUser?.content),
       tools: (body.tools ?? []).map((t) => t.function?.name ?? ""),
       lastTool: last?.role === "tool" ? textOf(last.content).slice(0, 400) : undefined,
+      ownerName: /The user's name is (.+)\.$/m.exec(msgs.filter((m) => m.role === "system").map((m) => textOf(m.content)).join("\n"))?.[1],
     });
     return reply(msgs, userText, lastUser);
   },

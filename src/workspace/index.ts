@@ -42,6 +42,7 @@ import { HistorySearch, historySearchHandlers } from "./historySearch.ts";
 import { DurableState } from "../agentRuntime/durableState.ts";
 import { WakeupManager, deliverScheduledCheck } from "./wakeups.ts";
 import { readJson } from "./files.ts";
+import { applyRegisteredOwnerName, loadOwnerName, ownerHandlers } from "./owner.ts";
 
 const log = getLogger("workspace");
 
@@ -63,6 +64,9 @@ async function main(): Promise<void> {
   // whenever no ChatGPT login is stored.
   delete process.env.OPENAI_API_KEY;
   await scaffoldHome(config.home);
+  loadOwnerName(config);
+  // A changed name reaches the live sessions between turns; until then they keep the one they started with.
+  const ownerChanged = () => topicsRef?.requestContextReload();
   // One instance for the whole process: later subagent and job runners record through it too.
   const runLog = new RunLog(config.stateDir, { warn: (obj, msg) => log.warn(obj, msg) });
   const orphans = runLog.reconcileOrphans();
@@ -333,6 +337,7 @@ async function main(): Promise<void> {
       ...authLogin.handlers(),
       ...commands,
       ...topics.handlers(),
+      ...ownerHandlers(config, ownerChanged),
       [RPC_METHODS.runsStop]: async (p: unknown) => {
         const q = runsStopParams.parse(p);
         if (q.principalId !== config.principalId) throw new Error("principal mismatch");
@@ -340,6 +345,7 @@ async function main(): Promise<void> {
       },
     },
     onRegistered: (result) => {
+      if (result) applyRegisteredOwnerName(config, result, ownerChanged);
       toolStubs.update(result?.tools ?? []);
       topics.onRegistered(result?.features ?? []);
       void wakeups.start().catch(err => log.warn({ err }, "Wake-up startup poll failed"));

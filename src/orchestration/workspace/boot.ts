@@ -43,6 +43,8 @@ export interface WorkspaceConfig {
   registry?: ToolRegistry;
   timers?: Timers;
   now?: () => number;
+  /** The owner's display name from the app's Settings; null when none is set. */
+  ownerName?: () => string | null;
 }
 
 export interface WorkspaceBoot {
@@ -87,6 +89,7 @@ export function bootWorkspace(cfg: WorkspaceConfig, adapters: SurfaceAdapter<any
     ...(cfg.registry ? { registry: cfg.registry } : {}),
     ...(cfg.timers ? { timers: cfg.timers } : {}),
     ...(cfg.now ? { now: cfg.now } : {}),
+    ...(cfg.ownerName ? { ownerName: cfg.ownerName } : {}),
   });
   const link = new WorkspaceLink({
     principalId: cfg.principalId,
@@ -98,6 +101,7 @@ export function bootWorkspace(cfg: WorkspaceConfig, adapters: SurfaceAdapter<any
     enabled: cfg.enabled,
     github: cfg.github ?? githubBrokerFromEnv(cfg.principalId),
     ...(cfg.uploadRead ? { uploadRead: cfg.uploadRead } : {}),
+    ...(cfg.ownerName ? { ownerName: cfg.ownerName } : {}),
     ...(cfg.timers ? { timers: cfg.timers } : {}),
     ...(cfg.now ? { now: cfg.now } : {}),
   });

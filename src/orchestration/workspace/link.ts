@@ -1,7 +1,7 @@
 import { TASKS_MANAGE, tasksParams, tasksResult, type TaskRequest } from "../taskContracts.ts";
 import { BROWSER_READ, browserReadParams, browserReadResult, type BrowserReadResult } from "../browserContracts.ts";
 import { memoryParams, memoryOverview, memoryDetail } from "../memoryContracts.ts";
-import { runsStopParams, runsStopResult } from "../contracts.ts";
+import { ownerUpdateParams, runsStopParams, runsStopResult } from "../contracts.ts";
 import { connectorsParams, connectorsResult, type ConnectorRequest, type ConnectorsResult } from "../contracts.ts";
 import type { z } from "zod";
 import {
@@ -60,7 +60,7 @@ import {
   type ModelsResult,
   type ModelsSearchResult,
 } from "../contracts.ts";
-import { MethodNotFoundError, mayHaveBeenAccepted, type ConnectionInfo, type WorkspaceHandler } from "../transport/server.ts";
+import { MethodNotFoundError, RpcErrorReply, WorkspaceNotConnectedError, mayHaveBeenAccepted, type ConnectionInfo, type WorkspaceHandler } from "../transport/server.ts";
 import type { WorkspaceLinkStore } from "../../db/workspaceLink.ts";
 import { getLogger } from "../../logger.ts";
 import type { GitHubTokenBroker } from "./githubToken.ts";
@@ -193,6 +193,8 @@ export interface WorkspaceLinkOptions {
   github?: Pick<GitHubTokenBroker, "handle">;
   /** Serves `upload/read`; absent → every request is refused. */
   uploadRead?: (conn: ConnectionInfo, params: unknown) => Promise<UploadReadResult>;
+  /** The owner's display name, sent in the register result; absent → the field is left out. */
+  ownerName?: () => string | null;
 }
 
 const MAIN_AGENT = "main";
@@ -317,6 +319,7 @@ export class WorkspaceLink {
       toolManifest: (conn) => (conn.principalId === this.opts.principalId && this.toolsEnabled ? this.opts.tools!.manifest() : []),
       // Advertised whatever WEB_FEATURES says: a surface without alertPrompt still shows an alert as its text.
       features: (conn) => (conn.principalId === this.opts.principalId ? [...WORKSPACE_FEATURES] : []),
+      ...(this.opts.ownerName ? { ownerName: (conn: ConnectionInfo) => (conn.principalId === this.opts.principalId ? this.opts.ownerName!() : null) } : {}),
       onRequest: (conn, method, params) => this.onRequest(conn, method, params),
       onNotification: (conn, method, params) => this.onNotification(conn, method, params),
     };
@@ -403,6 +406,18 @@ export class WorkspaceLink {
   /** Switches the owner's model, or the ChatGPT fallback, from the next turn, as `!model <alias>` does. */
   async modelsSet(alias: string, role: "main" | "fallback" = "main"): Promise<ModelsResult> {
     return this.read(RPC_METHODS.modelsSet, modelsSetParams, modelsResult, { alias, ...(role === "fallback" ? { role } : {}) }, CONTROL_TIMEOUT_MS);
+  }
+
+  /** Sends the owner's new name to a connected workspace. An offline or older workspace (no such method)
+   *  is skipped: it reads the name from the register result when it next connects. */
+  async ownerUpdate(name: string | null): Promise<void> {
+    if (!this.isConnected()) return;
+    try {
+      await this.request(RPC_METHODS.ownerUpdate, ownerUpdateParams.parse({ principalId: this.opts.principalId, name }), CONTROL_TIMEOUT_MS);
+    } catch (err) {
+      if (err instanceof WorkspaceNotConnectedError || (err instanceof RpcErrorReply && err.code === -32601)) return;
+      throw err;
+    }
   }
 
   async modelsSearch(query: string): Promise<ModelsSearchResult> {
