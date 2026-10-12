@@ -12,3 +12,12 @@ test-results/
 
 # Generated visual review captures
 .impeccable/review/
+
+# Local tooling and test output
+.venv/
+__pycache__/
+playwright-report/
+
+# Local identity and team config
+/principals.json
+/teams.json

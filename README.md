@@ -32,7 +32,7 @@ Web app checks run from `web/`; see `AGENTS.md`.
 | `DATABASE_PATH` | `./data/personal.db` | SQLite path; migrations in `drizzle/` apply at boot |
 | `PRINCIPALS_PATH` | `./principals.json` | Identity registry; the owner principal maps its `web` login |
 | `OWNER_DISCORD_ID` | none | Synthesizes the owner principal when `principals.json` is absent; proxied tools run as this id |
-| `TEAMS_PATH` | `./teams.json` | Team grouping (`teams.example.json`); routes Linear issues per team |
+| `TEAMS_PATH` | `./teams.json` | Team grouping; routes Linear issues per team |
 | `EXA_API_KEY`, `GRAFANA_BASE_URL`, `GRAFANA_API_TOKEN`, `LINEAR_API_KEY`, `LINEAR_TEAM_ID` | none | Proxied tools; each is offered only when configured |
 | `ORCH_PORT`, `ORCH_SECRET` | `8788`, none | Workspace transport; the workspace presents the same secret |
 | `SUSHII_MACHINES_JSON` | `[]` | Machine daemon grants (`docs/machines.md`) |

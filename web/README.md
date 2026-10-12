@@ -54,7 +54,6 @@ See the root README for Fastmail setup and protocol limits.
 Read [UX guidelines](docs/ux-guidelines.md) before changing a screen or shared component.
 They cover interaction hierarchy, lists and filters, forms and recovery, mobile layout, loading, copy, and accessibility.
 The guidelines include review and verification methods. Document new reusable patterns there alongside their shared implementation.
-See the [UI and UX review](docs/ux-review.md) for addressed issues and remaining implementation gaps.
 
 The [channel interaction rules](docs/channel-interaction-rules.md) define the workspace layout,
 source evidence, gesture behavior, and acceptance checks. The live shell keeps channel navigation
