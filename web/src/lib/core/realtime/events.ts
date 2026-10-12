@@ -792,6 +792,12 @@ export interface TaskRecord {
 	workConversationId?: string;
 	parentTaskId?: string;
 	agent?: string;
+	execution?: {
+		machineId: string;
+		rootId: string;
+		provider: 'codex' | 'claude';
+		sessionId: string;
+	};
 	runIds: string[];
 	result?: string;
 	createdAt: string;

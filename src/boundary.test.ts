@@ -10,6 +10,7 @@ const PERSONAL = [
   "src/workspace/**",
   "src/agentRuntime/**",
   "src/orchestration/workspace/**",
+  "src/orchestration/machines/**",
   "src/orchestration/transport/**",
   "src/orchestration/github/**",
   "src/orchestration/{contracts,sessionContracts,taskContracts,browserContracts,memoryContracts}.ts",

@@ -21,6 +21,7 @@ export const KNOWN_PROXIED_TOOLS: readonly string[] = [
   "team_config",
   "request_current_location",
   "task_manage",
+  "machine_files",
   "list_channel_requests",
 ];
 

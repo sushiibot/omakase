@@ -1,3 +1,6 @@
+import { MachineHub, machineGrants } from "./orchestration/machines/hub.ts";
+import { MachineControl } from "./orchestration/machines/control.ts";
+import { MachineRoutes } from "./surfaces/web/machineRoutes.ts";
 import { exitAfterBackoff } from "./crashBackoff.ts";
 import { TaskRoutes } from "./surfaces/web/taskRoutes.ts";
 import { createBrowserRoutes } from "./surfaces/web/browserRoutes.ts";
@@ -153,7 +156,12 @@ async function main() {
     breakGlass: (nonce) => breakGlass(nonce),
     uploads,
   });
-  const taskRoutes = new TaskRoutes(workspace.link, webChat.threads);
+  const machines = new MachineHub(machineGrants.parse(JSON.parse(process.env.SUSHII_MACHINES_JSON ?? "[]")));
+  workspace.server.setMachineHub(machines);
+  const machineControl = new MachineControl(machines, workspace.link);
+  const machineRoutes = new MachineRoutes(machineControl, workspace.link);
+  workspace.tools.setMachineFiles(async raw => (raw as { action?: string })?.action === "list_machines" ? { machines: machineControl.list() } : machineControl.files(raw));
+  const taskRoutes = new TaskRoutes(workspace.link, webChat.threads, machineControl);
   workspace.tools.setChannelRequests(() => webChat.threads.pendingRequests());
   workspace.tools.setTaskControl((args, actor, conversationId) => taskRoutes.action(args, actor, conversationId));
   const webVoice = createVoiceRoutes(process.env, createVoiceAgent(webChat.threads));
@@ -161,6 +169,7 @@ async function main() {
     chat: webChat.routes,
     threads: webChat.threads,
     tasks: taskRoutes,
+    machines: machineRoutes,
     home: webChat.home,
     uploads,
     browser: createBrowserRoutes(workspace.link),

@@ -71,8 +71,9 @@ The design follows [Dots](https://learn.chatgpt.com/docs/dots/tasks-and-memory):
 It also separates checklists from execution, as [Claude Code](https://code.claude.com/docs/en/interactive-mode#task-list) does.
 [Deep Agents](https://docs.langchain.com/oss/javascript/deepagents/frontend/todo-list) provides another reference for shared, visible task state.
 
-The current execution backend is Sushii with its existing delegated agents.
-Remote machine registration and Codex or Claude Code adapters require a separate implementation.
+Sushii can execute tasks with its existing delegated agents.
+Configured machine daemons also support Codex and Claude Code sessions, with output, approvals, follow-ups, and stop controls.
+The main agent can read and search explicitly shared file-server folders. See [connected-machine setup](../../docs/machines.md).
 A standalone Codex app-server session does not guarantee visibility in the official Codex desktop or mobile interfaces.
 
 ## Verification

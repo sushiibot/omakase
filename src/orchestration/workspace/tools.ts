@@ -1,3 +1,4 @@
+import { machineFileManifest } from "../machines/control.ts";
 import { taskManifest } from "../../surfaces/web/taskRoutes.ts";
 // Bot side of `tool/call`: the workspace runs its model elsewhere but calls these secret-holding tools
 // here, executed with the bot's keys in the principal's private tool context. Owner approval is asked on
@@ -203,6 +204,8 @@ export class WorkspaceTools {
   setTaskControl(control: NonNullable<WorkspaceTools["taskControl"]>) { this.taskControl = control; }
   private channelRequests?: () => unknown;
   /** Read-only projection from bot-owned channel logs; never settles an approval or dialog. */
+  private machineFiles?: (raw: unknown) => Promise<unknown>;
+  setMachineFiles(call: (raw: unknown) => Promise<unknown>): void { this.machineFiles = call; }
   setChannelRequests(read: () => unknown): void { this.channelRequests = read; }
   private location?: BrowserLocationRequests;
 
@@ -215,6 +218,7 @@ export class WorkspaceTools {
       inputSchema: schema,
       approval: PROXIED_TOOLS[entry.name]!.approval,
     }));
+    if (this.machineFiles && this.opts.ownerUserId()) tools.push(machineFileManifest);
     if (this.location) tools.push(locationManifest);
     if (this.taskControl) tools.push(taskManifest);
     if (this.channelRequests && this.opts.ownerUserId()) tools.push({
@@ -259,6 +263,11 @@ export class WorkspaceTools {
 
   private async dispatch(conn: ConnectionInfo, p: ToolCallParams): Promise<ToolCallResult> {
     if (p.principalId !== this.opts.principalId || conn.principalId !== this.opts.principalId) return { ok: false, error: "principal mismatch" };
+    if (p.name === "machine_files") {
+      if (!this.machineFiles || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Machine files are unavailable." };
+      if (!Check(machineFileManifest.inputSchema, p.args ?? {})) return { ok: false, error: "Invalid machine file request." };
+      return { ok: true, result: JSON.stringify(await this.machineFiles(p.args)) };
+    }
     if (p.name === "list_channel_requests") {
       if (!this.channelRequests || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Channel requests are unavailable." };
       if (!Check({ type: "object", properties: {}, additionalProperties: false }, p.args ?? {})) return { ok: false, error: "invalid arguments for list_channel_requests" };

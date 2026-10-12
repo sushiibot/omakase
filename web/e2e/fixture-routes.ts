@@ -66,6 +66,7 @@ export async function fixtureRoutes(
 		const m = (re: RegExp) => re.exec(path);
 		let hit: RegExpExecArray | null;
 
+		if (path === '/machines') return route.fulfill({ json: { machines: [] } });
 		if (path === '/tasks')
 			return route.fulfill({ json: await (post ? tasks.action(body) : tasks.list()) });
 		if ((hit = m(/^\/tasks\/([^/]+)\/chat\/(.*)$/))) {

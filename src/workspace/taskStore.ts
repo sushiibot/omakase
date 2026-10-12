@@ -95,7 +95,13 @@ export class TaskStore {
       return { tasks: [structuredClone(task)] };
     }
     const task = this.get(request.id);
-    if (request.action === "update") {
+    if (request.action === "execution") {
+      if (task.revision !== request.revision) throw new RpcHandlerError("This task changed. Reload it before saving.", -32041);
+      task.execution = request.execution;
+      task.agent = `${request.execution.provider} · ${request.execution.machineId}`;
+      task.status = request.status;
+      if (request.result !== undefined) task.result = request.result;
+    } else if (request.action === "update") {
       if (task.revision !== request.revision)
         throw new RpcHandlerError(
           "This task changed. Reload it before saving.",

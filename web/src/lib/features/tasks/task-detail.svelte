@@ -1,4 +1,5 @@
 <script lang="ts">
+	import RemoteTask from './remote-task.svelte';
 	import { untrack, type Snippet } from 'svelte';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Play from '@lucide/svelte/icons/play';
@@ -37,6 +38,9 @@
 		onretry: () => void;
 	} = $props();
 	let tab = $state<'overview' | 'conversation' | 'runs'>('overview');
+	$effect(() => {
+		if (task.execution?.sessionId) tab = 'conversation';
+	});
 	let title = $state(untrack(() => task.title));
 	let brief = $state(untrack(() => task.brief));
 	let step = $state('');
@@ -201,13 +205,19 @@
 					<h3 class="text-sm font-semibold">Latest result</h3>
 					<p class="text-ui [overflow-wrap:anywhere] whitespace-pre-wrap">{task.result}</p>
 				</section>{/if}
+			{#if !task.execution}
+				<RemoteTask
+					{task}
+					beforeStart={async () => (title !== task.title || brief !== task.brief ? save() : true)}
+				/>{/if}
 			<div class="flex flex-col gap-2">
-				<Button disabled={busy} onclick={() => void start()}
-					><Play />{task.workConversationId
-						? 'Continue with Sushii'
-						: 'Ask Sushii to work on this'}</Button
-				>
-				{#if task.status === 'in-progress'}<Button
+				{#if !task.execution}<Button disabled={busy} onclick={() => void start()}
+						><Play />{task.workConversationId
+							? 'Continue with Sushii'
+							: 'Ask Sushii to work on this'}</Button
+					>
+				{/if}
+				{#if task.status === 'in-progress' && !task.execution}<Button
 						variant="outline"
 						disabled={busy}
 						onclick={onstop}><Square />Stop active work</Button
@@ -227,9 +237,11 @@
 		</div>
 	</div>
 	<div class:hidden={tab !== 'conversation'} class="flex min-h-0 flex-1 flex-col">
-		{#if task.workConversationId}{@render conversation?.(tab === 'conversation')}{:else}<div
-				class="flex flex-col gap-3 px-4 py-8"
-			>
+		{#if task.execution}<div class="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+				<RemoteTask {task} />
+			</div>{:else if task.workConversationId}{@render conversation?.(
+				tab === 'conversation'
+			)}{:else}<div class="flex flex-col gap-3 px-4 py-8">
 				<p class="text-sm text-muted-foreground">
 					Start work to open this task's own conversation. Follow-ups stay with this task.
 				</p>

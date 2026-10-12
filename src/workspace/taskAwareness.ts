@@ -20,6 +20,7 @@ export function taskAwareness(
           title: t.title,
           status: t.status,
           agent: t.agent,
+          execution: t.execution,
         }));
       context = `Tasks are persistent shared assignments. Use task_manage to list, create, update, start or stop tasks. Use the returned revision for updates. TASKS.md is a generated index, not an editable store. A finished run is not proof of task completion: mark done only after the objective and verification are satisfied. Keep checklists current. Do not start every saved to-do automatically.\nOpen tasks: ${JSON.stringify(index)}${current ? `\nThis conversation works on task ${current.id}: ${JSON.stringify(current)}. Follow-ups continue this task. Return concise results and update its checklist and status.` : ""}`;
     });

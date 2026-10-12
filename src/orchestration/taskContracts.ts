@@ -1,3 +1,4 @@
+import { execution } from "./machines/contracts.ts";
 import { z } from "zod";
 
 export const TASKS_MANAGE = "tasks/manage";
@@ -30,6 +31,7 @@ export const taskRecord = z
       .optional(),
     parentTaskId: taskId.optional(),
     agent: z.string().max(100).optional(),
+    execution: execution.optional(),
     runIds: z.array(z.string().max(80)).max(100),
     result: z.string().max(4000).optional(),
     createdAt: z.string().datetime(),
@@ -70,6 +72,16 @@ export const taskRequest = z.discriminatedUnion("action", [
     .strict(),
   z
     .object({
+      action: z.literal("execution"),
+      id: taskId,
+      revision: z.number().int().positive(),
+      execution,
+      status: taskStatus,
+      result: z.string().max(4000).optional(),
+    })
+    .strict(),
+  z
+    .object({
       action: z.literal("bind"),
       id: taskId,
       conversationId: taskRecord.shape.sourceConversationId,
@@ -94,6 +106,7 @@ export const taskAction = z.discriminatedUnion("action", [
       action: z.literal("start"),
       id: taskId,
       text: z.string().trim().min(1).max(16000).optional(),
+      target: execution.omit({ sessionId: true }).optional(),
     })
     .strict(),
   z.object({ action: z.literal("stop"), id: taskId }).strict(),

@@ -1,3 +1,4 @@
+import type { MachineHub } from "../machines/hub.ts";
 import type { Server, ServerWebSocket } from "bun";
 import crypto from "node:crypto";
 import { ZodError } from "zod";
@@ -64,6 +65,7 @@ export function mayHaveBeenAccepted(err: unknown): boolean {
 }
 
 interface SocketState {
+  machineId?: string;
   runnerId: string | null;
   pending: Map<string | number, PendingCall>;
   conn: ConnectionInfo | null;
@@ -122,6 +124,11 @@ export class OrchestrationServer {
   private readonly workspaces = new Map<string, ServerWebSocket<SocketState>>();
   private readonly secretGrants: Record<string, SecretGrant>;
   private workspaceHandler: WorkspaceHandler | null = null;
+  private machines: MachineHub | null = null;
+  setMachineHub(hub: MachineHub): void {
+    if (hub.grants.some(g => grantForSecret(this.secretGrants, g.token))) throw new Error("Machine tokens must differ from workspace secrets.");
+    this.machines = hub;
+  }
   private server: Server<SocketState> | null = null;
   private nextId = 1;
 
@@ -134,6 +141,11 @@ export class OrchestrationServer {
     this.server = Bun.serve<SocketState>({
       port: this.options.port ?? 0,
       fetch: (req, server) => {
+        if (new URL(req.url).pathname === "/machines") {
+          const id = this.machines?.authorize(req);
+          if (!id) return new Response("Unauthorized", { status: 401 });
+          return server.upgrade(req, { data: { machineId: id, runnerId: null, pending: new Map(), conn: null } }) ? undefined : new Response("Upgrade required", { status: 426 });
+        }
         const success = server.upgrade(req, {
           data: { runnerId: null, pending: new Map(), conn: null },
         });
@@ -141,12 +153,14 @@ export class OrchestrationServer {
         return new Response("Upgrade required", { status: 426 });
       },
       websocket: {
-        open: () => {},
+        open: (ws) => { if (ws.data.machineId) this.machines?.open(ws.data.machineId, ws); },
         close: (ws) => {
-          this.cleanupSocket(ws);
+          if (ws.data.machineId) this.machines?.close(ws.data.machineId, ws);
+          else this.cleanupSocket(ws);
         },
         message: (ws, raw) => {
-          this.handleMessage(ws, raw);
+          if (ws.data.machineId) this.machines?.message(ws.data.machineId, ws, raw.toString());
+          else this.handleMessage(ws, raw);
         },
       },
     });
@@ -182,6 +196,7 @@ export class OrchestrationServer {
   }
 
   stop(): void {
+    this.machines?.stop();
     this.server?.stop(true);
     this.sockets.clear();
     this.workspaces.clear();
