@@ -11,22 +11,22 @@ const reply = {
 	files: []
 };
 
-test('Conversations keeps Main first, a shared inbox and working thread search', async ({
+test('Channels keeps Main first, a shared inbox and working channel search', async ({
 	page,
 	context
 }) => {
 	await fixtureApp(context);
 	await page.goto('/chats');
-	await expect(page.getByRole('heading', { name: 'Conversations', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Channels', level: 1 })).toBeVisible();
 	const menu = await openDrawer(page);
-	await expect(menu.getByRole('link', { name: 'Conversations' })).toHaveAttribute(
-		'aria-current',
-		'page'
+	await expect(menu.getByRole('link', { name: 'Channels', exact: true })).toHaveAttribute(
+		'href',
+		'/chats'
 	);
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('region', { name: 'Main chat' })).not.toContainText('Pinned');
-	for (const h of ['Threads', 'Archived']) {
-		await expect(page.getByRole('heading', { name: new RegExp(`^${h}`) })).toBeVisible();
+	for (const h of ['Channels', 'Archived']) {
+		await expect(page.getByRole('heading', { name: new RegExp(`^${h}`), level: 2 })).toBeVisible();
 	}
 	await expect(page.getByRole('region', { name: /^Archived/ })).toContainText('Couch delivery');
 	await openSharedInbox(page);
@@ -453,7 +453,7 @@ test('Discuss puts a heartbeat in the selected topic draft, preserves text and d
 	await page
 		.getByRole('textbox', { name: 'Message', exact: true })
 		.fill('Keep these travel notes.');
-	await page.getByRole('link', { name: 'Back to Conversations' }).click();
+	await (await openDrawer(page)).getByRole('link', { name: 'Channels', exact: true }).click();
 	await openSharedInbox(page);
 	await page.getByRole('button', { name: /Your passport renewal is due Friday/ }).click();
 	await page.getByRole('dialog').getByRole('button', { name: 'Discuss', exact: true }).click();

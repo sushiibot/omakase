@@ -1,3 +1,5 @@
+import { configureChannels } from '$lib/features/channels';
+import { createFixtureChannelsApi } from '$lib/features/channels/fake';
 import { configureTasks } from '$lib/features/tasks';
 import { createFixtureTasksApi } from '$lib/features/tasks/fake';
 // Dev only (`bun dev` with ?fake); +layout.ts imports it behind import.meta.env.DEV.
@@ -29,11 +31,16 @@ import { createFixtureThreadsApi } from '$lib/features/threads/fake';
 
 export function installFakes() {
 	const fake = createFakeBackend();
+	const threadsApi = createFixtureThreadsApi();
+	const tasksApi = createFixtureTasksApi();
+	configureChannels({
+		api: createFixtureChannelsApi({ threads: threadsApi, tasks: tasksApi, main: fake.api })
+	});
 	hub.useTransport(fake.transport);
 	configureChat({ api: fake.api });
 	configureModels(createFixtureModelsApi());
 	configureHome({ api: fixtureHomeApi });
-	configureTasks(createFixtureTasksApi(), (task) => {
+	configureTasks(tasksApi, (task) => {
 		const fakeTask = createFakeBackend({
 			reply: 'I kept this follow-up with the task and updated its plan.'
 		});
@@ -58,7 +65,7 @@ export function installFakes() {
 	configureConnectors(createFixtureConnectorsApi());
 	// Each thread answers from its own scripted bot, seeded with its history.
 	configureThreads({
-		api: createFixtureThreadsApi(),
+		api: threadsApi,
 		chat: (detail) => {
 			const thread = createFakeBackend({
 				history: detail.history,

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick, type ComponentProps, type Snippet } from 'svelte';
+	import { onDestroy, tick, untrack, type ComponentProps, type Snippet } from 'svelte';
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import Download from '@lucide/svelte/icons/download';
@@ -20,6 +20,8 @@
 	import type { LocationReply } from './location';
 	import type { PendingApproval } from './types';
 	import Composer from './components/composer.svelte';
+	import ActivityLine from './components/activity-line.svelte';
+	import { channelActivity } from './activity';
 	import ModelSheet from './components/model-sheet.svelte';
 	import Conversation from './components/conversation.svelte';
 	import { messagePlainText } from './render/plain-text';
@@ -74,6 +76,7 @@
 		canInstall = false,
 		announce = '',
 		focusAsk,
+		focusApproval,
 		sheet,
 		contextBoundaryId,
 		viewer,
@@ -164,6 +167,7 @@
 		/** Screen-reader text, set once per completed reply. */
 		announce?: string;
 		focusAsk?: string;
+		focusApproval?: string;
 		sheet?: ChatSheet;
 		contextBoundaryId?: string;
 		viewer?: FileRef;
@@ -204,6 +208,126 @@
 	const NEAR_BOTTOM_PX = 48;
 
 	let scroller = $state<HTMLElement | null>(null);
+	const activity = $derived(channelActivity(messages, running, stopping, approvals));
+	function focusRequest(request: { kind: 'ask' | 'approval'; id: string }): boolean {
+		if (!scroller) return false;
+		const selector =
+			request.kind === 'ask'
+				? `[data-ask-id="${CSS.escape(request.id)}"]`
+				: `[data-approval-id="${CSS.escape(request.id)}"]`;
+		const target = scroller.querySelector<HTMLElement>(selector);
+		if (!target) return false;
+		target.scrollIntoView({ block: 'center', behavior: 'instant' });
+		target
+			.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)')
+			?.focus({ preventScroll: true });
+		return true;
+	}
+	function reviewRequest() {
+		if (activity?.request) focusRequest(activity.request);
+	}
+	let focusedRequest = $state<string | null>(null);
+	const requestedFocus = $derived(
+		focusAsk
+			? { kind: 'ask' as const, id: focusAsk }
+			: focusApproval
+				? { kind: 'approval' as const, id: focusApproval }
+				: null
+	);
+	let requestSearchKey = $state<string | null>(null);
+	let requestSearch = $state<'idle' | 'loading' | 'missing' | 'error' | 'limited'>('idle');
+	let mounted = true;
+	onDestroy(() => (mounted = false));
+	const MAX_REQUEST_PAGES = 8;
+	const requestKey = (request: { kind: 'ask' | 'approval'; id: string }) =>
+		`${request.kind}:${request.id}`;
+	async function findRequest(request: { kind: 'ask' | 'approval'; id: string }, retry = false) {
+		const key = requestKey(request);
+		const current = () => mounted && requestedFocus && requestKey(requestedFocus) === key;
+		requestSearchKey = key;
+		requestSearch = 'loading';
+		for (let page = 0; current(); page++) {
+			await tick();
+			if (!current()) return;
+			if (focusRequest(request)) {
+				focusedRequest = key;
+				requestSearch = 'idle';
+				return;
+			}
+			if (olderError && !(retry && page === 0)) {
+				requestSearch = 'error';
+				return;
+			}
+			if (!hasOlder || !onloadolder) {
+				requestSearch = 'missing';
+				return;
+			}
+			if (page >= MAX_REQUEST_PAGES) {
+				requestSearch = 'limited';
+				return;
+			}
+			const oldestId = messages[0]?.id;
+			try {
+				await onloadolder();
+			} catch {
+				if (current()) requestSearch = 'error';
+				return;
+			}
+			await tick();
+			if (!current()) return;
+			if (olderError) {
+				requestSearch = 'error';
+				return;
+			}
+			// The requested card may have arrived within the same projected turn.
+			if (focusRequest(request)) {
+				focusedRequest = key;
+				requestSearch = 'idle';
+				return;
+			}
+			// Repeated history can prepend duplicates. Compare the stable oldest boundary, not array size.
+			if (messages[0]?.id === oldestId) {
+				requestSearch = hasOlder ? 'limited' : 'missing';
+				return;
+			}
+		}
+	}
+	$effect(() => {
+		const request = requestedFocus;
+		if (!request) {
+			focusedRequest = null;
+			requestSearchKey = null;
+			requestSearch = 'idle';
+			return;
+		}
+		const key = requestKey(request);
+		// A request can arrive after the initial history seek through hello/pending or the live stream.
+		// Observe hydration without restarting pagination or moving a request already focused once.
+		void messages;
+		void approvals;
+		if (history !== 'ready' || !scroller || olderLoading || key === focusedRequest) return;
+		if (key === requestSearchKey) {
+			if (requestSearch !== 'loading')
+				void tick().then(() => {
+					if (
+						mounted &&
+						requestedFocus &&
+						requestKey(requestedFocus) === key &&
+						focusedRequest !== key &&
+						focusRequest(request)
+					) {
+						focusedRequest = key;
+						requestSearch = 'idle';
+					}
+				});
+			return;
+		}
+		untrack(() => void findRequest(request));
+	});
+	function retryRequestSearch() {
+		if (requestedFocus && !olderLoading) void findRequest(requestedFocus, true);
+	}
+
 	// svelte-ignore state_referenced_locally
 	let newMessages = $state(initialNewMessages);
 	let slowLoad = $state(false);
@@ -271,7 +395,7 @@
 	// The observer fires only when visibility changes, so keep loading while a short page leaves the
 	// sentinel on screen.
 	async function fillOlder() {
-		if (filling) return;
+		if (filling || (requestedFocus && focusedRequest !== requestKey(requestedFocus))) return;
 		filling = true;
 		try {
 			// Bounded, in case a server hands back a cursor that never moves.
@@ -503,6 +627,29 @@
 {/snippet}
 
 {#snippet banner()}
+	{#if requestSearch !== 'idle'}
+		<div
+			class="flex shrink-0 items-center gap-2 border-b px-4 py-2 text-sm"
+			role="status"
+			data-request-search
+		>
+			<p class="min-w-0 flex-1">
+				{requestSearch === 'loading'
+					? 'Finding the linked request in earlier messages…'
+					: requestSearch === 'error'
+						? "Couldn't load the linked request. Try again."
+						: requestSearch === 'limited'
+							? 'The linked request is farther back, or is no longer available.'
+							: 'The linked request is no longer in this conversation.'}
+			</p>
+			{#if requestSearch === 'error' || requestSearch === 'limited'}<Button
+					variant="outline"
+					disabled={olderLoading}
+					onclick={retryRequestSearch}
+					>{requestSearch === 'error' ? 'Retry' : 'Keep looking'}</Button
+				>{/if}
+		</div>
+	{/if}
 	{#if connection}<ConnectionBanner state={connection} />{/if}
 	{#if !readOnly}{@render browserPreview?.()}{/if}
 {/snippet}
@@ -512,6 +659,7 @@
 {/snippet}
 
 {#snippet footer()}
+	{#if !readOnly}<ActivityLine {activity} onreview={reviewRequest} />{/if}
 	{#if backgroundActivity}{@render backgroundActivity()}{/if}
 	{#if newMessages}
 		<div class="pointer-events-none absolute inset-x-0 bottom-full flex justify-center pb-3">
@@ -553,6 +701,7 @@
 {/snippet}
 
 <Screen
+	channelNavigation
 	{title}
 	{back}
 	subtitle={subtitleOverride}

@@ -1,3 +1,4 @@
+import { createFixtureChannelsApi } from '../src/lib/features/channels/fake';
 import { createFixtureTasksApi } from '../src/lib/features/tasks/fake';
 // The routes the not-yet-built backends will serve (threads, memory, skills, schedules, browser,
 // briefing, connectors), answered by each feature's fixture API, as the app build never holds them.
@@ -32,6 +33,7 @@ export async function fixtureRoutes(
 	const pick = (f: FixtureFeature) => () => scenarios[f] ?? 'normal';
 	const tasks = createFixtureTasksApi();
 	const threads = createFixtureThreadsApi(pick('threads'));
+	const channels = createFixtureChannelsApi({ threads, tasks });
 	const memory = createFixtureMemoryApi(pick('memory'));
 	const skills = createFixtureSkillsApi(pick('skills'));
 	const schedules = createFixtureSchedulesApi(pick('schedules'));
@@ -93,6 +95,7 @@ export async function fixtureRoutes(
 			if (sub === 'messages') return route.fulfill({ status: 202, json: { seq: 1, routed: true } });
 			return route.fulfill({ status: 204 });
 		}
+		if (path === '/channels') return answer(route, 'threads', () => channels.list());
 		if (path === '/chats') return answer(route, 'threads', () => threads.list());
 		if (path === '/threads' && post) return answer(route, 'threads', () => threads.branch(body));
 		if ((hit = m(/^\/threads\/([^/]+)\/(close|reopen|rename)$/)))

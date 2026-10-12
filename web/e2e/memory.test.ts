@@ -7,7 +7,9 @@ test('Memory separates saved files, daily notes and recorded changes', async ({
 }) => {
 	await fixtureApp(context);
 	await page.goto('/chat');
-	await (await openDrawer(page)).getByRole('link', { name: /Memory/ }).click();
+	await (await openDrawer(page)).getByRole('link', { name: 'Workspace', exact: true }).click();
+	await expect(page).toHaveURL(/\/workspace$/);
+	await page.getByRole('link', { name: /^Memory/ }).click();
 	await expect(page.getByRole('heading', { name: 'Memory', level: 1 })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Long-term files' })).toBeVisible();
 	await page.getByRole('tab', { name: 'Daily notes', exact: true }).click();

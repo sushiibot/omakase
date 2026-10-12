@@ -56,20 +56,28 @@ export function toTurn(t: TurnState, stopping: boolean): Turn {
 	const running = steps.some((s) => s.state === 'running');
 	const elapsed = t.durationMs !== undefined ? formatDuration(t.durationMs) : undefined;
 	switch (t.phase) {
-		case 'working':
-			if (stopping) return { state: 'stopping', steps };
-			if (t.label) return { state: 'working', steps, label: t.label };
+		case 'working': {
+			const modelActivity = t.modelActivity ?? (t.responseStarted ? 'responding' : 'waiting');
+			if (stopping) return { state: 'stopping', steps, modelActivity };
+			if (t.label) return { state: 'working', steps, label: t.label, modelActivity };
 			if (!steps.length)
 				return {
 					state: 'working',
 					steps,
-					label: t.responseStarted
-						? 'Working…'
-						: t.modelActivity === 'thinking'
-							? 'Thinking…'
-							: 'Waiting for the model…'
+					modelActivity,
+					label:
+						modelActivity === 'responding'
+							? 'Working…'
+							: t.modelActivity === 'thinking'
+								? 'Thinking…'
+								: 'Waiting for the model…'
 				};
-			return { state: running ? 'working' : 'thinking', steps };
+			return {
+				state: running ? 'working' : modelActivity === 'thinking' ? 'thinking' : 'working',
+				steps,
+				modelActivity
+			};
+		}
 		case 'done':
 			return { state: 'done', steps, elapsed };
 		case 'stopped':

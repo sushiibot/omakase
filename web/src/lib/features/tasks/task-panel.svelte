@@ -2,6 +2,7 @@
 	import { tasksStore } from './tasks.svelte';
 	import TaskList from './task-list.svelte';
 	import TaskDetail from './task-detail.svelte';
+	import TaskInspector from './task-inspector.svelte';
 	import TaskChat from './task-chat.svelte';
 	import TaskRuns from './task-runs.svelte';
 	import { Button } from '$lib/ui/button';
@@ -39,25 +40,44 @@
 </script>
 
 {#if task}
-	{#snippet conversation()}{#key task.id}<TaskChat {task} />{/key}{/snippet}
 	{#snippet runs()}<TaskRuns ids={task.runIds} />{/snippet}
-	{#key task.id}<TaskDetail
-			{task}
-			busy={store.busy}
-			error={store.error}
-			{conversation}
-			{runs}
-			fullHref={fullPage ? undefined : `/tasks/${task.id}`}
-			onback={() => {
-				selectedId = undefined;
-				onclose && fullPage && onclose();
-			}}
-			onupdate={update}
-			onstart={async (text) =>
-				!!(await store.action({ action: 'start', id: task.id, ...(text ? { text } : {}) }))}
-			onstop={() => void store.action({ action: 'stop', id: task.id })}
-			onretry={() => void store.refresh(true)}
-		/>{/key}
+	{#if fullPage}
+		{#snippet conversation(viewing: boolean)}{#key task.id}<TaskChat
+					{task}
+					{viewing}
+				/>{/key}{/snippet}
+		{#key task.id}<TaskDetail
+				{task}
+				busy={store.busy}
+				error={store.error}
+				{conversation}
+				{runs}
+				onback={() => {
+					selectedId = undefined;
+					onclose && fullPage && onclose();
+				}}
+				onupdate={update}
+				onstart={async (text) =>
+					!!(await store.action({ action: 'start', id: task.id, ...(text ? { text } : {}) }))}
+				onstop={() => void store.action({ action: 'stop', id: task.id })}
+				onretry={() => void store.refresh(true)}
+			/>{/key}
+	{:else}
+		{#key task.id}<TaskInspector
+				{task}
+				busy={store.busy}
+				error={store.error}
+				fullHref={`/tasks/${task.id}?view=conversation`}
+				{runs}
+				{onclose}
+				onback={() => (selectedId = undefined)}
+				onupdate={update}
+				onstart={async (text) =>
+					!!(await store.action({ action: 'start', id: task.id, ...(text ? { text } : {}) }))}
+				onstop={() => void store.action({ action: 'stop', id: task.id })}
+				onretry={() => void store.refresh(true)}
+			/>{/key}
+	{/if}
 {:else}
 	{#snippet taskList()}
 		<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -75,8 +95,9 @@
 				ontoggle={(task) =>
 					void store.update(task, { status: task.status === 'done' ? 'todo' : 'done' })}
 				onselect={(id) => {
-					selectedId = id;
-					onselect?.(id);
+					// Route-owned selection mounts its editor once, at the destination.
+					if (onselect) onselect(id);
+					else selectedId = id;
 				}}
 				onretry={() => void store.refresh(true)}
 			/>

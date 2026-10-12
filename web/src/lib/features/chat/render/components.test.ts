@@ -265,25 +265,32 @@ describe('ask card vs approval tray', () => {
 });
 
 describe('compact inline activity', () => {
-	test('thinking has a small status and no expandable task card', async () => {
+	test('transcript working rows retain tool detail without duplicating composer presence', async () => {
 		const { els, text } = await dom(WorkingRow, {
 			turn: { state: 'thinking', steps: [], label: 'Thinking…' }
 		});
-		expect(text).toContain('Thinking…');
-		expect(text).toContain('🍣');
-		expect(text).toContain('Rolling sushi…');
-		expect(els.filter((e) => e.tag === 'details')).toHaveLength(0);
-		expect(els.some((e) => e.attrs.role === 'status')).toBe(true);
+		expect(text).not.toContain('Rolling sushi');
+		expect(els.some((e) => e.attrs.role === 'status')).toBe(false);
 	});
 
-	test('waiting and tool progress keep their plain status without thinking phrases', async () => {
-		for (const label of ['Waiting for the model…', 'Working…', 'Resetting context…']) {
-			const { text } = await dom(WorkingRow, { turn: { state: 'working', steps: [], label } });
-			expect(text).toContain(label);
-			expect(text).not.toContain('🍣');
-			expect(text).not.toContain('Rolling sushi');
-			expect(text).not.toContain('Thinking…');
-		}
+	test('the composer activity line uses factual status and a visible request action', async () => {
+		const { default: ActivityLine } = await import('../components/activity-line.svelte');
+		const thinking = await dom(ActivityLine, {
+			activity: { kind: 'thinking', label: 'Sushii is thinking…' }
+		});
+		expect(thinking.text).toContain('Sushii is thinking…');
+		expect(thinking.text).not.toContain('Rolling sushi');
+		expect(thinking.els.some((e) => e.attrs.role === 'status')).toBe(true);
+		const waiting = await dom(ActivityLine, {
+			activity: {
+				kind: 'waiting',
+				label: 'Waiting for your response',
+				request: { kind: 'ask', id: 'canonical' }
+			},
+			onreview: () => {}
+		});
+		expect(waiting.text).toContain('Review');
+		expect(waiting.text).toContain('Waiting for your response');
 	});
 
 	test('an approval without execution evidence never claims the tool finished', async () => {

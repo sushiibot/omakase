@@ -153,8 +153,8 @@ test('a send shows at once, carries a ULID, and settles on the status event', as
 	await expect(bubble(page, 'Book the car service')).toContainText('Sent');
 	await expect(page.locator('[data-message-id]').filter({ hasText: 'Book' })).toHaveCount(1);
 	// The status names the actual model state.
-	await expect(page.locator('[data-typing] [aria-hidden=true]')).toContainText(/\S.*…/);
-	await expect(page.locator('[data-typing]')).not.toContainText('Sushii');
+	await expect(page.locator('[data-typing]')).toContainText(/\S.*…/);
+	await expect(page.locator('[data-typing]')).toContainText('Waiting for the model…');
 
 	await push(page, 'tool', { turnId: 't1', name: 'search_mail', summary: 'Searching mail' });
 	await expect(page.getByText('Searching mail').first()).toBeVisible();
@@ -580,12 +580,15 @@ test('seen goes out only while Main is on screen', async ({ page, context }) => 
 	await open(page);
 	await push(page, 'proactive', { key: 'p1', text: 'On screen', files: [] }, 1);
 	await expect.poll(() => posts('/api/chat/seen').length).toBe(1);
-	await (await openDrawer(page)).getByRole('link', { name: 'Settings' }).click();
+	const menu = await openDrawer(page);
+	await menu.getByRole('link', { name: 'Settings' }).click();
 	await expect(page).toHaveURL(/\/settings$/);
 	await push(page, 'approval', approval('n1'), 2);
 	await page.waitForTimeout(1500);
 	expect(posts('/api/chat/seen').length).toBe(1);
 	await page.goBack();
+	await expect(page).toHaveURL(/\/chat$/);
+	await expect(page.getByRole('heading', { name: 'Sushii', level: 1 })).toBeVisible();
 	await expect.poll(() => posts('/api/chat/seen').at(-1)?.body).toEqual({ seq: 2 });
 });
 
@@ -843,8 +846,7 @@ test('Escape and Close in the same frame close the sheet once and stay on the pa
 	await page.getByRole('button', { name: /^Model: sol/ }).click();
 	const dialog = page.getByRole('dialog', { name: 'Model and context' });
 	await expect(dialog).toBeVisible();
-	await page.evaluate(() => {
-		const sheet = document.querySelector<HTMLElement>('[role=dialog]')!;
+	await dialog.evaluate((sheet) => {
 		const close = [...sheet.querySelectorAll('button')].find(
 			(b) => b.getAttribute('aria-label') === 'Close'
 		)!;
@@ -1792,7 +1794,7 @@ test('a job alert shows once in the chat, live or reloaded, with its error as pl
 	await expect(line).toHaveCount(1);
 	await page.getByRole('link', { name: 'Details' }).click();
 	await expect(page).toHaveURL(/\/chats$/);
-	await expect(page.getByRole('heading', { name: 'Conversations', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Channels', level: 1 })).toBeVisible();
 });
 
 test('location only reads the user browser after explicit share and sends one correlated fix', async ({
@@ -1873,7 +1875,7 @@ for (const width of [412, 1280]) {
 		await expect(page.locator('[data-typing]')).toBeVisible();
 		await expect(page.locator('[data-typing]')).not.toContainText('Used');
 		await page.screenshot({ path: `/tmp/chat-typing-${width}.png` });
-		const visibleStatus = page.locator('[data-typing] [aria-hidden=true]');
+		const visibleStatus = page.locator('[data-typing]');
 		await expect(visibleStatus).toHaveText('Waiting for the model…');
 		await page.clock.runFor(16000);
 		await expect(visibleStatus).toHaveText('Waiting for the model…');
@@ -1888,13 +1890,11 @@ for (const width of [412, 1280]) {
 				modelActivity: 'thinking'
 			}
 		});
-		await expect(visibleStatus.locator('[data-thinking-emoji]')).toBeVisible();
-		const firstPhrase = await visibleStatus.textContent();
+		await expect(visibleStatus).toHaveText('Sushii is thinking…');
 		await page.clock.runFor(8000);
-		await expect(visibleStatus).not.toHaveText(firstPhrase!);
-		await expect(page.locator('[data-typing] .sr-only')).toHaveText('Thinking…');
+		await expect(visibleStatus).toHaveText('Sushii is thinking…');
 		await page.emulateMedia({ reducedMotion: 'reduce' });
-		await expect(visibleStatus.locator('.typing-status')).toHaveCSS('animation-name', 'none');
+		await expect(page.locator('.activity-dots i').first()).toHaveCSS('animation-name', 'none');
 		const stillPhrase = await visibleStatus.textContent();
 		await page.clock.runFor(16000);
 		await expect(visibleStatus).toHaveText(stillPhrase!);
@@ -1911,8 +1911,7 @@ for (const width of [412, 1280]) {
 			}
 		});
 		await expect(visibleStatus).toHaveText('Waiting for the model…');
-		await expect(visibleStatus.locator('[data-thinking-emoji]')).toHaveCount(0);
-		await expect(page.locator('[data-typing] .sr-only')).toHaveText('Waiting for the model…');
+		await expect(page.locator('.activity-dots')).toHaveCount(0);
 		await push(page, 'delta', {
 			turnId: 'compact',
 			offset: 0,
@@ -1952,6 +1951,11 @@ for (const width of [412, 1280]) {
 		await expect(request).toHaveCount(1);
 		await expect(request).toContainText('Send email');
 		await expect(request).toContainText('Subject');
+		await expect(page.locator('[data-channel-activity]')).toContainText(
+			'Waiting for your approval'
+		);
+		await page.locator('[data-channel-activity]').getByRole('button', { name: 'Review' }).click();
+		await expect(page.getByRole('button', { name: 'Deny send_email' })).toBeFocused();
 		expect((await request.boundingBox())!.height).toBeLessThan(320);
 		await page.screenshot({ path: `/tmp/chat-approval-pending-${width}.png` });
 		await page.getByRole('button', { name: 'Approve send_email' }).click();

@@ -56,9 +56,12 @@ They cover interaction hierarchy, lists and filters, forms and recovery, mobile 
 The guidelines include review and verification methods. Document new reusable patterns there alongside their shared implementation.
 See the [UI and UX review](docs/ux-review.md) for addressed issues and remaining implementation gaps.
 
-The [channel interaction rules](docs/channel-interaction-rules.md) define the workspace revision,
-source evidence, gesture behavior, and acceptance checks. The isolated motion prototype is available
-at `/interaction-lab` with `bun run dev:proto`. It uses sample content and does not replace live screens.
+The [channel interaction rules](docs/channel-interaction-rules.md) define the workspace layout,
+source evidence, gesture behavior, and acceptance checks. The live shell keeps channel navigation
+beside desktop conversations. On phones, dragging chat reveals navigation or the supporting inspector.
+Tasks and Activity stay directly accessible; Workspace holds Memory, History, Connectors, and previews.
+Settings remains accessible from navigation. Existing conversation URLs and drafts remain valid.
+The isolated motion prototype remains available at `/interaction-lab` with `bun run dev:proto`.
 Run its touch, recovery, history, and timing checks with
 `bunx playwright test -c interaction/playwright.config.ts`.
 
@@ -93,10 +96,15 @@ See [Tabs, swipes, and scroll ownership](docs/ux-guidelines.md#tabs-swipes-and-s
 and [Loading and background refresh](docs/ux-guidelines.md#loading-and-background-refresh)
 for layout rules, loading patterns, research sources, and regression checks.
 
-## Topic conversations
+## Channels
 
-Topic conversations are available automatically in the owner web app.
+Topic conversations appear as channels in the owner web app.
 Each topic has a separate persisted workspace session and chat stream.
+The sidebar reads `/api/channels`, including task work conversations.
+All uses stable names; Recent uses explicit visits saved on this device.
+Needs you counts unresolved request handles. Opening a channel does not resolve them.
+The catalog has no read receipts, so navigation does not invent unread counts.
+Task channel links open `/tasks/:id?view=conversation`; `/tasks/:id` retains the planning view.
 See [Topic threads](docs/topic-threads.md) for routing, shared memory, lifecycle, and tests.
 
 ## Memory browser

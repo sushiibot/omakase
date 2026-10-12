@@ -101,6 +101,7 @@
 	<section
 		aria-labelledby="{uid}-q"
 		data-surface="ask"
+		data-ask-id={ask.askId}
 		class={cn(
 			'flex min-w-0 flex-col gap-3 rounded-xl border bg-muted/30 p-3 text-body leading-relaxed [overflow-wrap:anywhere]',
 			focused && '-mx-2 rounded-xl px-2 py-2 ring-2 ring-brand/60'

@@ -63,6 +63,7 @@
 
 <section
 	data-approval
+	data-approval-id={pending.nonce}
 	data-surface="approval"
 	aria-labelledby="{uid}-title"
 	class="min-w-0 rounded-xl border border-approval/60 bg-approval-surface px-3 py-2"

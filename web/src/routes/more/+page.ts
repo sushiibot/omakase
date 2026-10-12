@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 
-// More was the tab bar's overflow; its entries are in the drawer now.
+// Preserve the old overflow URL as an entry to workspace information and tools.
 export function load() {
-	redirect(307, '/chat');
+	redirect(307, '/workspace');
 }

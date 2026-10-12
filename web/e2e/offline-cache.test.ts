@@ -28,12 +28,13 @@ for (const colorScheme of ['light', 'dark'] as const) {
 		await page.emulateMedia({ colorScheme });
 		await fixtureApp(context);
 		await page.goto('/chats');
-		await expect(page.getByRole('heading', { name: 'Conversations', level: 1 })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Channels', level: 1 })).toBeVisible();
 		await expect
 			.poll(() => cachedPaths(page))
 			.toEqual(
 				expect.arrayContaining([
 					'/chats',
+					'/channels',
 					'/threads/oct-trip',
 					'/threads/oct-trip/chat/history?limit=40',
 					'/chat/history?limit=40'

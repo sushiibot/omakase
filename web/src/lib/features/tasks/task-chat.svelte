@@ -1,11 +1,25 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
+	import { getWorkspace } from '$lib/ui/workspace/context';
 	import { ChatScreen, chatStore, createHttpChatApi } from '$lib/features/chat';
 	import { createHub } from '$lib/core/realtime/hub.svelte';
 	import { fetchSse } from '$lib/core/realtime/transport';
 	import { taskChatDeps } from './tasks.svelte';
 	import type { TaskRecord } from './types';
-	let { task }: { task: TaskRecord } = $props();
+	let {
+		task,
+		viewing = true,
+		headerActions,
+		focusAsk,
+		focusApproval
+	}: {
+		task: TaskRecord;
+		viewing?: boolean;
+		headerActions?: Snippet;
+		focusAsk?: string;
+		focusApproval?: string;
+	} = $props();
+	const workspace = getWorkspace();
 	const id = untrack(() => task.workConversationId!);
 	const base = untrack(() => `/tasks/${task.id}/chat`);
 	const store = chatStore(
@@ -19,10 +33,18 @@
 			api: createHttpChatApi(base)
 		}
 	);
+	$effect(() => {
+		const visible = viewing && (workspace?.contentVisible ?? true);
+		untrack(() => store.setViewing(visible));
+		return () => store.setViewing(false);
+	});
 </script>
 
 <ChatScreen
-	title="Sushii · task conversation"
+	title={task.title}
+	{headerActions}
+	{focusAsk}
+	{focusApproval}
 	messages={store.messages}
 	history={store.history}
 	hasOlder={store.hasOlder}

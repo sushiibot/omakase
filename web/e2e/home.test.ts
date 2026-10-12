@@ -1,5 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { fakeBackend, type Scenario } from './fake-backend';
+import { channelFixture } from '../src/lib/features/channels/fixtures';
 import {
 	expandConversationInboxes,
 	axe,
@@ -44,6 +45,11 @@ async function homeServer(
 ) {
 	await expandConversationInboxes(context);
 	const calls: Call[] = [];
+	let pendingApprovals = (opts.pending?.approvals ?? []) as ReturnType<typeof approval>[];
+	const pendingAsks = (opts.pending?.asks ?? []) as ReturnType<typeof ask>[];
+	const resolveApproval = (nonce: string) => {
+		pendingApprovals = pendingApprovals.filter((item) => item.nonce !== nonce);
+	};
 	await stubStream(context);
 	await context.addInitScript(
 		({ pending, streamStatus }) => {
@@ -62,9 +68,38 @@ async function homeServer(
 		calls.push({ method: req.method(), path: url.pathname, body: raw ? JSON.parse(raw) : null });
 		const json = (data: unknown, status = 200) =>
 			route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
+		if (url.pathname === '/api/channels') {
+			const approvals = pendingApprovals;
+			const asks = pendingAsks;
+			const total = approvals.length + asks.length;
+			return json({
+				archiveAfterDays: 7,
+				channels: [
+					channelFixture('main', 'Main', {
+						state: total ? 'needs-you' : 'idle',
+						pending: { asks: asks.length, approvals: approvals.length, total },
+						attention: [
+							...asks.map((item) => ({
+								kind: 'ask' as const,
+								id: item.askId,
+								seq: item.seq,
+								at: item.at
+							})),
+							...approvals.map((item) => ({
+								kind: 'approval' as const,
+								id: item.nonce,
+								seq: item.seq,
+								at: item.at
+							}))
+						]
+					})
+				]
+			});
+		}
 		if (url.pathname === '/api/chat/history') return json({ items: [], before: null });
 		if (url.pathname.startsWith('/api/chat/approvals/')) {
 			if (opts.decide && opts.decide !== 200) return json({ error: 'x' }, opts.decide);
+			resolveApproval(decodeURIComponent(url.pathname.split('/').at(-1)!));
 			return json({ status: 'decided' });
 		}
 		if (url.pathname.startsWith('/api/chat/asks/')) return json({ status: 'answered' });
@@ -74,19 +109,19 @@ async function homeServer(
 	const backend = await fakeBackend(context, { home: opts.fixtures });
 	const posts = (prefix: string) =>
 		[...calls, ...backend.calls].filter((c) => c.method === 'POST' && c.path.startsWith(prefix));
-	return { calls, posts, backend };
+	return { calls, posts, backend, resolveApproval };
 }
 
 const busy = () => ({ approvals: [approval('n1')], asks: [ask('a1')] });
 const sheet = (page: Page) => page.getByRole('dialog');
 
-test('groups what needs you in order and counts waiting items on the menu', async ({
+test('groups inbox items while menu and Main ping count only canonical channel requests', async ({
 	page,
 	context
 }) => {
-	await homeServer(context, { pending: busy() });
+	const { resolveApproval } = await homeServer(context, { pending: busy() });
 	await page.goto('/inbox');
-	await expect(page.getByRole('heading', { name: 'Conversations', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Channels', level: 1 })).toBeVisible();
 	await expect(page.getByText('nightly-sync failed')).toBeVisible();
 	await expect(page.getByRole('region', { name: 'Needs you', exact: true })).toContainText(
 		'Approve send_email'
@@ -97,17 +132,25 @@ test('groups what needs you in order and counts waiting items on the menu', asyn
 	await expect(page.locator('details[data-inbox="shared"]')).toContainText('nightly-sync failed');
 	await expect(page.locator('details[data-inbox="shared"]')).toContainText('Compare flight prices');
 	const menu = page.getByRole('button', { name: /^Menu/ });
-	await expect(menu).toHaveAccessibleName('Menu, 4 need you');
+	await expect(menu).toHaveAccessibleName('Menu, 2 need you');
 	await menu.click();
-	const inboxLink = page
-		.getByRole('dialog', { name: 'Menu' })
-		.getByRole('link', { name: /Conversations/ });
-	await expect(inboxLink).toContainText('4 need you');
-	await expect(inboxLink).toHaveAttribute('aria-current', 'page');
+	const navigation = page.getByRole('dialog', { name: 'Menu' });
+	await expect(navigation.getByRole('link', { name: 'Channels', exact: true })).toHaveAttribute(
+		'href',
+		'/chats'
+	);
+	// Channel pings count questions and approvals; jobs remain in the shared inbox.
+	const mainChannel = navigation.getByRole('link', { name: /^Main(?:\s|$)/ });
+	await expect(mainChannel).toHaveAccessibleName('Main 2 requests need you');
 	await page.keyboard.press('Escape');
+	resolveApproval('n1');
 	await push(page, 'approval_resolved', { nonce: 'n1', decision: 'approve' }, 5);
-	await expect(menu).toHaveAccessibleName('Menu, 3 need you');
+	// The bot publishes this invalidation after committing the resolution to its channel log.
+	await push(page, 'threads', { id: 'main' });
+	await expect(menu).toHaveAccessibleName('Menu, 1 need you');
 	await expect(page.getByText('Approve send_email')).toBeHidden();
+	await menu.click();
+	await expect(mainChannel).toHaveAccessibleName('Main 1 requests need you');
 });
 
 test('a quiet day says nothing needs you, with a way into the chat', async ({ page, context }) => {
@@ -268,7 +311,7 @@ test('Ask the agent steps back to the chat under the inbox, with the alert quote
 }) => {
 	await homeServer(context);
 	await page.goto('/chat');
-	await (await openDrawer(page)).getByRole('link', { name: 'Conversations' }).click();
+	await (await openDrawer(page)).getByRole('link', { name: 'Channels' }).click();
 	await page.getByRole('button', { name: /nightly-sync failed/ }).click();
 	await sheet(page).getByRole('button', { name: 'Ask the agent' }).click();
 	await sheet(page).getByRole('button', { name: 'Main chat', exact: true }).click();
@@ -469,7 +512,7 @@ test("a job's message opens in full, Reply quotes it into the chat, and it stays
 	await expect(page.getByRole('textbox')).toHaveValue(
 		/^> From heartbeat:\n> Your passport renewal is due \*\*Friday\*\*/
 	);
-	await (await openDrawer(page)).getByRole('link', { name: 'Conversations' }).click();
+	await (await openDrawer(page)).getByRole('link', { name: 'Channels' }).click();
 	await expect(page.getByRole('button', { name: /Read: Your passport renewal/ })).toBeVisible();
 });
 
@@ -571,7 +614,7 @@ test("a cold link to a run while the agent is unreachable says it can't check", 
 	await expect(sheet(page).getByRole('heading', { name: "Can't check this now" })).toBeVisible();
 });
 
-test('launched on the chat, the menu already flags what waits and what failed', async ({
+test('launched on the chat, the menu counts canonical requests without counting failed jobs', async ({
 	page,
 	context
 }) => {
@@ -579,6 +622,6 @@ test('launched on the chat, the menu already flags what waits and what failed', 
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/chat$/);
 	await expect(page.getByRole('button', { name: /^Menu/ })).toHaveAccessibleName(
-		'Menu, 4 need you'
+		'Menu, 2 need you'
 	);
 });

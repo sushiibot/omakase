@@ -7,6 +7,8 @@ export interface DrawerHandle {
 	open(): void;
 	/** Something in the drawer wants attention: a count, or true for a dot. */
 	readonly badge: number | boolean;
+	readonly persistent?: boolean;
+	readonly channels?: boolean;
 }
 
 export function setDrawer(handle: DrawerHandle) {

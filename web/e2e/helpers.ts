@@ -59,7 +59,10 @@ export async function horizontalOverflow(page: Page) {
 				el.matches('[data-tab-track],[data-task-track]') ||
 				el.closest('[inert]') ||
 				el.closest('[data-tab-panel][aria-hidden=true]') ||
-				el.closest('[data-tab-strip]')
+				el.closest('[data-tab-strip]') ||
+				el.closest(
+					'[data-shell][data-workspace-pane]:not([data-workspace-pane="chat"]) [data-chat-surface]'
+				)
 			)
 				continue;
 			const style = getComputedStyle(el);
@@ -121,11 +124,11 @@ type SseWindow = Window & {
 };
 
 /**
- * Replaces fetch for /api/chat/stream with an in-page stream the test writes frames into, since
+ * Replaces fetch for selected stream paths with an in-page stream the test writes frames into, since
  * route.fulfill can only answer with a finished body. Context-wide so it survives reloads.
  */
-export async function stubStream(context: BrowserContext) {
-	await context.addInitScript(() => {
+export async function stubStream(context: BrowserContext, paths = ['/api/chat/stream']) {
+	await context.addInitScript((paths) => {
 		const w = window as unknown as SseWindow;
 		w.__sse = {
 			hello: {
@@ -144,7 +147,7 @@ export async function stubStream(context: BrowserContext) {
 				typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
 				location.href
 			);
-			if (url.pathname !== '/api/chat/stream') return real(input, init);
+			if (!paths.includes(url.pathname)) return real(input, init);
 			w.__sse.requests.push(url.pathname + url.search);
 			if (w.__sse.status !== 200) return new Response('no', { status: w.__sse.status });
 			let ctrl!: ReadableStreamDefaultController<Uint8Array>;
@@ -163,7 +166,7 @@ export async function stubStream(context: BrowserContext) {
 			);
 			return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
 		};
-	});
+	}, paths);
 }
 
 /** Writes one SSE frame to every open stream; a `seq` makes it a durable event. */
@@ -203,9 +206,10 @@ export async function fixtureApp(
 		fixtures?: Partial<Record<FixtureFeature, FixtureScenario>>;
 		history?: unknown[];
 		override?: string;
+		streams?: string[];
 	} = {}
 ): Promise<FixtureRoutes> {
-	await stubStream(context);
+	await stubStream(context, opts.streams);
 	await context.addInitScript((override) => {
 		localStorage.setItem('features:override', override);
 		localStorage.setItem('install-hint-dismissed', '1');

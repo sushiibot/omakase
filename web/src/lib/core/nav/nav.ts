@@ -1,3 +1,4 @@
+import PanelsTopLeft from '@lucide/svelte/icons/panels-top-left';
 import ListChecks from '@lucide/svelte/icons/list-checks';
 import Activity from '@lucide/svelte/icons/activity';
 import BookMarked from '@lucide/svelte/icons/book-marked';
@@ -24,7 +25,7 @@ export const allOn: FeatureCheck = () => true;
 const chats: NavEntry = {
 	id: 'chats',
 	href: '/chats',
-	label: 'Conversations',
+	label: 'Channels',
 	icon: MessagesSquare
 };
 
@@ -111,9 +112,31 @@ export function moreFor(on: FeatureCheck): NavEntry[] {
 	return moreEntries.filter((e) => !e.feature || on(e.feature));
 }
 
-/** The drawer and the desktop sidebar, top to bottom; Settings comes last. */
-export function navFor(on: FeatureCheck): NavEntry[] {
-	return [chats, ...moreFor(on)];
+const workspace: NavEntry = {
+	id: 'workspace',
+	href: '/workspace',
+	label: 'Workspace',
+	icon: PanelsTopLeft,
+	description: 'Memory, history, connectors and workspace tools'
+};
+
+/** Information and capabilities, rather than frequently used work destinations. */
+export function workspaceFor(on: FeatureCheck): NavEntry[] {
+	const entries = moreFor(on);
+	return ['memory', 'history', 'connectors', 'briefing', 'skills', 'schedules', 'browser'].flatMap(
+		(id) => entries.filter((entry) => entry.id === id)
+	);
+}
+
+/** Stable primary destinations. Optional previews live inside Workspace. */
+export function navFor(_on: FeatureCheck): NavEntry[] {
+	return [
+		chats,
+		moreEntries.find((entry) => entry.id === 'tasks')!,
+		moreEntries.find((entry) => entry.id === 'runs')!,
+		workspace,
+		moreEntries.find((entry) => entry.id === 'settings')!
+	];
 }
 
 const pathOf = (routeId: string) => routeId.replace(/\/\([^)]+\)/g, '') || '/';
@@ -124,5 +147,9 @@ export function activeNav(routeId: string | null): string | undefined {
 	if (!routeId) return undefined;
 	const section = sectionOf(pathOf(routeId));
 	if (section === '/chat' || section === '/inbox') return 'chats';
-	return [chats, ...moreEntries].find((e) => e.href === section)?.id;
+	if (section === '/workspace' || section === '/more') return 'workspace';
+	const entry = [chats, ...moreEntries].find((e) => e.href === section);
+	return entry && workspaceFor(allOn).some((item) => item.id === entry.id)
+		? 'workspace'
+		: entry?.id;
 }

@@ -1,15 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { axe, horizontalOverflow, smallTargets, stubStream, fixtureApp } from './helpers';
 
-const LIVE_NAV = [
-	'Conversations',
-	'Tasks',
-	'Activity',
-	'History',
-	'Memory',
-	'Connectors',
-	'Settings'
-];
+const LIVE_NAV = ['Channels', 'Tasks', 'Activity', 'Workspace', 'Settings'];
 
 /** Live navigation never depends on /api/me; overrides enable only fixture previews. */
 async function server(context: BrowserContext, opts: { override?: string; me?: 'hang' } = {}) {
@@ -44,38 +36,56 @@ test('the app opens on chat and all live screens appear in the drawer by default
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/chat$/);
 	const menu = await drawer(page);
-	await expect(menu.getByRole('link')).toHaveText(LIVE_NAV);
-	await expect(menu.getByRole('link', { name: 'Conversations' })).toHaveAttribute(
+	for (const label of LIVE_NAV)
+		await expect(menu.getByRole('link', { name: label, exact: true })).toBeVisible();
+	for (const label of ['Memory', 'History', 'Connectors'])
+		await expect(menu.getByRole('link', { name: label, exact: true })).toHaveCount(0);
+	await expect(menu.getByRole('link', { name: 'Main', exact: true })).toHaveAttribute(
 		'aria-current',
 		'page'
 	);
 });
 
-test('the fixture override adds preview screens alongside every live screen', async ({
+test('Workspace groups secondary destinations and keeps fixture previews gated', async ({
 	page,
 	context
 }) => {
 	await server(context, { override: 'all' });
-	await page.goto('/chat');
-	const all = [
-		'Conversations',
-		'Tasks',
-		'Briefing',
-		'Activity',
-		'History',
+	await page.goto('/workspace');
+	await expect(page.getByRole('heading', { name: 'Workspace', level: 1 })).toBeVisible();
+	const content = page.locator('main');
+	for (const label of [
 		'Memory',
+		'History',
+		'Connectors',
+		'Briefing',
 		'Skills',
 		'Schedules',
-		'Connectors',
-		'Browser',
-		'Settings'
-	];
-	await expect((await drawer(page)).getByRole('link')).toHaveText(all);
+		'Browser'
+	])
+		await expect(content.getByRole('link', { name: new RegExp(`^${label}`) })).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Development previews' })).toBeVisible();
+	const menu = await drawer(page);
+	for (const label of ['Skills', 'Schedules', 'Browser', 'Briefing'])
+		await expect(menu.getByRole('link', { name: label, exact: true })).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await expect(page.getByRole('button', { name: /^Menu/ })).toBeHidden();
-	const sidebar = page.locator('nav[aria-label="Main"]').first();
-	await expect(sidebar.getByRole('link')).toHaveText(all);
+	await expect(page.getByRole('heading', { name: 'Workspace', level: 1 })).toBeVisible();
+});
+
+test('Workspace contains live information without enabling fixture previews', async ({
+	page,
+	context
+}) => {
+	await server(context);
+	await page.goto('/workspace');
+	const content = page.locator('main');
+	for (const label of ['Memory', 'History', 'Connectors'])
+		await expect(content.getByRole('link', { name: new RegExp(`^${label}`) })).toBeVisible();
+	for (const label of ['Skills', 'Schedules', 'Browser', 'Briefing'])
+		await expect(content.getByRole('link', { name: new RegExp(`^${label}`) })).toHaveCount(0);
+	await expect(page.getByRole('region', { name: 'Development previews' })).toHaveCount(0);
 });
 
 test('picking from the drawer closes it; back from there returns to the chat, then the drawer closes before leaving', async ({
@@ -86,15 +96,30 @@ test('picking from the drawer closes it; back from there returns to the chat, th
 	await page.goto('/chat');
 	await (await drawer(page)).getByRole('link', { name: 'Activity' }).click();
 	await expect(page).toHaveURL(/\/runs$/);
+	await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
 	await expect(page.getByRole('dialog', { name: 'Menu' })).toBeHidden();
-	await (await drawer(page)).getByRole('link', { name: 'History' }).click();
+	await (await drawer(page)).getByRole('link', { name: 'Workspace' }).click();
+	await expect(page).toHaveURL(/\/workspace$/);
+	await expect(page.getByRole('heading', { name: 'Workspace', level: 1 })).toBeVisible();
+	await page
+		.locator('main')
+		.getByRole('link', { name: /^History/ })
+		.click();
 	await expect(page).toHaveURL(/\/history$/);
 	await page.goBack();
+	await expect(page).toHaveURL(/\/workspace$/);
+	await expect(page.getByRole('heading', { name: 'Workspace', level: 1 })).toBeVisible();
+	await page.goBack();
+	await expect(page).toHaveURL(/\/runs$/);
+	await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
+	await page.goBack();
 	await expect(page).toHaveURL(/\/chat$/);
+	await expect(page.getByRole('heading', { name: 'Sushii', level: 1 })).toBeVisible();
 	await drawer(page);
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('dialog', { name: 'Menu' })).toBeHidden();
 	await expect(page).toHaveURL(/\/chat$/);
+	await expect(page.getByRole('heading', { name: 'Sushii', level: 1 })).toBeVisible();
 });
 
 test('an unknown address sends you to the chat', async ({ page, context }) => {
@@ -121,12 +146,15 @@ test('drawer navigation keeps the old screen covered until the destination mount
 	});
 	const menu = await drawer(page);
 	await menu.evaluate((element) => {
-		element.addEventListener('close', () => {
+		const observer = new MutationObserver(() => {
+			if (element.getAttribute('aria-hidden') !== 'true') return;
 			element.setAttribute(
 				'data-closed-over',
 				document.querySelector('header h1')?.textContent ?? ''
 			);
+			observer.disconnect();
 		});
+		observer.observe(element, { attributes: true, attributeFilter: ['aria-hidden'] });
 	});
 	try {
 		await menu.getByRole('link', { name: 'Activity', exact: true }).click();
@@ -217,18 +245,18 @@ for (const colorScheme of ['light', 'dark'] as const) {
 	});
 }
 
-test('main chat and inbox links share the Conversations drawer destination', async ({
+test('main chat and inbox links share the Channels drawer destination', async ({
 	page,
 	context
 }) => {
 	await fixtureApp(context);
 	await page.goto('/chat');
 	const menu = await drawer(page);
-	await expect(menu.getByRole('link', { name: /^Conversations/ })).toHaveAttribute(
+	await expect(menu.getByRole('link', { name: 'Main', exact: true })).toHaveAttribute(
 		'aria-current',
 		'page'
 	);
-	await menu.getByRole('link', { name: /^Conversations/ }).click();
+	await menu.getByRole('link', { name: /^Channels/ }).click();
 	await expect(page).toHaveURL(/\/chats$/);
 	await page.getByRole('link', { name: /^Main chat/ }).click();
 	await expect(page).toHaveURL(/\/chat$/);
@@ -246,7 +274,7 @@ test('widening past the sidebar breakpoint closes an open drawer, so the page st
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await expect(page.getByRole('dialog', { name: 'Menu' })).toBeHidden();
 	await page
-		.locator('nav[aria-label="Main"]')
+		.locator('[data-channel-navigation]')
 		.first()
 		.getByRole('link', { name: 'Activity' })
 		.click();

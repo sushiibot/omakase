@@ -1324,3 +1324,26 @@ describe("terminal owner-question delivery", () => {
     expect(h.chatMessages()).toEqual([expect.objectContaining({ messageId: "wsask:new", text: "No" })]);
   });
 });
+
+test("later model phases override old text and tool history without exposing reasoning", async () => {
+  const { test: adapter, event } = setup({ streaming: true });
+  const latest = () => (adapter.of("progressUpdate").at(-1)!.arg as { view: ProgressView }).view;
+  event("phase", { type: "turn_start" }, TEST);
+  event("phase", { type: "text_delta", text: "Earlier text" }, TEST);
+  await tick(); await tick();
+  event("phase", { type: "tool_start", name: "read", summary: "Read files", toolCallId: "call" }, TEST);
+  await tick(); await tick();
+  event("phase", { type: "tool_end", name: "read", ok: true, toolCallId: "call" }, TEST);
+  await tick(); await tick();
+  expect(latest().modelActivity).toBe("waiting");
+  event("phase", { type: "model_activity", activity: "thinking" }, TEST);
+  await tick(); await tick();
+  expect(latest()).toMatchObject({ modelActivity: "thinking", text: "Earlier text" });
+  event("phase", { type: "model_activity", activity: "waiting" }, TEST);
+  await tick(); await tick();
+  expect(latest().modelActivity).toBe("waiting");
+  event("phase", { type: "text_delta", text: " More text" }, TEST);
+  await tick(); await tick();
+  expect(latest()).toMatchObject({ text: "Earlier text More text" });
+  expect(latest().modelActivity).toBeUndefined();
+});

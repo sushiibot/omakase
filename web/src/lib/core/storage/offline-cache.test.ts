@@ -16,6 +16,7 @@ const row = (path: string, savedAt: number, bytes = 10, usedAt?: number): Cached
 test('only thread metadata and conversation history can be cached', () => {
 	for (const path of [
 		'/chats',
+		'/channels',
 		'/threads/a',
 		'/threads/a/chat/history?limit=40',
 		'/chat/history?limit=40&before=a'

@@ -15,6 +15,7 @@
 		toastPosition = 'bottom',
 		footer,
 		stickToBottom = false,
+		channelNavigation = false,
 		scrollable = true,
 		scroller = $bindable(null),
 		children
@@ -34,6 +35,7 @@
 		scrollable?: boolean;
 		/** Keep the newest content in view, for chats. */
 		stickToBottom?: boolean;
+		channelNavigation?: boolean;
 		/** The scrolling region, for callers that track the reader's position. */
 		scroller?: HTMLElement | null;
 		children: Snippet;
@@ -44,7 +46,7 @@
 </script>
 
 <header class="flex min-h-13 shrink-0 items-center gap-1 border-b px-2 py-1 @3xl:px-5">
-	{#if back}
+	{#if back && !(channelNavigation && drawer?.channels)}
 		<a
 			href={back.href}
 			onclick={back.onclick}
@@ -57,14 +59,14 @@
 				>{back.label}</span
 			>
 		</a>
-	{:else if drawer}
+	{:else if drawer && !drawer.persistent}
 		<button
 			type="button"
 			aria-label={drawer.badge
 				? `Menu, ${typeof drawer.badge === 'number' ? `${drawer.badge} need you` : 'something new'}`
 				: 'Menu'}
 			onclick={() => drawer.open()}
-			class="relative grid size-12 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-foreground @3xl:hidden"
+			class="relative grid size-12 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-foreground"
 		>
 			<Menu class="size-5" aria-hidden="true" />
 			{#if drawer.badge}

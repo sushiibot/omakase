@@ -61,7 +61,7 @@
 			return [{ label: `${hits.length} matching`, items: hits }];
 		}
 		return [
-			{ label: 'Threads', count: true, items: active },
+			{ label: 'Channels', count: true, items: active },
 			{ label: 'Archived', icon: Archive, count: true, items: archived }
 		];
 	});
@@ -135,12 +135,12 @@
 
 <ListScreen
 	{tail}
-	title="Conversations"
+	title="Channels"
 	{banner}
 	{actions}
 	toast={updateReady ? toast : undefined}
 	bind:search={query}
-	searchLabel="Search conversations"
+	searchLabel="Search channels"
 	state={{
 		remote,
 		offline: !online,
@@ -154,7 +154,7 @@
 				}
 			: {
 					title: 'No conversations yet',
-					body: 'Use Main chat above, or start a thread for a specific topic.',
+					body: 'Use Main chat above, or start a channel for a specific topic.',
 					...(onnew ? { action: { label: 'Start a conversation', onclick: onnew } } : {})
 				}
 	}}

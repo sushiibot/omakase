@@ -294,7 +294,7 @@ describe("web adapter progress", () => {
     ]);
   });
 
-  test("reasoning status reaches live snapshots and reconnect views without changing progress after output", async () => {
+  test("later reasoning reaches live snapshots and reconnect views; new text clears the current model phase", async () => {
     const h = setup();
     h.event("t1", { type: "turn_start" });
     await h.link.settled();
@@ -312,7 +312,14 @@ describe("web adapter progress", () => {
     h.event("t1", { type: "model_activity", activity: "thinking" });
     await h.link.settled();
     h.timers.flush();
-    expect(h.adapter.openTurns()[0]!.modelActivity).toBe("waiting");
+    expect(h.adapter.openTurns()[0]!).toMatchObject({ modelActivity: "thinking", text: "reply" });
+    expect(h.events.filter((e) => e.type === "snapshot").at(-1)!.data).toMatchObject({ view: { modelActivity: "thinking", text: "reply" } });
+    h.event("t1", { type: "text_delta", text: " resumed" });
+    await h.link.settled();
+    h.timers.flush();
+    expect(h.adapter.openTurns()[0]!.modelActivity).toBeUndefined();
+    expect(h.adapter.openTurns()[0]!.text).toBe("reply resumed");
+    expect(h.events.filter((e) => e.type === "snapshot").at(-1)!.data).toMatchObject({ view: { text: "reply resumed" } });
   });
 
   test("snapshots are throttled while a turn runs", async () => {

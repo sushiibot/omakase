@@ -12,7 +12,7 @@ export interface CachedResponse {
 }
 
 export function cacheGroup(path: string): string | null {
-	if (path === '/chats') return 'list';
+	if (path === '/chats' || path === '/channels') return 'list';
 	if (/^\/chat\/history\?/.test(path)) return 'main';
 	const thread = /^\/threads\/([^/?]+)(?:\/chat\/history\?[^#]*)?$/.exec(path);
 	return thread ? `thread:${thread[1]}` : null;

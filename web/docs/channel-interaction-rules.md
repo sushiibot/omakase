@@ -49,17 +49,19 @@ That setting does not control drag-release duration.
 
 ## Navigation rules
 
-| ID  | Requirement                                                                                                   | Verification                                                                                                  |
-| --- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| N1  | Give each channel one stable identity, transcript, draft, and request source.                                 | Open Main, an ordinary channel, and a task channel. Check history and draft isolation.                        |
-| N2  | Keep project containers separate from channel transcripts.                                                    | A project heading expands links. It never opens an implied project chat.                                      |
-| N3  | Keep Main visible outside project groups.                                                                     | Check empty, grouped, filtered, and archived views.                                                           |
-| N4  | Preserve query, selected view, expanded groups, and list position across navigation.                          | Search, open a channel, and return through Back. Compare all retained values.                                 |
-| N5  | Keep All stable. Sort Recent by owner visits.                                                                 | Deliver a background reply. Neither view reorders. An owner visit updates Recent only.                        |
-| N6  | Keep Tasks and Activity directly accessible. Place Memory, History, Connectors, and Settings under Workspace. | Reach each destination with touch and keyboard. Return to the same selected channel.                          |
-| N7  | Keep channel selection separate from global destination selection.                                            | Open Memory from a channel. Return without a new channel or lost draft.                                       |
-| N8  | Label search according to its actual coverage.                                                                | Name/preview search never claims transcript search. Archived matching results identify their state.           |
-| N9  | Use one channel row anatomy and distinct hover, selected, and focus states.                                   | Check Main and grouped channels in both themes. Align icons, labels, and badges; retain mobile touch targets. |
+| ID  | Requirement                                                                                                    | Verification                                                                                                  |
+| --- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| N1  | Give each channel one stable identity, transcript, draft, and request source.                                  | Open Main, an ordinary channel, and a task channel. Check history and draft isolation.                        |
+| N2  | Keep project containers separate from channel transcripts.                                                     | A project heading expands links. It never opens an implied project chat.                                      |
+| N3  | Keep Main visible outside project groups.                                                                      | Check empty, grouped, filtered, and archived views.                                                           |
+| N4  | Preserve query, selected view, expanded groups, and list position across navigation.                           | Search, open a channel, and return through Back. Compare all retained values.                                 |
+| N5  | Keep All stable. Sort Recent by owner visits.                                                                  | Deliver a background reply. Neither view reorders. An owner visit updates Recent only.                        |
+| N6  | Keep Tasks, Activity, and Settings directly accessible. Place Memory, History, and Connectors under Workspace. | Reach each destination with touch and keyboard. Return to the same selected channel.                          |
+| N7  | Keep channel selection separate from global destination selection.                                             | Open Memory from a channel. Return without a new channel or lost draft.                                       |
+| N8  | Label search according to its actual coverage.                                                                 | Name/preview search never claims transcript search. Archived matching results identify their state.           |
+| N9  | Use one channel row anatomy and distinct hover, selected, and focus states.                                    | Check Main and grouped channels in both themes. Align icons, labels, and badges; retain mobile touch targets. |
+
+Search and view filters stay collapsed until requested. Channel links remain the main navigation surface.
 
 Recent and All are alternate views of the same records. They do not duplicate conversation state.
 Task work conversations enter the catalog when a work conversation exists. Unstarted to-dos remain in Tasks.
@@ -141,6 +143,24 @@ The isolated prototype route is `/interaction-lab` under `bun run dev:proto`.
 Its automated browser checks run through `bunx playwright test -c interaction/playwright.config.ts`.
 Its release rules have unit tests in `src/proto-routes/interaction-lab/pane-motion.test.ts`.
 
+The live implementation uses `ui/shell` for navigation, chat, and inspector motion.
+`ui/workspace/context.ts` lets a feature register supporting inspector content.
+The shell owns both pane gestures. It preserves drafts and keeps vertical scrolling native.
+Channel data lives in `features/channels`; the root route binds it to the presentational navigator.
+All ordering remains stable. Recent ordering changes only after an owner visit.
+The catalog and existing histories use the device's offline cache.
+The `/chats` directory remains available for channel management and the shared inbox.
+The right inspector renders task details, checklists, activity, and results.
+Task conversations open centrally through an explicit channel link.
+Project assignment is not available in the channel catalog yet.
+The navigator groups ordinary channels and task channels without inventing project membership.
+
+Mobile navigation first closes its shallow history entry, then pushes the destination route.
+A temporary local state keeps navigation visible until that route mounts.
+Replacing a shallow entry with another route can leave SvelteKit's navigation index unchanged.
+Back must restore the rendered screen as well as its address; browser tests check both.
+The shell reserves the outer 24px for system gestures and leaves tab pagers to their own engine.
+
 ### Shell sizing rules
 
 The table defines Sushii conventions, rather than universal platform requirements.
@@ -180,6 +200,7 @@ Physical phone feel and keyboard behavior still need device review.
 
 The additive backend provides a channel catalog and shared request discovery.
 Read receipts remain unavailable in that catalog. The `unread` field is explicitly `null`.
+Linked requests load earlier history pages until their card is found. Lookup stops on errors, exhausted history, or a bounded limit. Retry and Keep looking provide recovery without changing the draft.
 Explicit decision keys prevent duplicate live owner questions.
 Generic extension questions remain visible without automatic text-based merging.
 New question handles survive crashes so restart can withdraw orphan questions.

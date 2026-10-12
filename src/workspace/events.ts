@@ -57,8 +57,16 @@ export function assistantText(message: AssistantLike): string {
  */
 export function mapSessionEvent(event: AgentSessionEvent, acc: RunAccumulator): ChatEventPayload[] {
   switch (event.type) {
+    case "message_start": {
+      if (!asAssistant(event.message)) return [];
+      acc.outputStarted = false;
+      if (acc.modelActivity === "waiting") return [];
+      acc.modelActivity = "waiting";
+      return [{ type: "model_activity", activity: "waiting" }];
+    }
     case "tool_execution_start": {
       acc.outputStarted = true;
+      acc.modelActivity = undefined;
       const summary = summarizeToolArgs(event.args).replace(/\s+/g, " ").trim().slice(0, TOOL_SUMMARY_MAX);
       return [{ type: "tool_start", name: event.toolName, summary, toolCallId: event.toolCallId }];
     }
@@ -66,9 +74,9 @@ export function mapSessionEvent(event: AgentSessionEvent, acc: RunAccumulator): 
       return [{ type: "tool_end", name: event.toolName, ok: event.isError !== true, toolCallId: event.toolCallId }];
     case "message_update": {
       const m = event.assistantMessageEvent;
-      if (m.type === "text_delta" && m.delta) acc.outputStarted = true;
-      if (!acc.outputStarted) {
-        const activity = m.type === "thinking_delta" && m.delta ? "thinking" : m.type === "thinking_end" ? "waiting" : undefined;
+      if (m.type === "text_delta" && m.delta) { acc.outputStarted = true; acc.modelActivity = undefined; }
+      {
+        const activity = m.type === "thinking_delta" && m.delta ? "thinking" : (m.type === "thinking_end" || m.type === "text_end") ? "waiting" : undefined;
         if (activity && activity !== acc.modelActivity) {
           acc.modelActivity = activity;
           return [{ type: "model_activity", activity }];
@@ -92,7 +100,7 @@ export function mapSessionEvent(event: AgentSessionEvent, acc: RunAccumulator): 
       acc.errorMessage = msg.stopReason === "error" ? publicAuthError(msg.errorMessage ?? "unknown error") : undefined;
       acc.finalText = assistantText(msg);
       // An interrupted reasoning stream must not claim to think during retry/provider latency.
-      if (!acc.outputStarted && acc.modelActivity === "thinking") {
+      if (acc.modelActivity === "thinking") {
         acc.modelActivity = "waiting";
         return [{ type: "model_activity", activity: "waiting" }];
       }

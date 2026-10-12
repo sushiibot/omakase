@@ -25,7 +25,7 @@
 		task: TaskRecord;
 		busy: boolean;
 		error: string | null;
-		conversation?: Snippet;
+		conversation?: Snippet<[viewing: boolean]>;
 		runs?: Snippet;
 		fullHref?: string;
 		onback: () => void;
@@ -227,7 +227,7 @@
 		</div>
 	</div>
 	<div class:hidden={tab !== 'conversation'} class="flex min-h-0 flex-1 flex-col">
-		{#if task.workConversationId}{@render conversation?.()}{:else}<div
+		{#if task.workConversationId}{@render conversation?.(tab === 'conversation')}{:else}<div
 				class="flex flex-col gap-3 px-4 py-8"
 			>
 				<p class="text-sm text-muted-foreground">

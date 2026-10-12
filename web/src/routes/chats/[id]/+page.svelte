@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { getWorkspace } from '$lib/ui/workspace/context';
+	const workspaceLayout = getWorkspace();
 	import { TaskWorkspace } from '$lib/features/tasks';
 	import { Button } from '$lib/ui/button';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
@@ -73,7 +75,8 @@
 	$effect(() => {
 		const s = store;
 		if (!s) return;
-		untrack(() => s.setViewing(true));
+		const visible = workspaceLayout?.contentVisible ?? true;
+		untrack(() => s.setViewing(visible));
 		return () => s.setViewing(false);
 	});
 
@@ -133,7 +136,7 @@
 	}
 </script>
 
-<svelte:head><title>{detail?.summary.title ?? 'Thread'} · sushii</title></svelte:head>
+<svelte:head><title>{detail?.summary.title ?? 'Channel'} · sushii</title></svelte:head>
 
 {#snippet browserPreview()}
 	<BrowserPreviewPanel
@@ -219,6 +222,8 @@
 			chat={store
 				? {
 						headerActions: taskActions,
+						focusAsk: page.url.searchParams.get('ask') ?? undefined,
+						focusApproval: page.url.searchParams.get('approve') ?? undefined,
 						approvals: store.approvals,
 						messages: threadMessages(detail!, store.messages),
 						history: store.history,

@@ -308,6 +308,8 @@ export class WebWorkspaceAdapter implements SurfaceAdapter<WebInbound, WebHandle
     const offset = turn.text.length;
     const text = delta.slice(0, TURN_TEXT_MAX - offset);
     if (!text) return;
+    // Fresh response bytes supersede a previous reasoning/waiting phase, including reconnect snapshots.
+    turn.modelActivity = undefined;
     turn.text += text;
     this.deps.log.publish({ type: "delta", data: { turnId: turn.turnId, offset, text } });
     this.scheduleSnapshot(turn);

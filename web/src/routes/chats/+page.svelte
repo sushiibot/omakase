@@ -45,7 +45,7 @@
 	}
 </script>
 
-<svelte:head><title>Conversations · sushii</title></svelte:head>
+<svelte:head><title>Channels · sushii</title></svelte:head>
 
 <InboxPanel threads={list.data?.threads ?? []}>
 	{#snippet children(inbox, attention)}

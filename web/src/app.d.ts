@@ -15,6 +15,8 @@ declare global {
 			| HomeSheet
 			| ThreadSheet
 			| 'tasks'
+			| 'channels'
+			| 'channel-create'
 			| 'agent-activity'
 			| 'voice'
 			| 'browser-preview';

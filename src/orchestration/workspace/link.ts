@@ -982,15 +982,17 @@ export class WorkspaceLink {
       }
       case "model_activity": {
         const turn = this.turns.get(p.turnId);
-        if (!turn || turn.text || turn.lines.length || turn.modelActivity === ev.activity) return;
+        if (!turn || turn.modelActivity === ev.activity) return;
         turn.modelActivity = ev.activity;
         this.touch(turn);
         return;
       }
       case "tool_start":
+        this.turnFor(p.turnId, origin).modelActivity = undefined;
         this.addToolLine(this.turnFor(p.turnId, origin), { name: ev.name, summary: ev.summary, state: "run", ...(ev.toolCallId ? { id: ev.toolCallId } : {}) });
         return;
       case "tool_end":
+        if (this.turns.get(p.turnId)) this.turns.get(p.turnId)!.modelActivity = "waiting";
         this.endToolLine(this.turns.get(p.turnId), ev.name, ev.ok, undefined, ev.toolCallId);
         return;
       case "turn_end": {
@@ -1004,6 +1006,7 @@ export class WorkspaceLink {
         const target = this.tryTarget(existing, origin);
         if (!target?.adapter.capabilities.streaming) return;
         const turn = existing ?? this.turnFor(p.turnId, origin);
+        turn.modelActivity = undefined;
         turn.text += ev.text;
         if (turn.message && target.adapter.progressDelta) {
           const delta = ev.text;

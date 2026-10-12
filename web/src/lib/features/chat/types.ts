@@ -139,6 +139,8 @@ export interface TurnStep {
 }
 
 export interface Turn {
+	/** Current model phase, independent of earlier text in this turn. */
+	modelActivity?: 'waiting' | 'thinking' | 'responding';
 	/** Tool activity can render separately from this status row. */
 	toolRunning?: boolean;
 	state: 'working' | 'thinking' | 'done' | 'stopping' | 'stopped';

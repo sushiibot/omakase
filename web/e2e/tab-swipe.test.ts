@@ -105,7 +105,7 @@ test('Runs filters swipe on link rows without opening the row', async ({ page, c
 	);
 });
 
-test('memory swipes preserve search, taps and the drawer gesture', async ({ page, context }) => {
+test('memory swipes preserve search, taps and the navigation button', async ({ page, context }) => {
 	await fixtureApp(context);
 	await page.goto('/memory');
 	await expect(page.getByRole('heading', { name: 'Long-term files' })).toBeVisible();
@@ -130,10 +130,13 @@ test('memory swipes preserve search, taps and the drawer gesture', async ({ page
 	await expect(input).toHaveValue('2026');
 	await daily.click();
 	await expect(daily).toHaveAttribute('aria-selected', 'true');
-	await swipe(page, [24, 850], [160, 850]);
+	await swipe(page, [12, 850], [160, 850]);
+	await expect(page.getByRole('dialog', { name: 'Menu', exact: true })).toBeHidden();
+	await page.getByRole('button', { name: /^Menu/ }).click();
 	await expect(page.getByRole('dialog', { name: 'Menu', exact: true })).toBeVisible();
-	await expect(daily).toHaveAttribute('aria-selected', 'true');
 	await page.keyboard.press('Escape');
+	await expect(page.getByRole('dialog', { name: 'Menu', exact: true })).toBeHidden();
+	await expect(daily).toHaveAttribute('aria-selected', 'true');
 });
 
 test('vertical, diagonal, short drags and horizontal scrollers keep their behavior', async ({

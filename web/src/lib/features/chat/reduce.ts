@@ -276,6 +276,8 @@ export function noticeText(n: RouterNotice): { line?: string; toast?: string } {
 
 function applyToolEvent(item: Extract<ChatItem, { kind: 'assistant' }>, e: ChatEventMap['tool']) {
 	const turn = (item.turn ??= { phase: 'working', lines: [], startedAt: Date.now() });
+	turn.responseStarted = false;
+	turn.modelActivity = 'waiting';
 	if (e.ok === undefined) {
 		turn.lines = [
 			...turn.lines,
@@ -563,7 +565,7 @@ export function applyEvent(s: ChatState, ev: ChatEnvelope, now = Date.now()): Ef
 				lines: [...v.lines],
 				startedAt: v.startedAt,
 				responseStarted: !!v.text,
-				modelActivity: v.text ? undefined : v.modelActivity
+				modelActivity: v.modelActivity
 			};
 			break;
 		}

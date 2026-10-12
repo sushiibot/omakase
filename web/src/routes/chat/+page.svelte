@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { getWorkspace } from '$lib/ui/workspace/context';
+	const workspaceLayout = getWorkspace();
 	import { TaskWorkspace } from '$lib/features/tasks';
 	import { Button } from '$lib/ui/button';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
@@ -124,7 +126,8 @@
 	});
 
 	$effect(() => {
-		untrack(() => store.setViewing(true));
+		const visible = workspaceLayout?.contentVisible ?? true;
+		untrack(() => store.setViewing(visible));
 		return () => store.setViewing(false);
 	});
 
@@ -297,6 +300,7 @@
 			canInstall={pwa.canInstall}
 			announce={s.announce}
 			{focusAsk}
+			focusApproval={page.url.searchParams.get('approve') ?? undefined}
 			{sheet}
 			{viewer}
 			onbranch={openBranch}
