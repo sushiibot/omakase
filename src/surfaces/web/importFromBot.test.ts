@@ -40,6 +40,7 @@ function seedBot(): Database {
   event.run(3, "typing", null, "{}", T0 + 2000);
   db.run("UPDATE sqlite_sequence SET seq = 40 WHERE name = 'web_events'");
   db.run("INSERT INTO web_threads (id, title, brief, created_at) VALUES ('t1', 'Trip', 'plan it', ?)", [T0]);
+  db.run("INSERT INTO external_file_stores (id, config) VALUES ('nas', '{}')");
   db.run("INSERT INTO workspace_inbox (id, principal_id, user_text, reply_text, created_at) VALUES (7, 'drk', 'hi', 'hello', ?)", [T0]);
   db.run("INSERT INTO workspace_outbox_seen (outbox_id, principal_id, seen_at) VALUES ('ob1', 'drk', ?), ('ob2', 'drk', ?)", [T0, T0]);
   const kv = db.prepare("INSERT INTO kv (key, value) VALUES (?, ?)");
@@ -65,6 +66,7 @@ describe("importFromBot", () => {
     expect(result).toEqual({
       status: "imported",
       counts: {
+        external_file_stores: 1,
         web_alerts: 0,
         web_dismissed_runs: 0,
         web_events: 5,
@@ -176,7 +178,7 @@ describe("importFromBot", () => {
   test("the import list names every personal table in the schema", () => {
     const db = open(personalPath);
     const tables = (
-      db.query("SELECT name FROM sqlite_master WHERE type = 'table' AND (name GLOB 'web_*' OR name GLOB 'workspace_*') AND name NOT GLOB 'web_chat_fts*' ORDER BY name").all() as { name: string }[]
+      db.query("SELECT name FROM sqlite_master WHERE type = 'table' AND (name GLOB 'web_*' OR name GLOB 'workspace_*' OR name = 'external_file_stores') AND name NOT GLOB 'web_chat_fts*' ORDER BY name").all() as { name: string }[]
     ).map((t) => t.name);
     expect(tables).toEqual([...IMPORTED_TABLES]);
     db.close();

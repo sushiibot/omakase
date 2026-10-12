@@ -8,6 +8,7 @@ export const IMPORT_MARKER_KEY = "personal:imported_from_bot";
 
 /** Every table the personal gateway owns. web_chat_fts is left out: the chat index rebuilds it. */
 export const IMPORTED_TABLES = [
+  "external_file_stores",
   "web_alerts",
   "web_dismissed_runs",
   "web_events",
@@ -111,7 +112,7 @@ function columnList(db: Database, table: string): string {
 function assertTableListCovers(db: Database): void {
   const tables = all<{ name: string }>(
     db,
-    "SELECT name FROM main.sqlite_master WHERE type = 'table' AND (name GLOB 'web_*' OR name GLOB 'workspace_*') AND name NOT GLOB 'web_chat_fts*'",
+    "SELECT name FROM main.sqlite_master WHERE type = 'table' AND (name GLOB 'web_*' OR name GLOB 'workspace_*' OR name = 'external_file_stores') AND name NOT GLOB 'web_chat_fts*'",
   ).map((t) => t.name);
   const known = new Set<string>(IMPORTED_TABLES);
   const unknown = tables.filter((t) => !known.has(t));
