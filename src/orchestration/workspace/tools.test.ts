@@ -741,3 +741,18 @@ test("channel request discovery is read-only, owner-scoped and rejects extra arg
   expect(unavailable.manifest().some(t => t.name === "list_channel_requests")).toBe(false);
   expect(await unavailable.handleCall(conn(), call("list_channel_requests", {}))).toMatchObject({ ok: false });
 });
+
+test("external files enforce owner, principal and schema before reaching the adapter", async () => {
+  const { tools } = setup(); let calls = 0;
+  tools.setExternalFiles(async () => { calls++; return { stores: [] }; });
+  expect(tools.manifest().some(t => t.name === "external_files")).toBe(true);
+  expect(await tools.handleCall(conn(), call("external_files", { action: "list_stores" }))).toMatchObject({ ok: true });
+  expect(await tools.handleCall(conn(), call("external_files", { action: "list_stores", endpoint: "https://untrusted" }))).toMatchObject({ ok: false });
+  expect(await tools.handleCall(conn(), call("external_files", { action: "list_stores" }, { principalId: "other" }))).toMatchObject({ ok: false });
+  expect(calls).toBe(1);
+  const absent = setup({ ownerUserId: () => undefined });
+  absent.tools.setExternalFiles(async () => { calls++; return {}; });
+  expect(absent.tools.manifest().some(t => t.name === "external_files")).toBe(false);
+  expect(await absent.tools.handleCall(conn(), call("external_files", { action: "list_stores" }))).toMatchObject({ ok: false });
+  expect(calls).toBe(1);
+});

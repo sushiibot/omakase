@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AgentSession, AgentToolResult, ExtensionAPI, ExtensionFactory, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { RPC_METHODS, type ToolCallParams, type ToolCallResult, type ToolCancelParams, type ToolManifestEntry, type ChatOrigin } from "../orchestration/contracts.ts";
 import { ConnectionClosedError, NotConnectedError, RequestTimeoutError } from "../orchestration/transport/client.ts";
@@ -22,6 +25,7 @@ export const KNOWN_PROXIED_TOOLS: readonly string[] = [
   "request_current_location",
   "task_manage",
   "machine_files",
+  "external_files",
   "list_channel_requests",
 ];
 
@@ -153,6 +157,17 @@ export class ToolStubs {
     }
     const result = raw as ToolCallResult | undefined;
     if (result?.ok === true && typeof result.result === "string") {
+      if (name === "external_files" && (args as { action?: string })?.action === "download") {
+        const download = JSON.parse(result.result);
+        if (download.externalDownload !== true || typeof download.base64 !== "string" || download.base64.length > 3_000_000 || typeof download.filename !== "string") throw new Error("Invalid external document response.");
+        const bytes = Buffer.from(download.base64, "base64");
+        if (bytes.length !== download.bytes || bytes.length > 2 * 1024 * 1024) throw new Error("Invalid external document size.");
+        const folder = await mkdtemp(join(tmpdir(), "sushii-external-"));
+        const filename = download.filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
+        const path = join(folder, filename && filename !== "." && filename !== ".." ? filename : "document");
+        await writeFile(path, bytes, { mode: 0o600 });
+        return { content: [{ type: "text", text: JSON.stringify({ path, bytes: bytes.length, etag: download.etag, temporary: true, note: "Use the workspace document tools on this file. Remove the temporary file when finished; it is not synchronized with the NAS." }) }], details: { callId } };
+      }
       return { content: [{ type: "text", text: result.result }], details: { callId } };
     }
     if (result?.ok === false && result.denied) throw new Error(DENIED_TEXT);

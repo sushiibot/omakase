@@ -399,3 +399,5 @@ export const webThreads = sqliteTable("web_threads", {
   report: text("report"),
   reportDelivered: integer("report_delivered").notNull().default(0),
 });
+
+export const externalFileStores = sqliteTable("external_file_stores", { id: text("id").primaryKey(), config: text("config").notNull() });

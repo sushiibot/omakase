@@ -169,6 +169,13 @@
       "when": 1791773000000,
       "tag": "0023_web_voice_reply",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1791829000000,
+      "tag": "0024_external_file_stores",
+      "breakpoints": true
     }
   ]
 }

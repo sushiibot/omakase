@@ -4,6 +4,7 @@
 </script>
 
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import BellRing from '@lucide/svelte/icons/bell-ring';
 	import RotateCw from '@lucide/svelte/icons/rotate-cw';
@@ -18,6 +19,7 @@
 
 	let {
 		back,
+		fileStores,
 		me,
 		push,
 		pushBusy = false,
@@ -40,6 +42,7 @@
 		oninstall,
 		onreload
 	}: {
+		fileStores?: Snippet;
 		back?: { href: string; label: string; onclick?: (e: MouseEvent) => void };
 		me: RemoteLike & { data?: { login: string; displayName?: string } };
 		push: PushState;
@@ -132,6 +135,8 @@
 				</ScreenState>
 			</div>
 		</section>
+
+		{#if fileStores}{@render fileStores()}{/if}
 
 		<section aria-labelledby="notifications" class="flex flex-col gap-2">
 			<h2 id="notifications" class="text-sm font-medium text-muted-foreground">Notifications</h2>

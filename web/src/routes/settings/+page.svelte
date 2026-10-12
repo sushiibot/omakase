@@ -1,9 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { beforeNavigate } from '$app/navigation';
+	import { FileStoresSection } from '$lib/features/file-stores';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import { SettingsScreen, settingsStore } from '$lib/features/settings';
 
 	const settings = settingsStore();
+	let fileStoresDirty = $state(false);
+	beforeNavigate(({ cancel, willUnload }) => {
+		if (!willUnload && fileStoresDirty && !window.confirm('Discard unsaved file-store changes?'))
+			cancel();
+	});
 
 	onMount(() => settings.open());
 </script>
@@ -32,4 +39,8 @@
 	onchoosetheme={(t) => settings.chooseTheme(t)}
 	oninstall={() => void settings.install()}
 	onreload={() => pwa.reload()}
-/>
+>
+	{#snippet fileStores()}<FileStoresSection
+			ondirty={(value) => (fileStoresDirty = value)}
+		/>{/snippet}
+</SettingsScreen>

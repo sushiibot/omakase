@@ -1,9 +1,10 @@
+import { fileStoreManifest } from "../orchestration/workspace/fileStores/service.ts";
 import { machineFileManifest } from "../orchestration/machines/control.ts";
 import { taskManifest } from "../surfaces/web/taskRoutes.ts";
 import { clearOpenRouterCatalog } from "../agentRuntime/piShared.ts";
 import { LOCATION_TOOL } from "../orchestration/workspace/location.ts";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createFauxCore, fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
@@ -55,7 +56,7 @@ function byName(s: ToolStubs, name: string, ctx?: Parameters<ToolStubs["definiti
 
 describe("manifest → stubs", () => {
   test("the known names match the bot's proxied tools", () => {
-    expect([...KNOWN_PROXIED_TOOLS].sort()).toEqual([...Object.keys(PROXIED_TOOLS), LOCATION_TOOL, taskManifest.name, machineFileManifest.name, "list_channel_requests"].sort());
+    expect([...KNOWN_PROXIED_TOOLS].sort()).toEqual([...Object.keys(PROXIED_TOOLS), LOCATION_TOOL, taskManifest.name, machineFileManifest.name, fileStoreManifest.name, "list_channel_requests"].sort());
   });
 
   test("one stub per known manifest entry, carrying its name, description and schema", () => {
@@ -374,4 +375,19 @@ describe("real Pi session", () => {
     expect(active(next)).toEqual([...BUILTINS, "web_search"].sort());
     next.dispose();
   });
+});
+
+
+test("external download creates a private temporary document and keeps bytes out of model output", async () => {
+  const { s } = stubs(async () => ({ ok: true, result: JSON.stringify({ externalDownload: true, filename: "../../property.pdf", base64: Buffer.from("%PDF-test").toString("base64"), bytes: 9, etag: '\"document\"' }) }));
+  s.update([fileStoreManifest]);
+  const result = await run(byName(s, "external_files"), { action: "download", storeId: crypto.randomUUID(), path: "property.pdf" });
+  const text = (result.content[0] as { text: string }).text;
+  const download = JSON.parse(text);
+  try {
+    expect(download.path).toStartWith(join(tmpdir(), "sushii-external-"));
+    expect(readFileSync(download.path, "utf8")).toBe("%PDF-test");
+    expect(statSync(download.path).mode & 0o777).toBe(0o600);
+    expect(text).not.toContain("base64");
+  } finally { rmSync(join(download.path, ".."), { recursive: true, force: true }); }
 });

@@ -1,3 +1,4 @@
+import { fileStoreManifest } from "./fileStores/service.ts";
 import { machineFileManifest } from "../machines/control.ts";
 import { taskManifest } from "../../surfaces/web/taskRoutes.ts";
 // Bot side of `tool/call`: the workspace runs its model elsewhere but calls these secret-holding tools
@@ -204,6 +205,8 @@ export class WorkspaceTools {
   setTaskControl(control: NonNullable<WorkspaceTools["taskControl"]>) { this.taskControl = control; }
   private channelRequests?: () => unknown;
   /** Read-only projection from bot-owned channel logs; never settles an approval or dialog. */
+  private externalFiles?: (raw: unknown) => Promise<unknown>;
+  setExternalFiles(call: (raw: unknown) => Promise<unknown>): void { this.externalFiles = call; }
   private machineFiles?: (raw: unknown) => Promise<unknown>;
   setMachineFiles(call: (raw: unknown) => Promise<unknown>): void { this.machineFiles = call; }
   setChannelRequests(read: () => unknown): void { this.channelRequests = read; }
@@ -218,6 +221,7 @@ export class WorkspaceTools {
       inputSchema: schema,
       approval: PROXIED_TOOLS[entry.name]!.approval,
     }));
+    if (this.externalFiles && this.opts.ownerUserId()) tools.push(fileStoreManifest);
     if (this.machineFiles && this.opts.ownerUserId()) tools.push(machineFileManifest);
     if (this.location) tools.push(locationManifest);
     if (this.taskControl) tools.push(taskManifest);
@@ -263,6 +267,11 @@ export class WorkspaceTools {
 
   private async dispatch(conn: ConnectionInfo, p: ToolCallParams): Promise<ToolCallResult> {
     if (p.principalId !== this.opts.principalId || conn.principalId !== this.opts.principalId) return { ok: false, error: "principal mismatch" };
+    if (p.name === "external_files") {
+      if (!this.externalFiles || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "External files are unavailable." };
+      if (!Check(fileStoreManifest.inputSchema, p.args ?? {})) return { ok: false, error: "Invalid external file request." };
+      return { ok: true, result: JSON.stringify(await this.externalFiles(p.args)) };
+    }
     if (p.name === "machine_files") {
       if (!this.machineFiles || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Machine files are unavailable." };
       if (!Check(machineFileManifest.inputSchema, p.args ?? {})) return { ok: false, error: "Invalid machine file request." };

@@ -34,6 +34,7 @@ async function mockApi(context: BrowserContext, initial: ApiOptions = {}) {
 		});
 		const json = (data: unknown, status = 200) =>
 			route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
+		if (path === '/api/file-stores') return json({ stores: [] });
 		if (path === '/api/me') {
 			if (opts.meStatus !== 200) return route.fulfill({ status: opts.meStatus, body: 'Forbidden' });
 			return json({ login: 'drk@example.com' });

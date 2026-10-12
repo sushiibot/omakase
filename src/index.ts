@@ -1,3 +1,5 @@
+import { FileStores } from "./orchestration/workspace/fileStores/service.ts";
+import { FileStoreRoutes } from "./surfaces/web/fileStoreRoutes.ts";
 import { MachineHub, machineGrants } from "./orchestration/machines/hub.ts";
 import { MachineControl } from "./orchestration/machines/control.ts";
 import { MachineRoutes } from "./surfaces/web/machineRoutes.ts";
@@ -160,6 +162,8 @@ async function main() {
   workspace.server.setMachineHub(machines);
   const machineControl = new MachineControl(machines, workspace.link);
   const machineRoutes = new MachineRoutes(machineControl, workspace.link);
+  const fileStores = new FileStores(db);
+  workspace.tools.setExternalFiles(raw => fileStores.action(raw));
   workspace.tools.setMachineFiles(async raw => (raw as { action?: string })?.action === "list_machines" ? { machines: machineControl.list() } : machineControl.files(raw));
   const taskRoutes = new TaskRoutes(workspace.link, webChat.threads, machineControl);
   workspace.tools.setChannelRequests(() => webChat.threads.pendingRequests());
@@ -170,6 +174,7 @@ async function main() {
     threads: webChat.threads,
     tasks: taskRoutes,
     machines: machineRoutes,
+    fileStores: new FileStoreRoutes(fileStores),
     home: webChat.home,
     uploads,
     browser: createBrowserRoutes(workspace.link),
