@@ -1,4 +1,5 @@
 <script lang="ts">
+	import VoiceActivity from './voice-activity.svelte';
 	import Mic from '@lucide/svelte/icons/mic';
 	import MicOff from '@lucide/svelte/icons/mic-off';
 	import PhoneOff from '@lucide/svelte/icons/phone-off';
@@ -10,6 +11,7 @@
 	let {
 		state,
 		muted,
+		micLevel = 0,
 		agentWorking,
 		error,
 		onmute,
@@ -25,6 +27,7 @@
 	}: {
 		state: 'idle' | 'connecting' | 'listening' | 'speaking';
 		muted: boolean;
+		micLevel?: number;
 		agentWorking: boolean;
 		error: string | null;
 		onmute: () => void;
@@ -64,6 +67,7 @@
 				aria-label={status.review ? 'Review voice request in chat' : 'Voice call details'}
 				onclick={status.review ? onreview : ondetails}
 			>
+				<VoiceActivity level={micLevel} {muted} />
 				<span class="min-w-0 flex-1">
 					<span role="status" class="block truncate text-sm font-medium">{status.label}</span>
 					<span class="block truncate text-xs font-normal text-muted-foreground"

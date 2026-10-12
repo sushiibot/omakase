@@ -212,6 +212,8 @@ export interface SurfaceAdapter<M extends InboundMessage = InboundMessage, H ext
   turnStarted?(origin: ChatOrigin | null, view: ProgressView): Promise<H>;
   progressUpdate(handle: H, view: ProgressView): Promise<void>;
   /** A streaming surface's live text: called per delta, unthrottled, instead of a full update. */
+  /** User-visible text only, scoped to the inbound request; never reasoning or tool arguments. */
+  speechDelta?(replyTo: string, text: string, boundary?: boolean): void;
   progressDelta?(handle: H, delta: string, view: ProgressView): Promise<void>;
   /** Edits the view into its final state, or posts the final state on its own when there is no view. */
   progressFinalize(origin: ChatOrigin | null, handle: H | null, final: ProgressFinal): Promise<void>;

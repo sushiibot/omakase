@@ -1,3 +1,5 @@
+import { ReadAloud } from './read-aloud.svelte';
+import { microphoneLevel } from './render/microphone-level';
 import type { ChatMessage, SpeechModel, VoiceModel } from './types';
 import { TurnDetector } from './render/turn-detector';
 import { voiceProvider } from './render/voice-provider';
@@ -6,6 +8,18 @@ import { voiceMessages, type VoiceTranscript } from './render/voice-messages';
 import { AudioSessionLease } from './render/audio-session';
 
 export class Voice {
+	reader = new ReadAloud();
+	micLevel = $state(0);
+	#meterAt = 0;
+	async readAloud(message: ChatMessage) {
+		if (this.state !== 'idle') return;
+		this.stopPreview();
+		await this.reader.start(message, async () => {
+			if (!this.speechModels.length) await this.load();
+			if (!this.speechConfigured) throw new Error('Speech is unavailable');
+			return { model: this.speechModel, voice: this.speechVoice, delivery: this.delivery };
+		});
+	}
 	transcripts = $state.raw<VoiceTranscript[]>([]);
 	#liveText = new LiveTranscription();
 	#captionIndex = -1;
@@ -83,7 +97,13 @@ export class Voice {
 	#previewAbort: AbortController | null = null;
 	#previewCache = new Map<string, ArrayBuffer>();
 	#preferencesLoaded = false;
-	#turnDetector = new TurnDetector();
+	turnPause = $state(800);
+	#turnDetector = new TurnDetector(800);
+	setTurnPause(ms: number) {
+		this.turnPause = ms === 1200 ? 1200 : 800;
+		this.#turnDetector = new TurnDetector(this.turnPause);
+		this.persist();
+	}
 	loading = $state(false);
 	state = $state<'idle' | 'connecting' | 'listening' | 'speaking'>('idle');
 	error = $state<string | null>(null);
@@ -137,6 +157,8 @@ export class Voice {
 				if (typeof saved?.voice === 'string') this.speechVoice = saved.voice;
 				if (typeof saved?.delivery === 'string') this.speechDelivery = saved.delivery.slice(0, 300);
 				if (typeof saved?.provider === 'string') this.provider = saved.provider;
+				this.turnPause = saved?.turnPause === 1200 ? 1200 : 800;
+				this.#turnDetector = new TurnDetector(this.turnPause);
 				if (saved?.version !== 2 && this.speechModel === 'hexgrad/kokoro-82m') {
 					this.speechModel = this.speechVoice = '';
 				}
@@ -187,7 +209,8 @@ export class Voice {
 					provider: this.provider,
 					model: this.speechModel,
 					voice: this.speechVoice,
-					delivery: this.speechDelivery
+					delivery: this.speechDelivery,
+					turnPause: this.turnPause
 				})
 			);
 		} catch {
@@ -216,6 +239,7 @@ export class Voice {
 		if (this.state === 'idle') this.#audioSession.restore();
 	}
 	async preview() {
+		this.reader.stop();
 		if (this.previewState !== 'idle') {
 			this.stopPreview();
 			return;
@@ -296,6 +320,7 @@ export class Voice {
 		this.state = 'listening';
 	}
 	#pauseMic() {
+		this.micLevel = 0;
 		this.micReady = false;
 		this.#liveText.stop();
 		this.#input?.disconnect();
@@ -339,6 +364,7 @@ export class Voice {
 		}
 	}
 	async start(conversation: string) {
+		this.reader.stop();
 		this.stopPreview();
 		if (this.state !== 'idle') return;
 		const model = this.models.find((m) => m.id === this.provider && m.configured);
@@ -417,6 +443,10 @@ export class Voice {
 				if (socket.bufferedAmount > 256 * 1024) {
 					this.#fail('Voice connection is too slow. Try again.');
 					return;
+				}
+				if (performance.now() - this.#meterAt >= 80) {
+					this.micLevel = this.muted ? 0 : microphoneLevel(new Int16Array(data), 32768);
+					this.#meterAt = performance.now();
 				}
 				const turn =
 					this.mode === 'turns' ? this.#turnDetector.push(data) : { audio: [data], commit: false };
@@ -629,6 +659,7 @@ export class Voice {
 	}
 	mute() {
 		this.muted = !this.muted;
+		this.micLevel = 0;
 		if (this.muted) this.#liveText.stop();
 		else if (this.micReady) this.#startLiveText();
 		this.#turnDetector.reset();
@@ -651,6 +682,7 @@ export class Voice {
 		this.error = message;
 	}
 	stop() {
+		this.reader.stop();
 		this.stopPreview();
 		++this.#generation;
 		this.#turnDetector.reset();

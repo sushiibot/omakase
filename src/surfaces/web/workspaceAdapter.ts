@@ -94,6 +94,14 @@ interface LiveTurn {
 }
 
 export class WebWorkspaceAdapter implements SurfaceAdapter<WebInbound, WebHandle> {
+  private readonly speechListeners = new Set<(replyTo: string, text: string, boundary?: boolean) => void>();
+  subscribeSpeech(listener: (replyTo: string, text: string, boundary?: boolean) => void): () => void {
+    this.speechListeners.add(listener);
+    return () => { this.speechListeners.delete(listener); };
+  }
+  speechDelta(replyTo: string, text: string, boundary?: boolean): void {
+    for (const listener of this.speechListeners) listener(replyTo, text, boundary);
+  }
   private readonly replyListeners = new Set<(reply: ReplyView) => void>();
   /** Voice waits for its own persisted reply, matched by replyTo, without consuming chat events. */
   subscribeReply(listener: (reply: ReplyView) => void): () => void {

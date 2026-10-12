@@ -30,6 +30,8 @@
 		speechModels = [],
 		speechModel = '',
 		speechVoice = '',
+		turnPause = 800,
+		onpause,
 		speechDelivery = '',
 		ondelivery,
 		speechConfigured = false,
@@ -68,6 +70,8 @@
 		speechModels?: SpeechModel[];
 		speechModel?: string;
 		speechVoice?: string;
+		turnPause?: number;
+		onpause?: (ms: number) => void;
 		speechDelivery?: string;
 		ondelivery?: (value: string) => void;
 		speechConfigured?: boolean;
@@ -140,6 +144,17 @@
 				Speak naturally. After a short pause, Sushii sends your turn automatically. Your chosen
 				speech model reads the reply. Tap Stop speaking to interrupt.
 			</p>
+			<label for="turn-pause" class="text-sm font-medium">Pause before sending</label>
+			<select
+				id="turn-pause"
+				class="h-12 w-full rounded-lg border bg-background px-3 text-base"
+				value={turnPause}
+				disabled={active}
+				onchange={(e) => onpause?.(Number(e.currentTarget.value))}
+			>
+				<option value={800}>Quick · 0.8 seconds</option>
+				<option value={1200}>More time · 1.2 seconds</option>
+			</select>
 			{#if speech}
 				<div class="flex flex-col gap-2">
 					<h3 class="font-medium [overflow-wrap:anywhere]">{speech.name}</h3>
@@ -184,7 +199,7 @@
 					{/if}
 					{#if speech.capabilities?.streaming}
 						<p class="text-sm text-muted-foreground">
-							Plays audio as it arrives after the agent finishes its reply.
+							Starts speaking complete phrases while the agent writes. Audio plays as it arrives.
 						</p>
 					{/if}
 					<Button

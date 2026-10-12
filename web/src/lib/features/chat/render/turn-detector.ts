@@ -1,5 +1,6 @@
 /** Local PCM endpoint detection: retain the start of speech and send after a 1.2s pause. */
 export class TurnDetector {
+	constructor(private pauseMs = 1200) {}
 	private pending: ArrayBuffer[] = [];
 	private pendingMs = 0;
 	private voicedMs = 0;
@@ -34,7 +35,7 @@ export class TurnDetector {
 		}
 		this.totalMs += ms;
 		this.silentMs = voiced ? 0 : this.silentMs + ms;
-		const commit = this.silentMs >= 1200 || this.totalMs >= 240_000;
+		const commit = this.silentMs >= this.pauseMs || this.totalMs >= 240_000;
 		if (commit) this.reset();
 		return { audio: [pcm], commit };
 	}

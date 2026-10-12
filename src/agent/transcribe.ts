@@ -29,6 +29,15 @@ export async function transcribeAudio(audio: TranscribableAudio, signal?: AbortS
   }
 }
 
+/** Captured call audio is already mono PCM16 at 16 kHz; do not decode it through ffmpeg again. */
+export async function transcribeCallAudio(audio: TranscribableAudio, signal?: AbortSignal): Promise<string | null> {
+  const combined = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(5 * 60_000)]);
+  combined.throwIfAborted();
+  const text = await uploadAudio(audio, combined);
+  combined.throwIfAborted();
+  return text;
+}
+
 /** A failed segment rejects the entire take; callers never receive an incomplete transcript. */
 export async function transcribeRecording(audio: TranscribableAudio, deps: {
   signal?: AbortSignal;

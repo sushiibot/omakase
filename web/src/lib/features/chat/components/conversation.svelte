@@ -31,6 +31,7 @@
 	import ApprovalInline from './approval-inline.svelte';
 	import type { LocationReply } from '../location';
 	import MessageActions, { type MessageAction } from './message-actions.svelte';
+	import Square from '@lucide/svelte/icons/square';
 	import { hasText } from '../render/plain-text';
 	import type { ChatMessage, Delivery, FileRef, MessagePart, PendingApproval } from '../types';
 
@@ -50,6 +51,10 @@
 		onanswer,
 		onretryhistory,
 		oncopy,
+		onspeak,
+		readingId,
+		readingState,
+		readingError,
 		onshare,
 		onbranch,
 		onstartthread,
@@ -79,6 +84,10 @@
 		onretryhistory?: () => void;
 		/** Copy under each message; without it messages have no action row. */
 		oncopy?: (message: ChatMessage) => void;
+		onspeak?: (message: ChatMessage) => void;
+		readingId?: string | null;
+		readingState?: 'idle' | 'loading' | 'playing';
+		readingError?: { id: string; message: string } | null;
 		/** Share, where the browser can. */
 		onshare?: (message: ChatMessage) => void;
 		/** Starts a thread from a reply, where threads exist. */
@@ -112,6 +121,13 @@
 		};
 		if (message.role === 'user') return [copy];
 		const out = [copy];
+		if (onspeak && !message.streaming && hasText(message))
+			out.push({
+				id: 'speak',
+				label: readingId === message.id ? 'Stop reading aloud' : 'Read aloud',
+				icon: readingId === message.id ? Square : Volume2,
+				onclick: () => onspeak(message)
+			});
 		if (onshare)
 			out.push({
 				id: 'share',
@@ -463,12 +479,18 @@
 					<MessageActions
 						{actions}
 						label={owner ? 'Actions for your message' : 'Actions for the reply'}
-						always={message.id === latestReply}
+						always={message.id === latestReply || message.id === readingId}
 						align={owner ? 'end' : 'start'}
 						pending={message.streaming}
 						beside={owner}
 					/>
 				{/if}
+				{#if readingId === message.id}<p role="status" class="text-xs text-muted-foreground">
+						{readingState === 'loading' ? 'Preparing voice…' : 'Reading aloud'}
+					</p>{/if}
+				{#if readingError?.id === message.id}<p role="alert" class="text-sm text-failed">
+						{readingError.message}
+					</p>{/if}
 			</div>
 		</li>
 	{/each}

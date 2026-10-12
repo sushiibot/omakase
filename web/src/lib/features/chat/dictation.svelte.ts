@@ -1,3 +1,4 @@
+import { microphoneLevel } from './render/microphone-level';
 import { LiveTranscription } from './render/live-transcription';
 import type { DictationState } from './types';
 
@@ -42,6 +43,9 @@ const BITS_PER_SECOND = 32_000;
 export class Dictation {
 	state = $state<DictationState>('idle');
 	seconds = $state(0);
+	micLevel = $state(0);
+	#meterContext: AudioContext | null = null;
+	#meterTimer: ReturnType<typeof setInterval> | null = null;
 	error = $state<string | null>(null);
 	partialText = $state('');
 	liveAvailable = $state(false);
@@ -155,6 +159,23 @@ export class Dictation {
 		}
 		this.seconds = 0;
 		this.state = 'recording';
+		try {
+			const context = new AudioContext();
+			this.#meterContext = context;
+			void context.resume().catch(() => {});
+			const analyser = context.createAnalyser();
+			analyser.fftSize = 512;
+			context.createMediaStreamSource(stream).connect(analyser);
+			const samples = new Float32Array(analyser.fftSize);
+			this.#meterTimer = setInterval(() => {
+				analyser.getFloatTimeDomainData(samples);
+				this.micLevel = microphoneLevel(samples);
+			}, 80);
+		} catch {
+			// Meter support is optional; recording remains available.
+			void this.#meterContext?.close();
+			this.#meterContext = null;
+		}
 		this.liveAvailable = this.#live.start((text) => {
 			if (generation === this.#generation && this.state === 'recording') this.partialText = text;
 		});
@@ -202,6 +223,11 @@ export class Dictation {
 	}
 
 	#teardown() {
+		if (this.#meterTimer) clearInterval(this.#meterTimer);
+		this.#meterTimer = null;
+		void this.#meterContext?.close();
+		this.#meterContext = null;
+		this.micLevel = 0;
 		this.#live.stop();
 		document.removeEventListener('visibilitychange', this.#onhidden);
 		if (this.#timer) clearInterval(this.#timer);

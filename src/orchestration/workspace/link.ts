@@ -1001,6 +1001,11 @@ export class WorkspaceLink {
         if (turn) this.finishTurn(turn, ev.aborted ? "stopped" : "done");
         return;
       }
+      case "speech_delta": {
+        const target = this.tryTarget(this.turns.get(p.turnId), origin);
+        target?.adapter.speechDelta?.(ev.replyTo, ev.text, ev.boundary);
+        return;
+      }
       case "text_delta": {
         const existing = this.turns.get(p.turnId);
         const target = this.tryTarget(existing, origin);

@@ -6,6 +6,13 @@ import type { WebThreads } from "../threadRoutes.ts";
 test("voice uses a valid durable chat ID and waits for the matching agent reply", async () => {
   let listener: (reply: any) => void = () => {};
   let unsubscribed = false;
+  let speechListener: (
+    id: string,
+    text: string,
+    boundary?: boolean,
+  ) => void = () => {};
+  let speechUnsubscribed = false;
+  const spoken: string[] = [];
   const links: { userId: string; assistantId?: string }[] = [];
   const actor = mintWebActor("owner@example.com");
   const threads = {
@@ -14,6 +21,12 @@ test("voice uses a valid durable chat ID and waits for the matching agent reply"
       return {
         adapter: {
           openTurns: () => [],
+          subscribeSpeech: (next: typeof speechListener) => {
+            speechListener = next;
+            return () => {
+              speechUnsubscribed = true;
+            };
+          },
           subscribeReply: (next: typeof listener) => {
             listener = next;
             return () => {
@@ -34,6 +47,8 @@ test("voice uses a valid durable chat ID and waits for the matching agent reply"
             expect(body.text).toBe("check my calendar");
             expect(body.voice).toBe(true);
             expect(links).toEqual([{ userId: body.clientId }]);
+            speechListener("other", "Unrelated reply.");
+            speechListener(body.clientId, "Your calendar is clear.");
             listener({ kind: "reply", replyTo: "other", text: "unrelated" });
             listener({
               kind: "reply",
@@ -54,9 +69,12 @@ test("voice uses a valid durable chat ID and waits for the matching agent reply"
       "topic",
       new AbortController().signal,
       (link) => links.push(link),
+      (text) => spoken.push(text),
     ),
   ).toBe("Your calendar is clear.");
   expect(unsubscribed).toBe(true);
+  expect(speechUnsubscribed).toBe(true);
+  expect(spoken).toEqual(["Your calendar is clear."]);
   expect(links).toEqual([
     { userId: links[0]!.userId },
     { userId: links[0]!.userId, assistantId: "calendar-turn" },

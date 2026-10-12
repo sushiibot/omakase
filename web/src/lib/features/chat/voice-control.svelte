@@ -84,6 +84,8 @@
 		speechModels={voice.speechModels}
 		speechModel={voice.speechModel}
 		speechVoice={voice.speechVoice}
+		turnPause={voice.turnPause}
+		onpause={(ms) => voice.setTurnPause(ms)}
 		speechDelivery={voice.speechDelivery}
 		ondelivery={(value) => voice.setDelivery(value)}
 		speechConfigured={voice.speechConfigured}

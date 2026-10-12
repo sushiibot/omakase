@@ -62,6 +62,10 @@
 		onpickmodel,
 		onmodelrole,
 		onmodelquery,
+		onspeak,
+		readingId,
+		readingState,
+		readingError,
 		dictation = null,
 		ondictate,
 		ondictatesend,
@@ -156,6 +160,10 @@
 		onmodelrole?: (role: 'main' | 'fallback') => void;
 		onmodelquery?: (query: string) => void;
 		/** Speech to text in the composer; null hides the mic. */
+		onspeak?: ComponentProps<typeof Conversation>['onspeak'];
+		readingId?: string | null;
+		readingState?: 'idle' | 'loading' | 'playing';
+		readingError?: { id: string; message: string } | null;
 		dictation?: ComponentProps<typeof Composer>['dictation'];
 		ondictate?: () => void;
 		ondictatesend?: () => void;
@@ -807,6 +815,10 @@
 				ondeletesend={(id) => ondeletesend?.(id)}
 				onanswer={(askId, answer) => onanswer?.(askId, answer)}
 				onretryhistory={() => onretryhistory?.()}
+				{onspeak}
+				{readingId}
+				{readingState}
+				{readingError}
 				oncopy={copyMessage}
 				{onbranch}
 				{onstartthread}

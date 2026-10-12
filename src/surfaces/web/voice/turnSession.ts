@@ -1,5 +1,6 @@
+import { Utterances } from "./utterances.ts";
 import type { ServerWebSocket } from "bun";
-import { transcribeAudio } from "../../../agent/transcribe.ts";
+import { transcribeCallAudio } from "../../../agent/transcribe.ts";
 import { isSilentPcm, pcmWav } from "../../../agent/transcriptionAudio.ts";
 import type { SurfaceActor } from "../../../orchestration/workspace/surface.ts";
 import {
@@ -40,10 +41,11 @@ export class TurnVoiceSession {
     private conversation: string,
     private ask: AskAgent,
     private onclose: () => void,
-    private transcribe = transcribeAudio,
+    private transcribe = transcribeCallAudio,
     private speak = synthesizeSpeech,
     private options: SpeechOptions = {},
     private stream = streamSpeech,
+    private readOnly = false,
   ) {}
   open(client: ServerWebSocket<VoiceSocketData>) {
     if (this.closed) return client.close(1000);
@@ -61,7 +63,8 @@ export class TurnVoiceSession {
   }
   message(data: string | Buffer) {
     if (this.closed) return;
-    if (data.length > 32000) return this.fail("Voice packet was too large.");
+    if (data.length > (this.readOnly ? 150000 : 32000))
+      return this.fail("Voice packet was too large.");
     try {
       const m = JSON.parse(data.toString());
       if (m.type === "playback_done") {
@@ -76,6 +79,18 @@ export class TurnVoiceSession {
         // Accepted work remains in chat; interrupt only stops speech playback.
         this.playback?.();
         this.abort.abort();
+        return;
+      }
+      if (this.readOnly) {
+        if (
+          m.type !== "speak" ||
+          this.busy ||
+          typeof m.text !== "string" ||
+          !m.text.trim() ||
+          m.text.length > 24000
+        )
+          return this.fail("Invalid read-aloud request.");
+        void this.read(m.text);
         return;
       }
       if (m.type === "clear") {
@@ -115,6 +130,7 @@ export class TurnVoiceSession {
     this.chunks = [];
     this.bytes = 0;
     this.busy = true;
+    this.previousSpeech = "";
     this.abort = new AbortController();
     const signal = this.abort.signal;
     let stage = "transcription";
@@ -141,12 +157,17 @@ export class TurnVoiceSession {
       stage = "agent";
       this.emit({ type: "phase", state: "working" });
       this.emit({ type: "agent", state: "working" });
+      const utterances = new Utterances(async (phrase) => {
+        this.emit({ type: "phase", state: "synthesizing" });
+        await this.playText(phrase, signal);
+      }, signal);
       const result = await this.ask(
         text,
         this.actor,
         this.conversation,
         signal,
         (link) => this.emit({ type: "linked", ...link }),
+        (delta, boundary) => utterances.push(delta, boundary),
       );
       if (this.closed || signal.aborted) return;
       this.emit({
@@ -157,54 +178,8 @@ export class TurnVoiceSession {
         replace: true,
       });
       this.emit({ type: "agent", state: "done" });
-      // Small utterances bound provider limits and avoid downloading a whole long reply before playback.
-      const spoken = result.slice(0, 24000);
       stage = "speech";
-      this.emit({ type: "phase", state: "synthesizing" });
-      for (let at = 0; at < spoken.length;) {
-        signal.throwIfAborted();
-        let end = Math.min(at + 1000, spoken.length);
-        if (end < spoken.length) {
-          const boundary = spoken.lastIndexOf(" ", end);
-          if (boundary > at + 500) end = boundary;
-        }
-        if (speechCapabilities(this.model.id).streaming) {
-          await this.playStream(spoken.slice(at, end), signal, {
-            ...this.options,
-            previousText: spoken.slice(Math.max(0, at - 500), at),
-            nextText: spoken.slice(end, end + 500),
-          });
-          at = end;
-          continue;
-        }
-        const audio = await this.speak(
-          this.key,
-          this.model,
-          this.voice,
-          spoken.slice(at, end),
-          signal,
-          undefined,
-          {
-            ...this.options,
-            previousText: spoken.slice(Math.max(0, at - 500), at),
-            nextText: spoken.slice(end, end + 500),
-          },
-        );
-        if (this.closed || signal.aborted) return;
-        await new Promise<void>((resolve) => {
-          const timer = setTimeout(() => {
-            this.playback = null;
-            resolve();
-          }, 120_000);
-          this.playback = () => {
-            clearTimeout(timer);
-            this.playback = null;
-            resolve();
-          };
-          this.emit({ type: "audio_encoded", audio: audio.toString("base64") });
-        });
-        at = end;
-      }
+      await utterances.finish(result.slice(0, 24000));
     } catch (error) {
       if (!this.closed && !signal.aborted) {
         getLogger("web/voice").warn(
@@ -233,6 +208,73 @@ export class TurnVoiceSession {
       this.busy = false;
       this.emit({ type: "agent", state: "done" });
       this.emit({ type: "turn_done" });
+    }
+  }
+  private previousSpeech = "";
+  private async playText(spoken: string, signal: AbortSignal) {
+    for (let at = 0; at < spoken.length;) {
+      signal.throwIfAborted();
+      let end = Math.min(at + 1000, spoken.length);
+      if (end < spoken.length) {
+        const boundary = spoken.lastIndexOf(" ", end);
+        if (boundary > at + 500) end = boundary;
+      }
+      if (speechCapabilities(this.model.id).streaming) {
+        await this.playStream(spoken.slice(at, end), signal, {
+          ...this.options,
+          previousText: (this.previousSpeech + spoken.slice(0, at)).slice(-500),
+          nextText: spoken.slice(end, end + 500),
+        });
+        at = end;
+        continue;
+      }
+      const audio = await this.speak(
+        this.key,
+        this.model,
+        this.voice,
+        spoken.slice(at, end),
+        signal,
+        undefined,
+        {
+          ...this.options,
+          previousText: (this.previousSpeech + spoken.slice(0, at)).slice(-500),
+          nextText: spoken.slice(end, end + 500),
+        },
+      );
+      if (this.closed || signal.aborted) return;
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(() => {
+          this.playback = null;
+          resolve();
+        }, 120_000);
+        this.playback = () => {
+          clearTimeout(timer);
+          this.playback = null;
+          resolve();
+        };
+        this.emit({ type: "audio_encoded", audio: audio.toString("base64") });
+      });
+      at = end;
+    }
+    this.previousSpeech = (this.previousSpeech + " " + spoken).slice(-500);
+  }
+  private async read(text: string) {
+    this.busy = true;
+    try {
+      this.emit({ type: "phase", state: "synthesizing" });
+      await this.playText(text, this.abort.signal);
+      if (!this.abort.signal.aborted) this.emit({ type: "turn_done" });
+    } catch (error) {
+      if (!this.abort.signal.aborted)
+        this.emit({
+          type: "error",
+          message:
+            error instanceof SpeechError
+              ? error.message
+              : "Couldn't read this reply. Try another voice.",
+        });
+    } finally {
+      this.close();
     }
   }
   private async playStream(

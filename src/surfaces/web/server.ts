@@ -310,7 +310,9 @@ export async function startWebServer(config: WebConfig, db: Database, opts: WebS
       return upgraded ? undefined : response;
     },
     websocket: {
-      maxPayloadLength: 32000,
+      // Read-aloud accepts up to 24,000 characters (including JSON escapes).
+      // Audio relays retain their stricter per-message limits.
+      maxPayloadLength: 150000,
       backpressureLimit: 1024 * 1024,
       closeOnBackpressureLimit: true,
       open: (socket) => "voice" in socket.data ? socket.data.voice.open(socket) : socket.data.browser.open(socket),

@@ -3162,3 +3162,19 @@ describe("durable owner request lifecycle", () => {
   expect(formatUserText(base, NOW)).not.toContain("Live voice conversation");
   expect(formatUserText({ ...base, voice: true, origin: { surface: "discord", conversationId: "main" } }, NOW)).not.toContain("Live voice conversation");
  });
+
+test("voice streams user-visible text with its request ID, excluding reasoning and tool payloads", async () => {
+  const { host, sessions, transport } = setup();
+  await host.start();
+  await host.handleMessage({ ...msg("voice-1", "Hello"), voice: true, origin: { surface: "web", conversationId: "main" } });
+  sessions[0].emit({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "private reasoning" } });
+  sessions[0].emit({ type: "message_update", assistantMessageEvent: { type: "toolcall_delta", delta: "private tool args" } });
+  sessions[0].emit({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Hello there. " } });
+  expect(transport.events().filter((e) => e.type === "speech_delta")).toEqual([
+    { type: "speech_delta", replyTo: "voice-1", text: "Hello there. " },
+  ]);
+  sessions[0].finish("Hello there.");
+  await tick();
+  expect(transport.events().filter((e) => e.type === "speech_delta").at(-1)).toEqual({ type: "speech_delta", replyTo: "voice-1", text: "", boundary: true });
+  await host.dispose();
+});

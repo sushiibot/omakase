@@ -166,10 +166,11 @@ export function createVoiceRoutes(
       )
         return json({ error: "forbidden" }, 403);
       const url = new URL(req.url);
-      const turnMode = url.searchParams.get("mode") === "turns";
+      const readOnly = url.searchParams.get("mode") === "read";
+      const turnMode = readOnly || url.searchParams.get("mode") === "turns";
       if (
         url.searchParams.has("mode") &&
-        !["turns", "live"].includes(url.searchParams.get("mode")!)
+        !["turns", "live", "read"].includes(url.searchParams.get("mode")!)
       )
         return json({ error: "Unknown voice mode" }, 400);
       const provider = configs.find(
@@ -231,6 +232,8 @@ export function createVoiceRoutes(
             undefined,
             speak,
             { delivery },
+            undefined,
+            readOnly,
           )
         : new VoiceSession(
             provider!,

@@ -229,6 +229,7 @@
 		oninterrupt={() => voice.interrupt()}
 		state={voice.state}
 		muted={voice.muted}
+		micLevel={voice.micLevel}
 		seconds={voice.seconds}
 		agentWorking={voice.agentWorking}
 		error={voice.error}
@@ -300,10 +301,20 @@
 			dictation={{
 				state: dictation.state,
 				seconds: dictation.seconds,
+				micLevel: dictation.micLevel,
 				error: dictation.error,
 				disabled: voiceActive
 			}}
-			ondictate={() => dictation.toggle()}
+			onspeak={voice.state === 'idle' && dictation.state === 'idle'
+				? (m) => void voice.readAloud(m)
+				: undefined}
+			readingId={voice.reader.messageId}
+			readingState={voice.reader.state}
+			readingError={voice.reader.error}
+			ondictate={() => {
+				voice.reader.stop();
+				dictation.toggle();
+			}}
 			ondictatesend={() => dictation.sendNow()}
 			voice={voiceControls}
 			{voiceStatus}

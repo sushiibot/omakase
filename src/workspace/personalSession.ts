@@ -229,6 +229,7 @@ interface OpenRun {
   origin: ChatOrigin | undefined;
   /** The prompting message; the reply's replyTo when the latest steer came from another conversation. */
   promptMessageId: string | undefined;
+  voice?: boolean;
   acc: RunAccumulator;
   deltaBuffer: string;
   deltaTimer: ReturnType<typeof setTimeout> | null;
@@ -242,6 +243,7 @@ interface OpenRun {
 
 /** A user message handed to Pi that it hasn't yet turned into a user message_start. */
 interface PendingInbound {
+  voice?: boolean;
   messageId: string;
   text: string;
   origin: ChatOrigin | undefined;
@@ -553,7 +555,7 @@ export class PersonalSession {
     const attachments = this.attachmentsFor(params);
     const mode = await this.enqueue(async () => {
       const { images, saved } = await attachments;
-      return this.promptOrSteer(id, formatUserText(params, receivedAt, saved), params.origin, undefined, images);
+      return this.promptOrSteer(id, formatUserText(params, receivedAt, saved), params.origin, undefined, images, params.voice);
     });
     this.inbox.add(id);
     await this.inbox.flush();
@@ -1117,7 +1119,7 @@ export class PersonalSession {
   }
 
   // Pi marks the run active only after async preflight, so gate the queue on preflightResult or a racing idle prompt starts a second run.
-  private async promptOrSteer(messageId: string, text: string, origin: ChatOrigin | undefined, wakeId?: string, images?: ImageContent[]): Promise<"prompt" | "steer"> {
+  private async promptOrSteer(messageId: string, text: string, origin: ChatOrigin | undefined, wakeId?: string, images?: ImageContent[], voice = false): Promise<"prompt" | "steer"> {
     let steered: { text: string; images: ImageContent[] } | undefined;
     let retriedCompaction = false;
     for (;;) {
@@ -1139,7 +1141,7 @@ export class PersonalSession {
       const input = mode === "steer" && steered ? steered : { text, images };
       // Registered before prompt(): Pi can drain a steer before it calls preflightResult.
       // The text is exactly what Pi queues, so a stranded steer is found again by it.
-      const pending: PendingInbound = { messageId, text: input.text, origin, ...(wakeId ? { wakeId } : {}), ...(input.images ? { images: input.images } : {}) };
+      const pending: PendingInbound = { voice, messageId, text: input.text, origin, ...(wakeId ? { wakeId } : {}), ...(input.images ? { images: input.images } : {}) };
       await this.inbox.prepare(pending);
       const wake = wakeId ? this.wakes.get(wakeId) : undefined;
       if (wake?.isPending && !wake.isPending()) {
@@ -1213,7 +1215,7 @@ export class PersonalSession {
       log.info({ messageId }, "re-prompting a steer stranded at settle");
       // A chat/new queued ahead of it drops it, like any other steer queued on the old conversation.
       void this.enqueue(async () => {
-        if (gen === this.generation) await this.promptOrSteer(messageId ?? "", text, stranded?.origin, undefined, stranded?.images);
+        if (gen === this.generation) await this.promptOrSteer(messageId ?? "", text, stranded?.origin, undefined, stranded?.images, stranded?.voice);
         else {
           this.inbox.consume([messageId ?? ""]);
           await this.inbox.flush();
@@ -1357,6 +1359,7 @@ export class PersonalSession {
         turnId: this.newId(),
         origin: prompt?.origin ?? this.lastOrigin,
         promptMessageId: prompt?.messageId || undefined,
+        voice: prompt?.voice,
         acc: newRunAccumulator(),
         deltaBuffer: "",
         deltaTimer: null,
@@ -1375,6 +1378,12 @@ export class PersonalSession {
     }
     const run = this.run;
     if (!run) return;
+    if (run.voice && run.promptMessageId && run.origin?.surface === "web") {
+      if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta")
+        this.emit({ type: "speech_delta", replyTo: run.promptMessageId, text: event.assistantMessageEvent.delta });
+      if (event.type === "message_end" && event.message.role === "assistant")
+        this.emit({ type: "speech_delta", replyTo: run.promptMessageId, text: "", boundary: true });
+    }
     for (const ev of mapSessionEvent(event, run.acc)) {
       if (ev.type === "text_delta") this.bufferDelta(run, ev.text);
       else {
@@ -1417,6 +1426,7 @@ export class PersonalSession {
     if (steer && !steer.wakeId) {
       run.origin = steer.origin ?? run.origin;
       run.promptMessageId = steer.messageId || undefined;
+      run.voice = steer.voice;
     }
     this.emitFor(run, { type: "turn_start" });
   }
@@ -1813,7 +1823,7 @@ export function formatUserText(
 ): string {
   const header = messageHeader(params.messageId, receivedAt, { surface: params.origin?.surface, voice: params.voice === true });
   const spoken = params.voice && params.origin?.surface === "web"
-    ? "[Live voice conversation: For this reply only, use one or two short spoken sentences, usually under 40 words. Lead with the answer or result. Ask one question at a time. Avoid markdown, lists, URLs and reading tool logs aloud. Give more detail only when requested or needed for safety. Never claim work is complete without confirmation.]\n"
+    ? "[Live voice conversation: All user-visible text in this turn is spoken aloud as it streams, including progress updates. Keep tool arguments and private reasoning out of that text. For this reply only, use one or two short spoken sentences, usually under 40 words. Lead with the answer or result. Ask one question at a time. Avoid markdown, lists, URLs and reading tool logs aloud. Give more detail only when requested or needed for safety. Never claim work is complete without confirmation.]\n"
     : "";
   let text = header ? `${header}\n${spoken}${params.text}` : `${spoken}${params.text}`;
   // Only the host's own flush prompts may start with the marker; flushRanThisCycle trusts it.

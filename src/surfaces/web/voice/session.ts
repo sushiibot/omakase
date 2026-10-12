@@ -10,6 +10,7 @@ export type AskAgent = (
   conversation: string,
   signal: AbortSignal,
   onlink?: (link: { userId: string; assistantId?: string }) => void,
+  ontext?: (text: string, boundary?: boolean) => void,
 ) => Promise<string>;
 export const VOICE_SESSION_MS = 15 * 60 * 1000;
 export const VOICE_BUFFER_MAX = 256 * 1024;

@@ -274,3 +274,116 @@ test("interrupt cancels a stream blocked on playback and the next turn cannot re
   await Bun.sleep(10);
   expect(released).toBe(2);
 });
+
+test("speech starts before the agent resolves and final delivery does not replay streamed text", async () => {
+  let finish!: (text: string) => void;
+  const reply = new Promise<string>((resolve) => {
+    finish = resolve;
+  });
+  const spoken: string[] = [];
+  const events: any[] = [];
+  const model = {
+    id: "new/voice",
+    name: "Voice",
+    description: "",
+    voices: [],
+    curated: null,
+    price: { unit: "characters" as const, input: 0, output: 0 },
+  };
+  const session = new TurnVoiceSession(
+    model,
+    "",
+    "key",
+    mintWebActor("owner@example.com"),
+    "main",
+    async (_text, _actor, _conversation, _signal, _link, ontext) => {
+      ontext?.("The first sentence. ");
+      return reply;
+    },
+    () => {},
+    async () => "Hello",
+    async (_key, _model, _voice, text) => {
+      spoken.push(text);
+      return Buffer.from("mp3");
+    },
+  );
+  session.open({
+    send: (raw: string) => {
+      const event = JSON.parse(raw);
+      events.push(event);
+      if (event.type === "audio_encoded")
+        queueMicrotask(() => session.message('{"type":"playback_idle"}'));
+    },
+    close() {},
+    getBufferedAmount: () => 0,
+  } as unknown as ServerWebSocket<VoiceSocketData>);
+  session.message(
+    JSON.stringify({
+      type: "audio",
+      audio: Buffer.alloc(320, 4).toString("base64"),
+    }),
+  );
+  session.message('{"type":"commit"}');
+  await Bun.sleep(10);
+  expect(spoken).toEqual(["The first sentence."]);
+  expect(events.some((e) => e.type === "turn_done")).toBe(false);
+  finish("The first sentence.");
+  await Bun.sleep(10);
+  expect(spoken).toEqual(["The first sentence."]);
+  expect(events.at(-1).type).toBe("turn_done");
+  session.close();
+});
+
+test("read-aloud uses the same settings and playback protocol without transcription or agent calls", async () => {
+  const events: any[] = [];
+  const model = {
+    id: "new/voice",
+    name: "Voice",
+    description: "",
+    voices: ["warm"],
+    curated: null,
+    price: { unit: "characters" as const, input: 0, output: 0 },
+  };
+  let closed = false;
+  const session = new TurnVoiceSession(
+    model,
+    "warm",
+    "key",
+    mintWebActor("owner@example.com"),
+    "main",
+    async () => {
+      throw new Error("must not ask");
+    },
+    () => {
+      closed = true;
+    },
+    async () => {
+      throw new Error("must not transcribe");
+    },
+    async (_key, selected, voice, text, _signal, _fetch, options) => {
+      expect(selected).toBe(model);
+      expect(voice).toBe("warm");
+      expect(text).toBe("Read this reply.");
+      expect(options?.delivery).toBe("gentle");
+      return Buffer.from("mp3");
+    },
+    { delivery: "gentle" },
+    undefined,
+    true,
+  );
+  session.open({
+    send: (raw: string) => {
+      events.push(JSON.parse(raw));
+    },
+    close() {},
+    getBufferedAmount: () => 0,
+  } as unknown as ServerWebSocket<VoiceSocketData>);
+  session.message(JSON.stringify({ type: "speak", text: "Read this reply." }));
+  await Bun.sleep(10);
+  expect(events.some((e) => e.type === "audio_encoded")).toBe(true);
+  expect(closed).toBe(false);
+  session.message('{"type":"playback_idle"}');
+  await Bun.sleep(10);
+  expect(closed).toBe(true);
+  expect(events.at(-1).type).toBe("turn_done");
+});

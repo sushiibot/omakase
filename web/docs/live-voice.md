@@ -29,14 +29,19 @@ Dictate remains available outside calls. During a call, the voice session owns t
 ## Talk in turns
 
 Talk in turns is the default mode on a new device.
-Speak naturally. A 1.2-second pause sends the turn automatically.
+Speak naturally. A 0.8-second pause sends the turn automatically.
+Select **More time** under **Pause before sending** for a 1.2-second pause.
 **Send now** remains available to submit sooner.
 Local audio detection retains 400 ms before speech and ignores silence and brief clicks.
 It uses audio level thresholds, so noisy rooms and quiet voices can affect detection.
 Browser speech recognition supplies live preview text when available.
 The server transcribes the recording and sends the final text to the existing conversation agent.
+Call audio is already PCM, so it uploads as WAV without another ffmpeg decode.
+Transcription still waits for the pause; this endpoint does not provide live transcription.
 A browser without live recognition still shows the final transcript after the pause.
-The selected speech model reads the reply through OpenRouter.
+The selected speech model reads complete phrases through OpenRouter while the agent generates text.
+This includes brief progress updates. Reasoning and tool payloads are never sent to speech.
+The final saved reply is not read twice. Older workspaces without speech events use the completed reply.
 Tools and approvals stay in the chat.
 Select **Stop speaking** to stop the spoken reply.
 The next turn starts after the reply ends or you stop speech.
@@ -64,7 +69,7 @@ Prices retain their billing units: characters, text/audio tokens, or generated s
 Provider rates and temporary offers can change the charge.
 Transcription and agent usage add costs.
 The catalog refreshes after five minutes and shows its last update time.
-The selected mode, model, voice, and delivery directions stay on this device.
+The selected mode, model, voice, pause, and delivery directions stay on this device.
 
 Speech uses `OPENROUTER_API_KEY`, or the existing `OPENAI_API_KEY` when the dedicated key is absent.
 Speech requests use OpenRouter's `/api/v1/audio/speech` endpoint.
@@ -108,9 +113,10 @@ ElevenLabs requests also include neighboring text to preserve delivery across ut
 The server derives these capabilities from the model and the OpenRouter route.
 The catalog's general `supported_parameters` list does not describe these speech capabilities reliably.
 
-The agent still finishes its reply before speech synthesis starts.
-Its progress stream contains commentary and does not identify confirmed reply segments for early speech.
-OpenRouter accepts complete text requests and returns audio streams. This integration does not provide incremental text input.
+Voice turns explicitly request speech-ready text, including any progress updates.
+Request-scoped speech events carry only user-visible text to a bounded phrase queue.
+OpenRouter receives each complete phrase as a separate request and returns its audio.
+This overlaps agent generation with speech; it does not send incremental text into one synthesis request.
 A direct ElevenLabs Text to Dialogue connection can accept incremental text, but requires separate integration and credentials.
 That connection is not necessary for the delivery controls and streaming playback above.
 Custom account voices also need OpenRouter BYOK or a direct provider account.
@@ -121,6 +127,22 @@ Sources checked on October 12, 2026:
 Protocol tests cover PCM framing, format errors, playback limits, cancellation, and preview caching.
 Short live OpenRouter requests confirmed the PCM format for Eleven v4 Turbo and Gemini Flash Lite TTS.
 These requests verify the transport, not subjective voice quality or a latency guarantee.
+
+## Read aloud and microphone level
+
+Select **Read aloud** under a completed assistant message outside calls.
+It uses the speech model, voice and delivery selected in **Voice chat**, without requesting microphone access.
+Markdown is converted to plain text. Tool activity is excluded.
+**Stop reading aloud** cancels generation and playback. Starting another reply replaces the current playback.
+Calls, previews, dictation, navigation and a hidden page stop read-aloud.
+Replies longer than 24,000 characters show an error instead of being cut off.
+Loading and playback status appear under the message. Errors remain beside that reply so you can retry.
+Read-aloud uses the same owner-only WebSocket, synthesis and playback acknowledgments as turn calls.
+A call or read-aloud session occupies the single speech-session slot.
+
+The call bar and dictation timer show a microphone level meter from actual captured samples.
+The meter uses logarithmic RMS volume; it does not claim to recognize words.
+Muted or released microphones show zero. The meter adds no second microphone capture.
 
 ## Recorded speech
 

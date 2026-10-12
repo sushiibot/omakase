@@ -131,6 +131,16 @@ test('PCM streams in both directions, interruption stops playback, mute and end 
 			.getByRole('button', { name: 'Mute microphone' })
 	).toBeEnabled();
 	await expect.poll(() => packets.some((m) => m.type === 'audio')).toBe(true);
+	await expect
+		.poll(async () =>
+			Number(
+				await page
+					.getByRole('meter', { name: 'Microphone level', exact: true })
+					.getAttribute('aria-valuenow')
+			)
+		)
+		.toBeGreaterThan(0);
+	await page.screenshot({ path: '/tmp/sushii-microphone-meter.png' });
 	connection.send(
 		JSON.stringify({
 			type: 'audio',
@@ -716,4 +726,120 @@ test('expressive delivery follows previews and calls; streaming playback acknowl
 		.poll(() => packets.some((p) => p.type === 'playback_done' && p.id === 37))
 		.toBe(true);
 	await page.getByRole('button', { name: 'End call', exact: true }).click();
+});
+
+test('read aloud uses saved speech settings without a microphone and supports stop, failure and retry', async ({
+	page,
+	context
+}) => {
+	await withVoice(context);
+	await context.route('**/api/chat/history**', (route) =>
+		route.fulfill({
+			json: {
+				items: [
+					{
+						type: 'assistant',
+						id: 'read-reply',
+						at: new Date().toISOString(),
+						text: 'Your **calendar** is clear.\n\nEnjoy your afternoon.',
+						attachments: [],
+						tools: [],
+						files: []
+					}
+				],
+				before: null
+			}
+		})
+	);
+	await context.route('**/api/voice/speech-models', (route) =>
+		route.fulfill({
+			json: {
+				configured: true,
+				updatedAt: new Date().toISOString(),
+				models: [
+					{
+						id: 'elevenlabs/eleven-v4-turbo',
+						name: 'Eleven v4 Turbo',
+						voices: ['george'],
+						description: '',
+						curated: 'Premium',
+						price: { unit: 'characters', input: 0.0001, output: 0 },
+						capabilities: { expression: 'tags', streaming: true }
+					}
+				]
+			}
+		})
+	);
+	await page.addInitScript(() => {
+		localStorage.setItem(
+			'voice:preferences',
+			JSON.stringify({
+				version: 2,
+				mode: 'turns',
+				model: 'elevenlabs/eleven-v4-turbo',
+				voice: 'george',
+				delivery: 'Warm and relaxed'
+			})
+		);
+		Object.assign(window, { microphoneRequests: 0 });
+		navigator.mediaDevices.getUserMedia = async () => {
+			(window as unknown as { microphoneRequests: number }).microphoneRequests++;
+			throw new Error('Read-aloud must not request the microphone');
+		};
+	});
+	let socket: any;
+	const packets: any[] = [];
+	let connections = 0;
+	await page.routeWebSocket('**/api/voice/connect**', (ws) => {
+		socket = ws;
+		connections++;
+		const query = new URL(ws.url()).searchParams;
+		expect(query.get('mode')).toBe('read');
+		expect(query.get('model')).toBe('elevenlabs/eleven-v4-turbo');
+		expect(query.get('voice')).toBe('george');
+		expect(query.get('delivery')).toBe('Warm and relaxed');
+		ws.onMessage((raw) => packets.push(JSON.parse(String(raw))));
+		ws.send(JSON.stringify({ type: 'ready' }));
+	});
+	await page.goto('/chat');
+	await page.getByRole('button', { name: 'Read aloud', exact: true }).click();
+	await expect.poll(() => packets.filter((p) => p.type === 'speak').length).toBe(1);
+	expect(packets[0].text).toBe('Your calendar is clear.\n\nEnjoy your afternoon.');
+	await expect(page.getByText('Preparing voice…', { exact: true })).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Voice call', exact: true })).toHaveCount(0);
+	socket.send(
+		JSON.stringify({
+			type: 'audio',
+			audio: Buffer.alloc(4800).toString('base64'),
+			sampleRate: 24000,
+			playbackId: 1
+		})
+	);
+	await expect.poll(() => packets.some((p) => p.type === 'playback_done' && p.id === 1)).toBe(true);
+	await expect(page.getByText('Reading aloud', { exact: true })).toBeVisible();
+	await checkScreen(page);
+	await page.screenshot({ path: '/tmp/sushii-read-aloud-mobile.png' });
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await expect(await axe(page)).toEqual([]);
+	await page.screenshot({ path: '/tmp/sushii-read-aloud-desktop.png' });
+	socket.send(JSON.stringify({ type: 'turn_done' }));
+	await expect(page.getByRole('button', { name: 'Read aloud', exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Read aloud', exact: true }).click();
+	await expect.poll(() => connections).toBe(2);
+	await page.getByRole('button', { name: 'Stop reading aloud', exact: true }).click();
+	await expect(page.getByText('Preparing voice…', { exact: true })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Read aloud', exact: true }).click();
+	await expect.poll(() => connections).toBe(3);
+	socket.send(
+		JSON.stringify({ type: 'error', message: 'Voice is unavailable. Try another model.' })
+	);
+	await expect(page.getByRole('alert')).toContainText('Voice is unavailable');
+	await page.getByRole('button', { name: 'Read aloud', exact: true }).click();
+	await expect.poll(() => connections).toBe(4);
+	await page.getByRole('button', { name: 'Stop reading aloud', exact: true }).click();
+	expect(
+		await page.evaluate(
+			() => (window as unknown as { microphoneRequests: number }).microphoneRequests
+		)
+	).toBe(0);
 });

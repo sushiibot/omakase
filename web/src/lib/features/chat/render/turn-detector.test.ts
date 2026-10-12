@@ -23,3 +23,12 @@ test('reset discards muted or previous-turn audio and long speech commits before
 	for (let i = 0; i < 12000; i++) if (detector.push(packet(1000)).commit) commits++;
 	expect(commits).toBe(1);
 });
+
+test('quick pause commits at 800ms but speaking again before then keeps the turn open', () => {
+	const detector = new TurnDetector(800);
+	for (let i = 0; i < 6; i++) detector.push(packet(1000));
+	for (let i = 0; i < 39; i++) expect(detector.push(packet()).commit).toBe(false);
+	expect(detector.push(packet(1000)).commit).toBe(false);
+	for (let i = 0; i < 39; i++) expect(detector.push(packet()).commit).toBe(false);
+	expect(detector.push(packet()).commit).toBe(true);
+});

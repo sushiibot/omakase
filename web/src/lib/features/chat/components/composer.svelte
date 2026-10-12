@@ -1,4 +1,5 @@
 <script lang="ts">
+	import VoiceActivity from './voice-activity.svelte';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import Square from '@lucide/svelte/icons/square';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
@@ -65,6 +66,7 @@
 		dictation?: {
 			state: DictationState;
 			seconds: number;
+			micLevel?: number;
 			error: string | null;
 			disabled?: boolean;
 		} | null;
@@ -369,10 +371,7 @@
 						<span
 							class="flex items-center gap-1.5 px-1 text-meta text-muted-foreground tabular-nums"
 						>
-							<span
-								class="size-2 rounded-full bg-failed motion-safe:animate-pulse"
-								aria-hidden="true"
-							></span>{clock(d.seconds)}
+							<VoiceActivity level={d.micLevel ?? 0} />{clock(d.seconds)}
 						</span>
 					{/if}
 					{@render round({
