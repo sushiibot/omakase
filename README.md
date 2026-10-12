@@ -187,7 +187,7 @@ WAL mode. Messages older than 30 days purged daily.
 ## Personal agent workspace
 
 The owner's web chat (agent.sushii.bot) goes to a long-lived Pi coding-agent session in its own container
-(`src/workspace/`, image tag `<sha>-workspace`, service `private-bots/sushii-agent-workspace`), not
+(`src/workspace/`, image tag `<sha>-workspace`, service `private-bots/omakase-workspace`), not
 to the in-process loop. The bot is the transport: it relays chat over a JSON-RPC WebSocket
 (`src/orchestration/workspace/`), proxies bot-side tools (Exa, Grafana, Linear, `team_config`) with
 owner approval for writes, and mints GitHub App tokens so `git`/`gh` run as `sushii-runner[bot]`.
@@ -256,9 +256,9 @@ including entries removed from the model's context by compaction. Markdown histo
 The agent reads history through these interfaces without direct database write access.
 
 Deploy: pushing to `main` builds both images, deploys the bot, then the personal gateway
-(`private-bots/sushii-agent-personal`, the bot image running `bun src/personal.ts`), then the workspace
+(`private-bots/omakase`, the bot image running `bun src/personal.ts`), then the workspace
 (CI bumps `workspace_image_tag` in sushii-ansible). The workspace connects to the personal gateway, not the bot. A manual redeploy is
-`./deploy.sh -y apps private-bots/sushii-agent-workspace`. Tunables (`WORKSPACE_MODELS`,
+`./deploy.sh -y apps private-bots/omakase-workspace`. Tunables (`WORKSPACE_MODELS`,
 `WORKSPACE_COMPACT_TOKENS`, `WORKSPACE_TASK_*`, …; defaults in `src/workspace/config.ts`) go in
 `workspace_env_overrides` there. `DM_WORKSPACE_ENABLED` on the personal gateway routes the owner's web chat to it.
 

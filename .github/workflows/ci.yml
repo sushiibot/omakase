@@ -233,7 +233,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: sushiibot/sushii-workflows/.github/workflows/deploy.yml@main # zizmor: ignore[unpinned-uses] first-party, tracked at @main by design
     with:
-      service: private-bots/sushii-agent-personal
+      service: private-bots/omakase
       image_version: ${{ needs.docker-build.outputs.image_version }}
       host: apps
     secrets:
@@ -248,7 +248,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: sushiibot/sushii-workflows/.github/workflows/deploy.yml@main # zizmor: ignore[unpinned-uses] first-party, tracked at @main by design
     with:
-      service: private-bots/sushii-agent-workspace
+      service: private-bots/omakase-workspace
       image_version: ${{ needs.docker-build-workspace.outputs.short_sha }}
       host: apps
     secrets:

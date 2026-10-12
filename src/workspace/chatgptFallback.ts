@@ -7,7 +7,7 @@ export const CHATGPT_PROVIDER = "openai";
 export const DEFAULT_COOLDOWN_MS = 60 * 60_000;
 const MAX_COOLDOWN_MS = 7 * 24 * 60 * 60_000;
 
-export const NOT_SIGNED_IN_WARNING = "ChatGPT not signed in — send `!login chatgpt` from a chat surface, or run: docker exec -it sushii_agent_workspace pi, then /login openai";
+export const NOT_SIGNED_IN_WARNING = "ChatGPT not signed in — send `!login chatgpt` from a chat surface, or run: docker exec -it omakase_workspace pi, then /login openai";
 
 export type Backend = "chatgpt" | "openrouter";
 export type FailureReason = "limit" | "unavailable" | "auth";

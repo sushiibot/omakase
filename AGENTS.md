@@ -13,7 +13,7 @@ AI agent Discord bot with guild config and OpenRouter.
 ## Web app (`web/`)
 
 Owner-only SvelteKit SPA (PWA) served by the personal gateway (`src/personal.ts`, its own process and
-compose service `private-bots/sushii-agent-personal`, own DB) at agent.sushii.bot (tailnet only). The gateway
+compose service `private-bots/omakase`, own DB) at agent.sushii.bot (tailnet only). The gateway
 also runs the workspace control plane; `src/index.ts` is the community bot only.
 Structure and rules: `web/README.md`, `web/docs/ux-guidelines.md`. Gate from `web/`: `bun run check`,
 `bun run lint` (prettier + raw-HTML, token and import-boundary checks + unit tests), `bun run build`,
@@ -31,7 +31,7 @@ When work is finalized and checks pass, commit and push to `main` without asking
 
 Auto-deploys via CI on every push to `main` (`.github/workflows/ci.yml`): `typecheck`, `test`, `web`,
 `browser-smoke` and `e2e-system` → `docker-build` / `docker-build-workspace` → `deploy`
-(`private-bots/sushii-agent` on host `apps`) → `deploy-personal` (`private-bots/sushii-agent-personal`, same
-image, `bun src/personal.ts`) → `deploy-workspace` (`private-bots/sushii-agent-workspace`). No manual `deploy.sh` step is needed — pushing to `main` ships it. Push any
+(`private-bots/sushii-agent` on host `apps`) → `deploy-personal` (`private-bots/omakase`, same
+image, `bun src/personal.ts`) → `deploy-workspace` (`private-bots/omakase-workspace`). No manual `deploy.sh` step is needed — pushing to `main` ships it. Push any
 sushii-ansible config change first: the deploy renders from sushii-ansible `main`. Verify with
 `gh run list --branch main` and the post-deploy logs.
