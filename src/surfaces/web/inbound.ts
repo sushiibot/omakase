@@ -8,6 +8,7 @@ export type InboundState = "pending" | "routed" | "rejected" | "discarded";
 export interface InboundRow {
   clientId: string;
   text: string;
+  voice?: boolean;
   uploadIds: string[];
   seq: number;
   createdAt: number;
@@ -15,7 +16,7 @@ export interface InboundRow {
   state: InboundState;
 }
 
-type Raw = { client_id: string; text: string; upload_ids: string; seq: number; created_at: number; routed_at: number | null; state: InboundState };
+type Raw = { voice: number; client_id: string; text: string; upload_ids: string; seq: number; created_at: number; routed_at: number | null; state: InboundState };
 
 /** web_inbound: each owner message, persisted before its 202 and routed until the workspace gives a receipt. */
 export class WebInboundStore {
@@ -36,13 +37,14 @@ export class WebInboundStore {
   }
 
   insert(row: Omit<InboundRow, "routedAt" | "state">): void {
-    this.db.run("INSERT INTO web_inbound (client_id, text, upload_ids, seq, created_at, conversation_id) VALUES (?, ?, ?, ?, ?, ?)", [
+    this.db.run("INSERT INTO web_inbound (client_id, text, upload_ids, seq, created_at, conversation_id, voice) VALUES (?, ?, ?, ?, ?, ?, ?)", [
       row.clientId,
       row.text,
       JSON.stringify(row.uploadIds),
       row.seq,
       row.createdAt,
       this.conversationId,
+      row.voice ? 1 : 0,
     ]);
   }
 
@@ -78,5 +80,5 @@ export class WebInboundStore {
 }
 
 function toRow(r: Raw): InboundRow {
-  return { clientId: r.client_id, text: r.text, uploadIds: JSON.parse(r.upload_ids), seq: r.seq, createdAt: r.created_at, routedAt: r.routed_at, state: r.state };
+  return { ...(r.voice ? { voice: true } : {}), clientId: r.client_id, text: r.text, uploadIds: JSON.parse(r.upload_ids), seq: r.seq, createdAt: r.created_at, routedAt: r.routed_at, state: r.state };
 }

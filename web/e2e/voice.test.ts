@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext } from '@playwright/test';
-import { axe, checkScreen, fixtureApp } from './helpers';
+import { axe, checkScreen, fixtureApp, push } from './helpers';
 test.use({
 	launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] },
 	permissions: ['microphone']
@@ -189,15 +189,20 @@ test('PCM streams in both directions, interruption stops playback, mute and end 
 	connection.send(JSON.stringify({ type: 'turn_done' }));
 	await expect(captions.getByText('I will check.', { exact: true })).not.toHaveClass(/italic/);
 	await expect(captions.getByText('Voice', { exact: true })).toHaveCount(2);
+	await page.getByRole('button', { name: 'Voice call details' }).click();
 	await page.getByRole('button', { name: 'Hide voice captions' }).click();
+	await page.getByRole('button', { name: 'Back to chat' }).click();
 	await expect(captions).toBeHidden();
+	await page.getByRole('button', { name: 'Voice call details' }).click();
 	await page.getByRole('button', { name: 'Show voice captions' }).click();
+	await page.getByRole('button', { name: 'Back to chat' }).click();
 	await expect(captions).toBeVisible();
 
 	connection.send(JSON.stringify({ type: 'agent', state: 'working' }));
-	await expect(
-		page.getByText('Sushii is working · tools and approvals appear in chat', { exact: false })
-	).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Voice call' })).toContainText('Working');
+	await expect(page.getByRole('region', { name: 'Voice call' })).toContainText('Find my notes.');
+	await expect(page.locator('[data-channel-activity]')).toHaveCount(0);
+	await expect(page.locator('[data-routed-sheet]')).toHaveCount(0);
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await page.screenshot({ path: '/tmp/voice-captions-desktop.png' });
 	await page.setViewportSize({ width: 320, height: 740 });
@@ -309,6 +314,39 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 		)
 	);
 	await page.addInitScript(() => {
+		const tracks: MediaStreamTrack[] = [];
+		const sessionChanges: string[] = [];
+		const gains: GainNode[] = [];
+		Object.assign(window, {
+			testTracks: tracks,
+			testSessionChanges: sessionChanges,
+			testGains: gains
+		});
+		let type = 'auto';
+		Object.defineProperty(navigator, 'audioSession', {
+			value: {
+				get type() {
+					return type;
+				},
+				set type(next) {
+					type = next;
+					sessionChanges.push(next);
+				}
+			},
+			configurable: true
+		});
+		const getMic = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+		navigator.mediaDevices.getUserMedia = async (constraints) => {
+			const stream = await getMic(constraints);
+			tracks.push(stream.getAudioTracks()[0]!);
+			return stream;
+		};
+		const gain = AudioContext.prototype.createGain;
+		AudioContext.prototype.createGain = function () {
+			const node = gain.call(this);
+			gains.push(node);
+			return node;
+		};
 		const Capture = window.AudioWorkletNode;
 		window.AudioWorkletNode = class extends Capture {
 			constructor(context: BaseAudioContext, name: string, options?: AudioWorkletNodeOptions) {
@@ -391,6 +429,10 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	await page.getByRole('button', { name: 'Voice chat', exact: true }).click();
 	await page.getByRole('button', { name: 'Talk in turns', exact: true }).click();
 	await expect(page.getByLabel('Speaking voice', { exact: true })).toHaveValue('Cherry');
+	await page.getByLabel('Voice output', { exact: true }).evaluate((el) => {
+		(el as HTMLInputElement).value = '35';
+		el.dispatchEvent(new Event('input', { bubbles: true }));
+	});
 	await page.getByRole('button', { name: 'Preview Cherry', exact: true }).click();
 	await expect(page.getByRole('button', { name: 'Stop preview', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Stop preview', exact: true }).click();
@@ -415,6 +457,7 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	await expect(await axe(page)).toEqual([]);
 	await page.screenshot({ path: '/tmp/speech-models-desktop.png' });
 	await page.setViewportSize({ width: 320, height: 740 });
+	await expect(page.getByRole('button', { name: 'Close Voice chat', exact: true })).toBeVisible();
 	await checkScreen(page);
 	await page.screenshot({ path: '/tmp/speech-models-mobile.png' });
 	await page.getByRole('button', { name: 'Start voice chat' }).click();
@@ -434,8 +477,79 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 		for (let i = 0; i < 60; i++) feed(0);
 	});
 	await expect.poll(() => packets.filter((p) => p.type === 'commit').length).toBe(1);
-	await expect(page.getByRole('button', { name: 'Working…' })).toBeDisabled();
+	await expect(page.getByRole('region', { name: 'Voice call' })).toContainText('Transcribing');
+	expect(
+		await page.evaluate(
+			() => (window as unknown as { testTracks: MediaStreamTrack[] }).testTracks[0]!.readyState
+		)
+	).toBe('ended');
+	expect(
+		await page.evaluate(() =>
+			(window as unknown as { testSessionChanges: string[] }).testSessionChanges.at(-1)
+		)
+	).toBe('playback');
+	expect(
+		await page.evaluate(() =>
+			(window as unknown as { testGains: GainNode[] }).testGains.some(
+				(gain) => Math.abs(gain.gain.value - 0.35) < 0.001
+			)
+		)
+	).toBe(true);
+	await expect(page.getByRole('button', { name: 'Send now', exact: true })).toHaveCount(0);
+	expect(
+		await page.evaluate(
+			() => (window as unknown as { testCapture: AudioWorkletNode }).testCapture.context.state
+		)
+	).toBe('suspended');
+	connection.send(JSON.stringify({ type: 'phase', state: 'working' }));
 	connection.send(JSON.stringify({ type: 'agent', state: 'working' }));
+	await push(page, 'snapshot', {
+		turnId: 'voice-work',
+		view: {
+			turnId: 'voice-work',
+			startedAt: Date.now(),
+			lines: [
+				{
+					id: 'search-1',
+					name: 'search',
+					summary: 'Searching calendar for a free afternoon',
+					state: 'run'
+				}
+			],
+			toolCount: 1,
+			text: ''
+		}
+	});
+	await expect(page.getByRole('region', { name: 'Voice call' })).toContainText(
+		'Searching calendar for a free afternoon'
+	);
+	await push(
+		page,
+		'approval',
+		{
+			nonce: 'voice-approval',
+			view: {
+				tool: 'send_email',
+				agentId: 'main',
+				agentName: 'Main',
+				fields: [{ key: 'to', value: 'dentist@example.com', kind: 'single', max: 200 }]
+			}
+		},
+		1
+	);
+	await expect(page.getByRole('region', { name: 'Voice call' })).toContainText('Approval needed');
+	await page.getByRole('button', { name: 'Review voice request in chat' }).click();
+	await expect(page).toHaveURL(/approve=voice-approval/);
+	await expect(page.getByRole('dialog', { name: 'Voice chat' })).toBeHidden();
+	await push(page, 'approval_resolved', { nonce: 'voice-approval', decision: 'deny' }, 2);
+	await push(page, 'turn_final', {
+		turnId: 'voice-work',
+		outcome: 'done',
+		summary: { durationMs: 100, toolCount: 1 }
+	});
+	connection.send(JSON.stringify({ type: 'phase', state: 'synthesizing' }));
+	connection.send(JSON.stringify({ type: 'agent', state: 'done' }));
+	await expect(page.getByRole('region', { name: 'Voice call' })).toContainText('Preparing voice');
 	const wav = Buffer.alloc(44 + 16000 * 2 * 10);
 	wav.write('RIFF');
 	wav.writeUInt32LE(wav.length - 8, 4);
@@ -453,9 +567,17 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	await page.getByRole('button', { name: 'Stop speaking', exact: true }).click();
 	await expect.poll(() => packets.some((p) => p.type === 'interrupt')).toBe(true);
 	connection.send(JSON.stringify({ type: 'turn_done' }));
+	await expect(page.getByRole('region', { name: 'Voice call' })).toContainText('Listening');
+	expect(
+		await page.evaluate(
+			() => (window as unknown as { testTracks: MediaStreamTrack[] }).testTracks[1]!.readyState
+		)
+	).toBe('live');
+	await page.getByRole('button', { name: 'Voice call details' }).click();
 	await expect(page.getByRole('button', { name: 'Send now', exact: true })).toBeEnabled();
 	await page.getByRole('button', { name: 'Send now', exact: true }).click();
 	await expect.poll(() => packets.filter((p) => p.type === 'commit').length).toBe(2);
+	await page.getByRole('button', { name: 'Back to chat' }).click();
 	await page
 		.getByRole('region', { name: 'Voice call', exact: true })
 		.getByRole('button', { name: 'End call' })
@@ -464,4 +586,10 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	expect(saved.model).toBe('future/speech-model');
 	expect(saved.voice).toBe('new-voice');
 	expect(saved.mode).toBe('turns');
+	expect(saved.volume).toBe(0.35);
+	expect(
+		await page.evaluate(() =>
+			(window as unknown as { testSessionChanges: string[] }).testSessionChanges.at(-1)
+		)
+	).toBe('auto');
 });

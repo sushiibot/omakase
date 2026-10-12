@@ -19,6 +19,7 @@
 		VoiceControl,
 		Voice,
 		VoiceCallBar,
+		channelActivity,
 		VoiceCaptions,
 		type ChatSheet,
 		type FileRef
@@ -156,6 +157,24 @@
 
 {#snippet voiceStatus()}
 	<VoiceCallBar
+		phase={voice.phase}
+		request={voice.userText}
+		activity={store
+			? channelActivity(store.messages, store.running, store.stopping, store.approvals)
+			: null}
+		onreview={() => {
+			if (!store) return;
+			const request = channelActivity(
+				store.messages,
+				store.running,
+				store.stopping,
+				store.approvals
+			)?.request;
+			if (!request) return;
+			const url = new URL(page.url);
+			url.searchParams.set(request.kind === 'ask' ? 'ask' : 'approve', request.id);
+			void goto(url.pathname + url.search);
+		}}
 		mode={voice.mode}
 		apiLabel={voice.apiLabel}
 		turnBusy={voice.turnBusy}
@@ -184,6 +203,9 @@
 
 {#snippet voiceControls()}
 	<VoiceControl
+		activity={store
+			? channelActivity(store.messages, store.running, store.stopping, store.approvals)
+			: null}
 		{voice}
 		conversation={id}
 		open={voiceSheet.open}
@@ -248,6 +270,7 @@
 						voiceStatus,
 						browserPreview,
 						voiceCaptions,
+						voiceActive: voice.state !== 'idle',
 						voiceHasContent: voice.state !== 'idle' && !!(voice.userText || voice.assistantText),
 						usage: store.usage,
 						models: models.remote.data ?? null,

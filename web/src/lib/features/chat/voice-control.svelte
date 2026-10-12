@@ -5,9 +5,11 @@
 	import { Button } from '$lib/ui/button';
 	import RoutedSheet from '$lib/ui/sheet/routed-sheet.svelte';
 	import VoicePanel from './components/voice-panel.svelte';
+	import type { ChannelActivity } from './activity';
 	import type { Voice } from './voice.svelte';
 	let {
 		voice,
+		activity = null,
 		conversation = 'main',
 		open,
 		onopen,
@@ -16,6 +18,7 @@
 		onactive
 	}: {
 		voice: Voice;
+		activity?: ChannelActivity | null;
 		conversation?: string;
 		open: boolean;
 		onopen: () => void;
@@ -76,6 +79,8 @@
 >
 	<VoicePanel
 		mode={voice.mode}
+		phase={voice.phase}
+		{activity}
 		speechModels={voice.speechModels}
 		speechModel={voice.speechModel}
 		speechVoice={voice.speechVoice}
@@ -83,6 +88,11 @@
 		speechError={voice.speechError}
 		pricesUpdatedAt={voice.pricesUpdatedAt}
 		turnBusy={voice.turnBusy}
+		outputVolume={voice.outputVolume}
+		micReady={voice.micReady}
+		onvolume={(value) => voice.setVolume(value)}
+		captionsVisible={voice.captionsVisible}
+		oncaptions={() => (voice.captionsVisible = !voice.captionsVisible)}
 		previewState={voice.previewState}
 		previewError={voice.previewError}
 		onpreview={() => void voice.preview()}

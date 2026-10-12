@@ -34,5 +34,6 @@ export type {
 export type { LocationReply } from './location';
 
 export { Voice } from './voice.svelte';
+export { channelActivity, type ChannelActivity } from './activity';
 export { default as VoiceCallBar } from './components/voice-call-bar.svelte';
 export { default as VoiceCaptions } from './components/voice-captions.svelte';

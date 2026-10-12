@@ -100,7 +100,7 @@ export class TurnVoiceSession {
     this.abort = new AbortController();
     const signal = this.abort.signal;
     let stage = "transcription";
-    this.emit({ type: "agent", state: "working" });
+    this.emit({ type: "phase", state: "transcribing" });
     try {
       if (!pcm.length || isSilentPcm(pcm))
         throw new SpeechError(
@@ -121,6 +121,8 @@ export class TurnVoiceSession {
         replace: true,
       });
       stage = "agent";
+      this.emit({ type: "phase", state: "working" });
+      this.emit({ type: "agent", state: "working" });
       const result = await this.ask(
         text,
         this.actor,
@@ -139,6 +141,7 @@ export class TurnVoiceSession {
       // Small utterances bound provider limits and avoid downloading a whole long reply before playback.
       const spoken = result.slice(0, 24000);
       stage = "speech";
+      this.emit({ type: "phase", state: "synthesizing" });
       for (let at = 0; at < spoken.length;) {
         signal.throwIfAborted();
         let end = Math.min(at + 1000, spoken.length);

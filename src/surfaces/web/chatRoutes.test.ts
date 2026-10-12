@@ -1003,3 +1003,16 @@ describe("the server-side queue: a send while a turn runs is held by the bot", (
     ]);
   });
 });
+
+ test("voice reply style survives offline redrive without changing the visible transcript", async () => {
+  const h = setup();
+  h.link.connected = false;
+  expect((await post(h.handler, "/api/chat/messages", { clientId: CLIENT, text: "Check my calendar", voice: true })).status).toBe(202);
+  await h.routes.idle();
+  expect(h.inbound.get(CLIENT)?.voice).toBe(true);
+  h.link.connected = true;
+  await post(h.handler, "/api/chat/messages", { clientId: CLIENT, text: "Check my calendar" });
+  await h.routes.idle();
+  expect(h.link.sent[0]?.voice).toBe(true);
+  expect(h.link.sent[0]?.text).toBe("Check my calendar");
+ });

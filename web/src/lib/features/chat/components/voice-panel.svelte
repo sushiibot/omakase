@@ -5,6 +5,8 @@
 	import type { SpeechModel, VoiceModel } from '../types';
 	import { speechPrice } from '../render/speech-price';
 	import { voiceProvider } from '../render/voice-provider';
+	import { voiceStatus } from '../render/voice-status';
+	import type { ChannelActivity } from '../activity';
 	import { voiceTrait } from '../render/voice-traits';
 	import { Input } from '$lib/ui/input';
 	let {
@@ -32,6 +34,8 @@
 		speechError = null,
 		pricesUpdatedAt = null,
 		turnBusy = false,
+		phase = 'listening',
+		activity = null,
 		previewState = 'idle',
 		previewError = null,
 		onpreview,
@@ -39,7 +43,12 @@
 		onspeech,
 		onvoice,
 		onturn,
-		oninterrupt
+		oninterrupt,
+		outputVolume = 1,
+		micReady = true,
+		onvolume,
+		captionsVisible = true,
+		oncaptions
 	}: {
 		models: VoiceModel[];
 		provider: string;
@@ -65,6 +74,8 @@
 		speechError?: string | null;
 		pricesUpdatedAt?: string | null;
 		turnBusy?: boolean;
+		phase?: string;
+		activity?: ChannelActivity | null;
 		previewState?: 'idle' | 'loading' | 'playing';
 		previewError?: string | null;
 		onpreview?: () => void;
@@ -73,6 +84,11 @@
 		onvoice?: (voice: string) => void;
 		onturn?: () => void;
 		oninterrupt?: () => void;
+		outputVolume?: number;
+		micReady?: boolean;
+		onvolume?: (volume: number) => void;
+		captionsVisible?: boolean;
+		oncaptions?: () => void;
 	} = $props();
 	const active = $derived(callState !== 'idle');
 	const selected = $derived(models.find((m) => m.id === provider));
@@ -85,21 +101,16 @@
 	);
 	const canStart = $derived(mode === 'turns' ? speechConfigured && !!speech : selected?.configured);
 	const status = $derived(
-		callState === 'connecting'
-			? 'Connecting…'
-			: muted
-				? 'Microphone muted'
-				: agentWorking
-					? mode === 'turns'
-						? 'Sushii is working — approvals appear in chat'
-						: 'Sushii is working — you can keep talking'
-					: callState === 'speaking'
-						? mode === 'turns'
-							? 'Speaking — tap Stop speaking to interrupt'
-							: 'Speaking — interrupt anytime'
-						: mode === 'turns'
-							? 'Listening — sends after a pause'
-							: 'Listening'
+		voiceStatus({
+			state: callState,
+			mode,
+			muted,
+			busy: turnBusy,
+			working: agentWorking,
+			phase,
+			activity,
+			request: userText
+		})
 	);
 </script>
 
@@ -111,103 +122,76 @@
 	<p class="text-sm text-muted-foreground">
 		Sushii uses the same memory, tools and approvals as this chat.
 	</p>
-	<div role="group" aria-label="Voice mode" class="grid grid-cols-2 gap-2">
-		<Button
-			variant={mode === 'turns' ? 'secondary' : 'outline'}
-			class="h-auto min-h-12 px-2 py-2 whitespace-normal"
-			aria-pressed={mode === 'turns'}
-			disabled={active}
-			onclick={() => onmode?.('turns')}>Talk in turns</Button
-		>
-		<Button
-			variant={mode === 'live' ? 'secondary' : 'outline'}
-			class="h-auto min-h-12 px-2 py-2 whitespace-normal"
-			aria-pressed={mode === 'live'}
-			disabled={active}
-			onclick={() => onmode?.('live')}>Live conversation</Button
-		>
-	</div>
-	{#if mode === 'turns'}
-		<p class="text-sm text-muted-foreground">
-			Speak naturally. After a short pause, Sushii sends your turn automatically. Your chosen speech
-			model reads the reply. Tap Stop speaking to interrupt.
-		</p>
-		{#if speech}
-			<div class="flex flex-col gap-2">
-				<h3 class="font-medium [overflow-wrap:anywhere]">{speech.name}</h3>
-				<p class="text-sm text-muted-foreground">
-					Speech API: OpenRouter · uses the server’s OpenRouter key
-				</p>
-				<p class="text-sm text-muted-foreground tabular-nums">{speechPrice(speech)}</p>
-				{#if speech.voices.length}
-					<label for="speech-voice" class="text-sm font-medium">Speaking voice</label>
-					<select
-						id="speech-voice"
-						class="h-12 w-full rounded-lg border bg-background px-3 text-base"
-						value={speechVoice}
-						disabled={active || loading}
-						onchange={(e) => onvoice?.(e.currentTarget.value)}
-					>
-						{#each speech.voices as name}<option value={name}
-								>{name}{voiceTrait(speech.id, name)
-									? ` · ${voiceTrait(speech.id, name)}`
-									: ''}</option
-							>{/each}
-					</select>
-				{:else}<p class="text-sm text-muted-foreground">
-						This model chooses its default voice.
-					</p>{/if}
-				<Button
-					variant="outline"
-					class="w-full"
-					disabled={active || loading || !speechConfigured}
-					onclick={onpreview}
-				>
-					{#if previewState === 'idle'}<Play aria-hidden="true" /> Preview {speechVoice ||
-							'default voice'}{:else}<Square aria-hidden="true" />
-						{previewState === 'loading' ? 'Cancel preview' : 'Stop preview'}{/if}
-				</Button>
-				<p class="text-xs text-muted-foreground">
-					Listen before starting a call. The first preview uses a short billed OpenRouter sample;
-					replays are cached.
-				</p>
-				{#if previewState === 'loading'}<p role="status" class="text-sm text-muted-foreground">
-						Generating voice preview…
-					</p>{/if}
-				{#if previewError}<p role="alert" class="text-sm text-failed">{previewError}</p>{/if}
-			</div>
-		{/if}
-		<section aria-label="Curated speech models" class="flex flex-col gap-2">
-			<h3 class="text-sm font-medium">Suggested speech models</h3>
-			{#each speechModels.filter((m) => m.curated) as model (model.id)}
-				<button
-					type="button"
-					class="flex min-h-12 w-full flex-col gap-1 rounded-lg px-3 py-2 text-left hover:bg-muted disabled:opacity-50 aria-pressed:bg-muted"
-					aria-pressed={speechModel === model.id}
-					disabled={active || loading}
-					onclick={() => onspeech?.(model.id)}
-				>
-					<span class="text-sm font-medium [overflow-wrap:anywhere]"
-						>{model.name} · {model.curated}</span
-					>
-					<span class="text-sm text-muted-foreground tabular-nums">{speechPrice(model)}</span>
-				</button>
-			{/each}
-		</section>
-		<details>
-			<summary class="min-h-12 cursor-pointer py-3 font-medium"
-				>Browse all OpenRouter speech models</summary
+	{#if !active}
+		<div role="group" aria-label="Voice mode" class="grid grid-cols-2 gap-2">
+			<Button
+				variant={mode === 'turns' ? 'secondary' : 'outline'}
+				class="h-auto min-h-12 px-2 py-2 whitespace-normal"
+				aria-pressed={mode === 'turns'}
+				disabled={active}
+				onclick={() => onmode?.('turns')}>Talk in turns</Button
 			>
-			<div class="flex flex-col gap-2">
-				<Input
-					class="h-12 text-base"
-					type="search"
-					aria-label="Search speech models"
-					placeholder="Search by name or model ID"
-					bind:value={query}
-					disabled={active || loading}
-				/>
-				{#each found as model (model.id)}
+			<Button
+				variant={mode === 'live' ? 'secondary' : 'outline'}
+				class="h-auto min-h-12 px-2 py-2 whitespace-normal"
+				aria-pressed={mode === 'live'}
+				disabled={active}
+				onclick={() => onmode?.('live')}>Live conversation</Button
+			>
+		</div>
+		{#if mode === 'turns'}
+			<p class="text-sm text-muted-foreground">
+				Speak naturally. After a short pause, Sushii sends your turn automatically. Your chosen
+				speech model reads the reply. Tap Stop speaking to interrupt.
+			</p>
+			{#if speech}
+				<div class="flex flex-col gap-2">
+					<h3 class="font-medium [overflow-wrap:anywhere]">{speech.name}</h3>
+					<p class="text-sm text-muted-foreground">
+						Speech API: OpenRouter · uses the server’s OpenRouter key
+					</p>
+					<p class="text-sm text-muted-foreground tabular-nums">{speechPrice(speech)}</p>
+					{#if speech.voices.length}
+						<label for="speech-voice" class="text-sm font-medium">Speaking voice</label>
+						<select
+							id="speech-voice"
+							class="h-12 w-full rounded-lg border bg-background px-3 text-base"
+							value={speechVoice}
+							disabled={active || loading}
+							onchange={(e) => onvoice?.(e.currentTarget.value)}
+						>
+							{#each speech.voices as name}<option value={name}
+									>{name}{voiceTrait(speech.id, name)
+										? ` · ${voiceTrait(speech.id, name)}`
+										: ''}</option
+								>{/each}
+						</select>
+					{:else}<p class="text-sm text-muted-foreground">
+							This model chooses its default voice.
+						</p>{/if}
+					<Button
+						variant="outline"
+						class="w-full"
+						disabled={active || loading || !speechConfigured}
+						onclick={onpreview}
+					>
+						{#if previewState === 'idle'}<Play aria-hidden="true" /> Preview {speechVoice ||
+								'default voice'}{:else}<Square aria-hidden="true" />
+							{previewState === 'loading' ? 'Cancel preview' : 'Stop preview'}{/if}
+					</Button>
+					<p class="text-xs text-muted-foreground">
+						Listen before starting a call. The first preview uses a short billed OpenRouter sample;
+						replays are cached.
+					</p>
+					{#if previewState === 'loading'}<p role="status" class="text-sm text-muted-foreground">
+							Generating voice preview…
+						</p>{/if}
+					{#if previewError}<p role="alert" class="text-sm text-failed">{previewError}</p>{/if}
+				</div>
+			{/if}
+			<section aria-label="Curated speech models" class="flex flex-col gap-2">
+				<h3 class="text-sm font-medium">Suggested speech models</h3>
+				{#each speechModels.filter((m) => m.curated) as model (model.id)}
 					<button
 						type="button"
 						class="flex min-h-12 w-full flex-col gap-1 rounded-lg px-3 py-2 text-left hover:bg-muted disabled:opacity-50 aria-pressed:bg-muted"
@@ -215,65 +199,105 @@
 						disabled={active || loading}
 						onclick={() => onspeech?.(model.id)}
 					>
-						<span class="text-sm font-medium [overflow-wrap:anywhere]">{model.name}</span>
-						<span class="text-sm [overflow-wrap:anywhere] text-muted-foreground">{model.id}</span>
+						<span class="text-sm font-medium [overflow-wrap:anywhere]"
+							>{model.name} · {model.curated}</span
+						>
 						<span class="text-sm text-muted-foreground tabular-nums">{speechPrice(model)}</span>
 					</button>
-				{:else}{#if !loading}<p role="status" class="text-sm text-muted-foreground">
-							No speech models match this search.
-						</p>{/if}{/each}
-			</div>
-		</details>
-		<p class="text-xs text-muted-foreground">
-			OpenRouter catalog prices{pricesUpdatedAt
-				? ` · checked ${new Date(pricesUpdatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
-				: ''}. Rates vary by provider and may include offers. Transcription and agent usage add
-			costs.
-		</p>
-		{#if !speechConfigured && !loading}<p class="text-sm text-muted-foreground">
-				Talk in turns needs an OpenRouter API key on the server.
-			</p>{/if}
-		{#if speechError}<p role="alert" class="text-sm text-failed">{speechError}</p>
-			<Button variant="outline" onclick={onretry}>Retry speech models</Button>{/if}
-	{:else}
-		<p class="text-sm text-muted-foreground">
-			Talk naturally and interrupt anytime. The live model supplies its own voice.
-		</p>
-		<div class="flex flex-col gap-2">
-			<label for="voice-provider" class="text-sm font-medium">Voice model</label>
-			<select
-				id="voice-provider"
-				class="h-12 w-full rounded-lg border bg-background px-3 text-base"
-				value={provider}
-				disabled={active || loading}
-				onchange={(event) => onprovider(event.currentTarget.value)}
-			>
-				{#if !provider}<option value="">Choose a configured model</option>{/if}
-				{#each models as model}
-					<option value={model.id} disabled={!model.configured}
-						>{model.name} · {voiceProvider(model.provider).name}{model.configured
-							? ''
-							: ' (not configured)'}</option
-					>
 				{/each}
-			</select>
-			{#if selected}
-				<p class="text-sm text-muted-foreground">{selected.description}</p>
-				<p class="text-sm text-muted-foreground">
-					API: {voiceProvider(selected.provider).name}. {selected.configured
-						? 'Configured on the server.'
-						: 'Not configured.'} Live conversation uses a separate provider key.
-				</p>
-				<p class="text-xs [overflow-wrap:anywhere] text-muted-foreground">
-					Server credential: {voiceProvider(selected.provider).key}
-				</p>
-				<p class="text-xs text-muted-foreground">
-					Audio: ${selected.audioInputUsd} input / ${selected.audioOutputUsd} output per million tokens.
-					Text, transcription and agent usage may add costs.
-				</p>
-			{/if}
-		</div>
+			</section>
+			<details>
+				<summary class="min-h-12 cursor-pointer py-3 font-medium"
+					>Browse all OpenRouter speech models</summary
+				>
+				<div class="flex flex-col gap-2">
+					<Input
+						class="h-12 text-base"
+						type="search"
+						aria-label="Search speech models"
+						placeholder="Search by name or model ID"
+						bind:value={query}
+						disabled={active || loading}
+					/>
+					{#each found as model (model.id)}
+						<button
+							type="button"
+							class="flex min-h-12 w-full flex-col gap-1 rounded-lg px-3 py-2 text-left hover:bg-muted disabled:opacity-50 aria-pressed:bg-muted"
+							aria-pressed={speechModel === model.id}
+							disabled={active || loading}
+							onclick={() => onspeech?.(model.id)}
+						>
+							<span class="text-sm font-medium [overflow-wrap:anywhere]">{model.name}</span>
+							<span class="text-sm [overflow-wrap:anywhere] text-muted-foreground">{model.id}</span>
+							<span class="text-sm text-muted-foreground tabular-nums">{speechPrice(model)}</span>
+						</button>
+					{:else}{#if !loading}<p role="status" class="text-sm text-muted-foreground">
+								No speech models match this search.
+							</p>{/if}{/each}
+				</div>
+			</details>
+			<p class="text-xs text-muted-foreground">
+				OpenRouter catalog prices{pricesUpdatedAt
+					? ` · checked ${new Date(pricesUpdatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+					: ''}. Rates vary by provider and may include offers. Transcription and agent usage add
+				costs.
+			</p>
+			{#if !speechConfigured && !loading}<p class="text-sm text-muted-foreground">
+					Talk in turns needs an OpenRouter API key on the server.
+				</p>{/if}
+			{#if speechError}<p role="alert" class="text-sm text-failed">{speechError}</p>
+				<Button variant="outline" onclick={onretry}>Retry speech models</Button>{/if}
+		{:else}
+			<p class="text-sm text-muted-foreground">
+				Talk naturally and interrupt anytime. The live model supplies its own voice.
+			</p>
+			<div class="flex flex-col gap-2">
+				<label for="voice-provider" class="text-sm font-medium">Voice model</label>
+				<select
+					id="voice-provider"
+					class="h-12 w-full rounded-lg border bg-background px-3 text-base"
+					value={provider}
+					disabled={active || loading}
+					onchange={(event) => onprovider(event.currentTarget.value)}
+				>
+					{#if !provider}<option value="">Choose a configured model</option>{/if}
+					{#each models as model}
+						<option value={model.id} disabled={!model.configured}
+							>{model.name} · {voiceProvider(model.provider).name}{model.configured
+								? ''
+								: ' (not configured)'}</option
+						>
+					{/each}
+				</select>
+				{#if selected}
+					<p class="text-sm text-muted-foreground">{selected.description}</p>
+					<p class="text-sm text-muted-foreground">
+						API: {voiceProvider(selected.provider).name}. {selected.configured
+							? 'Configured on the server.'
+							: 'Not configured.'} Live conversation uses a separate provider key.
+					</p>
+					<p class="text-xs [overflow-wrap:anywhere] text-muted-foreground">
+						Server credential: {voiceProvider(selected.provider).key}
+					</p>
+					<p class="text-xs text-muted-foreground">
+						Audio: ${selected.audioInputUsd} input / ${selected.audioOutputUsd} output per million tokens.
+						Text, transcription and agent usage may add costs.
+					</p>
+				{/if}
+			</div>
+		{/if}
 	{/if}
+	{#if active}<div class="flex flex-col gap-1">
+			<p role="status" class="font-medium">{status.label}</p>
+			<p class="text-sm text-muted-foreground">{status.detail}</p>
+			<p class="text-xs text-muted-foreground">
+				{mode === 'turns' ? speech?.name : selected?.name} · {mode === 'turns'
+					? 'OpenRouter'
+					: voiceProvider(selected?.provider ?? '').name} · {Math.floor(seconds / 60)}:{String(
+					seconds % 60
+				).padStart(2, '0')}
+			</p>
+		</div>{/if}
 	{#if loading}<p role="status" class="text-sm text-muted-foreground">Loading voice models…</p>{/if}
 	{#if mode === 'live' && !loading && !models.some((m) => m.configured)}
 		<p class="text-sm text-muted-foreground">
@@ -281,10 +305,31 @@
 		</p>
 	{/if}
 	{#if error}<p role="alert" class="text-sm text-failed">{error}</p>{/if}
-	{#if active}
-		<p role="status" class="text-sm font-medium">
-			{status} · {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+	<section aria-label="Voice audio" class="flex flex-col gap-2">
+		<div class="flex items-center justify-between gap-2">
+			<label for="voice-output-volume" class="text-sm font-medium">Voice output</label><span
+				class="text-sm tabular-nums">{Math.round(outputVolume * 100)}%</span
+			>
+		</div>
+		<input
+			id="voice-output-volume"
+			class="h-12 w-full accent-primary"
+			type="range"
+			min="0"
+			max="100"
+			step="5"
+			value={Math.round(outputVolume * 100)}
+			oninput={(e) => onvolume?.(Number(e.currentTarget.value) / 100)}
+		/>
+		<p class="text-xs text-muted-foreground">
+			App volume. Your phone controls the speaker and hardware volume. Turn mode releases the
+			microphone while Sushii replies.
 		</p>
+	</section>
+	{#if active}
+		<Button variant="outline" onclick={oncaptions}
+			>{captionsVisible ? 'Hide voice captions' : 'Show voice captions'}</Button
+		>
 		{#if userText}<p class="text-sm"><span class="font-medium">You:</span> {userText}</p>{/if}
 		{#if assistantText}<p class="max-h-40 overflow-y-auto text-sm">
 				<span class="font-medium">Sushii:</span>
@@ -298,7 +343,8 @@
 		</div>
 		{#if mode === 'turns'}
 			<Button
-				disabled={callState === 'connecting' || (callState !== 'speaking' && (turnBusy || muted))}
+				disabled={callState === 'connecting' ||
+					(callState !== 'speaking' && (turnBusy || muted || !micReady))}
 				onclick={callState === 'speaking' ? oninterrupt : onturn}
 				>{callState === 'speaking' ? 'Stop speaking' : turnBusy ? 'Working…' : 'Send now'}</Button
 			>

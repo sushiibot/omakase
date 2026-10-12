@@ -1,6 +1,7 @@
 import type { SpeechModel, VoiceModel } from './types';
 import { TurnDetector } from './render/turn-detector';
 import { voiceProvider } from './render/voice-provider';
+import { AudioSessionLease } from './render/audio-session';
 
 export class Voice {
 	models = $state<VoiceModel[]>([]);
@@ -13,6 +14,16 @@ export class Voice {
 	speechError = $state<string | null>(null);
 	pricesUpdatedAt = $state<string | null>(null);
 	turnBusy = $state(false);
+	phase = $state<'listening' | 'transcribing' | 'working' | 'synthesizing' | 'resuming'>(
+		'listening'
+	);
+	outputVolume = $state(1);
+	micReady = $state(false);
+	#audioSession = new AudioSessionLease();
+	#gain: GainNode | null = null;
+	#previewGain: GainNode | null = null;
+	#input: MediaStreamAudioSourceNode | null = null;
+	#resumingMic = false;
 	previewState = $state<'idle' | 'loading' | 'playing'>('idle');
 	previewError = $state<string | null>(null);
 	#previewContext: AudioContext | null = null;
@@ -63,6 +74,8 @@ export class Voice {
 				if (typeof saved?.model === 'string') this.speechModel = saved.model;
 				if (typeof saved?.voice === 'string') this.speechVoice = saved.voice;
 				if (typeof saved?.provider === 'string') this.provider = saved.provider;
+				if (typeof saved?.volume === 'number' && Number.isFinite(saved.volume))
+					this.outputVolume = Math.max(0, Math.min(1, saved.volume));
 				if (saved?.version !== 2 && this.speechModel === 'hexgrad/kokoro-82m') {
 					this.speechModel = this.speechVoice = '';
 				}
@@ -109,6 +122,7 @@ export class Voice {
 				'voice:preferences',
 				JSON.stringify({
 					version: 2,
+					volume: this.outputVolume,
 					mode: this.mode,
 					provider: this.provider,
 					model: this.speechModel,
@@ -131,6 +145,13 @@ export class Voice {
 		this.speechVoice = voice;
 		this.persist();
 	}
+	setVolume(volume: number) {
+		this.outputVolume = Math.max(0, Math.min(1, volume));
+		if (this.#gain && this.#context)
+			this.#gain.gain.setValueAtTime(this.outputVolume, this.#context.currentTime);
+		if (this.#previewGain) this.#previewGain.gain.value = this.outputVolume;
+		this.persist();
+	}
 	stopPreview() {
 		this.#previewAbort?.abort();
 		this.#previewAbort = null;
@@ -138,6 +159,8 @@ export class Voice {
 		this.#previewContext = null;
 		this.previewState = 'idle';
 		this.previewError = null;
+		this.#previewGain = null;
+		if (this.state === 'idle') this.#audioSession.restore();
 	}
 	async preview() {
 		if (this.previewState !== 'idle') {
@@ -150,6 +173,7 @@ export class Voice {
 		const abort = new AbortController();
 		this.#previewAbort = abort;
 		try {
+			this.#audioSession.set('playback');
 			const context = new AudioContext();
 			this.#previewContext = context;
 			await context.resume();
@@ -176,7 +200,10 @@ export class Voice {
 			abort.signal.throwIfAborted();
 			const source = context.createBufferSource();
 			source.buffer = buffer;
-			source.connect(context.destination);
+			const gain = context.createGain();
+			gain.gain.value = this.outputVolume;
+			this.#previewGain = gain;
+			source.connect(gain).connect(context.destination);
 			source.onended = () => {
 				if (this.#previewAbort === abort) this.stopPreview();
 			};
@@ -190,8 +217,18 @@ export class Voice {
 		}
 	}
 	finishTurn() {
-		if (this.mode !== 'turns' || this.state !== 'listening' || this.turnBusy || this.muted) return;
+		if (
+			this.mode !== 'turns' ||
+			this.state !== 'listening' ||
+			!this.micReady ||
+			this.turnBusy ||
+			this.muted
+		)
+			return;
 		this.turnBusy = true;
+		this.phase = 'transcribing';
+		this.#pauseMic();
+		this.#audioSession.set('playback');
 		this.#turnDetector.reset();
 		this.error = null;
 		this.#socket?.send(JSON.stringify({ type: 'commit' }));
@@ -201,6 +238,47 @@ export class Voice {
 		this.#socket?.send(JSON.stringify({ type: 'interrupt' }));
 		this.#clearAudio();
 		this.state = 'listening';
+	}
+	#pauseMic() {
+		this.micReady = false;
+		this.#input?.disconnect();
+		this.#input = null;
+		for (const track of this.#stream?.getTracks() ?? []) {
+			track.onended = null;
+			track.stop();
+		}
+		this.#stream = null;
+	}
+	async #resumeMic() {
+		if (this.#resumingMic || !this.#capture || !this.#context) return;
+		this.#resumingMic = true;
+		const generation = this.#generation;
+		this.phase = 'resuming';
+		this.#audioSession.set('play-and-record');
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({
+				audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+			});
+			if (generation !== this.#generation) {
+				for (const track of stream.getTracks()) track.stop();
+				return;
+			}
+			this.#stream = stream;
+			this.micReady = true;
+			for (const track of stream.getAudioTracks()) {
+				track.enabled = !this.muted;
+				track.onended = () => this.#fail('Microphone disconnected. Start a new call.');
+			}
+			this.#input = this.#context!.createMediaStreamSource(stream);
+			this.#input.connect(this.#capture!);
+			this.micReady = true;
+			this.phase = 'listening';
+		} catch {
+			if (generation === this.#generation)
+				this.#fail('Could not resume the microphone. Start a new call.');
+		} finally {
+			if (generation === this.#generation) this.#resumingMic = false;
+		}
 	}
 	async start(conversation: string) {
 		this.stopPreview();
@@ -228,9 +306,13 @@ export class Voice {
 		document.addEventListener('visibilitychange', this.#onhidden);
 		this.#timeout = setTimeout(() => this.#fail('Voice connection timed out. Try again.'), 20000);
 		try {
+			this.#audioSession.set('play-and-record');
 			// Resume during the user gesture, before any permission or network awaits.
 			const context = new AudioContext();
 			this.#context = context;
+			this.#gain = context.createGain();
+			this.#gain.gain.value = this.outputVolume;
+			this.#gain.connect(context.destination);
 			await context.resume();
 			const stream = await navigator.mediaDevices.getUserMedia({
 				audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
@@ -240,6 +322,7 @@ export class Voice {
 				return;
 			}
 			this.#stream = stream;
+			this.micReady = true;
 			for (const track of stream.getAudioTracks())
 				track.onended = () => this.#fail('Microphone disconnected. Start a new call.');
 			await context.audioWorklet.addModule('/audio/voice-capture.js');
@@ -248,7 +331,8 @@ export class Voice {
 				processorOptions: { rate: this.mode === 'turns' ? 16000 : model!.inputRate }
 			});
 			this.#capture = capture;
-			context.createMediaStreamSource(stream).connect(capture);
+			this.#input = context.createMediaStreamSource(stream);
+			this.#input.connect(capture);
 			const silent = context.createGain();
 			silent.gain.value = 0;
 			capture.connect(silent).connect(context.destination);
@@ -266,7 +350,8 @@ export class Voice {
 				if (
 					generation !== this.#generation ||
 					this.state === 'connecting' ||
-					(this.mode === 'turns' && (this.turnBusy || this.state !== 'listening' || this.muted)) ||
+					(this.mode === 'turns' &&
+						(!this.micReady || this.turnBusy || this.state !== 'listening' || this.muted)) ||
 					socket.readyState !== WebSocket.OPEN
 				)
 					return;
@@ -371,8 +456,20 @@ export class Voice {
 					this.assistantFinal = event.final === true;
 				}
 				break;
+			case 'phase':
+				if (
+					event.state === 'transcribing' ||
+					event.state === 'working' ||
+					event.state === 'synthesizing'
+				)
+					this.phase = event.state;
+				break;
 			case 'turn_done':
 				this.turnBusy = false;
+				if (this.mode === 'turns') {
+					this.agentWorking = false;
+					void this.#resumeMic();
+				}
 				this.assistantFinal = true;
 				this.#userFresh = this.#assistantFresh = true;
 				break;
@@ -394,7 +491,7 @@ export class Voice {
 			if (generation !== this.#generation) return;
 			const source = context.createBufferSource();
 			source.buffer = buffer;
-			source.connect(context.destination);
+			source.connect(this.#gain ?? context.destination);
 			this.#sources.add(source);
 			this.state = 'speaking';
 			source.onended = () => {
@@ -426,7 +523,7 @@ export class Voice {
 		}
 		const source = context.createBufferSource();
 		source.buffer = buffer;
-		source.connect(context.destination);
+		source.connect(this.#gain ?? context.destination);
 		this.#sources.add(source);
 		this.state = 'speaking';
 		source.onended = () => {
@@ -469,6 +566,8 @@ export class Voice {
 		this.#timer = this.#timeout = null;
 		this.#socket?.close();
 		this.#socket = null;
+		this.#pauseMic();
+		this.#resumingMic = false;
 		this.#capture?.disconnect();
 		this.#capture = null;
 		for (const track of this.#stream?.getTracks() ?? []) {
@@ -483,5 +582,8 @@ export class Voice {
 		this.turnBusy = false;
 		this.muted = false;
 		this.state = 'idle';
+		this.phase = 'listening';
+		this.#gain = null;
+		this.#audioSession.restore();
 	}
 }

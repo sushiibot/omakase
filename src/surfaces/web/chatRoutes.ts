@@ -92,6 +92,7 @@ const messageBody = z
   .object({
     clientId: z.string().regex(CLIENT_ID_RE),
     text: z.string().max(MESSAGE_TEXT_MAX),
+    voice: z.boolean().optional(),
     uploadIds: z.array(z.string().regex(UPLOAD_ID_RE)).max(MESSAGE_UPLOADS_MAX).optional(),
   })
   .strict()
@@ -127,7 +128,7 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
 
   /** Routes a persisted message through the owner router. A receipt (or a consuming notice) marks it
    *  routed; a workspaceOffline notice leaves it for the client to resend. */
-  function drive(row: { clientId: string; text: string; uploadIds: string[] }, actor: SurfaceActor): void {
+  function drive(row: { clientId: string; text: string; uploadIds: string[]; voice?: boolean }, actor: SurfaceActor): void {
     // Checked in the same tick routing starts, so a delete either sees this route in flight or wins outright.
     if (routing.has(row.clientId) || inbound.get(row.clientId)?.state !== "pending") return;
     const run = (async () => {
@@ -148,7 +149,7 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
       const routerLink: OwnerRouterDeps<InboundMessage>["link"] = {
         isConnected: () => link.isConnected(),
         sendMessage: async (input: Omit<ChatMessageParams, "principalId">) => {
-          const res = await link.sendMessage(input);
+          const res = await link.sendMessage({ ...input, ...(row.voice ? { voice: true } : {}) });
           // The workspace already has it (say, a resend after a bot restart): that is still a receipt.
           if (res.mode === "duplicate" && input.messageId === row.clientId) await adapter.ack(message, "accepted");
           return res;
@@ -252,7 +253,7 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
         const missing = uploadIds.length ? deps.uploads!.markReferenced(uploadIds, body.clientId).missing : [];
         if (missing.length) throw new UploadMissing(missing);
         const seq = chatLog.append("user", { key: body.clientId, text: body.text, uploadIds, at: new Date(at).toISOString() }, body.clientId);
-        const stored = { clientId: body.clientId, text: body.text, uploadIds, seq, createdAt: at };
+        const stored = { clientId: body.clientId, text: body.text, uploadIds, seq, createdAt: at, ...(body.voice ? { voice: true } : {}) };
         inbound.insert(stored);
         return { ...stored, routedAt: null, state: "pending" as const };
       });

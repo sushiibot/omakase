@@ -3154,3 +3154,11 @@ describe("durable owner request lifecycle", () => {
     await restart.host.dispose();
   });
 });
+
+ test("live web voice asks for a concise spoken reply without affecting typed chat or Discord recordings", () => {
+  const base = { messageId: "test", text: "Check my calendar", origin: { surface: "web", conversationId: "main" } };
+  expect(formatUserText({ ...base, voice: true }, NOW)).toContain("For this reply only");
+  expect(formatUserText({ ...base, voice: true }, NOW)).toContain("under 40 words");
+  expect(formatUserText(base, NOW)).not.toContain("Live voice conversation");
+  expect(formatUserText({ ...base, voice: true, origin: { surface: "discord", conversationId: "main" } }, NOW)).not.toContain("Live voice conversation");
+ });

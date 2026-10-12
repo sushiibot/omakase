@@ -1812,7 +1812,10 @@ export function formatUserText(
   saved: ReadonlySet<string> = new Set(),
 ): string {
   const header = messageHeader(params.messageId, receivedAt, { surface: params.origin?.surface, voice: params.voice === true });
-  let text = header ? `${header}\n${params.text}` : params.text;
+  const spoken = params.voice && params.origin?.surface === "web"
+    ? "[Live voice conversation: For this reply only, use one or two short spoken sentences, usually under 40 words. Lead with the answer or result. Ask one question at a time. Avoid markdown, lists, URLs and reading tool logs aloud. Give more detail only when requested or needed for safety. Never claim work is complete without confirmation.]\n"
+    : "";
+  let text = header ? `${header}\n${spoken}${params.text}` : `${spoken}${params.text}`;
   // Only the host's own flush prompts may start with the marker; flushRanThisCycle trusts it.
   if (text.startsWith(FLUSH_MARKER)) text = `[message]\n${text}`;
   // Image attachments also reach the model as images when it accepts them; every attachment stays a link it can fetch.

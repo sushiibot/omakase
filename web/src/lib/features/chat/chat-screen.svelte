@@ -69,6 +69,7 @@
 		browserPreview,
 		voiceCaptions,
 		voiceHasContent = false,
+		voiceActive = false,
 		connection,
 		commandsOffline = false,
 		toast,
@@ -159,6 +160,7 @@
 		browserPreview?: Snippet;
 		voiceCaptions?: Snippet;
 		voiceHasContent?: boolean;
+		voiceActive?: boolean;
 		connection?: ConnectionState | 'forbidden';
 		commandsOffline?: boolean;
 		toast?: string | null;
@@ -659,7 +661,7 @@
 {/snippet}
 
 {#snippet footer()}
-	{#if !readOnly}<ActivityLine {activity} onreview={reviewRequest} />{/if}
+	{#if !readOnly && !voiceActive}<ActivityLine {activity} onreview={reviewRequest} />{/if}
 	{#if backgroundActivity}{@render backgroundActivity()}{/if}
 	{#if newMessages}
 		<div class="pointer-events-none absolute inset-x-0 bottom-full flex justify-center pb-3">

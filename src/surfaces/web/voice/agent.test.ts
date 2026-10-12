@@ -31,6 +31,7 @@ test("voice uses a valid durable chat ID and waits for the matching agent reply"
             const body = await req.json();
             expect(body.clientId).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
             expect(body.text).toBe("check my calendar");
+            expect(body.voice).toBe(true);
             listener({ kind: "reply", replyTo: "other", text: "unrelated" });
             listener({
               kind: "reply",

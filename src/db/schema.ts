@@ -331,6 +331,7 @@ export const webInbound = sqliteTable(
     clientId: text("client_id").primaryKey(),
     conversationId: text("conversation_id").notNull().default("main"),
     text: text("text").notNull(),
+    voice: integer("voice", { mode: "boolean" }).notNull().default(false),
     uploadIds: text("upload_ids").notNull(),
     seq: integer("seq").notNull(),
     createdAt: integer("created_at").notNull(),

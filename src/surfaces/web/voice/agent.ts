@@ -35,7 +35,7 @@ export function createVoiceAgent(threads: WebThreads): AskAgent {
         new Request("http://voice.internal/api/chat/messages", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ clientId, text }),
+          body: JSON.stringify({ clientId, text, voice: true }),
         }),
         "/api/chat/messages",
         actor,

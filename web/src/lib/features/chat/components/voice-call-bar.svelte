@@ -2,109 +2,106 @@
 	import Mic from '@lucide/svelte/icons/mic';
 	import MicOff from '@lucide/svelte/icons/mic-off';
 	import PhoneOff from '@lucide/svelte/icons/phone-off';
-	import Captions from '@lucide/svelte/icons/captions';
-	import Settings2 from '@lucide/svelte/icons/settings-2';
+	import Square from '@lucide/svelte/icons/square';
+	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import { Button } from '$lib/ui/button';
+	import type { ChannelActivity } from '../activity';
+	import { voiceStatus } from '../render/voice-status';
 	let {
 		state,
 		muted,
-		seconds,
 		agentWorking,
-		captionsVisible,
 		error,
 		onmute,
 		onstop,
-		oncaptions,
 		ondetails,
 		mode = 'live',
-		apiLabel = '',
 		turnBusy = false,
-		onturn,
+		phase = 'listening',
+		activity = null,
+		request = '',
+		onreview,
 		oninterrupt
 	}: {
 		state: 'idle' | 'connecting' | 'listening' | 'speaking';
 		muted: boolean;
-		seconds: number;
 		agentWorking: boolean;
-		captionsVisible: boolean;
 		error: string | null;
 		onmute: () => void;
 		onstop: () => void;
-		oncaptions: () => void;
 		ondetails: () => void;
 		mode?: 'live' | 'turns';
-		apiLabel?: string;
 		turnBusy?: boolean;
-		onturn?: () => void;
+		phase?: string;
+		activity?: ChannelActivity | null;
+		request?: string;
+		onreview?: () => void;
 		oninterrupt?: () => void;
+		seconds?: number;
+		apiLabel?: string;
+		captionsVisible?: boolean;
+		oncaptions?: () => void;
+		onturn?: () => void;
 	} = $props();
+	const status = $derived(
+		voiceStatus({
+			state,
+			mode,
+			muted,
+			busy: turnBusy,
+			working: agentWorking,
+			phase,
+			activity,
+			request
+		})
+	);
 </script>
 
 {#if state !== 'idle'}
-	<section aria-label="Voice call" class="shrink-0 border-t bg-muted/30 px-3 py-1">
-		<div class="flex items-center justify-between gap-2">
-			<p class="min-w-0 text-sm font-medium">
-				<span role="status">
-					{state === 'connecting'
-						? 'Connecting…'
-						: muted
-							? 'Microphone muted'
-							: state === 'speaking'
-								? 'Speaking'
-								: mode === 'turns' && turnBusy
-									? 'Preparing reply'
-									: 'Listening'}
+	<section aria-label="Voice call" class="shrink-0 border-t bg-muted/30 px-2 py-1">
+		<div class="flex items-center gap-2">
+			<Button
+				variant="ghost"
+				class="h-auto min-h-12 min-w-0 flex-1 justify-start gap-2 px-2 py-1 text-left"
+				aria-label={status.review ? 'Review voice request in chat' : 'Voice call details'}
+				onclick={status.review ? onreview : ondetails}
+			>
+				<span class="min-w-0 flex-1">
+					<span role="status" class="block truncate text-sm font-medium">{status.label}</span>
+					<span class="block truncate text-xs font-normal text-muted-foreground"
+						>{status.detail}</span
+					>
 				</span>
-				<span class="text-xs text-muted-foreground" aria-live="off">
-					{apiLabel ? `· ${apiLabel}` : ''} · {Math.floor(seconds / 60)}:{String(
-						seconds % 60
-					).padStart(2, '0')}
-				</span>
-			</p>
-			<div class="flex shrink-0 items-center gap-2">
-				<Button
+				<ChevronUp class="size-4 shrink-0" aria-hidden="true" />
+			</Button>
+			<Button
+				variant="ghost"
+				class="size-12 shrink-0 px-0"
+				aria-label={muted ? 'Unmute microphone' : 'Mute microphone'}
+				aria-pressed={muted}
+				disabled={state === 'connecting'}
+				onclick={onmute}
+			>
+				{#if muted}<MicOff aria-hidden="true" />{:else}<Mic aria-hidden="true" />{/if}
+			</Button>
+			{#if mode === 'turns' && state === 'speaking'}<Button
 					variant="ghost"
-					class="size-12 px-0"
-					aria-label={muted ? 'Unmute microphone' : 'Mute microphone'}
-					aria-pressed={muted}
-					disabled={state === 'connecting'}
-					onclick={onmute}
-					>{#if muted}<MicOff aria-hidden="true" />{:else}<Mic aria-hidden="true" />{/if}</Button
-				>
-				<Button
-					variant="ghost"
-					class="size-12 px-0"
-					aria-label={captionsVisible ? 'Hide voice captions' : 'Show voice captions'}
-					aria-pressed={captionsVisible}
-					onclick={oncaptions}><Captions aria-hidden="true" /></Button
-				>
-				<Button variant="destructive" class="size-12 px-0" aria-label="End call" onclick={onstop}
-					><PhoneOff aria-hidden="true" /></Button
-				>
-			</div>
+					class="size-12 shrink-0 px-0"
+					aria-label="Stop speaking"
+					onclick={oninterrupt}><Square aria-hidden="true" /></Button
+				>{/if}
+			<Button
+				variant="destructive"
+				class="size-12 shrink-0 px-0"
+				aria-label="End call"
+				onclick={onstop}><PhoneOff aria-hidden="true" /></Button
+			>
 		</div>
-		{#if mode === 'turns'}
-			<div class="flex items-center justify-between gap-2 pb-1">
-				<p class="text-xs text-muted-foreground">Sends automatically after a pause</p>
-				<Button
-					variant="ghost"
-					class="shrink-0"
-					disabled={state === 'connecting' || (state !== 'speaking' && (turnBusy || muted))}
-					onclick={state === 'speaking' ? oninterrupt : onturn}
-					>{state === 'speaking' ? 'Stop speaking' : turnBusy ? 'Working…' : 'Send now'}</Button
-				>
-			</div>
-		{/if}
-		{#if agentWorking}<p role="status" class="pb-1 text-xs text-muted-foreground">
-				Sushii is working · tools and approvals appear in chat
-			</p>{/if}
-		{#if error}<p role="alert" class="pb-2 text-sm text-failed">{error}</p>{/if}
+		{#if error}<p role="alert" class="px-2 pb-2 text-sm text-failed">{error}</p>{/if}
 	</section>
 {:else if error}
 	<div class="flex items-center justify-between gap-2 border-t px-3 py-1">
 		<p role="alert" class="text-sm text-failed">{error}</p>
-		<Button variant="ghost" class="size-12 px-0" aria-label="Voice settings" onclick={ondetails}
-			><Settings2 aria-hidden="true" /></Button
-		>
+		<Button variant="ghost" onclick={ondetails}>Voice settings</Button>
 	</div>
 {/if}

@@ -4,6 +4,7 @@ import { toolCategory } from './tool-activity';
 export interface ChannelActivity {
 	kind: 'thinking' | 'typing' | 'tool' | 'working' | 'waiting' | 'stopping';
 	label: string;
+	detail?: string;
 	request?: { kind: 'ask' | 'approval'; id: string };
 }
 
@@ -71,7 +72,7 @@ export function channelActivity(
 			agent: 'Sushii is delegating work…',
 			other: 'Sushii is using a tool…'
 		};
-		return { kind: 'tool', label: labels[toolCategory(step.tool).kind] };
+		return { kind: 'tool', label: labels[toolCategory(step.tool).kind], detail: step.label };
 	}
 	if (turn?.toolRunning) return { kind: 'tool', label: 'Sushii is using a tool…' };
 	if (turn?.state === 'stopping') return { kind: 'stopping', label: 'Stopping…' };

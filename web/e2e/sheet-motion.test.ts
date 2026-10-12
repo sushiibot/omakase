@@ -57,6 +57,10 @@ for (const desktop of [false, true]) {
 		await sheet.evaluate(async (element) => {
 			await Promise.allSettled(element.getAnimations().map((animation) => animation.finished));
 		});
+		if (desktop) {
+			const bounds = await sheet.boundingBox();
+			expect(Math.abs(bounds!.x - (1280 - bounds!.width) / 2)).toBeLessThan(2);
+		}
 		await captureExit(page);
 		await page.keyboard.press('Escape');
 		const sample = await page.evaluate(() => (window as MotionWindow).__sheetMotion);

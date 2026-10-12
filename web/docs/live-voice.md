@@ -4,8 +4,14 @@ Use the **Voice chat** phone button at the top right in the owner web app.
 Choose **Talk in turns** or **Live conversation**.
 Choose a configured voice model, then select **Start voice chat**.
 Allow microphone access.
-The setup sheet closes when the call connects. A compact bar above the composer shows the call state,
-time, microphone control, caption toggle, and **End call**. Chat messages, tools, and approvals stay visible.
+The setup sheet closes when the call connects. A compact bar above the composer shows one call phase,
+a short work description, microphone control, and **End call**.
+The phases distinguish listening, transcription, agent work, voice generation, and speaking.
+Tool descriptions and approval states come from the conversation activity.
+Select an approval status to review the request in chat.
+Call details contain captions, elapsed time, output volume, and manual sending.
+The normal chat activity line is hidden during calls to avoid duplicate status.
+Chat messages, tools, and approvals stay visible.
 You can interrupt spoken replies. Open the phone button to review settings; **Back to chat** keeps the call open.
 
 Captions show your speech and the spoken reply while the call runs. Captions reuse the chat message layout, with a **Voice** label and microphone or speaker icon below each message.
@@ -28,7 +34,14 @@ The selected speech model reads the reply through OpenRouter.
 Tools and approvals stay in the chat.
 Select **Stop speaking** to stop the spoken reply.
 The next turn starts after the reply ends or you stop speech.
-The microphone does not submit another recording while the agent works or speech plays.
+Turn mode releases the microphone while the agent works or speech plays.
+It opens the microphone again before listening for the next turn.
+Browsers with the Audio Session API receive playback and play-and-record hints.
+Hardware volume and speaker routing remain browser and OS controlled.
+The Voice output slider changes an app gain node and stays on this device.
+Live mode keeps the microphone open for interruption.
+Web voice turns request one or two short spoken sentences, usually under 40 words.
+The reply-style flag persists through offline routing and affects only the current voice reply.
 
 The picker recommends Qwen Flash and shows value, quality, and premium alternatives.
 Kokoro remains searchable but is no longer suggested or the default.
