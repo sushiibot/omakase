@@ -1,42 +1,15 @@
-// ToolRegistry impl (contracts.ts §7). Filters by hosts-present + capabilities, then by the
-// same config/mode gates the pre-multi-surface resolveToolEntries (src/agent/loop.ts) applied —
-// the A/B/C surface-category matrix beyond that is deferred to U6.
-import type { SurfaceId, ToolEntry, ToolHosts, ToolRegistry, SurfaceSession } from "../contracts.ts";
+import type { ConversationRef, ConversationStore, SpaceMemoryStore, SurfaceId, ToolContext, ToolEntry, ToolHosts, ToolRegistry, SurfaceSession } from "../contracts.ts";
 import { config } from "../../config.ts";
-import "./hosts.ts";
-import { MESSAGE_CACHE_TOOL_ENTRIES } from "./messageCache/tools.ts";
 import { PORTABLE_TOOL_ENTRIES } from "./portable/tools.ts";
-import { MCP_TOOL_ENTRIES } from "./mcp/tools.ts";
 import { OPS_TRIAGE_TOOL_ENTRIES } from "./opsTriage/tools.ts";
-import { DISCORD_TOOL_ENTRIES } from "./discord/tools.ts";
-import { deleteUserMessagesEntry } from "./discord/deleteUserMessages.ts";
-import { FS_TOOL_ENTRIES } from "./fs/tools.ts";
-import { TEAM_TOOL_ENTRIES } from "./team/tools.ts";
 
-export const ALL_TOOL_ENTRIES: ToolEntry<keyof ToolHosts>[] = [
-  ...MESSAGE_CACHE_TOOL_ENTRIES,
-  ...PORTABLE_TOOL_ENTRIES,
-  ...MCP_TOOL_ENTRIES,
-  ...OPS_TRIAGE_TOOL_ENTRIES,
-  ...DISCORD_TOOL_ENTRIES,
-  ...FS_TOOL_ENTRIES,
-  ...TEAM_TOOL_ENTRIES,
-  deleteUserMessagesEntry,
-];
+export const ALL_TOOL_ENTRIES: ToolEntry<keyof ToolHosts>[] = [...PORTABLE_TOOL_ENTRIES, ...OPS_TRIAGE_TOOL_ENTRIES];
 
-/** Restricted to the autonomous auto-mod driver — a conversational request must never see these. */
-const AUTO_MOD_ONLY_TOOLS = new Set(["timeout_member", "delete_user_messages", "send_alert_message"]);
-/** Conversational moderation tools, gated on the moderation module now that the entry gate no
- *  longer implies it — a guild that opts out of moderation loses these along with the auto-mod
- *  trigger and prompt lines, not just chat access. */
-const MODERATION_MODULE_TOOLS = new Set(["list_automod_rules", "add_automod_keyword", "delete_automod_keyword", "search_audit_log"]);
 const EXA_TOOLS = new Set(["web_search", "fetch_url_content"]);
 const GRAFANA_TOOLS = new Set(["search_logs", "get_trace"]);
 const LINEAR_TOOLS = new Set(["file_linear_issue", "get_issue_status", "list_triaged_issues"]);
 
-/** Config-key gates, resolved once per `resolve()` call rather than baked into the class — lets
- *  a caller (tests, U4's wiring) supply availability directly instead of the registry reaching
- *  into the global `config` singleton itself. */
+/** Config-key gates, resolved once per `resolve()` call so tests can supply availability directly. */
 export interface ToolAvailability {
   exa: boolean;
   grafanaBaseUrl: boolean;
@@ -67,34 +40,41 @@ export class CoreToolRegistry implements ToolRegistry {
 
   resolve(
     session: SurfaceSession,
-    space: { surface: SurfaceId; spaceId: string; autoMod?: boolean; isOwner?: boolean; isPrivate?: boolean; authorized?: boolean; moderationOn?: boolean },
+    space: { surface: SurfaceId; spaceId: string; isOwner?: boolean; isPrivate?: boolean; authorized?: boolean },
   ): ToolEntry<keyof ToolHosts>[] {
-    const autoMod = space.autoMod ?? false;
-    const moderationOn = space.moderationOn ?? false;
     const a = this.availability();
-
-    // Ops-triage tools gate on `authorized` (owner OR a team-trusted member) but NOT on DM —
-    // authorized callers use them from guild channels too. update_profile stays owner-DM-first
-    // (editing the personal profile shouldn't surface in a shared channel, and a trusted member
-    // must not reach it).
+    // update_profile edits the owner's profile, so it never shows in a shared space.
     const profileAllowed = space.isOwner === true && space.isPrivate === true;
-    const opsOwnerAllowed = space.authorized === true;
+    const opsAllowed = space.authorized === true;
 
     return this.entries
       .filter((entry) => hostsSatisfied(entry, session.hosts) && capabilitiesSatisfied(entry, session))
-      .filter((entry) => autoMod || !AUTO_MOD_ONLY_TOOLS.has(entry.name))
-      .filter((entry) => moderationOn || autoMod || !MODERATION_MODULE_TOOLS.has(entry.name))
       .filter((entry) => a.exa || !EXA_TOOLS.has(entry.name))
-      .filter((entry) => opsOwnerAllowed || !(GRAFANA_TOOLS.has(entry.name) || LINEAR_TOOLS.has(entry.name)))
+      .filter((entry) => opsAllowed || !(GRAFANA_TOOLS.has(entry.name) || LINEAR_TOOLS.has(entry.name)))
       .filter((entry) => a.grafanaBaseUrl || !GRAFANA_TOOLS.has(entry.name))
       .filter((entry) => a.linear || !LINEAR_TOOLS.has(entry.name))
-      .filter((entry) => entry.name !== "team_config" || (!autoMod && opsOwnerAllowed))
-      // Core-profile editing is DM-first: available only in a personal/DM space (owner-only once the
-      // registry is configured); per-environment / per-user guild profiles are a deferred follow-up.
       .filter((entry) => entry.name !== "update_profile" || profileAllowed);
   }
 }
 
 export function createToolRegistry(entries?: ToolEntry<keyof ToolHosts>[], availability?: () => ToolAvailability): ToolRegistry {
   return new CoreToolRegistry(entries, availability);
+}
+
+export function buildToolContextBase(input: {
+  conversation: ConversationRef;
+  isPrivate: boolean;
+  store: ConversationStore;
+  memory: SpaceMemoryStore;
+  hosts: ToolHosts;
+}): Omit<ToolContext, "owner"> {
+  return {
+    space: { surface: input.conversation.surface, spaceId: input.conversation.spaceId },
+    isPrivate: input.isPrivate,
+    privacyUnverified: input.conversation.privacyUnverified,
+    store: input.store,
+    memory: input.memory,
+    log: undefined,
+    ...input.hosts,
+  };
 }

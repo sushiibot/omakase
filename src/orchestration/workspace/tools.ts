@@ -7,8 +7,7 @@ import { taskManifest } from "../../surfaces/web/taskRoutes.ts";
 import { randomBytes, randomInt } from "node:crypto";
 import { Check } from "typebox/schema";
 import type { AuthorRef, ConversationRef, ConversationStore, SpaceMemoryStore, SurfaceId, SurfaceSession, ToolContext, ToolEntry, ToolHosts, ToolRegistry } from "../../core/contracts.ts";
-import { buildToolContextBase } from "../../core/agentCore.ts";
-import { createToolRegistry } from "../../core/tools/registry.ts";
+import { buildToolContextBase, createToolRegistry } from "../../core/tools/registry.ts";
 import { toolCallParams, toolCancelParams, type ToolCallParams, type ToolCallResult, type ToolCancelResult, type ToolManifestEntry } from "../contracts.ts";
 import type { ConnectionInfo } from "../transport/server.ts";
 import { getLogger } from "../../logger.ts";
@@ -180,11 +179,9 @@ export class WorkspaceTools {
     const resolved = this.registry.resolve(session, {
       surface: this.opts.toolSpace.surface,
       spaceId: this.opts.toolSpace.spaceId,
-      autoMod: false,
       isOwner: true,
       isPrivate: true,
       authorized: true,
-      moderationOn: false,
     });
     const out = new Map<string, { entry: ToolEntry<keyof ToolHosts>; schema: Record<string, unknown> }>();
     for (const entry of resolved) {

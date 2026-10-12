@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveOwnerPrincipals, resolveTeamsConfig, teamGuildConfigs } from "./config.ts";
+import { resolveOwnerPrincipals, resolveTeamsConfig } from "./config.ts";
 import type { PrincipalConfig } from "./orchestration/principals.ts";
 import type { TeamConfig } from "./orchestration/teams.ts";
 
@@ -100,42 +100,6 @@ describe("resolveTeamsConfig", () => {
   });
 });
 
-describe("teamGuildConfigs", () => {
-  test("derives a guild config from a discord block, folding the space's statusChannelId into wiki", () => {
-    const teams: Record<string, TeamConfig> = {
-      dreamcatcher: {
-        spaces: [
-          {
-            surface: "discord",
-            spaceId: "1000000000000000001",
-            statusChannelId: "s1",
-            discord: { allowedRoles: ["r1"], promptTemplate: "general" },
-          },
-        ],
-      },
-    };
-    expect(teamGuildConfigs(teams)).toEqual({
-      "1000000000000000001": { allowedRoles: ["r1"], promptTemplate: "general", wiki: { statusChannelId: "s1" } },
-    });
-  });
-
-  test("a space with no discord block contributes nothing, even with a statusChannelId", () => {
-    const teams: Record<string, TeamConfig> = {
-      dreamcatcher: { spaces: [{ surface: "discord", spaceId: "1000000000000000001", statusChannelId: "s1" }] },
-    };
-    expect(teamGuildConfigs(teams)).toEqual({});
-  });
-
-  test("a discord block with no space-level statusChannelId passes through untouched", () => {
-    const teams: Record<string, TeamConfig> = {
-      dreamcatcher: {
-        spaces: [{ surface: "discord", spaceId: "g1", discord: { allowedRoles: ["r1"] } }],
-      },
-    };
-    expect(teamGuildConfigs(teams)).toEqual({ g1: { allowedRoles: ["r1"] } });
-  });
-});
-
 describe("principals web logins", () => {
   test("a mixed-case web identity is lowercased at load, other surfaces are left alone", () => {
     const out = resolveOwnerPrincipals({ drk: { owner: true, identities: { discord: "AbC1", web: " DrkLee3@GitHub " } } }, undefined, () => {});
@@ -143,10 +107,10 @@ describe("principals web logins", () => {
   });
 });
 
-test("config imports without DISCORD_BOT_TOKEN, and requireDiscordBotToken names it", async () => {
+test("config imports with only OPENAI_API_KEY set", async () => {
   const cwd = mkdtempSync(join(tmpdir(), "cfg-import-"));
   try {
-    const script = `const m = await import(${JSON.stringify(join(import.meta.dir, "config.ts"))}); try { m.requireDiscordBotToken(); } catch (e) { console.log(String(e)); }`;
+    const script = `const m = await import(${JSON.stringify(join(import.meta.dir, "config.ts"))}); console.log(m.config.databasePath);`;
     const proc = Bun.spawn([process.execPath, "-e", script], {
       cwd,
       env: { PATH: process.env["PATH"] ?? "", OPENAI_API_KEY: "x" },
@@ -155,7 +119,7 @@ test("config imports without DISCORD_BOT_TOKEN, and requireDiscordBotToken names
     });
     const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
     expect({ code, err: code === 0 ? "" : err }).toEqual({ code: 0, err: "" });
-    expect(out).toContain("Missing required env var: DISCORD_BOT_TOKEN");
+    expect(out.trim()).toBe("./data/personal.db");
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

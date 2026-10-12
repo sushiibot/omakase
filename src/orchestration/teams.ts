@@ -326,13 +326,6 @@ export function isTeamMember(principalId: string, surface: string, spaceId: stri
   return resolveTeam(surface, spaceId)?.members?.[principalId]?.trusted === true;
 }
 
-/** Buzz kind:0 profile avatar for a relay space: a team space's inline `buzz.avatarUrl` first, then
- *  the global `BUZZ_AVATAR_URL` fallback. */
-export function buzzAvatarFor(spaceId: string): string | undefined {
-  const teamAvatar = resolveTeam("buzz", spaceId)?.spaces.find((s) => s.surface === "buzz" && s.spaceId === spaceId)?.buzz?.avatarUrl;
-  return teamAvatar ?? config.buzz.avatarUrl;
-}
-
 /** All teams, by id — for a DM listing where there's no (surface, spaceId) to resolve from. */
 export function listTeams(): Team[] {
   return Object.entries(config.teams).map(([id, entry]) => toTeam(id, entry));

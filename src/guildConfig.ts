@@ -1,4 +1,4 @@
-import { config } from "./config.ts";
+// Shape of a team's discord space block in teams.json, validated by orchestration/teams.ts.
 import type { ScreeningRuleId } from "./modules/screening/rules.ts";
 
 /** Agent modules a guild can enable. Wiki participation is not a module — it's driven by a
@@ -48,56 +48,4 @@ export interface ScreeningConfig {
   rules?: ScreeningRuleId[];
   /** A text verdict is posted when any rule's probability reaches this. */
   reviewThreshold?: number;
-}
-
-/** Modules active for this guild — defaults to moderation-only, so configs written before this field existed keep exactly today's behavior. */
-export function resolvedModules(cfg: GuildConfig): ModuleId[] {
-  return cfg.enabledModules ?? ["moderation"];
-}
-
-/** Whether the moderation module is active for this space — true only on Discord, and only when the
- *  guild is configured and has "moderation" among its resolved modules. */
-export function moderationEnabled(surface: string, spaceId: string): boolean {
-  if (surface !== "discord") return false;
-  const cfg = config.guildConfig[spaceId];
-  if (!cfg) return false;
-  return resolvedModules(cfg).includes("moderation");
-}
-
-/** Whether the auto-mod trigger path is even in play for this guild — factored out of the gateway's
- *  MessageCreate handler so it's unit-testable without a discord.js Client. The moderation module
- *  gates this; it no longer doubles as the conversational entry gate below. */
-export function autoModGateOpen(cfg: GuildConfig, autoModEligible: boolean, messageContent: boolean): boolean {
-  // Without message text the trigger would act on blank evidence.
-  return messageContent && resolvedModules(cfg).includes("moderation") && autoModEligible;
-}
-
-/** The conversational entry gate: mention/reply + sender holds an allowedRoles role. Independent
- *  of enabledModules — a guild with no modules enabled still gets chat as long as it's configured. */
-export function chatEntryGateOpen(
-  cfg: GuildConfig,
-  opts: { isMention: boolean; isReply: boolean; memberRoleIds: readonly string[] | null },
-): boolean {
-  if (!opts.isMention && !opts.isReply) return false;
-  return opts.memberRoleIds?.some((id) => cfg.allowedRoles.includes(id)) ?? false;
-}
-
-/** Every guild id whose mcpBridgeAllowedUserIds includes the given Discord user id. */
-export function getPermittedGuildIds(
-  guildConfig: Record<string, GuildConfig>,
-  discordUserId: string,
-): string[] {
-  return Object.entries(guildConfig)
-    .filter(([, cfg]) => cfg.mcpBridgeAllowedUserIds?.includes(discordUserId))
-    .map(([guildId]) => guildId);
-}
-
-/** Build a name → Discord syntax map from an emojis array. */
-export function buildEmojiMap(emojis: string[]): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const emoji of emojis) {
-    const match = emoji.match(/^<a?:(\w+):\d+>$/);
-    if (match) map[match[1]] = emoji;
-  }
-  return map;
 }

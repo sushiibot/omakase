@@ -1,6 +1,4 @@
 // The personal agent's server side: the web gateway for the PWA and the workspace control plane.
-// Runs as its own process (and compose service) next to the community bot, on its own database.
-import "./surfaces/web/personalEnv.ts";
 import { exitAfterBackoff } from "./crashBackoff.ts";
 import { otelSDK } from "./telemetry.ts";
 import { initDb, closeDb, getDb } from "./db/index.ts";
@@ -30,7 +28,7 @@ import { createUploadReadHandler } from "./surfaces/web/uploadRoutes.ts";
 import { DiskUploadStore } from "./surfaces/web/uploads.ts";
 
 async function main() {
-  logger.info("Starting sushii-agent personal gateway...");
+  logger.info("Starting omakase gateway...");
 
   await initDb();
   logger.info({ path: config.databasePath }, "Database initialized");

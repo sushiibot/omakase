@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { config } from "../config.ts";
 import type { TeamConfig } from "./teams.ts";
-import { buildTeamIndex, buzzAvatarFor, getTeam, isTeamMember, parseTeams, resolveTeam } from "./teams.ts";
+import { buildTeamIndex, getTeam, isTeamMember, parseTeams, resolveTeam } from "./teams.ts";
 
 // Placeholder ids only — never real guild/team ids in a public repo.
 const TEAMS: Record<string, TeamConfig> = {
@@ -230,37 +230,6 @@ describe("parseTeams: inline buzz block", () => {
     expect(() =>
       parseTeams({ a: { spaces: [{ surface: "discord", spaceId: "g1", buzz: { avatarUrl: "https://img" } }] } }),
     ).toThrow(/buzz is only allowed on a "buzz" surface space/);
-  });
-});
-
-describe("buzzAvatarFor", () => {
-  const prev = config.teams;
-  const prevAvatarUrl = config.buzz.avatarUrl;
-  afterEach(() => {
-    config.teams = prev;
-    config.buzz.avatarUrl = prevAvatarUrl;
-  });
-
-  test("a team space's inline avatarUrl wins over the global fallback", () => {
-    config.teams = {
-      dreamcatcher: {
-        spaces: [{ surface: "buzz", spaceId: "buzz:https://relay.example", buzz: { avatarUrl: "https://team-avatar" } }],
-      },
-    };
-    config.buzz.avatarUrl = "https://fallback-avatar";
-    expect(buzzAvatarFor("buzz:https://relay.example")).toBe("https://team-avatar");
-  });
-
-  test("falls back to BUZZ_AVATAR_URL when no team avatar is set", () => {
-    config.teams = {};
-    config.buzz.avatarUrl = "https://fallback-avatar";
-    expect(buzzAvatarFor("buzz:https://relay.example")).toBe("https://fallback-avatar");
-  });
-
-  test("the no-relay 'buzz' spaceId also falls back to BUZZ_AVATAR_URL with no team avatar", () => {
-    config.teams = {};
-    config.buzz.avatarUrl = "https://fallback-avatar";
-    expect(buzzAvatarFor("buzz")).toBe("https://fallback-avatar");
   });
 });
 

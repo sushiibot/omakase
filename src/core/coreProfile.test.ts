@@ -1,22 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { assembleSystemPrompt } from "./systemPrompt.ts";
 import { updateProfileEntry } from "./tools/portable/tools.ts";
 import { CORE_PROFILE_TITLE } from "./stores/index.ts";
 import type { MemoryEntry, SpaceMemoryStore, ToolContext } from "./contracts.ts";
-
-describe("core profile — system prompt injection", () => {
-  test("coreProfile renders an 'About the user' section when present", () => {
-    const out = assembleSystemPrompt({ behavior: "b", coreProfile: "Prefers dark mode. Uses Bun." });
-    expect(out).toContain("## About the user");
-    expect(out).toContain("Prefers dark mode. Uses Bun.");
-    expect(out).toContain("update_profile");
-  });
-
-  test("no coreProfile → no About-the-user section (parity preserved)", () => {
-    const out = assembleSystemPrompt({ behavior: "b" });
-    expect(out).not.toContain("## About the user");
-  });
-});
 
 describe("core profile — update_profile tool", () => {
   function fakeStore(): SpaceMemoryStore & { last?: { spaceId: string; title: string; content: string } } {

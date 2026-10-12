@@ -230,12 +230,6 @@ describe("tool/call — approval none", () => {
     expect(surface.prompts).toHaveLength(0);
   });
 
-  test("team_config belongs to the community bot and is never proxied", async () => {
-    expect(Object.hasOwn(PROXIED_TOOLS, "team_config")).toBe(false);
-    const { tools } = setup({ registry: createToolRegistry(undefined, () => ALL_ON) });
-    expect(tools.manifest().map((t) => t.name)).not.toContain("team_config");
-  });
-
   test("the tool runs in the owner's private space", async () => {
     const probe = fakeEntry("get_issue_status", { type: "object", properties: { issue_id: { type: "string" } }, required: ["issue_id"] }, async () => "ok");
     const { tools } = setup({ registry: fixedRegistry([probe.entry]) });
