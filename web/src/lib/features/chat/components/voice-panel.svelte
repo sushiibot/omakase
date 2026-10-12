@@ -44,9 +44,7 @@
 		onvoice,
 		onturn,
 		oninterrupt,
-		outputVolume = 1,
-		micReady = true,
-		onvolume
+		micReady = true
 	}: {
 		models: VoiceModel[];
 		provider: string;
@@ -82,9 +80,7 @@
 		onvoice?: (voice: string) => void;
 		onturn?: () => void;
 		oninterrupt?: () => void;
-		outputVolume?: number;
 		micReady?: boolean;
-		onvolume?: (volume: number) => void;
 	} = $props();
 	const active = $derived(callState !== 'idle');
 	const selected = $derived(models.find((m) => m.id === provider));
@@ -301,27 +297,6 @@
 		</p>
 	{/if}
 	{#if error}<p role="alert" class="text-sm text-failed">{error}</p>{/if}
-	<section aria-label="Voice audio" class="flex flex-col gap-2">
-		<div class="flex items-center justify-between gap-2">
-			<label for="voice-output-volume" class="text-sm font-medium">Voice output</label><span
-				class="text-sm tabular-nums">{Math.round(outputVolume * 100)}%</span
-			>
-		</div>
-		<input
-			id="voice-output-volume"
-			class="h-12 w-full accent-primary"
-			type="range"
-			min="0"
-			max="100"
-			step="5"
-			value={Math.round(outputVolume * 100)}
-			oninput={(e) => onvolume?.(Number(e.currentTarget.value) / 100)}
-		/>
-		<p class="text-xs text-muted-foreground">
-			App volume. Your phone controls the speaker and hardware volume. Turn mode releases the
-			microphone while Sushii replies.
-		</p>
-	</section>
 	{#if active}
 		{#if userText}<p class="text-sm"><span class="font-medium">You:</span> {userText}</p>{/if}
 		{#if assistantText}<p class="max-h-40 overflow-y-auto text-sm">

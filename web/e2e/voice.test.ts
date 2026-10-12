@@ -305,7 +305,7 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	await context.addInitScript(() =>
 		localStorage.setItem(
 			'voice:preferences',
-			JSON.stringify({ mode: 'turns', model: 'hexgrad/kokoro-82m', voice: 'bella' })
+			JSON.stringify({ mode: 'turns', model: 'hexgrad/kokoro-82m', voice: 'bella', volume: 0.35 })
 		)
 	);
 	await page.addInitScript(() => {
@@ -424,10 +424,7 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	await page.getByRole('button', { name: 'Voice chat', exact: true }).click();
 	await page.getByRole('button', { name: 'Talk in turns', exact: true }).click();
 	await expect(page.getByLabel('Speaking voice', { exact: true })).toHaveValue('Cherry');
-	await page.getByLabel('Voice output', { exact: true }).evaluate((el) => {
-		(el as HTMLInputElement).value = '35';
-		el.dispatchEvent(new Event('input', { bubbles: true }));
-	});
+	await expect(page.getByLabel('Voice output', { exact: true })).toHaveCount(0);
 	await page.getByRole('button', { name: 'Preview Cherry', exact: true }).click();
 	await expect(page.getByRole('button', { name: 'Stop preview', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Stop preview', exact: true }).click();
@@ -492,10 +489,10 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	expect(
 		await page.evaluate(() =>
 			(window as unknown as { testGains: GainNode[] }).testGains.some(
-				(gain) => Math.abs(gain.gain.value - 0.35) < 0.001
+				(gain) => gain.gain.value !== 0
 			)
 		)
-	).toBe(true);
+	).toBe(false);
 	await expect(page.getByRole('button', { name: 'Send now', exact: true })).toHaveCount(0);
 	expect(
 		await page.evaluate(
@@ -630,7 +627,7 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	expect(saved.model).toBe('future/speech-model');
 	expect(saved.voice).toBe('new-voice');
 	expect(saved.mode).toBe('turns');
-	expect(saved.volume).toBe(0.35);
+	expect(saved.volume).toBeUndefined();
 	expect(
 		await page.evaluate(() =>
 			(window as unknown as { testSessionChanges: string[] }).testSessionChanges.at(-1)

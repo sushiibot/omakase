@@ -70,11 +70,8 @@ export class Voice {
 	phase = $state<'listening' | 'transcribing' | 'working' | 'synthesizing' | 'resuming'>(
 		'listening'
 	);
-	outputVolume = $state(1);
 	micReady = $state(false);
 	#audioSession = new AudioSessionLease();
-	#gain: GainNode | null = null;
-	#previewGain: GainNode | null = null;
 	#input: MediaStreamAudioSourceNode | null = null;
 	#resumingMic = false;
 	previewState = $state<'idle' | 'loading' | 'playing'>('idle');
@@ -126,8 +123,6 @@ export class Voice {
 				if (typeof saved?.model === 'string') this.speechModel = saved.model;
 				if (typeof saved?.voice === 'string') this.speechVoice = saved.voice;
 				if (typeof saved?.provider === 'string') this.provider = saved.provider;
-				if (typeof saved?.volume === 'number' && Number.isFinite(saved.volume))
-					this.outputVolume = Math.max(0, Math.min(1, saved.volume));
 				if (saved?.version !== 2 && this.speechModel === 'hexgrad/kokoro-82m') {
 					this.speechModel = this.speechVoice = '';
 				}
@@ -174,7 +169,6 @@ export class Voice {
 				'voice:preferences',
 				JSON.stringify({
 					version: 2,
-					volume: this.outputVolume,
 					mode: this.mode,
 					provider: this.provider,
 					model: this.speechModel,
@@ -197,13 +191,6 @@ export class Voice {
 		this.speechVoice = voice;
 		this.persist();
 	}
-	setVolume(volume: number) {
-		this.outputVolume = Math.max(0, Math.min(1, volume));
-		if (this.#gain && this.#context)
-			this.#gain.gain.setValueAtTime(this.outputVolume, this.#context.currentTime);
-		if (this.#previewGain) this.#previewGain.gain.value = this.outputVolume;
-		this.persist();
-	}
 	stopPreview() {
 		this.#previewAbort?.abort();
 		this.#previewAbort = null;
@@ -211,7 +198,6 @@ export class Voice {
 		this.#previewContext = null;
 		this.previewState = 'idle';
 		this.previewError = null;
-		this.#previewGain = null;
 		if (this.state === 'idle') this.#audioSession.restore();
 	}
 	async preview() {
@@ -252,10 +238,7 @@ export class Voice {
 			abort.signal.throwIfAborted();
 			const source = context.createBufferSource();
 			source.buffer = buffer;
-			const gain = context.createGain();
-			gain.gain.value = this.outputVolume;
-			this.#previewGain = gain;
-			source.connect(gain).connect(context.destination);
+			source.connect(context.destination);
 			source.onended = () => {
 				if (this.#previewAbort === abort) this.stopPreview();
 			};
@@ -366,9 +349,6 @@ export class Voice {
 			// Resume during the user gesture, before any permission or network awaits.
 			const context = new AudioContext();
 			this.#context = context;
-			this.#gain = context.createGain();
-			this.#gain.gain.value = this.outputVolume;
-			this.#gain.connect(context.destination);
 			await context.resume();
 			const stream = await navigator.mediaDevices.getUserMedia({
 				audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
@@ -568,7 +548,7 @@ export class Voice {
 			if (generation !== this.#generation) return;
 			const source = context.createBufferSource();
 			source.buffer = buffer;
-			source.connect(this.#gain ?? context.destination);
+			source.connect(context.destination);
 			this.#sources.add(source);
 			this.state = 'speaking';
 			source.onended = () => {
@@ -600,7 +580,7 @@ export class Voice {
 		}
 		const source = context.createBufferSource();
 		source.buffer = buffer;
-		source.connect(this.#gain ?? context.destination);
+		source.connect(context.destination);
 		this.#sources.add(source);
 		this.state = 'speaking';
 		source.onended = () => {
@@ -662,7 +642,6 @@ export class Voice {
 		this.muted = false;
 		this.state = 'idle';
 		this.phase = 'listening';
-		this.#gain = null;
 		this.#audioSession.restore();
 	}
 }

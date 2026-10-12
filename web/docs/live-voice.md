@@ -9,7 +9,7 @@ a short work description, microphone control, and **End call**.
 The phases distinguish listening, transcription, agent work, voice generation, and speaking.
 Tool descriptions and approval states come from the conversation activity.
 Select an approval status to review the request in chat.
-Call details contain elapsed time, output volume, and manual sending.
+Call details contain elapsed time and manual sending.
 Transcripts appear automatically as conversation messages.
 While speech is being transcribed, its message is muted and italic.
 A saved message replaces its provisional transcript, using the server request and reply identifiers.
@@ -44,7 +44,6 @@ Turn mode releases the microphone while the agent works or speech plays.
 It opens the microphone again before listening for the next turn.
 Browsers with the Audio Session API receive playback and play-and-record hints.
 Hardware volume and speaker routing remain browser and OS controlled.
-The Voice output slider changes an app gain node and stays on this device.
 Live mode keeps the microphone open for interruption.
 Web voice turns request one or two short spoken sentences, usually under 40 words.
 The reply-style flag persists through offline routing and affects only the current voice reply.
