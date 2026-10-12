@@ -26,6 +26,7 @@
 	let draft = $state('');
 	let theme = $state(false);
 	let compactPreview = $state(false);
+	let viewportHeight = $state('100dvh');
 	let gesture: {
 		id: number;
 		x: number;
@@ -56,6 +57,13 @@
 		drag = null;
 	}
 	onMount(() => {
+		const viewport = window.visualViewport;
+		const measureViewport = () => {
+			// Keyboard overlays change the visual viewport. Pinch zoom keeps the layout stable.
+			viewportHeight = viewport?.scale === 1 ? `${viewport.height}px` : '100dvh';
+		};
+		measureViewport();
+		viewport?.addEventListener('resize', measureViewport);
 		width = workspace.clientWidth;
 		ready = true;
 		let measuredWidth = workspace.clientWidth,
@@ -80,6 +88,7 @@
 		addEventListener('popstate', back);
 		document.addEventListener('visibilitychange', visibility);
 		return () => {
+			viewport?.removeEventListener('resize', measureViewport);
 			resize.disconnect();
 			removeEventListener('blur', recover);
 			removeEventListener('popstate', back);
@@ -196,17 +205,24 @@
 	}}
 />
 
-<div class:dark={theme} class="lab bg-background text-foreground">
+<div
+	class:dark={theme}
+	class="lab bg-background text-foreground"
+	style:--lab-height={viewportHeight}
+>
 	<div class="lab-heading">
 		<div>
 			<h1>Channel interaction lab</h1>
 			<p>Sample content. Drag the chat right for channels or left for details.</p>
 		</div>
 		<div class="lab-actions">
-			<Button variant="outline" onclick={() => (compactPreview = !compactPreview)}
+			<Button
+				class="lab-action"
+				variant="outline"
+				onclick={() => (compactPreview = !compactPreview)}
 				>{compactPreview ? 'Use available width' : 'Phone preview'}</Button
 			>
-			<Button variant="outline" onclick={() => (theme = !theme)}
+			<Button class="lab-action" variant="outline" onclick={() => (theme = !theme)}
 				>{theme ? 'Light theme' : 'Dark theme'}</Button
 			>
 		</div>
@@ -241,11 +257,13 @@
 			aria-hidden={!activeNavigation}
 		>
 			<header>
-				<span class="font-semibold">sushii</span><Button
-					variant="ghost"
-					aria-label="Close channels"
-					onclick={() => selectPane('chat')}><X /></Button
-				>
+				<span class="min-w-0 truncate font-semibold">sushii</span>{#if !wide}<Button
+						size="icon"
+						class="pane-control"
+						variant="ghost"
+						aria-label="Close channels"
+						onclick={() => selectPane('chat')}><X /></Button
+					>{/if}
 			</header>
 			<div class="channels">
 				<button
@@ -273,7 +291,6 @@
 			</div>
 			<footer>
 				<p>Tasks · Activity · Workspace</p>
-				<p>200ms settle · Finger tracking · Retained draft</p>
 			</footer>
 		</nav>
 		<aside
@@ -286,7 +303,9 @@
 			aria-hidden={!activeInspector}
 		>
 			<header>
-				<span class="font-semibold">{selected} details</span><Button
+				<span class="min-w-0 truncate font-semibold">{selected} details</span><Button
+					size="icon"
+					class="pane-control"
 					variant="ghost"
 					aria-label="Close details"
 					onclick={() => selectPane('chat')}><X /></Button
@@ -300,7 +319,9 @@
 				><label><input type="checkbox" />Choose deployment window</label>
 				<h2>Needs your response</h2>
 				<p>Choose a deployment window in the channel conversation.</p>
-				<Button variant="outline" onclick={() => selectPane('chat')}>Return to conversation</Button>
+				<Button class="workspace-action" variant="outline" onclick={() => selectPane('chat')}
+					>Return to conversation</Button
+				>
 			</div>
 		</aside>
 		<div class="chat" data-chat-surface>
@@ -310,13 +331,17 @@
 				aria-hidden={!wide && pane !== 'chat'}
 			>
 				<header>
-					<Button
-						data-open-navigation
-						variant="ghost"
-						aria-label="Open channels"
-						aria-expanded={pane === 'navigation'}
-						onclick={(e) => selectPane('navigation', e.currentTarget)}><Menu /></Button
-					><span class="min-w-0 flex-1 truncate font-semibold">{selected}</span><Button
+					{#if !wide}<Button
+							size="icon"
+							class="pane-control"
+							data-open-navigation
+							variant="ghost"
+							aria-label="Open channels"
+							aria-expanded={pane === 'navigation'}
+							onclick={(e) => selectPane('navigation', e.currentTarget)}><Menu /></Button
+						>{/if}<span class="min-w-0 flex-1 truncate font-semibold">{selected}</span><Button
+						size="icon"
+						class="pane-control"
 						variant="ghost"
 						aria-label="Open details"
 						aria-expanded={activeInspector}
@@ -341,10 +366,14 @@
 						<p>The checks passed. The changes are ready for review.</p>
 						<p id="lab-request">Which deployment window works for you?</p>
 						<div class="choices">
-							<Button variant="outline" onclick={() => (draft = 'Deploy this afternoon')}
-								>This afternoon</Button
-							><Button variant="outline" onclick={() => (draft = 'Deploy tomorrow morning')}
-								>Tomorrow morning</Button
+							<Button
+								class="workspace-action"
+								variant="outline"
+								onclick={() => (draft = 'Deploy this afternoon')}>This afternoon</Button
+							><Button
+								class="workspace-action"
+								variant="outline"
+								onclick={() => (draft = 'Deploy tomorrow morning')}>Tomorrow morning</Button
 							>
 						</div>
 					</article>
@@ -368,7 +397,6 @@
 						bind:value={draft}
 						placeholder="Message this channel…"
 						rows="2"></textarea>
-					<p class="composer-note">Your draft stays here when a panel opens.</p>
 				</div>
 			</div>
 			{#if !wide && pane !== 'chat'}<button
@@ -382,23 +410,33 @@
 
 <style>
 	.lab {
-		min-height: 100dvh;
-		padding: 16px;
+		--content-gutter: 16px;
+		--control-size: 48px;
+		--channel-height: 48px;
+		--channel-gap: 8px;
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		height: var(--lab-height, 100dvh);
+		padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+			max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 	}
 	.lab-heading {
+		flex-shrink: 0;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 16px;
 		max-width: 1440px;
-		margin: 0 auto 16px;
+		width: 100%;
+		margin-inline: auto;
 	}
 	h1 {
-		font-size: 20px;
+		font-size: 1.25rem;
 		font-weight: 600;
 	}
 	.lab-heading p {
-		font-size: 14px;
+		font-size: var(--text-ui);
 		color: var(--muted-foreground);
 		margin-top: 4px;
 	}
@@ -410,10 +448,12 @@
 	.workspace {
 		position: relative;
 		isolation: isolate;
-		height: min(780px, calc(100dvh - 112px));
-		min-height: 440px;
+		flex: 1;
+		min-height: 0;
+		max-height: 780px;
+		width: 100%;
 		max-width: 1440px;
-		margin: auto;
+		margin-inline: auto;
 		overflow: hidden;
 		border: 1px solid var(--border);
 		border-radius: 12px;
@@ -424,6 +464,7 @@
 		max-width: 412px;
 	}
 	header {
+		flex-shrink: 0;
 		display: flex;
 		align-items: center;
 		gap: 8px;
@@ -455,20 +496,34 @@
 	.navigation header,
 	.inspector header {
 		justify-content: space-between;
+		padding-left: var(--content-gutter);
+	}
+	:global(.pane-control) {
+		width: var(--control-size);
+		height: var(--control-size);
+		padding: 0;
+	}
+	:global(.lab-action),
+	:global(.workspace-action) {
+		height: auto;
+		min-height: var(--control-size);
+		padding: 8px 16px;
+		white-space: normal;
+		line-height: 1.5;
 	}
 	.channels {
 		flex: 1;
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--channel-gap);
 		padding: 8px;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 	}
 	.project {
-		margin: 20px 10px 6px;
-		font-size: 12px;
+		margin: 16px 12px 0;
+		font-size: var(--text-meta);
 		font-weight: 600;
 		color: var(--muted-foreground);
 	}
@@ -479,10 +534,10 @@
 		grid-template-columns: 16px minmax(0, 1fr) auto;
 		align-items: center;
 		gap: 8px;
-		padding: 6px 10px;
-		min-height: 36px;
-		font-size: 14px;
-		line-height: 20px;
+		padding: 8px 12px;
+		min-height: var(--channel-height);
+		font-size: var(--text-ui);
+		line-height: 1.5;
 		font-weight: 500;
 		color: var(--muted-foreground);
 		text-align: left;
@@ -508,9 +563,6 @@
 		outline: 2px solid var(--ring);
 		outline-offset: -2px;
 	}
-	.workspace:not(.wide) .channel {
-		min-height: 44px;
-	}
 	.ping {
 		display: grid;
 		place-items: center;
@@ -520,42 +572,43 @@
 		border-radius: 12px;
 		background: var(--waiting-soft);
 		color: var(--waiting);
-		font-size: 12px;
+		font-size: var(--text-meta);
 		font-weight: 600;
 	}
 	footer {
-		padding: 16px;
+		flex-shrink: 0;
+		padding: var(--content-gutter);
 		border-top: 1px solid var(--border);
-		font-size: 13px;
-	}
-	footer p + p {
-		margin-top: 12px;
-		color: var(--muted-foreground);
-		font-size: 12px;
+		font-size: var(--text-ui);
 	}
 	.inspector-content {
-		padding: 20px 16px;
+		flex: 1;
+		min-height: 0;
+		padding: var(--content-gutter);
 		overflow-y: auto;
 		overscroll-behavior: contain;
 	}
 	h2 {
-		font-size: 15px;
+		font-size: var(--text-body);
 		font-weight: 600;
 		margin-bottom: 8px;
 	}
 	.inspector-content h2:not(:first-child) {
-		margin-top: 28px;
+		margin-top: 24px;
 	}
 	.inspector-content label {
 		display: flex;
 		align-items: center;
 		gap: 12px;
 		min-height: 48px;
-		font-size: 14px;
+		font-size: var(--text-ui);
+	}
+	.inspector-content label + label {
+		margin-top: 8px;
 	}
 	.inspector-content p {
 		margin-bottom: 16px;
-		font-size: 14px;
+		font-size: var(--text-ui);
 	}
 	.chat {
 		position: absolute;
@@ -579,12 +632,19 @@
 		align-items: center;
 		justify-content: space-between;
 		min-height: 48px;
-		padding-inline: 16px;
+		flex-shrink: 0;
+		gap: 8px;
+		padding-inline: var(--content-gutter);
 		background: var(--waiting-soft);
 		color: var(--waiting);
-		font-size: 13px;
+		font-size: var(--text-ui);
+	}
+	.request > span {
+		min-width: 0;
+		padding-block: 8px;
 	}
 	.request button {
+		flex-shrink: 0;
 		min-height: 48px;
 		min-width: 48px;
 		font-weight: 600;
@@ -599,25 +659,25 @@
 		min-height: 0;
 		overflow-y: auto;
 		overscroll-behavior: contain;
-		padding: 20px;
+		padding: var(--content-gutter);
 	}
 	article {
 		max-width: 70ch;
-		margin-bottom: 24px;
-		font-size: 14px;
-		line-height: 1.65;
+		margin-bottom: 16px;
+		font-size: var(--text-body);
+		line-height: var(--text-body--line-height);
 	}
 	article > span {
 		font-weight: 600;
 	}
 	time {
 		margin-left: 8px;
-		font-size: 12px;
+		font-size: var(--text-meta);
 		font-weight: 400;
 		color: var(--muted-foreground);
 	}
 	article p {
-		margin-top: 6px;
+		margin-top: 8px;
 	}
 	.choices {
 		display: flex;
@@ -626,6 +686,7 @@
 		margin-top: 12px;
 	}
 	pre {
+		font-size: var(--text-code);
 		overflow-x: auto;
 		padding: 12px;
 		margin-top: 12px;
@@ -634,11 +695,15 @@
 		touch-action: pan-x pan-y;
 	}
 	.composer {
-		padding: 8px 16px max(16px, env(safe-area-inset-bottom));
+		flex-shrink: 0;
+		padding: 8px var(--content-gutter) var(--content-gutter);
 	}
 	.activity {
 		min-height: 24px;
-		font-size: 12px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--text-meta);
 		color: var(--muted-foreground);
 	}
 	textarea {
@@ -648,13 +713,8 @@
 		padding: 12px;
 		border: 1px solid var(--input);
 		border-radius: 8px;
-		font-size: 16px;
+		font-size: 1rem;
 		background: var(--background);
-	}
-	.composer-note {
-		margin-top: 6px;
-		font-size: 12px;
-		color: var(--muted-foreground);
 	}
 	.return-to-chat {
 		position: absolute;
@@ -692,6 +752,9 @@
 		grid-column: 2;
 		grid-row: 1;
 	}
+	.wide .chat header {
+		padding-left: var(--content-gutter);
+	}
 	.wide .inspector {
 		grid-column: 3;
 		grid-row: 1;
@@ -701,18 +764,48 @@
 	}
 	@media (max-width: 640px) {
 		.lab {
-			padding: 8px;
+			gap: 12px;
+			padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+				max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
 		}
 		.lab-heading {
 			flex-direction: column;
 			align-items: flex-start;
-			margin-bottom: 12px;
 		}
-		.workspace {
-			height: calc(100dvh - 164px);
+	}
+	@media (hover: hover) and (pointer: fine) {
+		.wide {
+			--channel-height: 36px;
+			--channel-gap: 2px;
 		}
-		.transcript {
-			padding: 16px;
+		.wide .channel {
+			padding-block: 6px;
+		}
+	}
+	@media (any-pointer: coarse) {
+		.wide {
+			--channel-height: 48px;
+			--channel-gap: 8px;
+		}
+		.wide .channel {
+			padding-block: 8px;
+		}
+	}
+	@media (max-height: 650px) {
+		.lab-heading {
+			gap: 8px;
+		}
+		.lab-heading h1 {
+			/* Demo chrome yields to the conversation at keyboard/landscape heights. */
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
+		}
+		.lab-heading p {
+			display: none;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

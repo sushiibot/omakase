@@ -142,3 +142,90 @@ test('P12 screenshots show coherent compact and desktop layouts in both themes',
 		await page.setViewportSize({ width: 412, height: 915 });
 	}
 });
+
+test('S1 touch targets stay generous on phones and wide touchscreens', async ({ page }) => {
+	for (const width of [320, 412, 1440]) {
+		await page.setViewportSize({ width, height: 915 });
+		if (width < 1100) await page.getByRole('button', { name: 'Open channels' }).click();
+		const rows = await page.locator('.channel').evaluateAll((els) =>
+			els.map((el) => {
+				const { width, height } = el.getBoundingClientRect();
+				return { width, height };
+			})
+		);
+		for (const row of rows) {
+			expect(row.width).toBeGreaterThanOrEqual(48);
+			expect(row.height).toBeGreaterThanOrEqual(48);
+		}
+		expect(await page.locator('.channels').evaluate((el) => getComputedStyle(el).gap)).toBe('8px');
+		if (width < 1100) await page.goBack();
+		const controls = await page.locator('.pane-control:visible').evaluateAll((els) =>
+			els.map((el) => {
+				const { width, height } = el.getBoundingClientRect();
+				return { width, height };
+			})
+		);
+		for (const control of controls) {
+			expect(control.width).toBeCloseTo(48, 2);
+			expect(control.height).toBeCloseTo(48, 2);
+		}
+	}
+});
+
+test('S2 short viewports and enlarged text preserve the composer and inspector scroll', async ({
+	page
+}) => {
+	for (const width of [320, 412]) {
+		await page.setViewportSize({ width, height: 600 });
+		await page.evaluate(() => {
+			document.documentElement.style.fontSize = '32px';
+		});
+		await expect
+			.poll(async () => {
+				const composer = await page.getByRole('textbox', { name: 'Message draft' }).boundingBox();
+				return composer!.y + composer!.height;
+			})
+			.toBeLessThanOrEqual(600);
+		expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+			true
+		);
+		await page.getByRole('button', { name: 'Open details' }).click();
+		await page.getByRole('button', { name: 'Return to conversation' }).scrollIntoViewIfNeeded();
+		const action = await page.getByRole('button', { name: 'Return to conversation' }).boundingBox();
+		expect(action!.y + action!.height).toBeLessThanOrEqual(600);
+		await page.goBack();
+		await page.evaluate(() => {
+			document.documentElement.style.fontSize = '16px';
+		});
+	}
+	await page.setViewportSize({ width: 412, height: 420 });
+	await expect
+		.poll(async () => {
+			const composer = await page.getByRole('textbox', { name: 'Message draft' }).boundingBox();
+			return composer!.y + composer!.height;
+		})
+		.toBeLessThanOrEqual(420);
+});
+
+test('S3 compact navigation requires a mouse-only desktop', async ({ browser, baseURL }) => {
+	const desktop = await browser.newContext({
+		baseURL,
+		viewport: { width: 1440, height: 1000 },
+		isMobile: false,
+		hasTouch: false
+	});
+	try {
+		const page = await desktop.newPage();
+		await page.goto('/interaction-lab');
+		await expect(page.locator('.workspace')).toHaveClass(/wide/);
+		const row = await page.locator('.channel').first().boundingBox();
+		expect(row!.height).toBeCloseTo(36, 2);
+		expect(await page.locator('.channels').evaluate((el) => getComputedStyle(el).gap)).toBe('2px');
+		await page.getByRole('button', { name: 'Open details' }).click();
+		await expect(page.getByRole('button', { name: 'Close details' })).toBeVisible();
+		await page.getByRole('button', { name: 'Close details' }).click();
+		await expect(page.getByRole('button', { name: 'Open details' })).toBeFocused();
+	} finally {
+		await desktop.close();
+	}
+});

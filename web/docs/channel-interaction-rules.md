@@ -141,10 +141,30 @@ The isolated prototype route is `/interaction-lab` under `bun run dev:proto`.
 Its automated browser checks run through `bunx playwright test -c interaction/playwright.config.ts`.
 Its release rules have unit tests in `src/proto-routes/interaction-lab/pane-motion.test.ts`.
 
-The prototype uses 36px desktop rows and 44px mobile rows, with 2px gaps.
-Icons use a fixed 16px column. Labels truncate before request badges.
-Hover uses a quieter background than selection. Keyboard focus has a separate outline.
-The latest synthetic run passed all five checks, with 171ms tap settlement.
+### Shell sizing rules
+
+The table defines Sushii conventions, rather than universal platform requirements.
+[WCAG AA target guidance](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum)
+uses a 24px minimum with exceptions.
+[Android guidance](https://support.google.com/accessibility/android/answer/7101858)
+recommends 48dp targets and 8dp separation.
+Our Android-first web app adopts 48 CSS pixels for touch targets.
+
+| Area             | Rule                                                                                                                                                                   | Verification                                                                                                                |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Touch targets    | At least 48px, with 8px between channel rows and separate controls. Small badges remain informational.                                                                 | Measure target rectangles at 320px, 412px, and wide touch layouts. Measure checkbox labels, not only their visual squares.  |
+| Desktop density  | Channel rows may use 36px height and 2px gaps only in a wide layout with a fine pointer and hover. Any coarse pointer restores touch sizing.                           | Compare mouse-only and mixed-input desktops. This is a deliberate compact navigation exception to the mobile spacing rules. |
+| Icon controls    | Square 48px targets, no text-button padding, 16px icons.                                                                                                               | Compare Menu, Details, and Close target rectangles.                                                                         |
+| Gutters          | One 16px content gutter for transcript, request banner, inspector, and composer. Sidebar rows use 12px internal padding.                                               | Compare visible edges in all panes and both themes.                                                                         |
+| Type             | Shared rem tokens: 15px body at 1.5 leading, 14px UI, 12px metadata, 13px code, and inputs at least 1rem.                                                              | Increase root text to 200%. Check wrapped action labels and overflow.                                                       |
+| Message rhythm   | 16px between messages; 8px between paragraphs.                                                                                                                         | Compare short exchanges and long replies without excessive empty space.                                                     |
+| Inspector rhythm | 16px inset, 24px section separation, 8px below headings. Checkbox label targets remain at least 48px.                                                                  | Scroll to the last action in a short viewport.                                                                              |
+| Viewport         | Let the heading occupy its actual height. The workspace fills the remainder with no hard minimum height. Use the visual viewport at normal zoom for keyboard overlays. | Check short heights and wrapped demo controls. Real phone keyboards remain a device gate.                                   |
+| Insets           | Apply safe-area padding once at the outer frame.                                                                                                                       | Check portrait and landscape system insets.                                                                                 |
+| States           | Keep the same row geometry across idle, hover, selected, and focus. Hover is quieter than selection; focus has its own outline.                                        | Compare Main and grouped channels across both themes.                                                                       |
+
+The sidebar icon column stays 16px wide. Labels truncate before request badges.
+Prototype explanations stay outside the composer and navigation footer.
 Physical phone feel and keyboard behavior still need device review.
 
 The additive backend provides a channel catalog and shared request discovery.
