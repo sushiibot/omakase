@@ -32,7 +32,6 @@ export const codingAgentRecord = z
 export type CodingAgentRecord = z.infer<typeof codingAgentRecord>;
 
 const KEY = "coding-agent:";
-const MAX_AGENTS = 1000;
 
 export class CodingAgentStore {
   constructor(private state: JsonState) {}

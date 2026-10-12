@@ -22,6 +22,7 @@ import { USER_MD_CAP, capContent } from "./home.ts";
 import { createMemoryGuardExtension } from "./memoryGuard.ts";
 import { createSecretGuardExtension } from "./secretGuard.ts";
 import { KNOWN_PROXIED_TOOLS, type ToolStubs } from "./toolStubs.ts";
+import { CODING_AGENT_TOOL } from "../orchestration/machines/agents.ts";
 
 const log = getLogger("workspace.job");
 
@@ -116,8 +117,9 @@ export async function runToolFreeJob(config: WorkspaceConfig, input: ToolFreeJob
   const systemPrompt = jobSystemPrompt(config.home, input.systemPrompt, input.contextFiles);
   const withTools = input.readOnlyTools !== undefined;
   // Approval-gated tools would park a job past its own timeout; jobs only get tools that run without asking.
+  // A job never launches coding agents: their results report to a conversation, which a job has none of.
   const jobStubTools = (input.readOnlyTools?.toolStubs
-    ? KNOWN_PROXIED_TOOLS.filter((n) => input.readOnlyTools?.toolStubs?.entry(n)?.approval === "none")
+    ? KNOWN_PROXIED_TOOLS.filter((n) => n !== CODING_AGENT_TOOL && input.readOnlyTools?.toolStubs?.entry(n)?.approval === "none")
     : []) as string[];
   const stubs = input.readOnlyTools?.toolStubs?.binding({ agentId: input.agentName, agentName: input.agentName });
   const guards: { name: string; factory: ExtensionFactory }[] = withTools

@@ -98,7 +98,7 @@ An agent is a Codex or Claude Code session the owner's agent delegates to a codi
 { "action": "stop", "id": "<agent-id>" }
 ```
 
-The gateway records each agent, with the conversation that started it, before launch. A repeated start with the same ID is idempotent on the daemon. The daemon keeps the latest 64 KB of visible output. Up to four agents can work at once. Work continues through a gateway connection loss; it is marked interrupted after a daemon restart.
+An agent starts only on a daemon that reports agent status; update and restart an older daemon first. A call from outside a web conversation, such as a scheduled job, reports to Main; scheduled jobs cannot start agents. The gateway records each agent, with the conversation that started it, before launch. A repeated start with the same ID is idempotent on the daemon. The daemon keeps the latest 64 KB of visible output. Up to four agents can work at once. Work continues through a gateway connection loss; it is marked interrupted after a daemon restart.
 
 A message reaches an agent in any state. An idle agent resumes its transcript with it. A running Codex turn is steered with it. A running Claude Code turn is interrupted, then resumed with it. An agent waiting on an approval takes no message until the owner answers.
 

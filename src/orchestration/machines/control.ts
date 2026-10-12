@@ -61,6 +61,11 @@ export class MachineControl {
       throw new Error(
         "This machine, provider or coding folder is unavailable.",
       );
+    // Without session events the agent's result would never arrive; nobody would hear it finish.
+    if (!this.hub.supportsEvents(input.machineId))
+      throw new Error(
+        "This machine's daemon does not report agent status. Update and restart the machine daemon, or retry in a few seconds if it just connected.",
+      );
     const at = new Date().toISOString();
     const agent: CodingAgentRecord = {
       id: `a-${crypto.randomUUID()}`,
@@ -94,13 +99,15 @@ export class MachineControl {
     origin: ActionOrigin,
   ) {
     const requestId = `p-${crypto.randomUUID()}`;
-    this.observer?.noteAction(id, origin, true);
-    return this.session(
+    const record = await this.session(
       machineId,
       this.hub.supportsEvents(machineId)
         ? { action: "message", sessionId: id, requestId, text, origin }
         : { action: "prompt", sessionId: id, requestId, text },
     );
+    // Counted once the agent took it: a refused message is not an automatic cycle.
+    this.observer?.noteAction(id, origin, true);
+    return record;
   }
   stopSession(machineId: string, id: string) {
     return this.session(machineId, { action: "stop", sessionId: id });

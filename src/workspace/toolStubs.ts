@@ -22,6 +22,7 @@ export const KNOWN_PROXIED_TOOLS: readonly string[] = [
   "request_current_location",
   "task_manage",
   "machine_files",
+  "coding_agent",
   "list_channel_requests",
 ];
 

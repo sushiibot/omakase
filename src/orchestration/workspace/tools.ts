@@ -291,7 +291,9 @@ export class WorkspaceTools {
       if (!this.codingAgents || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Coding agents are unavailable." };
       if (!Check(codingAgentManifest.inputSchema, p.args ?? {})) return { ok: false, error: "Invalid coding agent request." };
       try {
-        return { ok: true, result: JSON.stringify(await this.codingAgents(p.args, p.origin?.conversationId)) };
+        // Results report to a web conversation; a call from elsewhere (a job, another surface) reports to Main.
+        const conversationId = p.origin?.surface === "web" ? p.origin.conversationId : "main";
+        return { ok: true, result: JSON.stringify(await this.codingAgents(p.args, conversationId)) };
       } catch (err) { return { ok: false, error: errorText(err) }; }
     }
     if (p.name === "list_channel_requests") {
