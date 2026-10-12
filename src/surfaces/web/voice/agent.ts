@@ -3,12 +3,13 @@ import type { AskAgent } from "./session.ts";
 import { ulid } from "../../../workspace/ulid.ts";
 /** Uses the same durable input routes, actor and approval flow as typed web chat. */
 export function createVoiceAgent(threads: WebThreads): AskAgent {
-  return async (text, actor, conversation, signal) => {
+  return async (text, actor, conversation, signal, onlink) => {
     const channel = threads.channel(conversation);
     if (signal.aborted) throw new Error("Voice call ended");
     if (channel.adapter.openTurns().length)
       return "Sushii is already working. Wait for the current turn or use the web chat to steer it.";
     const clientId = ulid();
+    onlink?.({ userId: clientId });
     let unsubscribe = () => {};
     let timer: ReturnType<typeof setTimeout>;
     let rejectReply: (reason: Error) => void = () => {};
@@ -16,8 +17,13 @@ export function createVoiceAgent(threads: WebThreads): AskAgent {
     const reply = new Promise<string>((resolve, reject) => {
       rejectReply = reject;
       unsubscribe = channel.adapter.subscribeReply((reply) => {
-        if (reply.kind === "reply" && reply.replyTo === clientId)
+        if (reply.kind === "reply" && reply.replyTo === clientId) {
+          onlink?.({
+            userId: clientId,
+            ...(reply.turnId ? { assistantId: reply.turnId } : {}),
+          });
           resolve(reply.text);
+        }
       });
       timer = setTimeout(
         () =>

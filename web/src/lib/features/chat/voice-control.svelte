@@ -91,8 +91,6 @@
 		outputVolume={voice.outputVolume}
 		micReady={voice.micReady}
 		onvolume={(value) => voice.setVolume(value)}
-		captionsVisible={voice.captionsVisible}
-		oncaptions={() => (voice.captionsVisible = !voice.captionsVisible)}
 		previewState={voice.previewState}
 		previewError={voice.previewError}
 		onpreview={() => void voice.preview()}

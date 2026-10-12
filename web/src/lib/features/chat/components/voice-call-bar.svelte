@@ -39,8 +39,6 @@
 		oninterrupt?: () => void;
 		seconds?: number;
 		apiLabel?: string;
-		captionsVisible?: boolean;
-		oncaptions?: () => void;
 		onturn?: () => void;
 	} = $props();
 	const status = $derived(

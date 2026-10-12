@@ -9,7 +9,11 @@ a short work description, microphone control, and **End call**.
 The phases distinguish listening, transcription, agent work, voice generation, and speaking.
 Tool descriptions and approval states come from the conversation activity.
 Select an approval status to review the request in chat.
-Call details contain captions, elapsed time, output volume, and manual sending.
+Call details contain elapsed time, output volume, and manual sending.
+Transcripts appear automatically as conversation messages.
+While speech is being transcribed, its message is muted and italic.
+A saved message replaces its provisional transcript, using the server request and reply identifiers.
+Replies stay after the user message, including while the agent streams.
 The normal chat activity line is hidden during calls to avoid duplicate status.
 Chat messages, tools, and approvals stay visible.
 You can interrupt spoken replies. Open the phone button to review settings; **Back to chat** keeps the call open.
@@ -18,7 +22,7 @@ Captions show your speech and the spoken reply while the call runs. Captions reu
 Partial text is muted and italic, and returns to normal styling when the provider finalizes it.
 The empty-thread greeting disappears once voice text arrives. Providers control transcript timing; some text arrives only after a pause.
 The adapters accept input transcript deltas, interim revisions, and completed text where the provider sends them.
-Captions show the latest exchange and do not replace durable chat messages.
+Provider-only speech stays visible during the call. Agent requests and replies use their durable chat messages.
 **End call**, navigation, a hidden page, or the 15-minute limit ends the call and releases the microphone.
 Dictate remains available outside calls. During a call, the voice session owns the microphone.
 
@@ -29,7 +33,9 @@ Speak naturally. A 1.2-second pause sends the turn automatically.
 **Send now** remains available to submit sooner.
 Local audio detection retains 400 ms before speech and ignores silence and brief clicks.
 It uses audio level thresholds, so noisy rooms and quiet voices can affect detection.
-The server transcribes the recording and sends the text to the existing conversation agent.
+Browser speech recognition supplies live preview text when available.
+The server transcribes the recording and sends the final text to the existing conversation agent.
+A browser without live recognition still shows the final transcript after the pause.
 The selected speech model reads the reply through OpenRouter.
 Tools and approvals stay in the chat.
 Select **Stop speaking** to stop the spoken reply.
@@ -209,3 +215,14 @@ All Qwen tools use nested function definitions.
 Protocol tests cover the model catalog, regional prices, family-specific setup, tools, duplicate requests, interruptions, and result scheduling.
 Browser tests cover audio capture, playback, mute, ending calls, and missing credentials.
 These checks use simulated providers. Real provider validation requires provisioned API credentials.
+
+## Dictation previews
+
+Dictation also starts browser speech recognition when available.
+The browser recognition service may process speech outside the bot's configured transcription API.
+Live text appears as a muted, italic message in the conversation.
+The recorded-audio transcription remains the final text.
+**Stop dictating** puts that text in the draft for editing.
+**Send dictation now** stops recording, finishes transcription, and sends it once.
+Both actions preserve the existing draft text.
+Cancelling a take discards its live preview and prevents a late result from being sent.

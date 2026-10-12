@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext } from '@playwright/test';
+import { mockRecognition, recognize } from './live-transcription';
 import { axe, checkScreen, fixtureApp, push } from './helpers';
 test.use({
 	launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] },
@@ -141,7 +142,7 @@ test('PCM streams in both directions, interruption stops playback, mute and end 
 	connection.send(JSON.stringify({ type: 'interrupted' }));
 	await expect(page.getByText('Listening', { exact: false })).toBeVisible();
 	await expect(page.getByRole('dialog', { name: 'Voice chat' })).toBeHidden();
-	const captions = page.getByRole('region', { name: 'Voice captions', exact: true });
+	const captions = page.locator('[data-voice-message]').last();
 	const transcript = (text: string, extra = {}) =>
 		connection.send(
 			JSON.stringify({
@@ -176,7 +177,7 @@ test('PCM streams in both directions, interruption stops playback, mute and end 
 	connection.send(
 		JSON.stringify({ type: 'transcript', role: 'assistant', text: 'I will check.', final: false })
 	);
-	await expect(captions.getByText('I will check.', { exact: true })).toHaveClass(/italic/);
+	await expect(captions.locator('[data-message-text]')).toHaveClass(/italic/);
 	connection.send(
 		JSON.stringify({
 			type: 'transcript',
@@ -187,16 +188,9 @@ test('PCM streams in both directions, interruption stops playback, mute and end 
 		})
 	);
 	connection.send(JSON.stringify({ type: 'turn_done' }));
-	await expect(captions.getByText('I will check.', { exact: true })).not.toHaveClass(/italic/);
-	await expect(captions.getByText('Voice', { exact: true })).toHaveCount(2);
-	await page.getByRole('button', { name: 'Voice call details' }).click();
-	await page.getByRole('button', { name: 'Hide voice captions' }).click();
-	await page.getByRole('button', { name: 'Back to chat' }).click();
-	await expect(captions).toBeHidden();
-	await page.getByRole('button', { name: 'Voice call details' }).click();
-	await page.getByRole('button', { name: 'Show voice captions' }).click();
-	await page.getByRole('button', { name: 'Back to chat' }).click();
-	await expect(captions).toBeVisible();
+	await expect(captions.locator('[data-message-text]')).not.toHaveClass(/italic/);
+	await expect(captions.getByText('Voice', { exact: true })).toBeVisible();
+	await expect(captions.getByText('Voice', { exact: true })).toBeVisible();
 
 	connection.send(JSON.stringify({ type: 'agent', state: 'working' }));
 	await expect(page.getByRole('region', { name: 'Voice call' })).toContainText('Working');
@@ -307,6 +301,7 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	context
 }) => {
 	await withVoice(context);
+	await mockRecognition(context);
 	await context.addInitScript(() =>
 		localStorage.setItem(
 			'voice:preferences',
@@ -464,6 +459,12 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	await expect(page.getByRole('dialog', { name: 'Voice chat' })).toBeHidden();
 	expect(selectedUrl).toContain('mode=turns');
 	expect(selectedUrl).toContain('model=future%2Fspeech-model');
+	await recognize(page, 'Check my calender');
+	const provisional = page.locator('[data-voice-message]').last().locator('[data-message-text]');
+	await expect(provisional).toHaveText('Check my calender');
+	await expect(provisional).toHaveClass(/italic/);
+	await recognize(page, 'Check my calendar');
+	await expect(provisional).toHaveText('Check my calendar');
 	await page.evaluate(async () => {
 		const capture = (window as unknown as { testCapture: AudioWorkletNode }).testCapture;
 		await (capture.context as AudioContext).suspend();
@@ -501,6 +502,32 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 			() => (window as unknown as { testCapture: AudioWorkletNode }).testCapture.context.state
 		)
 	).toBe('suspended');
+	connection.send(
+		JSON.stringify({
+			type: 'transcript',
+			role: 'user',
+			text: 'Check my calendar',
+			final: true,
+			replace: true
+		})
+	);
+	connection.send(
+		JSON.stringify({ type: 'linked', userId: 'voice-request', assistantId: 'voice-work' })
+	);
+	await push(
+		page,
+		'user',
+		{
+			key: 'voice-request',
+			text: 'Check my calendar',
+			uploadIds: [],
+			at: new Date().toISOString()
+		},
+		1
+	);
+	await expect(
+		page.locator('[data-message-text]').filter({ hasText: 'Check my calendar' })
+	).toHaveCount(1);
 	connection.send(JSON.stringify({ type: 'phase', state: 'working' }));
 	connection.send(JSON.stringify({ type: 'agent', state: 'working' }));
 	await push(page, 'snapshot', {
@@ -523,6 +550,23 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	await expect(page.getByRole('region', { name: 'Voice call' })).toContainText(
 		'Searching calendar for a free afternoon'
 	);
+	await push(page, 'delta', { turnId: 'voice-work', offset: 0, text: 'Your calendar is clear.' });
+	connection.send(
+		JSON.stringify({
+			type: 'transcript',
+			role: 'assistant',
+			text: 'Your calendar is clear.',
+			final: true,
+			replace: true
+		})
+	);
+	await expect(
+		page.locator('[data-message-text]').filter({ hasText: 'Your calendar is clear.' })
+	).toHaveCount(1);
+	const ordered = await page.locator('[data-message-id]').allTextContents();
+	expect(ordered.findIndex((t) => t.includes('Check my calendar'))).toBeLessThan(
+		ordered.findIndex((t) => t.includes('Your calendar is clear.'))
+	);
 	await push(
 		page,
 		'approval',
@@ -535,13 +579,13 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 				fields: [{ key: 'to', value: 'dentist@example.com', kind: 'single', max: 200 }]
 			}
 		},
-		1
+		2
 	);
 	await expect(page.getByRole('region', { name: 'Voice call' })).toContainText('Approval needed');
 	await page.getByRole('button', { name: 'Review voice request in chat' }).click();
 	await expect(page).toHaveURL(/approve=voice-approval/);
 	await expect(page.getByRole('dialog', { name: 'Voice chat' })).toBeHidden();
-	await push(page, 'approval_resolved', { nonce: 'voice-approval', decision: 'deny' }, 2);
+	await push(page, 'approval_resolved', { nonce: 'voice-approval', decision: 'deny' }, 3);
 	await push(page, 'turn_final', {
 		turnId: 'voice-work',
 		outcome: 'done',

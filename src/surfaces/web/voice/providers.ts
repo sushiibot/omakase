@@ -134,6 +134,7 @@ export function publicModels(configs: VoiceConfig[]): VoiceModel[] {
 }
 export type VoiceEvent =
   | { type: "ready"; inputRate: number }
+  | { type: "linked"; userId: string; assistantId?: string }
   | { type: "audio"; audio: string; sampleRate: number; responseId?: string }
   | {
       type: "transcript";

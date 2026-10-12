@@ -1,9 +1,62 @@
-import type { SpeechModel, VoiceModel } from './types';
+import type { ChatMessage, SpeechModel, VoiceModel } from './types';
 import { TurnDetector } from './render/turn-detector';
 import { voiceProvider } from './render/voice-provider';
+import { LiveTranscription } from './render/live-transcription';
+import { voiceMessages, type VoiceTranscript } from './render/voice-messages';
 import { AudioSessionLease } from './render/audio-session';
 
 export class Voice {
+	transcripts = $state.raw<VoiceTranscript[]>([]);
+	#liveText = new LiveTranscription();
+	#captionIndex = -1;
+	constructor(private currentMessages: () => ChatMessage[] = () => []) {}
+	project(messages: ChatMessage[]): ChatMessage[] {
+		return voiceMessages(messages, this.transcripts);
+	}
+	#beginCaption(clearReply = true) {
+		if (clearReply) {
+			this.assistantText = '';
+			this.assistantFinal = false;
+		}
+		this.#captionIndex = this.transcripts.length;
+		this.transcripts = [
+			...this.transcripts,
+			{
+				id: `voice:${this.#generation}:${this.#captionIndex}`,
+				anchors: this.currentMessages().map((m) => m.id),
+				userText: '',
+				userFinal: false,
+				assistantText: '',
+				assistantFinal: false
+			}
+		];
+	}
+	#syncCaption(link: { userId?: string; assistantId?: string } = {}) {
+		if (this.#captionIndex < 0) this.#beginCaption(false);
+		this.transcripts = this.transcripts.map((t, i) =>
+			i === this.#captionIndex
+				? {
+						...t,
+						userText: this.userText,
+						userFinal: this.userFinal,
+						assistantText: this.assistantText,
+						assistantFinal: this.assistantFinal,
+						...link
+					}
+				: t
+		);
+	}
+	#startLiveText() {
+		if (this.mode !== 'turns' || this.muted) return;
+		this.#liveText.start((text) => {
+			if (this.turnBusy || !this.micReady || !text) return;
+			if (this.#userFresh) this.#beginCaption();
+			this.#userFresh = false;
+			this.userText = text;
+			this.userFinal = false;
+			this.#syncCaption();
+		});
+	}
 	models = $state<VoiceModel[]>([]);
 	provider = $state('');
 	mode = $state<'turns' | 'live'>('turns');
@@ -38,7 +91,6 @@ export class Voice {
 	agentWorking = $state(false);
 	userText = $state('');
 	userFinal = $state(false);
-	captionsVisible = $state(true);
 	#userCommitted = '';
 	#userItem: string | undefined;
 	assistantText = $state('');
@@ -241,6 +293,7 @@ export class Voice {
 	}
 	#pauseMic() {
 		this.micReady = false;
+		this.#liveText.stop();
 		this.#input?.disconnect();
 		this.#input = null;
 		for (const track of this.#stream?.getTracks() ?? []) {
@@ -273,6 +326,7 @@ export class Voice {
 			this.#input.connect(this.#capture!);
 			this.micReady = true;
 			this.phase = 'listening';
+			this.#startLiveText();
 		} catch {
 			if (generation === this.#generation)
 				this.#fail('Could not resume the microphone. Start a new call.');
@@ -293,6 +347,8 @@ export class Voice {
 		this.persist();
 		this.turnBusy = false;
 		this.error = null;
+		this.transcripts = [];
+		this.#captionIndex = -1;
 		this.userText = this.assistantText = '';
 		this.userFinal = this.assistantFinal = false;
 		this.#userCommitted = '';
@@ -404,6 +460,8 @@ export class Voice {
 		sampleRate?: number;
 		message?: string;
 		state?: string;
+		userId?: string;
+		assistantId?: string;
 	}) {
 		switch (event.type) {
 			case 'ready':
@@ -411,6 +469,7 @@ export class Voice {
 				if (this.#timeout) clearTimeout(this.#timeout);
 				this.#timeout = null;
 				this.state = 'listening';
+				this.#startLiveText();
 				this.#timer = setInterval(() => this.seconds++, 1000);
 				break;
 			case 'audio':
@@ -430,10 +489,26 @@ export class Voice {
 				this.#assistantFresh = true;
 				this.state = 'listening';
 				break;
+			case 'linked': {
+				const existing = this.transcripts.findIndex((t) => t.userId === event.userId);
+				const link = {
+					userId: event.userId,
+					...(event.assistantId ? { assistantId: event.assistantId } : {})
+				};
+				if (existing >= 0)
+					this.transcripts = this.transcripts.map((t, i) =>
+						i === existing ? { ...t, ...link } : t
+					);
+				else this.#syncCaption(link);
+				break;
+			}
 			case 'transcript':
 				if (event.role === 'user') {
 					const fresh = event.itemId ? event.itemId !== this.#userItem : this.#userFresh;
-					if (fresh) this.#userCommitted = '';
+					if (fresh) {
+						this.#beginCaption();
+						this.#userCommitted = '';
+					}
 					this.#userItem = event.itemId;
 					this.#userFresh = false;
 					if (event.interim) {
@@ -455,6 +530,7 @@ export class Voice {
 					).slice(-24000);
 					this.assistantFinal = event.final === true;
 				}
+				this.#syncCaption();
 				break;
 			case 'phase':
 				if (
@@ -471,6 +547,7 @@ export class Voice {
 					void this.#resumeMic();
 				}
 				this.assistantFinal = true;
+				if (this.#captionIndex >= 0) this.#syncCaption();
 				this.#userFresh = this.#assistantFresh = true;
 				break;
 			case 'agent':
@@ -538,6 +615,8 @@ export class Voice {
 	}
 	mute() {
 		this.muted = !this.muted;
+		if (this.muted) this.#liveText.stop();
+		else if (this.micReady) this.#startLiveText();
 		this.#turnDetector.reset();
 		if (this.mode === 'turns' && !this.turnBusy && this.#socket?.readyState === WebSocket.OPEN)
 			this.#socket.send(JSON.stringify({ type: 'clear' }));

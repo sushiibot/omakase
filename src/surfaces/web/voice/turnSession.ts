@@ -128,6 +128,7 @@ export class TurnVoiceSession {
         this.actor,
         this.conversation,
         signal,
+        (link) => this.emit({ type: "linked", ...link }),
       );
       if (this.closed || signal.aborted) return;
       this.emit({

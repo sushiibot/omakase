@@ -23,7 +23,6 @@
 		Voice,
 		VoiceCallBar,
 		channelActivity,
-		VoiceCaptions,
 		type ChatSheet,
 		type ChatMessage,
 		type FileRef
@@ -47,7 +46,7 @@
 		untrack(() => preview.setExpanded(expanded));
 	});
 	const voiceSheet = routedSheet('voice');
-	const voice = new Voice();
+	const voice = new Voice(() => store?.messages ?? []);
 	let voiceActive = $state(false);
 	let branchFrom = $state<{ id: string; quote: string } | null>(null);
 	let threadTitle = $state('');
@@ -67,9 +66,10 @@
 	let modelRole = $state<'main' | 'fallback'>('main');
 	// The transcript joins whatever is already in the box, like keyboard dictation. Kept on screen while
 	// it runs, so a feature flip can't hide the stop control of a recording in progress.
-	const dictation = new Dictation((text) => {
+	const dictation = new Dictation((text, send) => {
 		const draft = store.draft.trimEnd();
 		store.setDraft(draft ? `${draft} ${text}` : text);
+		if (send) void store.send(store.draft);
 	});
 	const sheet = $derived((Object.keys(sheets) as ChatSheet[]).find((s) => sheets[s].open));
 	const focusAsk = $derived(page.url.searchParams.get('ask') ?? undefined);
@@ -231,21 +231,11 @@
 		muted={voice.muted}
 		seconds={voice.seconds}
 		agentWorking={voice.agentWorking}
-		captionsVisible={voice.captionsVisible}
 		error={voice.error}
 		onmute={() => voice.mute()}
 		onstop={() => voice.stop()}
-		oncaptions={() => (voice.captionsVisible = !voice.captionsVisible)}
 		ondetails={() => voiceSheet.openWith()}
 	/>
-{/snippet}
-{#snippet voiceCaptions()}
-	{#if voice.captionsVisible && voice.state !== 'idle'}<VoiceCaptions
-			userText={voice.userText}
-			userFinal={voice.userFinal}
-			assistantText={voice.assistantText}
-			assistantFinal={voice.assistantFinal}
-		/>{/if}
 {/snippet}
 
 {#snippet voiceControls()}
@@ -281,7 +271,11 @@
 			contextBoundaryId={sheets['context-boundary'].arg}
 			title="Sushii"
 			approvalSubmitting={s.trayPhase === 'submitting'}
-			messages={s.messages}
+			messages={voice.project(s.messages)}
+			dictationTranscript={dictation.state === 'recording' || dictation.state === 'transcribing'
+				? dictation.partialText ||
+					(dictation.state === 'recording' ? 'Listening…' : 'Transcribing…')
+				: ''}
 			history={s.history}
 			hasOlder={s.hasOlder}
 			olderLoading={s.olderLoading}
@@ -310,10 +304,10 @@
 				disabled: voiceActive
 			}}
 			ondictate={() => dictation.toggle()}
+			ondictatesend={() => dictation.sendNow()}
 			voice={voiceControls}
 			{voiceStatus}
 			{browserPreview}
-			{voiceCaptions}
 			voiceActive={voice.state !== 'idle'}
 			voiceHasContent={voice.state !== 'idle' && !!(voice.userText || voice.assistantText)}
 			onpickmodel={(alias, role) => void models.pick(alias, role).then((ok) => ok && closeSheet())}

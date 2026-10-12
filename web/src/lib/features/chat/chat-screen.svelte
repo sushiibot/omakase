@@ -64,6 +64,8 @@
 		onmodelquery,
 		dictation = null,
 		ondictate,
+		ondictatesend,
+		dictationTranscript = '',
 		voice,
 		voiceStatus,
 		browserPreview,
@@ -155,6 +157,8 @@
 		/** Speech to text in the composer; null hides the mic. */
 		dictation?: ComponentProps<typeof Composer>['dictation'];
 		ondictate?: () => void;
+		ondictatesend?: () => void;
+		dictationTranscript?: string;
 		voice?: Snippet;
 		voiceStatus?: Snippet;
 		browserPreview?: Snippet;
@@ -344,7 +348,23 @@
 	const canShare = typeof navigator !== 'undefined' && 'share' in navigator;
 	let copyNote = $state('');
 	let copied = $state<string | undefined>();
-	const empty = $derived(history !== 'loading' && messages.length === 0 && !voiceHasContent);
+	const displayedMessages = $derived(
+		dictationTranscript
+			? [
+					...messages,
+					{
+						id: 'dictation:pending',
+						role: 'user' as const,
+						voice: true,
+						partial: true,
+						parts: [{ type: 'text' as const, text: dictationTranscript }]
+					}
+				]
+			: messages
+	);
+	const empty = $derived(
+		history !== 'loading' && displayedMessages.length === 0 && !voiceHasContent
+	);
 
 	$effect(() => {
 		if (history !== 'loading') {
@@ -360,7 +380,7 @@
 
 	let lastTail = '';
 	$effect(() => {
-		const tail = messages.at(-1);
+		const tail = displayedMessages.at(-1);
 		const sig = tail ? `${tail.id}:${JSON.stringify(tail.parts).length}` : '';
 		if (sig === lastTail) return;
 		const first = !lastTail;
@@ -697,6 +717,7 @@
 				onmodel={onopensheet ? () => onopensheet?.('model') : undefined}
 				{dictation}
 				{ondictate}
+				{ondictatesend}
 			/>
 		</div>
 	{/if}
@@ -764,7 +785,7 @@
 				<p role="status" class="sr-only">Loading messages…</p>
 			{/if}
 			<Conversation
-				{messages}
+				messages={displayedMessages}
 				{focusAsk}
 				{openTurn}
 				{openStep}

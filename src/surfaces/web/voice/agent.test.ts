@@ -6,6 +6,7 @@ import type { WebThreads } from "../threadRoutes.ts";
 test("voice uses a valid durable chat ID and waits for the matching agent reply", async () => {
   let listener: (reply: any) => void = () => {};
   let unsubscribed = false;
+  const links: { userId: string; assistantId?: string }[] = [];
   const actor = mintWebActor("owner@example.com");
   const threads = {
     channel: (conversation: string) => {
@@ -32,11 +33,13 @@ test("voice uses a valid durable chat ID and waits for the matching agent reply"
             expect(body.clientId).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
             expect(body.text).toBe("check my calendar");
             expect(body.voice).toBe(true);
+            expect(links).toEqual([{ userId: body.clientId }]);
             listener({ kind: "reply", replyTo: "other", text: "unrelated" });
             listener({
               kind: "reply",
               replyTo: body.clientId,
               text: "Your calendar is clear.",
+              turnId: "calendar-turn",
             });
             return new Response(null, { status: 202 });
           },
@@ -50,7 +53,12 @@ test("voice uses a valid durable chat ID and waits for the matching agent reply"
       actor,
       "topic",
       new AbortController().signal,
+      (link) => links.push(link),
     ),
   ).toBe("Your calendar is clear.");
   expect(unsubscribed).toBe(true);
+  expect(links).toEqual([
+    { userId: links[0]!.userId },
+    { userId: links[0]!.userId, assistantId: "calendar-turn" },
+  ]);
 });

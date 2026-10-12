@@ -9,6 +9,7 @@ export type AskAgent = (
   actor: SurfaceActor,
   conversation: string,
   signal: AbortSignal,
+  onlink?: (link: { userId: string; assistantId?: string }) => void,
 ) => Promise<string>;
 export const VOICE_SESSION_MS = 15 * 60 * 1000;
 export const VOICE_BUFFER_MAX = 256 * 1024;
@@ -187,7 +188,13 @@ export class VoiceSession {
           "Request accepted. Sushii is working in the web chat. You can keep talking; its result will be announced when ready. Approvals stay in the web chat.",
         );
         this.queueToolResult(messages);
-        void this.ask(args.request, this.actor, this.conversation, abort.signal)
+        void this.ask(
+          args.request,
+          this.actor,
+          this.conversation,
+          abort.signal,
+          (link) => this.emit({ type: "linked", ...link }),
+        )
           .catch(
             () =>
               "Sushii couldn't finish this request. Check the web chat for status or approvals, then try again.",

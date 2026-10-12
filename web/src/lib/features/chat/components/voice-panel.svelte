@@ -46,9 +46,7 @@
 		oninterrupt,
 		outputVolume = 1,
 		micReady = true,
-		onvolume,
-		captionsVisible = true,
-		oncaptions
+		onvolume
 	}: {
 		models: VoiceModel[];
 		provider: string;
@@ -87,8 +85,6 @@
 		outputVolume?: number;
 		micReady?: boolean;
 		onvolume?: (volume: number) => void;
-		captionsVisible?: boolean;
-		oncaptions?: () => void;
 	} = $props();
 	const active = $derived(callState !== 'idle');
 	const selected = $derived(models.find((m) => m.id === provider));
@@ -327,9 +323,6 @@
 		</p>
 	</section>
 	{#if active}
-		<Button variant="outline" onclick={oncaptions}
-			>{captionsVisible ? 'Hide voice captions' : 'Show voice captions'}</Button
-		>
 		{#if userText}<p class="text-sm"><span class="font-medium">You:</span> {userText}</p>{/if}
 		{#if assistantText}<p class="max-h-40 overflow-y-auto text-sm">
 				<span class="font-medium">Sushii:</span>

@@ -1,3 +1,4 @@
+import { LiveTranscription } from './render/live-transcription';
 import type { DictationState } from './types';
 
 export type { DictationState };
@@ -42,9 +43,14 @@ export class Dictation {
 	state = $state<DictationState>('idle');
 	seconds = $state(0);
 	error = $state<string | null>(null);
+	partialText = $state('');
+	liveAvailable = $state(false);
+	#live = new LiveTranscription();
+	#sendRequested = false;
+	#generation = 0;
 
 	#transcribe: Transcribe;
-	#ondone: (text: string) => void;
+	#ondone: (text: string, send: boolean) => void;
 	#recorder: MediaRecorder | null = null;
 	#stream: MediaStream | null = null;
 	#chunks: Blob[] = [];
@@ -57,7 +63,10 @@ export class Dictation {
 		if (document.visibilityState === 'hidden') this.#finish();
 	};
 
-	constructor(ondone: (text: string) => void, transcribe: Transcribe = httpTranscribe) {
+	constructor(
+		ondone: (text: string, send: boolean) => void,
+		transcribe: Transcribe = httpTranscribe
+	) {
 		this.#ondone = ondone;
 		this.#transcribe = transcribe;
 	}
@@ -68,8 +77,16 @@ export class Dictation {
 		else if (this.state === 'recording') this.#finish();
 	}
 
+	sendNow() {
+		if (this.state !== 'recording') return;
+		this.#sendRequested = true;
+		this.#finish();
+	}
 	/** Drops a recording or a transcription in progress; its text never lands. */
 	cancel() {
+		++this.#generation;
+		this.#live.stop();
+		this.partialText = '';
 		this.#abort?.abort();
 		this.#abort = null;
 		this.#teardown();
@@ -77,17 +94,25 @@ export class Dictation {
 	}
 
 	async #start() {
+		const generation = ++this.#generation;
+		this.#sendRequested = false;
+		this.partialText = '';
 		this.error = null;
 		this.state = 'starting';
 		let stream: MediaStream;
 		try {
 			stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 		} catch (err) {
+			if (generation !== this.#generation) return;
 			this.state = 'idle';
 			this.error =
 				err instanceof DOMException && err.name === 'NotAllowedError'
 					? "Microphone access is off. Allow it in the browser's site settings, then try again."
 					: "Couldn't start the microphone.";
+			return;
+		}
+		if (generation !== this.#generation) {
+			for (const track of stream.getTracks()) track.stop();
 			return;
 		}
 		this.#stream = stream;
@@ -114,10 +139,13 @@ export class Dictation {
 			this.#stopped = new Promise((resolve) => {
 				recorder.onstop = recorder.onerror = () => {
 					resolve();
-					this.#finish();
+					if (generation === this.#generation) this.#finish();
 				};
 			});
-			for (const t of stream.getAudioTracks()) t.onended = () => this.#finish();
+			for (const t of stream.getAudioTracks())
+				t.onended = () => {
+					if (generation === this.#generation) this.#finish();
+				};
 			recorder.start();
 		} catch {
 			this.#teardown();
@@ -127,6 +155,9 @@ export class Dictation {
 		}
 		this.seconds = 0;
 		this.state = 'recording';
+		this.liveAvailable = this.#live.start((text) => {
+			if (generation === this.#generation && this.state === 'recording') this.partialText = text;
+		});
 		document.addEventListener('visibilitychange', this.#onhidden);
 		this.#timer = setInterval(() => {
 			this.seconds++;
@@ -137,6 +168,7 @@ export class Dictation {
 	/** Ends the take and transcribes it; a no-op unless recording. */
 	#finish() {
 		if (this.state !== 'recording') return;
+		this.#live.stop();
 		this.state = 'transcribing';
 		void this.#transcribeTake();
 	}
@@ -148,26 +180,29 @@ export class Dictation {
 		try {
 			if (recorder && recorder.state !== 'inactive') recorder.stop();
 			await this.#stopped;
+			abort.signal.throwIfAborted();
 			const audio = new Blob(this.#chunks, { type: this.#type || 'audio/webm' });
 			this.#teardown();
 			if (!audio.size) throw new Error("Didn't catch any words. Try again.");
 			const text = (await this.#transcribe(audio, abort.signal)).trim();
-			if (text && !abort.signal.aborted) this.#ondone(text);
+			if (text && !abort.signal.aborted) this.#ondone(text, this.#sendRequested);
 		} catch (err) {
 			if (!abort.signal.aborted) {
 				this.error =
 					err instanceof Error ? err.message : "Couldn't turn that into text. Try again.";
 			}
 		} finally {
-			this.#teardown();
 			if (this.#abort === abort) {
+				this.#teardown();
 				this.#abort = null;
 				this.state = 'idle';
+				this.partialText = '';
 			}
 		}
 	}
 
 	#teardown() {
+		this.#live.stop();
 		document.removeEventListener('visibilitychange', this.#onhidden);
 		if (this.#timer) clearInterval(this.#timer);
 		this.#timer = null;

@@ -35,6 +35,7 @@
 		onmodel,
 		dictation = null,
 		ondictate,
+		ondictatesend,
 		status
 	}: {
 		value?: string;
@@ -68,6 +69,7 @@
 			disabled?: boolean;
 		} | null;
 		ondictate?: () => void;
+		ondictatesend?: () => void;
 		/** A muted line under the box, such as the last reply's usage. */
 		status?: Snippet;
 	} = $props();
@@ -100,7 +102,7 @@
 	// While dictating, the words aren't in the box yet: sending now would leave them behind.
 	const canSend = $derived(!blocked && !dictating && (!!value.trim() || photos.length > 0));
 	// Stop sits beside Send rather than in its place, so a second tap on Send can't stop the run it steered.
-	const showStop = $derived(running && stop);
+	const showStop = $derived(running && stop && !dictating);
 	const hint = $derived(
 		running && stop
 			? stopping
@@ -398,11 +400,14 @@
 					})}
 				{/if}
 				<button
-					type="submit"
-					aria-label="Send message"
+					type={dictation?.state === 'recording' ? 'button' : 'submit'}
+					aria-label={dictation?.state === 'recording' ? 'Send dictation now' : 'Send message'}
+					onclick={() => {
+						if (dictation?.state === 'recording') ondictatesend?.();
+					}}
 					aria-describedby={hint ? `${uid}-steer` : undefined}
 					class="group/round grid size-12 shrink-0 place-items-center rounded-full outline-none select-none disabled:pointer-events-none"
-					disabled={!canSend}
+					disabled={dictation?.state === 'recording' ? !!blocked || !ondictatesend : !canSend}
 				>
 					<span class={roundFace('primary')}><ArrowUp class="size-4.5" aria-hidden="true" /></span>
 				</button>

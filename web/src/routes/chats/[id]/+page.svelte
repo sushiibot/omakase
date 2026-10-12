@@ -20,7 +20,6 @@
 		Voice,
 		VoiceCallBar,
 		channelActivity,
-		VoiceCaptions,
 		type ChatSheet,
 		type FileRef
 	} from '$lib/features/chat';
@@ -50,12 +49,13 @@
 		untrack(() => preview.setExpanded(expanded));
 	});
 	const voiceSheet = routedSheet('voice');
-	const voice = new Voice();
+	const voice = new Voice(() => (detail && store ? threadMessages(detail, store.messages) : []));
 	let voiceActive = $state(false);
-	const dictation = new Dictation((text) => {
+	const dictation = new Dictation((text, send) => {
 		if (!store) return;
 		const draft = store.draft.trimEnd();
 		store.setDraft(draft ? `${draft} ${text}` : text);
+		if (send) void store.send(store.draft);
 	});
 	$effect(() => {
 		id;
@@ -184,21 +184,11 @@
 		muted={voice.muted}
 		seconds={voice.seconds}
 		agentWorking={voice.agentWorking}
-		captionsVisible={voice.captionsVisible}
 		error={voice.error}
 		onmute={() => voice.mute()}
 		onstop={() => voice.stop()}
-		oncaptions={() => (voice.captionsVisible = !voice.captionsVisible)}
 		ondetails={() => voiceSheet.openWith()}
 	/>
-{/snippet}
-{#snippet voiceCaptions()}
-	{#if voice.captionsVisible && voice.state !== 'idle'}<VoiceCaptions
-			userText={voice.userText}
-			userFinal={voice.userFinal}
-			assistantText={voice.assistantText}
-			assistantFinal={voice.assistantFinal}
-		/>{/if}
 {/snippet}
 
 {#snippet voiceControls()}
@@ -248,7 +238,12 @@
 						focusAsk: page.url.searchParams.get('ask') ?? undefined,
 						focusApproval: page.url.searchParams.get('approve') ?? undefined,
 						approvals: store.approvals,
-						messages: threadMessages(detail!, store.messages),
+						messages: voice.project(threadMessages(detail!, store.messages)),
+						dictationTranscript:
+							dictation.state === 'recording' || dictation.state === 'transcribing'
+								? dictation.partialText ||
+									(dictation.state === 'recording' ? 'Listening…' : 'Transcribing…')
+								: '',
 						history: store.history,
 						hasOlder: store.hasOlder,
 						olderLoading: store.olderLoading,
@@ -266,10 +261,10 @@
 							disabled: voiceActive
 						},
 						ondictate: () => dictation.toggle(),
+						ondictatesend: () => dictation.sendNow(),
 						voice: voiceControls,
 						voiceStatus,
 						browserPreview,
-						voiceCaptions,
 						voiceActive: voice.state !== 'idle',
 						voiceHasContent: voice.state !== 'idle' && !!(voice.userText || voice.assistantText),
 						usage: store.usage,

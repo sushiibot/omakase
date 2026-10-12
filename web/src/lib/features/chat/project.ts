@@ -201,6 +201,7 @@ export function toMessages(
 				out.push({
 					id: item.id,
 					role: 'user',
+					clientId: item.clientId,
 					parts,
 					delivery: item.delivery
 				});

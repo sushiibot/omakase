@@ -52,6 +52,9 @@ export interface AlertLine {
 }
 
 export interface ChatMessage {
+	clientId?: string;
+	voice?: boolean;
+	partial?: boolean;
 	turnId?: string;
 	/** Stable server key used when branching from a reply. */
 	sourceId?: string;

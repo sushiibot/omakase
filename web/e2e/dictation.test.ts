@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext } from '@playwright/test';
+import { mockRecognition, recognize } from './live-transcription';
 import { checkScreen, fixtureApp } from './helpers';
 
 test.use({
@@ -11,6 +12,9 @@ test.use({
 /** The fixture app with dictation on; the bot's transcript is `text`, or a 422 when null. */
 async function withDictation(context: BrowserContext, text: string | null) {
 	await fixtureApp(context, { override: '' });
+	await context.addInitScript(() =>
+		Object.assign(window, { SpeechRecognition: undefined, webkitSpeechRecognition: undefined })
+	);
 	const posts: string[] = [];
 	await context.route('**/api/me', (route) =>
 		route.fulfill({ json: { login: 'drk@example.com', dictation: true } })
@@ -37,7 +41,7 @@ test('the mic records, shows a timer, and adds the transcript to the draft', asy
 	await expect(page.getByText(/^0:0[1-9]$/)).toBeVisible();
 	await checkScreen(page);
 	await page.setViewportSize({ width: 412, height: 915 });
-	await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Send dictation now' })).toBeEnabled();
 	await stop.click();
 	await expect(box).toHaveValue('Thanks. and book the 7pm table');
 	await expect(page.getByRole('button', { name: 'Dictate' })).toBeEnabled();
@@ -120,4 +124,37 @@ test('a recorder that stops on its own still ends the take instead of hanging', 
 	});
 	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue('cut short');
 	await expect(page.getByRole('button', { name: 'Dictate' })).toBeEnabled();
+});
+
+test('dictation previews revisions as an italic message and Send now posts only the final transcript once', async ({
+	page,
+	context
+}) => {
+	const transcriptions = await withDictation(context, 'Book the 7pm table.');
+	await mockRecognition(context);
+	const sends: any[] = [];
+	await context.route('**/api/chat/messages', async (route) => {
+		sends.push(route.request().postDataJSON());
+		await route.fulfill({ status: 202, json: { seq: 1 } });
+	});
+	await page.goto('/chat');
+	await page.getByRole('button', { name: 'Dictate', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Stop dictating' })).toBeVisible();
+	await recognize(page, 'Book the seven');
+	const interim = page.locator('[data-message-id="dictation:pending"] [data-message-text]');
+	await expect(interim).toHaveText('Book the seven');
+	await expect(interim).toHaveClass(/italic/);
+	await recognize(page, 'Book the 7pm table');
+	await expect(interim).toHaveText('Book the 7pm table');
+	await checkScreen(page);
+	await page.screenshot({ path: '/tmp/dictation-live-mobile.png' });
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.screenshot({ path: '/tmp/dictation-live-desktop.png' });
+	expect(sends).toHaveLength(0);
+	await page.getByRole('button', { name: 'Send dictation now' }).click();
+	await expect.poll(() => sends.length).toBe(1);
+	expect(sends[0].text).toBe('Book the 7pm table.');
+	expect(transcriptions).toHaveLength(1);
+	await expect(page.locator('[data-message-id="dictation:pending"]')).toHaveCount(0);
+	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue('');
 });

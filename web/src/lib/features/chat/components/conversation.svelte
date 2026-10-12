@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Mic from '@lucide/svelte/icons/mic';
+	import Volume2 from '@lucide/svelte/icons/volume-2';
 	import ContextDivider from './context-divider.svelte';
 	import type { Snippet } from 'svelte';
 	import Split from '@lucide/svelte/icons/split';
@@ -162,8 +164,15 @@
 		{@const queued = message.delivery === 'queued' || message.delivery === 'queued-agent'}
 		{@const held = message.delivery === 'queued-run'}
 		{@const unsent = owner && (failed || queued || held)}
-		{@const actions = hasText(message) ? actionsFor(message) : []}
-		<li data-message-id={message.id} class="min-w-0">
+		{@const actions =
+			hasText(message) && !message.partial && !message.id.startsWith('voice:')
+				? actionsFor(message)
+				: []}
+		<li
+			data-message-id={message.id}
+			data-voice-message={message.voice || undefined}
+			class="min-w-0"
+		>
 			<div
 				class={cn(
 					'group/msg relative',
@@ -177,6 +186,7 @@
 					{#if part.type === 'text'}
 						<MessageText
 							text={part.text}
+							partial={message.partial}
 							{owner}
 							markdown={!owner}
 							streaming={message.streaming && (owner || i === lastText)}
@@ -406,6 +416,12 @@
 						/>
 					{/if}
 				{/each}
+				{#if message.voice}<p class="flex items-center gap-1 text-xs text-muted-foreground">
+						{#if owner}<Mic class="size-3.5" aria-hidden="true" />{:else}<Volume2
+								class="size-3.5"
+								aria-hidden="true"
+							/>{/if}{message.partial ? (owner ? 'Transcribing…' : 'Responding…') : 'Voice'}
+					</p>{/if}
 				{#if message.turnId && delegatedActivity}{@render delegatedActivity(message.turnId)}{/if}
 				{#if message.delivery}
 					{@const d = delivery[message.delivery]}
