@@ -54,8 +54,8 @@ Web voice turns request one or two short spoken sentences, usually under 40 word
 The reply-style flag persists through offline routing and affects only the current voice reply.
 
 The picker recommends Qwen Flash and shows value, quality, and premium alternatives.
-Kokoro remains searchable but is no longer suggested or the default.
-Old Kokoro defaults switch once to Qwen Flash. Later explicit model choices stay as chosen.
+Kokoro remains searchable but is not suggested or the default.
+A saved Kokoro default switches once to Qwen Flash. Later explicit model choices stay as chosen.
 The picker and active call show the API provider.
 Gemini speech output uses OpenRouter; Gemini Live uses Google directly with `GEMINI_API_KEY`.
 These labels describe evaluation candidates, not measured quality guarantees.
@@ -164,7 +164,7 @@ If any chunk fails, the entire transcription fails instead of returning incomple
 Cancellation stops decoding and subsequent uploads. Decoding has a 30-second timeout.
 The whole transcription has a five-minute timeout. Web dictation retains its shorter 90-second request timeout.
 
-To skip digitally silent recordings before a paid upload, set `TRANSCRIPTION_SKIP_SILENCE=1` on the bot server.
+To skip digitally silent recordings before a paid upload, set `TRANSCRIPTION_SKIP_SILENCE=1` on the gateway server.
 This option is off by default. The gate preserves quiet speech and passes background noise through.
 It does not classify speech or remove silent packets from live calls.
 Silent dictation returns the existing `no_speech` response.
@@ -184,7 +184,7 @@ The [Hermes voice infographic](https://pbs.twimg.com/media/HUAR2DcaMAALZkP?forma
 
 ## Provider setup
 
-Set credentials on the bot server through its secret configuration. Never put keys in browser code.
+Set credentials on the gateway server through its secret configuration. Never put keys in browser code.
 
 | Voice model                   | Model ID                        | Required environment variables                |
 | ----------------------------- | ------------------------------- | --------------------------------------------- |
@@ -214,7 +214,7 @@ Optional voice settings are `QWEN_VOICE` (Tina, Omni 3.8),
 Each Qwen family has its own voice setting because supported voice IDs differ.
 
 The first configured model in this table becomes the default. Each model remains selectable.
-OpenAI uses a dedicated key because the bot's existing `OPENAI_API_KEY` may belong to OpenRouter.
+OpenAI uses a dedicated key because the gateway's existing `OPENAI_API_KEY` may belong to OpenRouter.
 A ChatGPT subscription does not provide Realtime API access for this custom web app.
 
 Published audio prices checked on October 5, 2026, in USD per million audio tokens:
@@ -275,7 +275,7 @@ These checks use simulated providers. Real provider validation requires provisio
 ## Dictation previews
 
 Dictation also starts browser speech recognition when available.
-The browser recognition service may process speech outside the bot's configured transcription API.
+The browser recognition service may process speech outside the gateway's configured transcription API.
 Live text appears as a muted, italic message in the conversation.
 The recorded-audio transcription remains the final text.
 **Stop dictating** puts that text in the draft for editing.

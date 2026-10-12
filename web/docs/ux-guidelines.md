@@ -1,6 +1,6 @@
 # UX guidelines
 
-Rules for every screen in the personal agent web app. The bar: better than the Discord DM it replaces, judged on a real Android phone, one-handed, not in a desktop browser.
+Rules for every screen in the personal agent web app. The bar: better than a chat-app DM, judged on a real Android phone, one-handed, not in a desktop browser.
 
 Every rule has a one-line why and a check. A rule without a check is a wish, so review goes rule by rule and asks "did the check pass?"
 
@@ -144,7 +144,7 @@ Apply these rules to Runs, History, Memory, connections, and future data screens
 ### Sending
 
 - **A sent message renders in the list within one frame of tapping Send, before any network call.** Why: waiting for the server makes the app feel broken on mobile networks (optimistic UI; Doherty threshold). Check: `pw`: tap Send with the network throttled to 3G; the bubble is visible within 100ms.
-- **Every user message shows its delivery state in text or icon plus an accessible label: Sending → Sent → (optional) Seen by agent; or Failed with Retry.** Why: "did it go?" is the question a Discord DM never answers well. Check: `shot` of each state; `axe` for the labels.
+- **Every user message shows its delivery state in text or icon plus an accessible label: Sending → Sent → (optional) Seen by agent; or Failed with Retry.** Why: "did it go?" is the question a chat-app DM never answers well. Check: `shot` of each state; `axe` for the labels.
 - **Failed sends stay in place with Retry and Delete, keep their text, and never vanish.** Why: silent loss is the worst chat bug. Check: `pw`: fail the POST; the bubble shows Failed and Retry resends the same client id.
 - **Messages carry a client-generated id so a retry or a reconnect never duplicates them.** Why: retries after a timeout are the usual source of doubles. Check: `review` of the send path.
 - **Sends while offline queue locally and show "Queued, sends when you're back online".** Why: the phone drops off the tailnet often. Check: `pw` with `context.setOffline(true)`.
@@ -421,7 +421,7 @@ A milestone is done only when all four steps pass. Steps 1–2 are cheap and run
 1. **Deterministic checks pass:** `bun run check` (fail on warnings), `bun run lint`, `bun run build`, and the Playwright suite at 412x915 (touch, `deviceScaleFactor: 2.625`, `isMobile: true`) including axe with `target-size`, the 48px assertion, reflow at 320 and 412, and the scroll-jank test.
 2. **State matrix screenshots** are captured by Playwright and reviewed against this doc, rule by rule.
 3. **Prototype parity:** the shipped screens match the `/proto` flow that was clicked through, or the difference is written down and agreed.
-4. **Dogfood on the phone:** drk uses the installed PWA for real tasks for a day or two. Anything that annoys him is a bug and gets filed against this doc (either a rule is missing, or one was broken).
+4. **Dogfood on the phone:** the owner uses the installed PWA for real tasks for a day or two. Anything that annoys them is a bug and gets filed against this doc (either a rule is missing, or one was broken).
 
 ### State matrix
 
@@ -449,7 +449,7 @@ A UX bug blocks when any of these is true:
 - The keyboard covers the composer or the focused field.
 - A notification lands anywhere but the exact item.
 - Something reads "done" or green when the evidence doesn't back it.
-- drk hit it twice while dogfooding.
+- The owner hit it twice while dogfooding.
 
 Everything else (spacing, wording, a slow-but-in-budget moment) is filed and fixed within the milestone if cheap, otherwise logged for the next.
 

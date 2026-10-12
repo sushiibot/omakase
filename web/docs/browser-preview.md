@@ -47,7 +47,7 @@ The inline viewer requests up to five frames per second. The expanded viewer req
 Actual delivery depends on page changes and network latency.
 
 The browser stream stays on workspace loopback.
-The bot requests the latest frame through the existing authenticated workspace RPC connection.
+The gateway requests the latest frame through the existing authenticated workspace RPC connection.
 The owner gateway sends frames through `/api/browser/connect` and checks the browser Origin.
 Clients acknowledge displayed frames. The relay keeps at most one frame in flight for each viewer.
 The relay accepts acknowledgements and heartbeat messages only.
@@ -60,7 +60,7 @@ The standalone Browser screen remains a development preview for future interacti
 Backend tests cover ownership, cleanup, recovery, isolation, and viewer authentication.
 Web tests cover hide, show, navigation, reconnection, completion, zoom, Back, accessibility, and responsive layout.
 `scripts/browser-preview-smoke.ts` checks real Chromium frames and cleanup in both shipping images.
-The optional system flow checks the complete bot, workspace, proxy, and browser path.
+The optional system flow checks the complete gateway, workspace, proxy, and browser path.
 
 For that flow, install `agent-browser` and run:
 

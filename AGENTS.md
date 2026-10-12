@@ -1,8 +1,7 @@
 # omakase
 
 Owner-only personal agent: a SvelteKit PWA (`web/`), the gateway that serves it (`src/personal.ts`),
-and a long-lived workspace container (`src/workspace/`). Split out of sushii-agent, which keeps the
-community bot.
+and a long-lived workspace container (`src/workspace/`). Split out of sushii-agent.
 
 ## Runtime
 
@@ -16,7 +15,7 @@ Never edit, delete or renumber files in `drizzle/`: production databases track t
 
 ## Web app (`web/`)
 
-Owner-only SvelteKit SPA (PWA) served by the gateway at agent.sushii.bot (tailnet only).
+Owner-only SvelteKit SPA (PWA) served by the gateway on a private network behind a reverse proxy.
 Structure and rules: `web/README.md`, `web/docs/ux-guidelines.md`. Gate from `web/`: `bun run check`,
 `bun run lint` (prettier + raw-HTML, token and import-boundary checks + unit tests), `bun run build`,
 `bun run test:e2e` (ports via `PW_PORT` / `PW_HARNESS_PORT`). Dev with sample data: `bun dev`, then `?fake`.
@@ -33,7 +32,5 @@ When work is finalized and checks pass, commit and push to `main` without asking
 
 Auto-deploys via CI on every push to `main` (`.github/workflows/ci.yml`): `typecheck`, `test`, `web`,
 `web-e2e`, `browser-smoke` and `e2e-system` → `docker-build` (`ghcr.io/sushiibot/omakase:<sha>`) /
-`docker-build-workspace` (`:<sha>-workspace`) → `deploy` (`private-bots/omakase` on host `apps`) →
-`deploy-workspace` (`private-bots/omakase-workspace`). No manual `deploy.sh` step is needed. Push any
-sushii-ansible config change first: the deploy renders from sushii-ansible `main`. Verify with
-`gh run list --branch main` and the post-deploy logs.
+`docker-build-workspace` (`:<sha>-workspace`) → `deploy` (gateway) → `deploy-workspace`. No manual
+deploy step is needed. Verify with `gh run list --branch main` and the post-deploy logs.

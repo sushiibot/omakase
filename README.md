@@ -1,13 +1,14 @@
 # omakase
 
-The owner-only personal agent: a SvelteKit PWA at agent.sushii.bot (tailnet only), the gateway that
-serves it, and a long-lived workspace container where the agent runs. It was split out of
-sushii-agent, which keeps the community Discord/Slack/buzz bot.
+A self-hosted, owner-only personal agent: a SvelteKit PWA, the gateway that serves it, and a
+long-lived workspace container where the agent runs. The app is meant to be served on a private
+network (e.g. a tailnet) behind a reverse proxy that authenticates the owner. It was split out of
+sushii-agent.
 
 | Part | Entry | Runs as |
 |---|---|---|
-| Gateway: web app server, chat routing, push, workspace control plane, proxied tools | `src/personal.ts` | `private-bots/omakase`, image `ghcr.io/sushiibot/omakase:<sha>` |
-| Workspace: Pi coding-agent sessions, subagents, memory, scheduled jobs | `src/workspace/index.ts` | `private-bots/omakase-workspace`, image `ghcr.io/sushiibot/omakase:<sha>-workspace` (Dockerfile target `workspace`) |
+| Gateway: web app server, chat routing, push, workspace control plane, proxied tools | `src/personal.ts` | image `ghcr.io/sushiibot/omakase:<sha>` |
+| Workspace: Pi coding-agent sessions, subagents, memory, scheduled jobs | `src/workspace/index.ts` | image `ghcr.io/sushiibot/omakase:<sha>-workspace` (Dockerfile target `workspace`) |
 | Machine daemon: remote file and session access on the owner's machines | `src/workspace/machine/index.ts` | `bun run machine` on each machine (`docs/machines.md`) |
 | Web app | `web/` | built into the gateway image (`web/README.md`) |
 
@@ -21,7 +22,7 @@ OPENAI_API_KEY=dummy bun test
 bun run e2e:system            # gateway + workspace + web app + fake model (e2e-system/README.md)
 ```
 
-Web app checks run from `web/`; see `AGENTS.md`.
+Web app checks run from `web/`; see `AGENTS.md` (`CLAUDE.md` is a symlink to it).
 
 ## Gateway configuration
 
@@ -32,7 +33,7 @@ Web app checks run from `web/`; see `AGENTS.md`.
 | `DATABASE_PATH` | `./data/personal.db` | SQLite path; migrations in `drizzle/` apply at boot |
 | `PRINCIPALS_PATH` | `./principals.json` | Identity registry; the owner principal maps its `web` login |
 | `OWNER_DISCORD_ID` | none | Synthesizes the owner principal when `principals.json` is absent; proxied tools run as this id |
-| `TEAMS_PATH` | `./teams.json` | Team grouping; routes Linear issues per team |
+| `TEAMS_PATH` | `./teams.json` | Team grouping (shape: `src/orchestration/teams.ts`); routes Linear issues per team |
 | `EXA_API_KEY`, `GRAFANA_BASE_URL`, `GRAFANA_API_TOKEN`, `LINEAR_API_KEY`, `LINEAR_TEAM_ID` | none | Proxied tools; each is offered only when configured |
 | `ORCH_PORT`, `ORCH_SECRET` | `8788`, none | Workspace transport; the workspace presents the same secret |
 | `SUSHII_MACHINES_JSON` | `[]` | Machine daemon grants (`docs/machines.md`) |
@@ -47,18 +48,16 @@ Workspace settings (`WORKSPACE_*`, `ORCH_URL`) and their defaults are in `src/wo
 
 ## Deployment
 
-Every push to `main` runs the gates in `.github/workflows/ci.yml`, builds both images, deploys
-`private-bots/omakase` on host `apps`, then `private-bots/omakase-workspace`. Each deploy bumps the
-image tag in sushii-ansible, so push any sushii-ansible change first. A manual redeploy is
-`./deploy.sh -y apps private-bots/omakase-workspace` from sushii-ansible. Workspace tunables go in
-`workspace_env_overrides` there.
+Every push to `main` runs the gates in `.github/workflows/ci.yml` (`typecheck`, `test`, `web`,
+`web-e2e`, `browser-smoke`, `e2e-system`), builds the `ghcr.io/sushiibot/omakase:<sha>` and
+`:<sha>-workspace` images, and deploys the gateway, then the workspace.
 
 ## Workspace
 
 The web chat goes to a long-lived Pi coding-agent session in the workspace container
 (`src/workspace/`). The gateway is the transport: it relays chat over a JSON-RPC WebSocket
 (`src/orchestration/workspace/`), proxies the tools that need its keys (Exa, Grafana, Linear) with
-owner approval for writes, and mints GitHub App tokens so `git`/`gh` run as `sushii-runner[bot]`.
+owner approval for writes, and mints GitHub App tokens so `git`/`gh` run as the configured GitHub App bot.
 If the workspace is down, web messages wait and are resent once it reconnects.
 
 - **Home** (`/data/home`, git-versioned): `AGENTS.md`, `SOUL.md`, `USER.md`, `MEMORY.md`, `TASKS.md`
@@ -164,7 +163,6 @@ GitHub branch protection and GitHub App permissions still apply.
 The shipped home `AGENTS.md` describes this policy.
 Unedited home instructions upgrade automatically after deployment.
 If the owner edited that file, the workspace preserves it. Update its GitHub instructions manually.
-The repository's root instructions live in `AGENTS.md`. `CLAUDE.md` is a symlink to that file.
 
 ## One-time browser location
 

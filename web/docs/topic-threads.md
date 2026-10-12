@@ -32,7 +32,7 @@ flowchart LR
 
 ## Persistence
 
-The bot stores metadata in `web_threads`. Each event and inbound message has a `conversation_id`.
+The gateway stores metadata in `web_threads`. Each event and inbound message has a `conversation_id`.
 Existing rows belong to `main`. Event IDs remain globally unique, while history and SSE replay filter by conversation.
 Idempotency keys belong to one conversation. A client message ID cannot move between conversations.
 
@@ -66,13 +66,13 @@ Finite delegated tasks return a result to the conversation that spawned them. Or
 
 Existing run records identify topics through their `topic:<id>` agent name when they predate the `conversationId` field. Topic runs classify as chat turns; delegated child runs stay separate. Transcript reads use the existing confined run reader and the selected run's time window.
 
-## Existing data and navigation
+## URLs and stored data
 
-The existing `/chat` and `/chats/<id>` URLs remain stable, labeled Main and Threads. Existing IDs, transcripts, brief context, drafts, and archive metadata remain unchanged. Old closing reports remain historical Main messages; pending report delivery is no longer retried. Both manually and automatically archived threads remain visible and directly resumable with the same IDs. The former eight-active-thread cap is removed in both bot and workspace; existing threads need no migration or deletion to create or resume more conversations. No database or topic-catalog rewrite is required.
+`/chat` and `/chats/<id>` are Main and Threads. Archived threads, whether archived manually or automatically, stay visible and resume with the same IDs. Pending closing-report delivery is not retried; earlier closing reports are ordinary Main messages. There is no active-thread cap.
 
-New completed turns retain tool lines, assistant activity text, and text offsets in their existing durable `turn_final` event. History can restore individual inline tools in the same order shown during streaming. Older events without these optional fields keep their original reply and approval history; missing tool activity is not reconstructed or invented. The event schema remains backward compatible, with no historical rewrite required.
+Completed turns keep tool lines, assistant activity text, and text offsets in their durable `turn_final` event, so History restores inline tools in streaming order. Events without these optional fields keep their reply and approval history; missing tool activity is not reconstructed.
 
-Projects are optional grouping and shared-context containers, not mandatory conversation folders. This change does not convert existing task project records or repository clones into thread containers, and does not add project navigation.
+Projects are optional grouping and shared-context containers, not mandatory conversation folders. Task project records and repository clones are not thread containers, and there is no project navigation.
 
 ## Context upkeep
 
