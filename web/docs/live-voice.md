@@ -64,7 +64,7 @@ Prices retain their billing units: characters, text/audio tokens, or generated s
 Provider rates and temporary offers can change the charge.
 Transcription and agent usage add costs.
 The catalog refreshes after five minutes and shows its last update time.
-The selected mode, model, and voice stay on this device.
+The selected mode, model, voice, and delivery directions stay on this device.
 
 Speech uses `OPENROUTER_API_KEY`, or the existing `OPENAI_API_KEY` when the dedicated key is absent.
 Speech requests use OpenRouter's `/api/v1/audio/speech` endpoint.
@@ -80,14 +80,47 @@ Errors distinguish transcription, agent work, and OpenRouter speech generation.
 Speech errors show safe HTTP status and recovery advice.
 Digitally silent turns do not incur transcription charges.
 The server reads at most 24,000 reply characters aloud in small utterances.
-Most models use MP3 so the browser decodes the provider's sample rate.
-Gemini requires raw PCM; the server wraps its 24 kHz mono PCM16 in a WAV container.
-Playback starts after the first utterance downloads, rather than after the entire reply downloads.
+ElevenLabs and Gemini TTS calls use streaming 24 kHz mono PCM16 through OpenRouter.
+The browser plays complete samples as they arrive. The server queues at most two seconds of audio ahead of playback.
+Each frame has a playback acknowledgment. Late acknowledgments cannot release frames from a later turn.
+The server cancels the stream after a playback timeout, interruption, or call closure.
+Unknown audio formats fail with a recovery message instead of playback at an assumed sample rate.
+Other models use buffered MP3 utterances. The browser decodes the provider's sample rate.
+Previews remain buffered files. Gemini previews use a WAV container around its PCM audio.
 The server waits for playback before it generates the next utterance.
 Stopping speech cancels further generation. Ending the call releases audio and result listeners.
 An agent request already accepted into chat can continue after the call ends.
 
 Catalog and speech behavior follow the [OpenRouter speech API](https://openrouter.ai/docs/guides/overview/multimodal/tts).
+
+### Expressive delivery
+
+Models with supported delivery controls show **Voice delivery** in the setup sheet.
+Enter a direction such as `Warm, curious, relaxed pace` without brackets or line breaks.
+Leave the field blank for the model's natural delivery. The limit is 300 characters.
+Preview uses the same direction as the call. A changed direction requires a new billed preview.
+
+Eleven v3 and v4 models receive the direction as an inline audio tag before each utterance.
+Gemini TTS and OpenAI mini TTS receive a separate `instructions` field.
+Models without documented controls do not receive delivery directions.
+Captions and saved replies retain the agent's words without the added direction.
+ElevenLabs requests also include neighboring text to preserve delivery across utterance boundaries.
+The server derives these capabilities from the model and the OpenRouter route.
+The catalog's general `supported_parameters` list does not describe these speech capabilities reliably.
+
+The agent still finishes its reply before speech synthesis starts.
+Its progress stream contains commentary and does not identify confirmed reply segments for early speech.
+OpenRouter accepts complete text requests and returns audio streams. This integration does not provide incremental text input.
+A direct ElevenLabs Text to Dialogue connection can accept incremental text, but requires separate integration and credentials.
+That connection is not necessary for the delivery controls and streaming playback above.
+Custom account voices also need OpenRouter BYOK or a direct provider account.
+
+Sources checked on October 12, 2026:
+[OpenRouter ElevenLabs integration](https://openrouter.ai/blog/announcements/elevenlabs-on-openrouter/) and
+[ElevenLabs streaming interfaces](https://elevenlabs.io/docs/eleven-api/guides/how-to/websockets/tts-vs-ttd-websockets).
+Protocol tests cover PCM framing, format errors, playback limits, cancellation, and preview caching.
+Short live OpenRouter requests confirmed the PCM format for Eleven v4 Turbo and Gemini Flash Lite TTS.
+These requests verify the transport, not subjective voice quality or a latency guarantee.
 
 ## Recorded speech
 

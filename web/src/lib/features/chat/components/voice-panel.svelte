@@ -30,6 +30,8 @@
 		speechModels = [],
 		speechModel = '',
 		speechVoice = '',
+		speechDelivery = '',
+		ondelivery,
 		speechConfigured = false,
 		speechError = null,
 		pricesUpdatedAt = null,
@@ -66,6 +68,8 @@
 		speechModels?: SpeechModel[];
 		speechModel?: string;
 		speechVoice?: string;
+		speechDelivery?: string;
+		ondelivery?: (value: string) => void;
 		speechConfigured?: boolean;
 		speechError?: string | null;
 		pricesUpdatedAt?: string | null;
@@ -161,6 +165,28 @@
 					{:else}<p class="text-sm text-muted-foreground">
 							This model chooses its default voice.
 						</p>{/if}
+					{#if speech.capabilities?.expression}
+						<label for="speech-delivery" class="text-sm font-medium">Voice delivery</label>
+						<Input
+							id="speech-delivery"
+							class="h-12 text-base"
+							value={speechDelivery}
+							maxlength={300}
+							placeholder="Warm, curious, relaxed pace"
+							aria-describedby="speech-delivery-help"
+							disabled={active || loading}
+							oninput={(e) => ondelivery?.(e.currentTarget.value)}
+						/>
+						<p id="speech-delivery-help" class="text-xs text-muted-foreground">
+							Describe tone, emotion or pacing without brackets. Leave blank for the model’s natural
+							delivery. Preview uses these directions too.
+						</p>
+					{/if}
+					{#if speech.capabilities?.streaming}
+						<p class="text-sm text-muted-foreground">
+							Plays audio as it arrives after the agent finishes its reply.
+						</p>
+					{/if}
 					<Button
 						variant="outline"
 						class="w-full"

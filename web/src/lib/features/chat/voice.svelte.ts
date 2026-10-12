@@ -63,6 +63,9 @@ export class Voice {
 	speechModels = $state<SpeechModel[]>([]);
 	speechModel = $state('');
 	speechVoice = $state('');
+	speechDelivery = $state('');
+	#speechInterrupted = false;
+	#audioEpoch = 0;
 	speechConfigured = $state(false);
 	speechError = $state<string | null>(null);
 	pricesUpdatedAt = $state<string | null>(null);
@@ -107,6 +110,16 @@ export class Voice {
 	#onhidden = () => {
 		if (document.hidden) this.stop();
 	};
+	get delivery() {
+		return this.speechModels.find((m) => m.id === this.speechModel)?.capabilities?.expression
+			? this.speechDelivery
+			: '';
+	}
+	setDelivery(value: string) {
+		this.stopPreview();
+		this.speechDelivery = value.slice(0, 300);
+		this.persist();
+	}
 	get apiLabel() {
 		return this.mode === 'turns'
 			? 'OpenRouter'
@@ -122,6 +135,7 @@ export class Voice {
 				if (saved?.mode === 'live' || saved?.mode === 'turns') this.mode = saved.mode;
 				if (typeof saved?.model === 'string') this.speechModel = saved.model;
 				if (typeof saved?.voice === 'string') this.speechVoice = saved.voice;
+				if (typeof saved?.delivery === 'string') this.speechDelivery = saved.delivery.slice(0, 300);
 				if (typeof saved?.provider === 'string') this.provider = saved.provider;
 				if (saved?.version !== 2 && this.speechModel === 'hexgrad/kokoro-82m') {
 					this.speechModel = this.speechVoice = '';
@@ -172,7 +186,8 @@ export class Voice {
 					mode: this.mode,
 					provider: this.provider,
 					model: this.speechModel,
-					voice: this.speechVoice
+					voice: this.speechVoice,
+					delivery: this.speechDelivery
 				})
 			);
 		} catch {
@@ -215,13 +230,17 @@ export class Voice {
 			const context = new AudioContext();
 			this.#previewContext = context;
 			await context.resume();
-			const id = JSON.stringify([this.speechModel, this.speechVoice]);
+			const id = JSON.stringify([this.speechModel, this.speechVoice, this.delivery]);
 			let audio = this.#previewCache.get(id);
 			if (!audio) {
 				const res = await fetch('/api/voice/preview', {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ model: this.speechModel, voice: this.speechVoice }),
+					body: JSON.stringify({
+						model: this.speechModel,
+						voice: this.speechVoice,
+						delivery: this.delivery
+					}),
 					signal: AbortSignal.any([abort.signal, AbortSignal.timeout(65000)])
 				});
 				if (!res.ok)
@@ -260,6 +279,7 @@ export class Voice {
 			this.muted
 		)
 			return;
+		this.#speechInterrupted = false;
 		this.turnBusy = true;
 		this.phase = 'transcribing';
 		this.#pauseMic();
@@ -270,6 +290,7 @@ export class Voice {
 	}
 	interrupt() {
 		if (this.mode !== 'turns' || this.state !== 'speaking') return;
+		this.#speechInterrupted = true;
 		this.#socket?.send(JSON.stringify({ type: 'interrupt' }));
 		this.#clearAudio();
 		this.state = 'listening';
@@ -329,6 +350,7 @@ export class Voice {
 			return;
 		this.persist();
 		this.turnBusy = false;
+		this.#speechInterrupted = false;
 		this.error = null;
 		this.transcripts = [];
 		this.#captionIndex = -1;
@@ -378,6 +400,7 @@ export class Voice {
 				url.searchParams.set('mode', 'turns');
 				url.searchParams.set('model', this.speechModel);
 				url.searchParams.set('voice', this.speechVoice);
+				if (this.delivery) url.searchParams.set('delivery', this.delivery);
 			} else url.searchParams.set('provider', model!.id);
 			url.searchParams.set('conversation', conversation);
 			const socket = new WebSocket(url);
@@ -438,6 +461,7 @@ export class Voice {
 		itemId?: string;
 		audio?: string;
 		sampleRate?: number;
+		playbackId?: number;
 		message?: string;
 		state?: string;
 		userId?: string;
@@ -453,10 +477,16 @@ export class Voice {
 				this.#timer = setInterval(() => this.seconds++, 1000);
 				break;
 			case 'audio':
-				this.#play(event.audio!, event.sampleRate!);
+				if (this.#speechInterrupted) break;
+				this.#play(event.audio!, event.sampleRate!, event.playbackId);
 				break;
 			case 'audio_encoded':
+				if (this.#speechInterrupted) break;
 				void this.#playEncoded(event.audio!);
+				break;
+			case 'speech_stopped':
+				this.#clearAudio();
+				if (this.state === 'speaking') this.state = 'listening';
 				break;
 			case 'notice':
 				this.error = event.message ?? 'Try this voice turn again.';
@@ -539,13 +569,14 @@ export class Voice {
 		}
 	}
 	async #playEncoded(audio: string) {
+		const epoch = this.#audioEpoch;
 		const generation = this.#generation;
 		const context = this.#context;
 		if (!context) return;
 		try {
 			const bytes = Uint8Array.from(atob(audio), (c) => c.charCodeAt(0));
 			const buffer = await context.decodeAudioData(bytes.buffer);
-			if (generation !== this.#generation) return;
+			if (generation !== this.#generation || epoch !== this.#audioEpoch) return;
 			const source = context.createBufferSource();
 			source.buffer = buffer;
 			source.connect(context.destination);
@@ -564,7 +595,7 @@ export class Voice {
 				this.#fail("Couldn't play this voice. Choose another model or voice.");
 		}
 	}
-	#play(audio: string, rate: number) {
+	#play(audio: string, rate: number, playbackId?: number) {
 		const context = this.#context;
 		if (!context || ![16000, 24000, 48000].includes(rate)) return;
 		const binary = atob(audio);
@@ -585,11 +616,14 @@ export class Voice {
 		this.state = 'speaking';
 		source.onended = () => {
 			this.#sources.delete(source);
+			source.disconnect();
+			if (playbackId !== undefined && this.#socket?.readyState === WebSocket.OPEN)
+				this.#socket.send(JSON.stringify({ type: 'playback_done', id: playbackId }));
 			if (!this.#sources.size && this.#socket?.readyState === WebSocket.OPEN)
 				this.#socket.send(JSON.stringify({ type: 'playback_idle' }));
 			if (!this.#sources.size && this.state === 'speaking') this.state = 'listening';
 		};
-		const at = Math.max(context.currentTime + 0.02, this.#nextAudio);
+		const at = this.#nextAudio > context.currentTime ? this.#nextAudio : context.currentTime + 0.02;
 		source.start(at);
 		this.#nextAudio = at + buffer.duration;
 	}
@@ -603,6 +637,7 @@ export class Voice {
 		for (const track of this.#stream?.getAudioTracks() ?? []) track.enabled = !this.muted;
 	}
 	#clearAudio() {
+		++this.#audioEpoch;
 		for (const source of this.#sources) {
 			source.onended = null;
 			source.stop();

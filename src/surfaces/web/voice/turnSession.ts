@@ -2,7 +2,12 @@ import type { ServerWebSocket } from "bun";
 import { transcribeAudio } from "../../../agent/transcribe.ts";
 import { isSilentPcm, pcmWav } from "../../../agent/transcriptionAudio.ts";
 import type { SurfaceActor } from "../../../orchestration/workspace/surface.ts";
-import { type SpeechModel, SpeechError, synthesizeSpeech } from "./speech.ts";
+import {
+  type SpeechModel,
+  SpeechError,
+  synthesizeSpeech,
+  streamSpeech,
+} from "./speech.ts";
 import { getLogger } from "../../../logger.ts";
 import {
   type AskAgent,
@@ -10,6 +15,11 @@ import {
   VOICE_SESSION_MS,
   VOICE_BUFFER_MAX,
 } from "./session.ts";
+
+import {
+  speechCapabilities,
+  type SpeechOptions,
+} from "./speechCapabilities.ts";
 
 export class TurnVoiceSession {
   private client: ServerWebSocket<VoiceSocketData> | null = null;
@@ -20,6 +30,8 @@ export class TurnVoiceSession {
   private abort = new AbortController();
   private deadline: ReturnType<typeof setTimeout> | null = null;
   private playback: (() => void) | null = null;
+  private audioId = 0;
+  private audioAcks = new Map<number, () => void>();
   constructor(
     private model: SpeechModel,
     private voice: string,
@@ -30,6 +42,8 @@ export class TurnVoiceSession {
     private onclose: () => void,
     private transcribe = transcribeAudio,
     private speak = synthesizeSpeech,
+    private options: SpeechOptions = {},
+    private stream = streamSpeech,
   ) {}
   open(client: ServerWebSocket<VoiceSocketData>) {
     if (this.closed) return client.close(1000);
@@ -50,6 +64,10 @@ export class TurnVoiceSession {
     if (data.length > 32000) return this.fail("Voice packet was too large.");
     try {
       const m = JSON.parse(data.toString());
+      if (m.type === "playback_done") {
+        if (Number.isSafeInteger(m.id)) this.audioAcks.get(m.id)?.();
+        return;
+      }
       if (m.type === "playback_idle") {
         this.playback?.();
         return;
@@ -150,12 +168,27 @@ export class TurnVoiceSession {
           const boundary = spoken.lastIndexOf(" ", end);
           if (boundary > at + 500) end = boundary;
         }
+        if (speechCapabilities(this.model.id).streaming) {
+          await this.playStream(spoken.slice(at, end), signal, {
+            ...this.options,
+            previousText: spoken.slice(Math.max(0, at - 500), at),
+            nextText: spoken.slice(end, end + 500),
+          });
+          at = end;
+          continue;
+        }
         const audio = await this.speak(
           this.key,
           this.model,
           this.voice,
           spoken.slice(at, end),
           signal,
+          undefined,
+          {
+            ...this.options,
+            previousText: spoken.slice(Math.max(0, at - 500), at),
+            nextText: spoken.slice(end, end + 500),
+          },
         );
         if (this.closed || signal.aborted) return;
         await new Promise<void>((resolve) => {
@@ -195,10 +228,60 @@ export class TurnVoiceSession {
         });
       }
     } finally {
+      this.abort.abort();
+      this.emit({ type: "speech_stopped" });
       this.busy = false;
       this.emit({ type: "agent", state: "done" });
       this.emit({ type: "turn_done" });
     }
+  }
+  private async playStream(
+    text: string,
+    signal: AbortSignal,
+    options: SpeechOptions,
+  ) {
+    const pending: Promise<boolean>[] = [];
+    const wait = async () => {
+      const played = await pending.shift();
+      signal.throwIfAborted();
+      if (!played)
+        throw new SpeechError("Voice playback stalled. Start a new call.");
+    };
+    for await (const chunk of this.stream(
+      this.key,
+      this.model,
+      this.voice,
+      text,
+      signal,
+      options,
+    )) {
+      signal.throwIfAborted();
+      if (this.closed) return;
+      // Twenty 100 ms frames bound queued playback to two seconds, even if synthesis is instant.
+      if (pending.length >= 20) await wait();
+      const id = ++this.audioId;
+      pending.push(
+        new Promise<boolean>((resolve) => {
+          const finish = (played: boolean) => {
+            clearTimeout(timer);
+            signal.removeEventListener("abort", abort);
+            this.audioAcks.delete(id);
+            resolve(played);
+          };
+          const abort = () => finish(false);
+          const timer = setTimeout(() => finish(false), 15_000);
+          signal.addEventListener("abort", abort, { once: true });
+          this.audioAcks.set(id, () => finish(true));
+        }),
+      );
+      this.emit({
+        type: "audio",
+        audio: chunk.audio.toString("base64"),
+        sampleRate: chunk.sampleRate,
+        playbackId: id,
+      });
+    }
+    while (pending.length) await wait();
   }
   private fail(message: string) {
     this.emit({ type: "error", message });

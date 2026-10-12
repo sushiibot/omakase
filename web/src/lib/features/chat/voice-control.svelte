@@ -84,6 +84,8 @@
 		speechModels={voice.speechModels}
 		speechModel={voice.speechModel}
 		speechVoice={voice.speechVoice}
+		speechDelivery={voice.speechDelivery}
+		ondelivery={(value) => voice.setDelivery(value)}
 		speechConfigured={voice.speechConfigured}
 		speechError={voice.speechError}
 		pricesUpdatedAt={voice.pricesUpdatedAt}

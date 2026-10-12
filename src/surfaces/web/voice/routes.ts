@@ -8,6 +8,7 @@ import {
   synthesizeSpeech,
   SpeechError,
 } from "./speech.ts";
+import { speechCapabilities, validDelivery } from "./speechCapabilities.ts";
 import { TurnVoiceSession } from "./turnSession.ts";
 export function createVoiceRoutes(
   env: Record<string, string | undefined>,
@@ -63,7 +64,7 @@ export function createVoiceRoutes(
             { error: "End the call or wait for the current preview." },
             409,
           );
-        const body = await readJson(req, 1024);
+        const body = await readJson(req, 4096);
         if (body instanceof Response) return body;
         if (
           !body ||
@@ -74,6 +75,15 @@ export function createVoiceRoutes(
           typeof body.voice !== "string"
         )
           return json({ error: "Choose a speech model and voice." }, 400);
+        const delivery = "delivery" in body ? body.delivery : "";
+        if (!validDelivery(delivery))
+          return json(
+            {
+              error:
+                "Use up to 300 characters without brackets or line breaks for voice delivery.",
+            },
+            400,
+          );
         if (sessions.size || previewBusy)
           return json(
             { error: "End the call or wait for the current preview." },
@@ -88,7 +98,12 @@ export function createVoiceRoutes(
             return json({ error: "Unknown OpenRouter speech model" }, 400);
           if (body.voice && !model.voices.includes(body.voice))
             return json({ error: "Unknown speech voice" }, 400);
-          const id = JSON.stringify([model.id, body.voice]);
+          if (delivery && !speechCapabilities(model.id).expression)
+            return json(
+              { error: "This model does not support delivery instructions." },
+              400,
+            );
+          const id = JSON.stringify([model.id, body.voice, delivery]);
           const cached = previews.get(id);
           const audio =
             cached && cached.expires > Date.now()
@@ -99,6 +114,8 @@ export function createVoiceRoutes(
                   body.voice,
                   "Hi, I'm Sushii. What would you like to work on?",
                   req.signal,
+                  undefined,
+                  { delivery },
                 );
           if (!cached || cached.expires <= Date.now()) {
             previews.delete(id);
@@ -175,7 +192,10 @@ export function createVoiceRoutes(
         );
       let speechModel;
       const speechVoice = url.searchParams.get("voice") ?? "";
+      const delivery = url.searchParams.get("delivery") ?? "";
       if (turnMode) {
+        if (!validDelivery(delivery))
+          return json({ error: "Invalid voice delivery instructions" }, 400);
         try {
           speechModel = (await catalog()).models.find(
             (m) => m.id === url.searchParams.get("model"),
@@ -185,6 +205,11 @@ export function createVoiceRoutes(
         }
         if (!speechModel)
           return json({ error: "Unknown OpenRouter speech model" }, 400);
+        if (delivery && !speechCapabilities(speechModel.id).expression)
+          return json(
+            { error: "This model does not support delivery instructions." },
+            400,
+          );
         if (speechVoice && !speechModel.voices.includes(speechVoice))
           return json({ error: "Unknown speech voice" }, 400);
         // Catalog fetch above can yield; recheck the single-session limit before reserving.
@@ -203,6 +228,9 @@ export function createVoiceRoutes(
             conversation,
             ask,
             () => sessions.delete(session),
+            undefined,
+            speak,
+            { delivery },
           )
         : new VoiceSession(
             provider!,

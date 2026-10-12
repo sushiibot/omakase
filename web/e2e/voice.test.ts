@@ -394,7 +394,8 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 		previews++;
 		expect(route.request().postDataJSON()).toEqual({
 			model: 'qwen/qwen-audio-3.0-tts-flash',
-			voice: 'Cherry'
+			voice: 'Cherry',
+			delivery: ''
 		});
 		const wav = Buffer.alloc(44 + 16000 * 2 * 3);
 		wav.write('RIFF');
@@ -633,4 +634,86 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 			(window as unknown as { testSessionChanges: string[] }).testSessionChanges.at(-1)
 		)
 	).toBe('auto');
+});
+
+test('expressive delivery follows previews and calls; streaming playback acknowledges frames', async ({
+	page,
+	context
+}) => {
+	await withVoice(context);
+	await context.route('**/api/voice/speech-models', (route) =>
+		route.fulfill({
+			json: {
+				configured: true,
+				updatedAt: new Date().toISOString(),
+				models: [
+					{
+						id: 'elevenlabs/eleven-v4-turbo',
+						name: 'Eleven v4 Turbo',
+						description: '',
+						voices: ['george'],
+						curated: 'Premium',
+						price: { unit: 'characters', input: 0.0001, output: 0 },
+						capabilities: { expression: 'tags', streaming: true }
+					},
+					{
+						id: 'plain/speech',
+						name: 'Plain voice',
+						description: '',
+						voices: ['default'],
+						curated: 'Alternative',
+						price: { unit: 'characters', input: 0, output: 0 },
+						capabilities: { expression: null, streaming: false }
+					}
+				]
+			}
+		})
+	);
+	const previews: any[] = [];
+	await context.route('**/api/voice/preview', (route) => {
+		previews.push(route.request().postDataJSON());
+		return route.fulfill({ status: 502, json: { error: 'Test preview unavailable' } });
+	});
+	let socket: any;
+	let url = '';
+	const packets: any[] = [];
+	await page.routeWebSocket('**/api/voice/connect**', (ws) => {
+		socket = ws;
+		url = ws.url();
+		ws.onMessage((data) => packets.push(JSON.parse(String(data))));
+		ws.send(JSON.stringify({ type: 'ready', inputRate: 16000 }));
+	});
+	await page.goto('/chat');
+	await page.getByRole('button', { name: 'Voice chat', exact: true }).click();
+	await page.getByRole('button', { name: 'Talk in turns', exact: true }).click();
+	const delivery = page.getByLabel('Voice delivery', { exact: true });
+	await delivery.fill('Warm, curious, relaxed pace');
+	await page.getByRole('button', { name: 'Preview george', exact: true }).click();
+	await expect.poll(() => previews.length).toBe(1);
+	expect(previews[0].delivery).toBe('Warm, curious, relaxed pace');
+	await page.getByRole('button', { name: /Plain voice · Alternative/ }).click();
+	await expect(delivery).toHaveCount(0);
+	await page.getByRole('button', { name: /Eleven v4 Turbo · Premium/ }).click();
+	await expect(delivery).toHaveValue('Warm, curious, relaxed pace');
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await expect(await axe(page)).toEqual([]);
+	await page.screenshot({ path: '/tmp/sushii-expressive-voice-desktop.png' });
+	await page.setViewportSize({ width: 320, height: 740 });
+	await checkScreen(page);
+	await page.screenshot({ path: '/tmp/sushii-expressive-voice-mobile.png' });
+	await page.getByRole('button', { name: 'Start voice chat', exact: true }).click();
+	await expect(page.getByRole('dialog', { name: 'Voice chat' })).toBeHidden();
+	expect(new URL(url).searchParams.get('delivery')).toBe('Warm, curious, relaxed pace');
+	socket.send(
+		JSON.stringify({
+			type: 'audio',
+			audio: Buffer.alloc(4800).toString('base64'),
+			sampleRate: 24000,
+			playbackId: 37
+		})
+	);
+	await expect
+		.poll(() => packets.some((p) => p.type === 'playback_done' && p.id === 37))
+		.toBe(true);
+	await page.getByRole('button', { name: 'End call', exact: true }).click();
 });

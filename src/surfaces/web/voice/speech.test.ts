@@ -199,3 +199,38 @@ test("voice previews validate models and voices, use a fixed sample and cache re
   expect(generated).toBe(1);
   routes.close();
 });
+
+test("preview delivery is validated, forwarded, and included in the cache key", async () => {
+  const model = parseSpeechModels({
+    data: [row("elevenlabs/eleven-v4-turbo")],
+  })[0]!;
+  const deliveries: string[] = [];
+  const routes = createVoiceRoutes(
+    { OPENROUTER_API_KEY: "secret" },
+    async () => "",
+    undefined,
+    async () => ({ models: [model], updatedAt: new Date().toISOString() }),
+    async (_key, _chosen, _voice, _text, _signal, _fetch, options) => {
+      deliveries.push(options?.delivery ?? "");
+      return Buffer.from("sample");
+    },
+  );
+  const actor = mintWebActor("owner@example.com");
+  const preview = (delivery: unknown) =>
+    routes.handle(
+      new Request("https://agent.test/api/voice/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: model.id, voice: "bella", delivery }),
+      }),
+      "/api/voice/preview",
+      actor,
+    );
+  expect((await preview("warm"))?.status).toBe(200);
+  expect((await preview("warm"))?.status).toBe(200);
+  expect((await preview("curious"))?.status).toBe(200);
+  expect(deliveries).toEqual(["warm", "curious"]);
+  for (const bad of ["[warm]", "x".repeat(301), {}, null])
+    expect((await preview(bad))?.status).toBe(400);
+  routes.close();
+});

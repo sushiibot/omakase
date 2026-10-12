@@ -218,6 +218,7 @@ export interface VoiceModel {
 }
 
 export interface SpeechModel {
+	capabilities?: { expression: 'tags' | 'instructions' | null; streaming: boolean };
 	id: string;
 	name: string;
 	description: string;
