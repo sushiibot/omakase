@@ -242,7 +242,9 @@ export async function* streamSpeech(
   const combined = AbortSignal.any([
     signal,
     cancel.signal,
-    AbortSignal.timeout(60_000),
+    // Playback backpressure counts against this deadline. The 4 MiB cap permits
+    // about 87 seconds of PCM, so leave room for that audio and provider startup.
+    AbortSignal.timeout(120_000),
   ]);
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
