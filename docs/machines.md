@@ -1,12 +1,12 @@
 # Connected machines
 
-The machine daemon runs on a PC or file server. It connects out to the bot's orchestration listener at `/machines`. It does not replace the main workspace or open a local server port.
+The machine daemon runs on a PC or file server. It connects out to the gateway's orchestration listener at `/machines`. It does not replace the main workspace or open a local server port.
 
 The main agent gets `machine_files`. It can list connected machines, list shared folders, read text files, and search literal text. `task_manage` can start Codex or Claude Code on a connected machine. The task UI offers the same controls.
 
-## Configure the bot
+## Configure the gateway
 
-Set `SUSHII_MACHINES_JSON` in the bot environment. Use a separate random token for each machine. Generate one with `openssl rand -hex 32`.
+Set `SUSHII_MACHINES_JSON` in the gateway environment. Use a separate random token for each machine. Generate one with `openssl rand -hex 32`.
 
 ```json
 [
@@ -17,7 +17,7 @@ Set `SUSHII_MACHINES_JSON` in the bot environment. Use a separate random token f
 
 Expose `/machines` on the existing orchestration listener through your private TLS reverse proxy. Forward WebSocket upgrades, `Authorization`, and `X-Sushii-Machine`. Use `wss://` from remote machines. The daemon accepts plain `ws://` only on loopback for local tests.
 
-These tokens authorize machine connections only. They cannot register the main workspace, call bot tools, or read another machine's session. Do not reuse `ORCH_SECRET`.
+These tokens authorize machine connections only. They cannot register the main workspace, call gateway tools, or read another machine's session. Do not reuse `ORCH_SECRET`.
 
 ## Configure a machine
 
@@ -30,7 +30,7 @@ Create a private config file, for example `/home/me/.config/sushii/machine.json`
   "id": "pc",
   "name": "My PC",
   "url": "wss://<private-orchestration-host>/machines",
-  "token": "<same-token-configured-on-the-bot>",
+  "token": "<same-token-configured-on-the-gateway>",
   "stateDir": "/home/me/.local/state/sushii-machine",
   "roots": [
     { "id": "docs", "name": "File server documents", "path": "/mnt/files/documents", "coding": false },
@@ -58,8 +58,8 @@ Description=Sushii connected machine
 After=network-online.target
 
 [Service]
-ExecStart=/absolute/path/to/bun /absolute/path/to/sushii-agent/src/workspace/machine/index.ts /home/me/.config/sushii/machine.json
-WorkingDirectory=/absolute/path/to/sushii-agent
+ExecStart=/absolute/path/to/bun /absolute/path/to/omakase/src/workspace/machine/index.ts /home/me/.config/sushii/machine.json
+WorkingDirectory=/absolute/path/to/omakase
 Restart=on-failure
 RestartSec=5
 
@@ -92,7 +92,7 @@ Create a task first. Choose a machine, coding folder, and provider in its detail
 { "action": "start", "id": "<task-id>", "target": { "machineId": "pc", "rootId": "project", "provider": "codex" } }
 ```
 
-The task stores its machine, folder, provider, and remote session ID before launch. Repeated initial starts use that ID. A follow-up resumes the provider's own transcript. The daemon records attempts and keeps the latest 64 KB of visible output. Up to four sessions can work at once. Work continues through a bot connection loss; it is marked interrupted after a daemon restart.
+The task stores its machine, folder, provider, and remote session ID before launch. Repeated initial starts use that ID. A follow-up resumes the provider's own transcript. The daemon records attempts and keeps the latest 64 KB of visible output. Up to four sessions can work at once. Work continues through a gateway connection loss; it is marked interrupted after a daemon restart.
 
 Use the task's Conversation tab, or Activity tab in the chat inspector, to read output, answer Codex command/file approvals, send a follow-up, or stop work. A remote attempt finishing leaves the task ready for review. It does not check off the task automatically. Send follow-ups after the current attempt finishes, or stop it first.
 

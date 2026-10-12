@@ -1,7 +1,7 @@
-# Sushii Agent
+# omakase
 
 Sushii is a private, self-hosted personal assistant for one owner.
-The bot serves Discord and an owner-only SvelteKit PWA on the tailnet.
+The gateway serves an owner-only SvelteKit PWA on the tailnet.
 The workspace runs agent sessions, delegated agents, memory, and scheduled work.
 
 The owner uses the web app to chat, review work, manage tasks, inspect history and memory, and control approvals.

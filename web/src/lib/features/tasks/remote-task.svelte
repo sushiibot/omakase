@@ -223,7 +223,7 @@
 		</p>
 		<Button
 			variant="outline"
-			href="https://github.com/sushiibot/sushii-agent/blob/main/docs/machines.md"
+			href="https://github.com/sushiibot/omakase/blob/main/docs/machines.md"
 			target="_blank"
 			rel="noopener noreferrer">Set up a machine</Button
 		>

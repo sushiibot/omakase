@@ -148,7 +148,7 @@ Muted or released microphones show zero. The meter adds no second microphone cap
 
 ## Recorded speech
 
-Discord voice messages and web dictation use the same transcription path.
+Web dictation uses the gateway's transcription path.
 The server decodes recordings locally with ffmpeg before upload. Docker includes ffmpeg.
 For local development, install ffmpeg and make it available on `PATH`.
 

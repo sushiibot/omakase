@@ -1,20 +1,22 @@
-# sushii-agent
+# omakase
 
-AI agent Discord bot with guild config and OpenRouter.
+Owner-only personal agent: a SvelteKit PWA (`web/`), the gateway that serves it (`src/personal.ts`),
+and a long-lived workspace container (`src/workspace/`). Split out of sushii-agent, which keeps the
+community bot.
 
 ## Runtime
 
 - **Runtime:** Bun
-- **Type check:** `bunx tsc --noEmit`
 - **Install:** `bun install`
-- **Dev:** `bun dev` (community bot, `./data/sushii-agent.db`), `bun run dev:personal` (personal gateway,
-  `./data/personal.db`). `DATABASE_PATH` overrides either.
+- **Type check:** `bunx tsc --noEmit`
+- **Test:** `OPENAI_API_KEY=dummy bun test`
+- **Dev:** `bun dev` (gateway, `./data/personal.db`; `DATABASE_PATH` overrides it)
+
+Never edit, delete or renumber files in `drizzle/`: production databases track those migrations.
 
 ## Web app (`web/`)
 
-Owner-only SvelteKit SPA (PWA) served by the personal gateway (`src/personal.ts`, its own process and
-compose service `private-bots/omakase`, own DB) at agent.sushii.bot (tailnet only). The gateway
-also runs the workspace control plane; `src/index.ts` is the community bot only.
+Owner-only SvelteKit SPA (PWA) served by the gateway at agent.sushii.bot (tailnet only).
 Structure and rules: `web/README.md`, `web/docs/ux-guidelines.md`. Gate from `web/`: `bun run check`,
 `bun run lint` (prettier + raw-HTML, token and import-boundary checks + unit tests), `bun run build`,
 `bun run test:e2e` (ports via `PW_PORT` / `PW_HARNESS_PORT`). Dev with sample data: `bun dev`, then `?fake`.
@@ -22,7 +24,7 @@ All live screens are available automatically. Fixture-only screens stay in the d
 
 ## End-to-end system tests (`e2e-system/`)
 
-Real personal gateway + real workspace + fake model + Traefik-like proxy, driven by Chromium: `bun run e2e:system`
+Real gateway + real workspace + fake model + Traefik-like proxy, driven by Chromium: `bun run e2e:system`
 (port slot via `E2E_PORT_BASE`; avoid 5060, Chromium blocks it). One flow per file in `e2e-system/flows/`.
 
 ## Deployment
@@ -30,8 +32,8 @@ Real personal gateway + real workspace + fake model + Traefik-like proxy, driven
 When work is finalized and checks pass, commit and push to `main` without asking for confirmation.
 
 Auto-deploys via CI on every push to `main` (`.github/workflows/ci.yml`): `typecheck`, `test`, `web`,
-`browser-smoke` and `e2e-system` → `docker-build` / `docker-build-workspace` → `deploy`
-(`private-bots/sushii-agent` on host `apps`) → `deploy-personal` (`private-bots/omakase`, same
-image, `bun src/personal.ts`) → `deploy-workspace` (`private-bots/omakase-workspace`). No manual `deploy.sh` step is needed — pushing to `main` ships it. Push any
+`web-e2e`, `browser-smoke` and `e2e-system` → `docker-build` (`ghcr.io/sushiibot/omakase:<sha>`) /
+`docker-build-workspace` (`:<sha>-workspace`) → `deploy` (`private-bots/omakase` on host `apps`) →
+`deploy-workspace` (`private-bots/omakase-workspace`). No manual `deploy.sh` step is needed. Push any
 sushii-ansible config change first: the deploy renders from sushii-ansible `main`. Verify with
 `gh run list --branch main` and the post-deploy logs.

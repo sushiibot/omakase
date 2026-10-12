@@ -1,199 +1,65 @@
-# sushii-agent
+# omakase
 
-Discord moderation intelligence bot. Mention it in a whitelisted channel with a plain-English question — it creates a thread, runs a tool-calling agent against a local message cache, and posts a synthesized answer. Follow-ups in the same thread resume the conversation.
+The owner-only personal agent: a SvelteKit PWA at agent.sushii.bot (tailnet only), the gateway that
+serves it, and a long-lived workspace container where the agent runs. It was split out of
+sushii-agent, which keeps the community Discord/Slack/buzz bot.
 
-```
-@sushii-agent has user 123456789 been causing problems recently?
-@sushii-agent show me what was said in #general around that deleted message
-@sushii-agent what channels does this user post in most?
-```
+| Part | Entry | Runs as |
+|---|---|---|
+| Gateway: web app server, chat routing, push, workspace control plane, proxied tools | `src/personal.ts` | `private-bots/omakase`, image `ghcr.io/sushiibot/omakase:<sha>` |
+| Workspace: Pi coding-agent sessions, subagents, memory, scheduled jobs | `src/workspace/index.ts` | `private-bots/omakase-workspace`, image `ghcr.io/sushiibot/omakase:<sha>-workspace` (Dockerfile target `workspace`) |
+| Machine daemon: remote file and session access on the owner's machines | `src/workspace/machine/index.ts` | `bun run machine` on each machine (`docs/machines.md`) |
+| Web app | `web/` | built into the gateway image (`web/README.md`) |
 
-**Read-only** — never writes moderation actions.
-
-## Features
-
-- **30-day message cache** — SQLite with FTS5 full-text search
-- **Agent loop** — LLM calls tools iteratively until it has enough context
-- **Thread-scoped conversations** — independent sessions, persist across restarts
-- **Soft deletes** — deleted messages are tombstoned, not removed
-- **Multi-guild** — single process, per-guild config
-- **Provider-agnostic** — any OpenAI-compatible API (Anthropic, OpenRouter, local)
-
-## Agent tools
-
-| Tool | Description |
-|---|---|
-| `search_messages` | FTS5 full-text search with optional user/channel/time filters |
-| `get_conversation_context` | Messages around a message ID, with reply chain |
-| `get_user_profile` | First seen, message count, channel distribution, daily frequency |
-| `get_recent_activity` | Most recent N messages from a user across all channels |
-| `get_current_member_info` | Live Discord API — roles, join date, membership status |
-
-## Setup
-
-**Prerequisites:** [Bun](https://bun.sh) v1.0+, a Discord bot token with the **Server Members** privileged intent (and **Message Content** once approved, see `DISCORD_MESSAGE_CONTENT`), and bot permissions: Read Messages, Send Messages, Create/Send in Threads, Read Message History.
+## Development
 
 ```bash
-git clone <repo> && cd sushii-agent
 bun install
-cp .env.example .env
+bun dev                       # gateway, ./data/personal.db
+bunx tsc --noEmit
+OPENAI_API_KEY=dummy bun test
+bun run e2e:system            # gateway + workspace + web app + fake model (e2e-system/README.md)
 ```
 
-Edit `.env`:
+Web app checks run from `web/`; see `AGENTS.md`.
 
-```env
-DISCORD_BOT_TOKEN=your_bot_token_here
-OPENAI_API_KEY=your_api_key_here
-OPENAI_BASE_URL=https://api.anthropic.com/v1   # or OpenRouter, Ollama, etc.
-OPENAI_MODEL=claude-opus-4-6
-DATABASE_PATH=./data/sushii-agent.db
-```
+## Gateway configuration
 
-Create `teams.json` from `teams.example.json` — it's the only source of per-space configuration:
+| Variable | Default | Description |
+|---|---|---|
+| `OPENAI_API_KEY` | required | OpenRouter key for dictation and voice transcription |
+| `OPENAI_BASE_URL` | `https://api.anthropic.com/v1` | OpenAI-compatible endpoint (production: OpenRouter) |
+| `DATABASE_PATH` | `./data/personal.db` | SQLite path; migrations in `drizzle/` apply at boot |
+| `PRINCIPALS_PATH` | `./principals.json` | Identity registry; the owner principal maps its `web` login |
+| `OWNER_DISCORD_ID` | none | Synthesizes the owner principal when `principals.json` is absent; proxied tools run as this id |
+| `TEAMS_PATH` | `./teams.json` | Team grouping (`teams.example.json`); routes Linear issues per team |
+| `EXA_API_KEY`, `GRAFANA_BASE_URL`, `GRAFANA_API_TOKEN`, `LINEAR_API_KEY`, `LINEAR_TEAM_ID` | none | Proxied tools; each is offered only when configured |
+| `ORCH_PORT`, `ORCH_SECRET` | `8788`, none | Workspace transport; the workspace presents the same secret |
+| `SUSHII_MACHINES_JSON` | `[]` | Machine daemon grants (`docs/machines.md`) |
+| `DM_WORKSPACE_ENABLED` | `false` | Routes web chat to the workspace and enables its tool manifest |
+| `WEB_OWNER_LOGIN`, `WEB_PORT`, `WEB_BIND_ADDR`, `WEB_TRUSTED_PEERS`, `WEB_DIST_DIR`, `WEB_UPLOADS_DIR` | web server off without a login | Web gateway; it trusts `Tailscale-User-Login` only from the trusted peers |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | none | Web push |
+| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_BOT_NAME`, `GITHUB_BOT_EMAIL` | none | GitHub App tokens for the workspace |
+| `DASHSCOPE_*`, `GEMINI_API_KEY`, `OPENAI_REALTIME_API_KEY` | none | Optional live voice providers (`.env.example`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | none | Enables OpenTelemetry export |
 
-```json
-{
-  "your-team": {
-    "spaces": [
-      {
-        "surface": "discord",
-        "spaceId": "YOUR_GUILD_ID",
-        "discord": {
-          "allowedRoles": ["MOD_ROLE_ID"],
-          "emojis": ["<:blobheart:123456789012345678>"],
-          "promptTemplate": "general",
-          "enabledModules": ["moderation"]
-        }
-      }
-    ]
-  }
-}
-```
+Workspace settings (`WORKSPACE_*`, `ORCH_URL`) and their defaults are in `src/workspace/config.ts`.
 
-**Finding IDs:** Enable Developer Mode (Settings → Advanced), then right-click any server/user/channel to copy its ID.
+## Deployment
 
-```bash
-bun src/index.ts          # run the community bot
-bun src/personal.ts       # run the personal gateway (web app + workspace control plane), DB ./data/personal.db
-docker compose up -d      # or Docker (./data volume for SQLite)
-```
+Every push to `main` runs the gates in `.github/workflows/ci.yml`, builds both images, deploys
+`private-bots/omakase` on host `apps`, then `private-bots/omakase-workspace`. Each deploy bumps the
+image tag in sushii-ansible, so push any sushii-ansible change first. A manual redeploy is
+`./deploy.sh -y apps private-bots/omakase-workspace` from sushii-ansible. Workspace tunables go in
+`workspace_env_overrides` there.
 
-## Configuration reference
+## Workspace
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `DISCORD_BOT_TOKEN` | bot only | — | Bot token from Discord Developer Portal; `src/personal.ts` never reads it |
-| `DISCORD_MESSAGE_CONTENT` | no | `false` | Set to `true` once the privileged Message Content intent is approved. Off, the bot reads only messages that mention it; message caching, wiki-sync, server auto-scan, screening and the auto-mod trigger stand down |
-| `OPENAI_API_KEY` | yes | — | API key for your LLM provider |
-| `OPENAI_BASE_URL` | no | `https://api.anthropic.com/v1` | OpenAI-compatible endpoint |
-| `OPENAI_MODEL` | no | `claude-opus-4-6` | Model name |
-| `DATABASE_PATH` | no | `./data/sushii-agent.db` (bot), `./data/personal.db` (`src/personal.ts`) | SQLite path |
-| `PRINCIPALS_PATH` | no | `./principals.json` | Path to the manual cross-platform identity registry; missing file = unconfigured |
-| `TEAMS_PATH` | no | `./teams.json` | Path to the team grouping config — the only source of per-space configuration; missing file = unconfigured |
-
-A `teams.json` entry groups a team's spaces (Discord guild, Slack workspace, buzz relay) plus its
-own wiki/Linear scoping, trusted members, and each space's own settings. See `teams.example.json`
-for a full worked entry.
-
-```json
-{
-  "dreamcatcher": {
-    "spaces": [
-      {
-        "surface": "discord",
-        "spaceId": "123456789012345678",
-        "wiki": "source",
-        "statusChannelId": "234567890123456789",
-        "discord": {
-          "allowedRoles": ["MOD_ROLE_ID"],
-          "emojis": ["<:blobheart:123456789012345678>"],
-          "promptTemplate": "general",
-          "enabledModules": ["moderation"]
-        }
-      },
-      { "surface": "slack", "spaceId": "T000TEAMA0", "wiki": "read" },
-      {
-        "surface": "buzz",
-        "spaceId": "buzz:https://relay.example",
-        "wiki": "read",
-        "buzz": { "avatarUrl": "https://relay.example/avatar.png" }
-      }
-    ],
-    "wiki": { "wikiId": "123456789012345678" },
-    "members": { "some-principal-id": { "trusted": true } },
-    "linear": { "teamId": "DREAM", "apiKeyEnv": "DREAMCATCHER_LINEAR_API_KEY" },
-    "trustSpaceMembers": false
-  }
-}
-```
-
-- `wiki.wikiId` names the wiki this team owns; a space feeds it (`wiki: "source"`) and/or reads it
-  (`wiki: "read"`). Wiki participation is entirely determined by these two fields — there's no
-  other way for a space to feed or read a wiki.
-- `discord` takes the same shape as `GuildConfig` (`allowedRoles` required) and is only allowed on
-  a `surface: "discord"` space. It's the sole source of `config.guildConfig`, keyed by the space's
-  `spaceId`, with the space's own `statusChannelId` folded in as `wiki.statusChannelId` — set
-  `statusChannelId` on the space itself, not `discord.wiki.statusChannelId` (rejected at load).
-- `buzz.avatarUrl` is only allowed on a `surface: "buzz"` space, and takes precedence over the
-  global `BUZZ_AVATAR_URL` fallback for that relay.
-- `linear.apiKeyEnv` names the env var holding the team's Linear API key, read at resolve time.
-- `trustSpaceMembers` — see [Permissions](#permissions).
-
-## Permissions
-
-Two independent layers.
-
-**Entry gate — who can trigger the bot at all, per surface.** Discord guilds are public spaces:
-only a member holding one of the guild's `allowedRoles` can mention/reply to trigger the bot — this
-applies to everyone, including the owner. Slack workspaces and buzz relays are private and
-invite-only, so being in the space is itself the gate; there's no role check there.
-`enabledModules`/`moderation` never gates this — a guild with no modules enabled still gets chat as
-long as it's configured. `moderation` only turns on moderation features: the auto-mod trigger
-(pinging `modRoleId`), moderation-only tools, and the "Moderator:/Roles:" prompt lines.
-
-**Trust — which tools.** The owner, or a member listed as `trusted` in the space's team
-(`members` above), gets `team_config` and ops-triage tools. `trustSpaceMembers`
-extends this: set it `true` on a team whose Slack/buzz spaces are already invite-only vetting, and
-any caller present in one of those spaces is trusted — no `members` entry needed. It never applies
-to a Discord space, since Discord guilds are public and need an explicit trusted member or the
-owner.
-
-## Architecture
-
-```
-messageCreate → insertMessage (SQLite)
-             ↘ if @mention + whitelisted
-                → resolveOrCreateThread
-                → loadConversation (SQLite)
-                → runAgentLoop
-                   ├─ LLM call (OpenAI-compat API)
-                   ├─ tool_calls → runTools → SQLite / Discord API
-                   └─ repeat until stop
-                → thread.send(response)
-                → saveConversation (SQLite)
-                → renameThread (if new)
-```
-
-**Schema:**
-```sql
-messages       (discord_id, guild_id, channel_id, author_id, content,
-                reply_to_id, created_at, edited_at, deleted_at)
-messages_fts   -- FTS5 external content table
-conversations  (thread_id, guild_id, messages JSON, created_at, updated_at)
-```
-
-WAL mode. Messages older than 30 days purged daily.
-
-## Personal agent workspace
-
-The owner's web chat (agent.sushii.bot) goes to a long-lived Pi coding-agent session in its own container
-(`src/workspace/`, image tag `<sha>-workspace`, service `private-bots/omakase-workspace`), not
-to the in-process loop. The bot is the transport: it relays chat over a JSON-RPC WebSocket
-(`src/orchestration/workspace/`), proxies bot-side tools (Exa, Grafana, Linear, `team_config`) with
+The web chat goes to a long-lived Pi coding-agent session in the workspace container
+(`src/workspace/`). The gateway is the transport: it relays chat over a JSON-RPC WebSocket
+(`src/orchestration/workspace/`), proxies the tools that need its keys (Exa, Grafana, Linear) with
 owner approval for writes, and mints GitHub App tokens so `git`/`gh` run as `sushii-runner[bot]`.
-If the workspace is down, web messages wait and are resent once it reconnects. Discord DMs are
-ignored, the owner's included; the bot only sends the owner a fixed-text Discord DM when an approval
-can't reach the web app. Guild, thread, Slack and buzz traffic stays in-process.
+If the workspace is down, web messages wait and are resent once it reconnects.
 
 - **Home** (`/data/home`, git-versioned): `AGENTS.md`, `SOUL.md`, `USER.md`, `MEMORY.md`, `TASKS.md`
   and `memory/catalog.md` are loaded into every chat session. The catalog has a 4000-character cap.
@@ -218,7 +84,7 @@ share one connection. Conversation IDs select separate documents inside that dat
 Pi Durable owns the SQLite adapter, atomic commits, and document storage. The application
 supplies a versioned inbox document family and a checkpoint hook for the coding-agent session.
 
-After a workspace restart, queued instructions resume when the bot connects. Their original
+After a workspace restart, queued instructions resume when the gateway connects. Their original
 text, origin, and image attachments remain available. Consumed inputs do not replay because
 their tools can have external effects. The checkpoint hook blocks tools if the consumed-input
 commit fails. Stop and new-session commands withdraw queued instructions.
@@ -236,7 +102,7 @@ Domain modules define documents. They do not open another database for each feat
 
 | Data | Current store | Consolidation direction |
 |---|---|---|
-| Bot messages, routing, web events, and OAuth state | Bot SQLite database | Keep with the bot process. |
+| Web messages, routing, web events, and push subscriptions | Gateway SQLite database | Keep with the gateway process. |
 | Workspace input receipts and queued instructions | `workspace.sqlite` | Shared Durable documents, scoped by conversation. |
 | Session pointers, topic metadata, scheduler state, and proactive limits | `state.json`, `topics.json`, `scheduler.json`, `proactive.json` | Migrate to versioned documents in `workspace.sqlite`. |
 | Delivery receipts, subagent results, and run records | `outbox.jsonl`, `subagent-results.jsonl`, `runs.jsonl` | Migrate runtime records to `workspace.sqlite`. Keep history files as exports. |
@@ -255,25 +121,11 @@ If transcripts move to SQLite, these interfaces must retain original messages an
 including entries removed from the model's context by compaction. Markdown history can remain a derived export.
 The agent reads history through these interfaces without direct database write access.
 
-Deploy: pushing to `main` builds both images, deploys the bot, then the personal gateway
-(`private-bots/omakase`, the bot image running `bun src/personal.ts`), then the workspace
-(CI bumps `workspace_image_tag` in sushii-ansible). The workspace connects to the personal gateway, not the bot. A manual redeploy is
-`./deploy.sh -y apps private-bots/omakase-workspace`. Tunables (`WORKSPACE_MODELS`,
-`WORKSPACE_COMPACT_TOKENS`, `WORKSPACE_TASK_*`, …; defaults in `src/workspace/config.ts`) go in
-`workspace_env_overrides` there. `DM_WORKSPACE_ENABLED` on the personal gateway routes the owner's web chat to it.
-
-## Development
-
-```bash
-bun --watch src/index.ts   # auto-restart
-bunx tsc --noEmit          # type-check
-```
-
 ## MCP connections
 
-The personal workspace supports remote MCP servers through the web app's Connectors screen.
+The workspace supports remote MCP servers through the web app's Connectors screen.
 The agent can list current tools and call them during a chat turn.
-Other chat surfaces and scheduled jobs do not receive these tools.
+Scheduled jobs do not receive these tools.
 
 1. Open **Connectors → Add a server**.
 2. Enter the server's HTTPS address.
@@ -301,7 +153,7 @@ Local servers, stdio, legacy SSE, and OAuth clients that need manual registratio
 
 ## Owner-approved GitHub pushes
 
-The personal workspace can commit directly on the default branch when the owner requests that workflow.
+The workspace can commit directly on the default branch when the owner requests that workflow.
 The `github_push` tool asks the owner to approve the repository, destination branch, and exact commit.
 It pushes only that commit and does not force-push.
 The pre-push hook permits only the approved URL, branch, and commit for that call.
@@ -316,7 +168,7 @@ The repository's root instructions live in `AGENTS.md`. `CLAUDE.md` is a symlink
 
 ## One-time browser location
 
-In the owner's personal conversation, `request_current_location({ reason })` can ask for a
+In the owner's main conversation, `request_current_location({ reason })` can ask for a
 location fix to answer a nearby question. The request appears in the web chat and Inbox using
 the existing authenticated approval stream; **Share current location** is the only action that
 calls the user's own browser's `navigator.geolocation.getCurrentPosition`. The server/workspace
@@ -326,14 +178,14 @@ if permission was previously granted; there is no watch or background tracking.
 The browser requests high accuracy, no cached fix, and a 15-second acquisition timeout (with a
 20-second UI fallback covering unanswered permission prompts). Requests expire after 90 seconds
 if no client responds. Errors tell the agent to ask for a city/area instead. This currently supports
-only the owner's `main` conversation, not guild chats, subagents or scheduled jobs. The web gateway
+only the owner's `main` conversation, not subagents or scheduled jobs. The web gateway
 must be enabled and served in a secure browser context (HTTPS, or localhost for development).
 
 Replies are capped, strictly validated (coordinate ranges, finite numbers, accuracy and timestamp
 freshness), owner-authenticated, same-origin, and correlated by a single-use random nonce to the
 pending tool call and workspace connection. Browser-provided positions are not attested: the owner
 can override their own device's location. Coordinates are returned only to the requesting tool,
-not copied into the bot's approval records, push payloads, analytics or audit logs. Pi tool/session
+not copied into the gateway's approval records, push payloads, analytics or audit logs. Pi tool/session
 history necessarily stores the returned fix and the model provider receives it; chat replies may
 also be retained. The UI discloses this before sharing. The tool and memory-flush instructions tell
 the agent not to save exact fixes in durable memory or repeat them in replies unnecessarily; this
