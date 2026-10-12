@@ -209,28 +209,40 @@ jobs:
   deploy:
     needs: [docker-build, typecheck, test, web, web-e2e, browser-smoke, e2e-system]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # The host pulls with this job's token; a new ghcr package can start out private.
+    permissions:
+      contents: read
+      packages: read
     uses: sushiibot/sushii-workflows/.github/workflows/deploy.yml@main # zizmor: ignore[unpinned-uses] first-party, tracked at @main by design
     with:
       service: private-bots/omakase
       image_version: ${{ needs.docker-build.outputs.image_version }}
       host: apps
+      private_registry: true
     secrets:
       ANSIBLE_REPO_TOKEN: ${{ secrets.ANSIBLE_REPO_TOKEN }}
       ANSIBLE_SSH_PRIVATE_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
       ANSIBLE_KNOWN_HOSTS: ${{ secrets.ANSIBLE_KNOWN_HOSTS }}
       ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+      REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # After the gateway: a new workspace may send fields an older gateway drops.
   deploy-workspace:
     needs: [deploy, docker-build-workspace]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # The host pulls with this job's token; a new ghcr package can start out private.
+    permissions:
+      contents: read
+      packages: read
     uses: sushiibot/sushii-workflows/.github/workflows/deploy.yml@main # zizmor: ignore[unpinned-uses] first-party, tracked at @main by design
     with:
       service: private-bots/omakase-workspace
       image_version: ${{ needs.docker-build-workspace.outputs.short_sha }}
       host: apps
+      private_registry: true
     secrets:
       ANSIBLE_REPO_TOKEN: ${{ secrets.ANSIBLE_REPO_TOKEN }}
       ANSIBLE_SSH_PRIVATE_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
       ANSIBLE_KNOWN_HOSTS: ${{ secrets.ANSIBLE_KNOWN_HOSTS }}
       ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+      REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
