@@ -152,18 +152,29 @@ Our Android-first web app adopts 48 CSS pixels for touch targets.
 
 | Area             | Rule                                                                                                                                                                   | Verification                                                                                                                |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Touch targets    | At least 48px, with 8px between channel rows and separate controls. Small badges remain informational.                                                                 | Measure target rectangles at 320px, 412px, and wide touch layouts. Measure checkbox labels, not only their visual squares.  |
-| Desktop density  | Channel rows may use 36px height and 2px gaps only in a wide layout with a fine pointer and hover. Any coarse pointer restores touch sizing.                           | Compare mouse-only and mixed-input desktops. This is a deliberate compact navigation exception to the mobile spacing rules. |
+| Touch targets    | At least 48px. Separate actions have 8px gaps; repeated channel rows are contiguous with inset visual highlights. Small badges remain informational.                   | Measure target rectangles at 320px, 412px, and wide touch layouts. Measure checkbox labels, not only their visual squares.  |
+| Desktop density  | Channel rows may use 36px height and contiguous rows only in a wide layout with a fine pointer and hover. Any coarse pointer restores touch sizing.                    | Compare mouse-only and mixed-input desktops. This is a deliberate compact navigation exception to the mobile spacing rules. |
 | Icon controls    | Square 48px targets, no text-button padding, 16px icons.                                                                                                               | Compare Menu, Details, and Close target rectangles.                                                                         |
-| Gutters          | One 16px content gutter for transcript, request banner, inspector, and composer. Sidebar rows use 12px internal padding.                                               | Compare visible edges in all panes and both themes.                                                                         |
-| Type             | Shared rem tokens: 15px body at 1.5 leading, 14px UI, 12px metadata, 13px code, and inputs at least 1rem.                                                              | Increase root text to 200%. Check wrapped action labels and overflow.                                                       |
+| Gutters          | One 16px content gutter for transcript, request banner, inspector, and composer. Sidebar rows use 8px internal padding.                                                | Compare visible edges in all panes and both themes.                                                                         |
+| Type             | Shared rem tokens: 15px body at 1.5 leading, 14px UI (16px touch navigation), 12px metadata, 13px code, and inputs at least 1rem.                                      | Increase root text to 200%. Check wrapped action labels and overflow.                                                       |
 | Message rhythm   | 16px between messages; 8px between paragraphs.                                                                                                                         | Compare short exchanges and long replies without excessive empty space.                                                     |
 | Inspector rhythm | 16px inset, 24px section separation, 8px below headings. Checkbox label targets remain at least 48px.                                                                  | Scroll to the last action in a short viewport.                                                                              |
 | Viewport         | Let the heading occupy its actual height. The workspace fills the remainder with no hard minimum height. Use the visual viewport at normal zoom for keyboard overlays. | Check short heights and wrapped demo controls. Real phone keyboards remain a device gate.                                   |
 | Insets           | Apply safe-area padding once at the outer frame.                                                                                                                       | Check portrait and landscape system insets.                                                                                 |
 | States           | Keep the same row geometry across idle, hover, selected, and focus. Hover is quieter than selection; focus has its own outline.                                        | Compare Main and grouped channels across both themes.                                                                       |
 
-The sidebar icon column stays 16px wide. Labels truncate before request badges.
+The sidebar icon column is 20px on touch layouts and 18px on mouse desktops. Labels truncate before request badges.
+
+The navigation proportions come from visual comparison with Slack's
+[sidebar reference](https://slack.com/help/articles/212596808-Adjust-your-sidebar-preferences)
+and Discord's [official appearance examples](https://support.discord.com/hc/en-us/articles/207260127-How-to-Change-Discord-Color-Themes-and-Customize-Appearance-Settings).
+Their screenshots show tightly repeated channel rows, distinct section headings, and shallow selected highlights.
+This is an interpretation of the screenshots, not an exact pixel specification from either product.
+Discord also exposes navigation density separately from message density.
+Our selected face is 40px inside a 48px touch row, or 32px inside a 36px mouse row.
+The full row receives input. The selected background does not define the hit area.
+Project disclosure uses a chevron and the same icon/text alignment as its channels.
+
 Prototype explanations stay outside the composer and navigation footer.
 Physical phone feel and keyboard behavior still need device review.
 

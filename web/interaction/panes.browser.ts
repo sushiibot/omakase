@@ -157,7 +157,9 @@ test('S1 touch targets stay generous on phones and wide touchscreens', async ({ 
 			expect(row.width).toBeGreaterThanOrEqual(48);
 			expect(row.height).toBeGreaterThanOrEqual(48);
 		}
-		expect(await page.locator('.channels').evaluate((el) => getComputedStyle(el).gap)).toBe('8px');
+		expect(await page.locator('.channel-group').evaluate((el) => getComputedStyle(el).gap)).toBe(
+			'0px'
+		);
 		if (width < 1100) await page.goBack();
 		const controls = await page.locator('.pane-control:visible').evaluateAll((els) =>
 			els.map((el) => {
@@ -220,7 +222,9 @@ test('S3 compact navigation requires a mouse-only desktop', async ({ browser, ba
 		await expect(page.locator('.workspace')).toHaveClass(/wide/);
 		const row = await page.locator('.channel').first().boundingBox();
 		expect(row!.height).toBeCloseTo(36, 2);
-		expect(await page.locator('.channels').evaluate((el) => getComputedStyle(el).gap)).toBe('2px');
+		expect(await page.locator('.channel-group').evaluate((el) => getComputedStyle(el).gap)).toBe(
+			'0px'
+		);
 		await page.getByRole('button', { name: 'Open details' }).click();
 		await expect(page.getByRole('button', { name: 'Close details' })).toBeVisible();
 		await page.getByRole('button', { name: 'Close details' }).click();

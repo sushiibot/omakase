@@ -6,6 +6,7 @@
 	import X from '@lucide/svelte/icons/x';
 	import ListChecks from '@lucide/svelte/icons/list-checks';
 	import Hash from '@lucide/svelte/icons/hash';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import { Button } from '$lib/ui/button';
 	import {
@@ -26,6 +27,7 @@
 	let draft = $state('');
 	let theme = $state(false);
 	let compactPreview = $state(false);
+	let groupCollapsed = $state(false);
 	let viewportHeight = $state('100dvh');
 	let gesture: {
 		id: number;
@@ -275,19 +277,30 @@
 						void selectPane('chat');
 					}}><Hash class="size-4" /><span>Main</span></button
 				>
-				<p class="project">Sushii</p>
-				{#each channels as channel}<button
-						class="channel"
-						class:selected={selected === channel}
-						aria-current={selected === channel ? 'page' : undefined}
-						onclick={() => {
-							selected = channel;
-							void selectPane('chat');
-						}}
-						><Hash class="size-4" /><span>{channel}</span>{#if channel === 'Deployment'}<span
-								class="ping">1<span class="sr-only"> request needs you</span></span
-							>{/if}</button
-					>{/each}
+				<button
+					class="project"
+					aria-label="Sushii channels"
+					aria-expanded={!groupCollapsed}
+					aria-controls="lab-project-channels"
+					onclick={() => (groupCollapsed = !groupCollapsed)}
+					><ChevronDown class={groupCollapsed ? 'collapsed size-4' : 'size-4'} /><span>Sushii</span
+					></button
+				>
+				<div id="lab-project-channels" class="channel-group" hidden={groupCollapsed}>
+					{#each channels as channel}<button
+							class="channel"
+							class:has-request={channel === 'Deployment'}
+							class:selected={selected === channel}
+							aria-current={selected === channel ? 'page' : undefined}
+							onclick={() => {
+								selected = channel;
+								void selectPane('chat');
+							}}
+							><Hash class="size-4" /><span>{channel}</span>{#if channel === 'Deployment'}<span
+									class="ping">1<span class="sr-only"> request needs you</span></span
+								>{/if}</button
+						>{/each}
+				</div>
 			</div>
 			<footer>
 				<p>Tasks · Activity · Workspace</p>
@@ -413,7 +426,10 @@
 		--content-gutter: 16px;
 		--control-size: 48px;
 		--channel-height: 48px;
-		--channel-gap: 8px;
+		--channel-gap: 0px;
+		--channel-icon: 20px;
+		--channel-text: 1rem;
+		--channel-inset: 4px;
 		display: flex;
 		flex-direction: column;
 		gap: 16px;
@@ -522,26 +538,62 @@
 		overscroll-behavior: contain;
 	}
 	.project {
-		margin: 16px 12px 0;
-		font-size: var(--text-meta);
+		display: grid;
+		grid-template-columns: var(--channel-icon) minmax(0, 1fr);
+		align-items: center;
+		gap: 8px;
+		flex-shrink: 0;
+		min-height: var(--channel-height);
+		margin-top: 16px;
+		padding: 8px;
+		text-align: left;
+		font-size: var(--text-ui);
 		font-weight: 600;
 		color: var(--muted-foreground);
 	}
+	.project :global(svg) {
+		justify-self: center;
+	}
+	.project :global(svg.collapsed) {
+		transform: rotate(-90deg);
+	}
+	.channel-group {
+		display: flex;
+		flex-direction: column;
+		gap: var(--channel-gap);
+	}
+	.channel-group[hidden] {
+		display: none;
+	}
 	.channel {
+		position: relative;
+		isolation: isolate;
 		width: 100%;
 		flex-shrink: 0;
 		display: grid;
-		grid-template-columns: 16px minmax(0, 1fr) auto;
+		grid-template-columns: var(--channel-icon) minmax(0, 1fr) auto;
 		align-items: center;
 		gap: 8px;
-		padding: 8px 12px;
+		padding: 8px;
 		min-height: var(--channel-height);
-		font-size: var(--text-ui);
+		font-size: var(--channel-text);
 		line-height: 1.5;
 		font-weight: 500;
 		color: var(--muted-foreground);
 		text-align: left;
 		border-radius: 6px;
+	}
+	.channel::before {
+		content: '';
+		position: absolute;
+		inset: var(--channel-inset) 0;
+		z-index: -1;
+		border-radius: 6px;
+		background: var(--channel-background, transparent);
+	}
+	.channel :global(svg) {
+		width: var(--channel-icon);
+		height: var(--channel-icon);
 	}
 	.channel > span:not(.ping) {
 		overflow: hidden;
@@ -550,13 +602,15 @@
 	}
 	@media (hover: hover) {
 		.channel:not(.selected):hover {
-			background: color-mix(in oklch, var(--sidebar-foreground) 6%, var(--sidebar));
+			--channel-background: color-mix(in oklch, var(--sidebar-foreground) 6%, var(--sidebar));
 			color: var(--sidebar-foreground);
 		}
 	}
 	.channel.selected {
-		background: color-mix(in oklch, var(--sidebar-foreground) 12%, var(--sidebar));
+		--channel-background: color-mix(in oklch, var(--sidebar-foreground) 12%, var(--sidebar));
 		color: var(--sidebar-foreground);
+	}
+	.channel.has-request {
 		font-weight: 600;
 	}
 	.channel:focus-visible {
@@ -776,7 +830,9 @@
 	@media (hover: hover) and (pointer: fine) {
 		.wide {
 			--channel-height: 36px;
-			--channel-gap: 2px;
+			--channel-icon: 18px;
+			--channel-text: var(--text-ui);
+			--channel-inset: 2px;
 		}
 		.wide .channel {
 			padding-block: 6px;
@@ -785,7 +841,9 @@
 	@media (any-pointer: coarse) {
 		.wide {
 			--channel-height: 48px;
-			--channel-gap: 8px;
+			--channel-icon: 20px;
+			--channel-text: 1rem;
+			--channel-inset: 4px;
 		}
 		.wide .channel {
 			padding-block: 8px;
