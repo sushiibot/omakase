@@ -17,6 +17,7 @@
 		oncaptions,
 		ondetails,
 		mode = 'live',
+		apiLabel = '',
 		turnBusy = false,
 		onturn,
 		oninterrupt
@@ -32,6 +33,7 @@
 		oncaptions: () => void;
 		ondetails: () => void;
 		mode?: 'live' | 'turns';
+		apiLabel?: string;
 		turnBusy?: boolean;
 		onturn?: () => void;
 		oninterrupt?: () => void;
@@ -54,7 +56,9 @@
 									: 'Listening'}
 				</span>
 				<span class="text-xs text-muted-foreground" aria-live="off">
-					· {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+					{apiLabel ? `· ${apiLabel}` : ''} · {Math.floor(seconds / 60)}:{String(
+						seconds % 60
+					).padStart(2, '0')}
 				</span>
 			</p>
 			<div class="flex shrink-0 items-center gap-2">
@@ -80,16 +84,16 @@
 			</div>
 		</div>
 		{#if mode === 'turns'}
-			<Button
-				class="mb-2 w-full"
-				disabled={state === 'connecting' || (state !== 'speaking' && (turnBusy || muted))}
-				onclick={state === 'speaking' ? oninterrupt : onturn}
-				>{state === 'speaking'
-					? 'Stop speaking'
-					: turnBusy
-						? 'Working…'
-						: 'Send voice turn'}</Button
-			>
+			<div class="flex items-center justify-between gap-2 pb-1">
+				<p class="text-xs text-muted-foreground">Sends automatically after a pause</p>
+				<Button
+					variant="ghost"
+					class="shrink-0"
+					disabled={state === 'connecting' || (state !== 'speaking' && (turnBusy || muted))}
+					onclick={state === 'speaking' ? oninterrupt : onturn}
+					>{state === 'speaking' ? 'Stop speaking' : turnBusy ? 'Working…' : 'Send now'}</Button
+				>
+			</div>
 		{/if}
 		{#if agentWorking}<p role="status" class="pb-1 text-xs text-muted-foreground">
 				Sushii is working · tools and approvals appear in chat

@@ -274,6 +274,7 @@ test('voice model choices explain Audio and Omni and connect the selected model'
 	await expect(picker.locator('option')).toHaveCount(6);
 	await expect(picker).toHaveValue('qwen');
 	await expect(page.getByText('Multimodal realtime model.', { exact: false })).toBeVisible();
+	await expect(page.getByText('API: Alibaba DashScope (direct).', { exact: false })).toBeVisible();
 	await picker.selectOption('qwen-audio-3.1-plus');
 	await expect(
 		page.getByText('Dedicated full-duplex speech model.', { exact: false })
@@ -301,11 +302,34 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	context
 }) => {
 	await withVoice(context);
+	await context.addInitScript(() =>
+		localStorage.setItem(
+			'voice:preferences',
+			JSON.stringify({ mode: 'turns', model: 'hexgrad/kokoro-82m', voice: 'bella' })
+		)
+	);
+	await page.addInitScript(() => {
+		const Capture = window.AudioWorkletNode;
+		window.AudioWorkletNode = class extends Capture {
+			constructor(context: BaseAudioContext, name: string, options?: AudioWorkletNodeOptions) {
+				super(context, name, options);
+				(window as unknown as { testCapture: AudioWorkletNode }).testCapture = this;
+			}
+		};
+	});
 	const speechModels = [
+		{
+			id: 'qwen/qwen-audio-3.0-tts-flash',
+			name: 'Qwen Flash TTS',
+			curated: 'Recommended',
+			description: '',
+			voices: ['Cherry'],
+			price: { unit: 'characters', input: 0.000015, output: 0 }
+		},
 		{
 			id: 'hexgrad/kokoro-82m',
 			name: 'Kokoro 82M',
-			curated: 'Budget',
+			curated: null,
 			description: '',
 			voices: ['heart', 'bella'],
 			price: { unit: 'characters', input: 0.00000062, output: 0 }
@@ -332,6 +356,28 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 			json: { models: speechModels, configured: true, updatedAt: new Date().toISOString() }
 		})
 	);
+	let previews = 0;
+	await context.route('**/api/voice/preview', async (route) => {
+		previews++;
+		expect(route.request().postDataJSON()).toEqual({
+			model: 'qwen/qwen-audio-3.0-tts-flash',
+			voice: 'Cherry'
+		});
+		const wav = Buffer.alloc(44 + 16000 * 2 * 3);
+		wav.write('RIFF');
+		wav.writeUInt32LE(wav.length - 8, 4);
+		wav.write('WAVEfmt ', 8);
+		wav.writeUInt32LE(16, 16);
+		wav.writeUInt16LE(1, 20);
+		wav.writeUInt16LE(1, 22);
+		wav.writeUInt32LE(16000, 24);
+		wav.writeUInt32LE(32000, 28);
+		wav.writeUInt16LE(2, 32);
+		wav.writeUInt16LE(16, 34);
+		wav.write('data', 36);
+		wav.writeUInt32LE(wav.length - 44, 40);
+		await route.fulfill({ body: wav, contentType: 'audio/wav' });
+	});
 	let connection: any;
 	const packets: any[] = [];
 	let selectedUrl = '';
@@ -344,12 +390,24 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	await page.goto('/chat');
 	await page.getByRole('button', { name: 'Voice chat', exact: true }).click();
 	await page.getByRole('button', { name: 'Talk in turns', exact: true }).click();
-	await expect(page.getByText('$0.62 / 1M characters', { exact: true }).first()).toBeVisible();
+	await expect(page.getByLabel('Speaking voice', { exact: true })).toHaveValue('Cherry');
+	await page.getByRole('button', { name: 'Preview Cherry', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Stop preview', exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Stop preview', exact: true }).click();
+	await page.getByRole('button', { name: 'Preview Cherry', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Stop preview', exact: true })).toBeVisible();
+	expect(previews).toBe(1);
+	await page.getByRole('button', { name: 'Stop preview', exact: true }).click();
+	await expect(page.getByRole('region', { name: 'Curated speech models' })).not.toContainText(
+		'Kokoro'
+	);
 	await expect(
 		page.getByText('$0.5 text input / $6 audio output per 1M tokens', { exact: true }).first()
 	).toBeVisible();
-	await page.getByLabel('Speaking voice', { exact: true }).selectOption('bella');
+	await expect(page.getByText('Speech API: OpenRouter', { exact: false })).toBeVisible();
 	await page.getByText('Browse all OpenRouter speech models', { exact: true }).click();
+	await page.getByRole('button', { name: /Kokoro 82M/ }).click();
+	await page.getByLabel('Speaking voice', { exact: true }).selectOption('bella');
 	await page.getByRole('searchbox', { name: 'Search speech models' }).fill('future/');
 	await page.getByRole('button', { name: /New Speech Model/ }).click();
 	await expect(page.getByLabel('Speaking voice', { exact: true })).toHaveValue('new-voice');
@@ -363,8 +421,19 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	await expect(page.getByRole('dialog', { name: 'Voice chat' })).toBeHidden();
 	expect(selectedUrl).toContain('mode=turns');
 	expect(selectedUrl).toContain('model=future%2Fspeech-model');
-	await page.getByRole('button', { name: 'Send voice turn', exact: true }).click();
-	await expect.poll(() => packets.some((p) => p.type === 'commit')).toBe(true);
+	await page.evaluate(async () => {
+		const capture = (window as unknown as { testCapture: AudioWorkletNode }).testCapture;
+		await (capture.context as AudioContext).suspend();
+		const feed = (amplitude: number) =>
+			capture.port.dispatchEvent(
+				new MessageEvent('message', {
+					data: new Int16Array(320).fill(amplitude).buffer
+				})
+			);
+		for (let i = 0; i < 10; i++) feed(1000);
+		for (let i = 0; i < 60; i++) feed(0);
+	});
+	await expect.poll(() => packets.filter((p) => p.type === 'commit').length).toBe(1);
 	await expect(page.getByRole('button', { name: 'Working…' })).toBeDisabled();
 	connection.send(JSON.stringify({ type: 'agent', state: 'working' }));
 	const wav = Buffer.alloc(44 + 16000 * 2 * 10);
@@ -384,7 +453,9 @@ test('turn-based voice discovers any speech model, shows billing units, persists
 	await page.getByRole('button', { name: 'Stop speaking', exact: true }).click();
 	await expect.poll(() => packets.some((p) => p.type === 'interrupt')).toBe(true);
 	connection.send(JSON.stringify({ type: 'turn_done' }));
-	await expect(page.getByRole('button', { name: 'Send voice turn', exact: true })).toBeEnabled();
+	await expect(page.getByRole('button', { name: 'Send now', exact: true })).toBeEnabled();
+	await page.getByRole('button', { name: 'Send now', exact: true }).click();
+	await expect.poll(() => packets.filter((p) => p.type === 'commit').length).toBe(2);
 	await page
 		.getByRole('region', { name: 'Voice call', exact: true })
 		.getByRole('button', { name: 'End call' })

@@ -1,20 +1,27 @@
-import { json } from "../http.ts";
+import { json, readJson } from "../http.ts";
 import type { RequestTimeouts } from "../server.ts";
 import type { SurfaceActor } from "../../../orchestration/workspace/surface.ts";
 import { publicModels, voiceConfigs } from "./providers.ts";
 import { VoiceSession, type AskAgent } from "./session.ts";
-import { createSpeechCatalog } from "./speech.ts";
+import {
+  createSpeechCatalog,
+  synthesizeSpeech,
+  SpeechError,
+} from "./speech.ts";
 import { TurnVoiceSession } from "./turnSession.ts";
 export function createVoiceRoutes(
   env: Record<string, string | undefined>,
   ask: AskAgent,
   connect?: ConstructorParameters<typeof VoiceSession>[5],
   catalog = createSpeechCatalog(),
+  speak = synthesizeSpeech,
 ) {
   const configs = voiceConfigs(env);
   const speechKey =
     env.OPENROUTER_API_KEY?.trim() || env.OPENAI_API_KEY?.trim() || "";
   const sessions = new Set<VoiceSession | TurnVoiceSession>();
+  let previewBusy = false;
+  const previews = new Map<string, { audio: Buffer; expires: number }>();
   return {
     async handle(
       req: Request,
@@ -41,6 +48,84 @@ export function createVoiceRoutes(
             { error: "Couldn't load OpenRouter speech models. Try again." },
             503,
           );
+        }
+      }
+      if (path === "/api/voice/preview") {
+        if (req.method !== "POST")
+          return json({ error: "method not allowed" }, 405);
+        if (!speechKey)
+          return json(
+            { error: "OpenRouter speech credentials are not configured" },
+            503,
+          );
+        if (sessions.size || previewBusy)
+          return json(
+            { error: "End the call or wait for the current preview." },
+            409,
+          );
+        const body = await readJson(req, 1024);
+        if (body instanceof Response) return body;
+        if (
+          !body ||
+          typeof body !== "object" ||
+          !("model" in body) ||
+          typeof body.model !== "string" ||
+          !("voice" in body) ||
+          typeof body.voice !== "string"
+        )
+          return json({ error: "Choose a speech model and voice." }, 400);
+        if (sessions.size || previewBusy)
+          return json(
+            { error: "End the call or wait for the current preview." },
+            409,
+          );
+        previewBusy = true;
+        try {
+          const model = (await catalog()).models.find(
+            (m) => m.id === body.model,
+          );
+          if (!model)
+            return json({ error: "Unknown OpenRouter speech model" }, 400);
+          if (body.voice && !model.voices.includes(body.voice))
+            return json({ error: "Unknown speech voice" }, 400);
+          const id = JSON.stringify([model.id, body.voice]);
+          const cached = previews.get(id);
+          const audio =
+            cached && cached.expires > Date.now()
+              ? cached.audio
+              : await speak(
+                  speechKey,
+                  model,
+                  body.voice,
+                  "Hi, I'm Sushii. What would you like to work on?",
+                  req.signal,
+                );
+          if (!cached || cached.expires <= Date.now()) {
+            previews.delete(id);
+            previews.set(id, { audio, expires: Date.now() + 5 * 60_000 });
+            if (previews.size > 6)
+              previews.delete(previews.keys().next().value!);
+          }
+          return new Response(new Uint8Array(audio), {
+            headers: {
+              "Content-Type": model.id.startsWith("google/gemini-")
+                ? "audio/wav"
+                : "audio/mpeg",
+              "Cache-Control": "no-store",
+            },
+          });
+        } catch (error) {
+          return json(
+            {
+              error:
+                error instanceof SpeechError
+                  ? error.message
+                  : "Couldn't preview this voice through OpenRouter. Try another voice.",
+            },
+            502,
+          );
+        } finally {
+          previewBusy = false;
         }
       }
       if (path !== "/api/voice/connect") return null;

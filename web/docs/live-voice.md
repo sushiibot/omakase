@@ -19,7 +19,10 @@ Dictate remains available outside calls. During a call, the voice session owns t
 ## Talk in turns
 
 Talk in turns is the default mode on a new device.
-Speak, then select **Send voice turn**.
+Speak naturally. A 1.2-second pause sends the turn automatically.
+**Send now** remains available to submit sooner.
+Local audio detection retains 400 ms before speech and ignores silence and brief clicks.
+It uses audio level thresholds, so noisy rooms and quiet voices can affect detection.
 The server transcribes the recording and sends the text to the existing conversation agent.
 The selected speech model reads the reply through OpenRouter.
 Tools and approvals stay in the chat.
@@ -27,10 +30,18 @@ Select **Stop speaking** to stop the spoken reply.
 The next turn starts after the reply ends or you stop speech.
 The microphone does not submit another recording while the agent works or speech plays.
 
-The picker shows suggested models with budget, value, speed, and premium labels.
+The picker recommends Qwen Flash and shows value, quality, and premium alternatives.
+Kokoro remains searchable but is no longer suggested or the default.
+Old Kokoro defaults switch once to Qwen Flash. Later explicit model choices stay as chosen.
+The picker and active call show the API provider.
+Gemini speech output uses OpenRouter; Gemini Live uses Google directly with `GEMINI_API_KEY`.
 These labels describe evaluation candidates, not measured quality guarantees.
 **Browse all OpenRouter speech models** searches every model with text input and speech output in the current catalog.
 Each model shows its supported voices and catalog price.
+**Preview** plays a short sample of the selected voice without starting a call.
+The first sample uses billed OpenRouter synthesis. Six recent samples stay cached on the device.
+The server also caches six samples for five minutes.
+Changing voices, closing the picker, or starting a call stops the preview.
 Prices retain their billing units: characters, text/audio tokens, or generated seconds.
 Provider rates and temporary offers can change the charge.
 Transcription and agent usage add costs.
@@ -45,9 +56,14 @@ Cartesia, Inworld, and Chatterbox appear only if OpenRouter adds compatible mode
 This feature does not add direct billing accounts for those providers.
 
 Each turn accepts up to five minutes of 16 kHz PCM audio.
+The browser submits long continuous speech at four minutes.
+Muting discards an unsubmitted recording.
+Errors distinguish transcription, agent work, and OpenRouter speech generation.
+Speech errors show safe HTTP status and recovery advice.
 Digitally silent turns do not incur transcription charges.
 The server reads at most 24,000 reply characters aloud in small utterances.
-Each utterance uses MP3 so the browser decodes the provider's sample rate.
+Most models use MP3 so the browser decodes the provider's sample rate.
+Gemini requires raw PCM; the server wraps its 24 kHz mono PCM16 in a WAV container.
 Playback starts after the first utterance downloads, rather than after the entire reply downloads.
 The server waits for playback before it generates the next utterance.
 Stopping speech cancels further generation. Ending the call releases audio and result listeners.

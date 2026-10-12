@@ -2,7 +2,8 @@ import type { ServerWebSocket } from "bun";
 import { transcribeAudio } from "../../../agent/transcribe.ts";
 import { isSilentPcm, pcmWav } from "../../../agent/transcriptionAudio.ts";
 import type { SurfaceActor } from "../../../orchestration/workspace/surface.ts";
-import { type SpeechModel, synthesizeSpeech } from "./speech.ts";
+import { type SpeechModel, SpeechError, synthesizeSpeech } from "./speech.ts";
+import { getLogger } from "../../../logger.ts";
 import {
   type AskAgent,
   type VoiceSocketData,
@@ -59,6 +60,13 @@ export class TurnVoiceSession {
         this.abort.abort();
         return;
       }
+      if (m.type === "clear") {
+        if (!this.busy) {
+          this.chunks = [];
+          this.bytes = 0;
+        }
+        return;
+      }
       if (m.type === "commit") {
         if (!this.busy) void this.turn();
         return;
@@ -91,14 +99,19 @@ export class TurnVoiceSession {
     this.busy = true;
     this.abort = new AbortController();
     const signal = this.abort.signal;
+    let stage = "transcription";
     this.emit({ type: "agent", state: "working" });
     try {
-      if (!pcm.length || isSilentPcm(pcm)) throw new Error("No speech");
+      if (!pcm.length || isSilentPcm(pcm))
+        throw new SpeechError(
+          "No speech detected. Speak closer to the microphone and try again.",
+        );
       const text = await this.transcribe(
         { data: pcmWav(pcm), mediaType: "audio/wav" },
         signal,
       );
-      if (!text?.trim()) throw new Error("No speech");
+      if (!text?.trim())
+        throw new SpeechError("No words detected. Try speaking again.");
       if (this.closed) return;
       this.emit({
         type: "transcript",
@@ -107,6 +120,7 @@ export class TurnVoiceSession {
         final: true,
         replace: true,
       });
+      stage = "agent";
       const result = await this.ask(
         text,
         this.actor,
@@ -124,6 +138,7 @@ export class TurnVoiceSession {
       this.emit({ type: "agent", state: "done" });
       // Small utterances bound provider limits and avoid downloading a whole long reply before playback.
       const spoken = result.slice(0, 24000);
+      stage = "speech";
       for (let at = 0; at < spoken.length;) {
         signal.throwIfAborted();
         let end = Math.min(at + 1000, spoken.length);
@@ -153,13 +168,28 @@ export class TurnVoiceSession {
         });
         at = end;
       }
-    } catch {
-      if (!this.closed && !signal.aborted)
+    } catch (error) {
+      if (!this.closed && !signal.aborted) {
+        getLogger("web/voice").warn(
+          {
+            stage,
+            model: this.model.id,
+            status: error instanceof SpeechError ? error.status : undefined,
+          },
+          "voice turn failed",
+        );
         this.emit({
           type: "notice",
           message:
-            "Couldn't finish this voice turn. Check the reply in chat, or try again.",
+            error instanceof SpeechError
+              ? error.message
+              : stage === "speech"
+                ? "OpenRouter speech couldn't finish. Your reply is in chat. Try another model or voice."
+                : stage === "transcription"
+                  ? "Couldn't transcribe your speech. Check the server's transcription API setup, or try again."
+                  : "The agent couldn't finish this request. Check the conversation and try again.",
         });
+      }
     } finally {
       this.busy = false;
       this.emit({ type: "agent", state: "done" });

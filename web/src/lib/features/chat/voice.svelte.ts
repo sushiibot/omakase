@@ -1,4 +1,6 @@
 import type { SpeechModel, VoiceModel } from './types';
+import { TurnDetector } from './render/turn-detector';
+import { voiceProvider } from './render/voice-provider';
 
 export class Voice {
 	models = $state<VoiceModel[]>([]);
@@ -11,7 +13,13 @@ export class Voice {
 	speechError = $state<string | null>(null);
 	pricesUpdatedAt = $state<string | null>(null);
 	turnBusy = $state(false);
+	previewState = $state<'idle' | 'loading' | 'playing'>('idle');
+	previewError = $state<string | null>(null);
+	#previewContext: AudioContext | null = null;
+	#previewAbort: AbortController | null = null;
+	#previewCache = new Map<string, ArrayBuffer>();
 	#preferencesLoaded = false;
+	#turnDetector = new TurnDetector();
 	loading = $state(false);
 	state = $state<'idle' | 'connecting' | 'listening' | 'speaking'>('idle');
 	error = $state<string | null>(null);
@@ -39,6 +47,11 @@ export class Voice {
 	#onhidden = () => {
 		if (document.hidden) this.stop();
 	};
+	get apiLabel() {
+		return this.mode === 'turns'
+			? 'OpenRouter'
+			: `${voiceProvider(this.models.find((m) => m.id === this.provider)?.provider ?? '').shortName} · direct`;
+	}
 	async load() {
 		this.loading = true;
 		this.error = null;
@@ -50,6 +63,9 @@ export class Voice {
 				if (typeof saved?.model === 'string') this.speechModel = saved.model;
 				if (typeof saved?.voice === 'string') this.speechVoice = saved.voice;
 				if (typeof saved?.provider === 'string') this.provider = saved.provider;
+				if (saved?.version !== 2 && this.speechModel === 'hexgrad/kokoro-82m') {
+					this.speechModel = this.speechVoice = '';
+				}
 			} catch {
 				/* Storage can be unavailable. */
 			}
@@ -65,7 +81,7 @@ export class Voice {
 				this.pricesUpdatedAt = body.updatedAt;
 				if (!this.speechModels.some((m) => m.id === this.speechModel))
 					this.speechModel =
-						this.speechModels.find((m) => m.id === 'hexgrad/kokoro-82m')?.id ??
+						this.speechModels.find((m) => m.id === 'qwen/qwen-audio-3.0-tts-flash')?.id ??
 						this.speechModels[0]?.id ??
 						'';
 				this.selectSpeech(this.speechModel);
@@ -92,6 +108,7 @@ export class Voice {
 			localStorage.setItem(
 				'voice:preferences',
 				JSON.stringify({
+					version: 2,
 					mode: this.mode,
 					provider: this.provider,
 					model: this.speechModel,
@@ -103,14 +120,79 @@ export class Voice {
 		}
 	}
 	selectSpeech(id: string) {
+		this.stopPreview();
 		this.speechModel = id;
 		const voices = this.speechModels.find((m) => m.id === id)?.voices ?? [];
 		if (!voices.includes(this.speechVoice)) this.speechVoice = voices[0] ?? '';
 		this.persist();
 	}
+	selectVoice(voice: string) {
+		this.stopPreview();
+		this.speechVoice = voice;
+		this.persist();
+	}
+	stopPreview() {
+		this.#previewAbort?.abort();
+		this.#previewAbort = null;
+		void this.#previewContext?.close();
+		this.#previewContext = null;
+		this.previewState = 'idle';
+		this.previewError = null;
+	}
+	async preview() {
+		if (this.previewState !== 'idle') {
+			this.stopPreview();
+			return;
+		}
+		if (this.state !== 'idle' || !this.speechConfigured) return;
+		this.previewError = null;
+		this.previewState = 'loading';
+		const abort = new AbortController();
+		this.#previewAbort = abort;
+		try {
+			const context = new AudioContext();
+			this.#previewContext = context;
+			await context.resume();
+			const id = JSON.stringify([this.speechModel, this.speechVoice]);
+			let audio = this.#previewCache.get(id);
+			if (!audio) {
+				const res = await fetch('/api/voice/preview', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ model: this.speechModel, voice: this.speechVoice }),
+					signal: AbortSignal.any([abort.signal, AbortSignal.timeout(65000)])
+				});
+				if (!res.ok)
+					throw new Error(
+						(await res.json().catch(() => null))?.error ?? "Couldn't preview this voice."
+					);
+				audio = await res.arrayBuffer();
+				abort.signal.throwIfAborted();
+				this.#previewCache.set(id, audio);
+				if (this.#previewCache.size > 6)
+					this.#previewCache.delete(this.#previewCache.keys().next().value!);
+			}
+			const buffer = await context.decodeAudioData(audio.slice(0));
+			abort.signal.throwIfAborted();
+			const source = context.createBufferSource();
+			source.buffer = buffer;
+			source.connect(context.destination);
+			source.onended = () => {
+				if (this.#previewAbort === abort) this.stopPreview();
+			};
+			source.start();
+			this.previewState = 'playing';
+		} catch (error) {
+			if (this.#previewAbort !== abort) return;
+			this.stopPreview();
+			this.previewError =
+				error instanceof Error ? error.message : "Couldn't play this voice preview.";
+		}
+	}
 	finishTurn() {
 		if (this.mode !== 'turns' || this.state !== 'listening' || this.turnBusy || this.muted) return;
 		this.turnBusy = true;
+		this.#turnDetector.reset();
 		this.error = null;
 		this.#socket?.send(JSON.stringify({ type: 'commit' }));
 	}
@@ -121,6 +203,7 @@ export class Voice {
 		this.state = 'listening';
 	}
 	async start(conversation: string) {
+		this.stopPreview();
 		if (this.state !== 'idle') return;
 		const model = this.models.find((m) => m.id === this.provider && m.configured);
 		if (
@@ -141,6 +224,7 @@ export class Voice {
 		this.muted = false;
 		this.state = 'connecting';
 		const generation = ++this.#generation;
+		this.#turnDetector.reset();
 		document.addEventListener('visibilitychange', this.#onhidden);
 		this.#timeout = setTimeout(() => this.#fail('Voice connection timed out. Try again.'), 20000);
 		try {
@@ -190,10 +274,14 @@ export class Voice {
 					this.#fail('Voice connection is too slow. Try again.');
 					return;
 				}
-				const bytes = new Uint8Array(data);
-				let binary = '';
-				for (const byte of bytes) binary += String.fromCharCode(byte);
-				socket.send(JSON.stringify({ type: 'audio', audio: btoa(binary) }));
+				const turn =
+					this.mode === 'turns' ? this.#turnDetector.push(data) : { audio: [data], commit: false };
+				for (const pcm of turn.audio) {
+					let binary = '';
+					for (const byte of new Uint8Array(pcm)) binary += String.fromCharCode(byte);
+					socket.send(JSON.stringify({ type: 'audio', audio: btoa(binary) }));
+				}
+				if (turn.commit) this.finishTurn();
 			};
 			socket.onmessage = ({ data }) => {
 				if (generation !== this.#generation) return;
@@ -353,6 +441,9 @@ export class Voice {
 	}
 	mute() {
 		this.muted = !this.muted;
+		this.#turnDetector.reset();
+		if (this.mode === 'turns' && !this.turnBusy && this.#socket?.readyState === WebSocket.OPEN)
+			this.#socket.send(JSON.stringify({ type: 'clear' }));
 		for (const track of this.#stream?.getAudioTracks() ?? []) track.enabled = !this.muted;
 	}
 	#clearAudio() {
@@ -369,7 +460,9 @@ export class Voice {
 		this.error = message;
 	}
 	stop() {
+		this.stopPreview();
 		++this.#generation;
+		this.#turnDetector.reset();
 		document.removeEventListener('visibilitychange', this.#onhidden);
 		if (this.#timer) clearInterval(this.#timer);
 		if (this.#timeout) clearTimeout(this.#timeout);

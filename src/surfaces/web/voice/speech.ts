@@ -1,4 +1,5 @@
 import { readBodyCapped } from "../http.ts";
+import { pcmWav } from "../../../agent/transcriptionAudio.ts";
 export type SpeechFetch = (
   url: string,
   init?: RequestInit,
@@ -17,9 +18,8 @@ export interface SpeechModel {
   };
 }
 const curated: Record<string, string> = {
-  "hexgrad/kokoro-82m": "Budget",
+  "qwen/qwen-audio-3.0-tts-flash": "Recommended",
   "google/gemini-3.8-flash-lite-tts": "Value candidate",
-  "qwen/qwen-audio-3.0-tts-flash": "Fast candidate",
   "qwen/qwen-audio-3.0-tts-plus": "Quality alternative",
   "elevenlabs/eleven-v4-turbo": "Premium",
 };
@@ -111,7 +111,7 @@ export function createSpeechCatalog(fetcher: SpeechFetch = fetch) {
   };
 }
 
-/** MP3 lets the browser decode each provider's sample rate correctly. */
+/** Gemini requires PCM; wrap its 24kHz mono PCM16 in WAV for browser decoding. */
 export async function synthesizeSpeech(
   key: string,
   model: SpeechModel,
@@ -120,6 +120,7 @@ export async function synthesizeSpeech(
   signal: AbortSignal,
   fetcher: SpeechFetch = fetch,
 ): Promise<Buffer> {
+  const pcm = model.id.startsWith("google/gemini-");
   const res = await fetcher("https://openrouter.ai/api/v1/audio/speech", {
     method: "POST",
     headers: {
@@ -130,16 +131,56 @@ export async function synthesizeSpeech(
       model: model.id,
       input: text,
       ...(voice ? { voice } : {}),
-      response_format: "mp3",
+      response_format: pcm ? "pcm" : "mp3",
     }),
     signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]),
   });
-  if (!res.ok || !res.headers.get("Content-Type")?.startsWith("audio/"))
-    throw new Error("Speech generation failed");
+  if (!res.ok) {
+    const recovery =
+      res.status === 401 || res.status === 403
+        ? "Check the server's OpenRouter API key and model access."
+        : res.status === 402
+          ? "Add OpenRouter credits or check the spending limit."
+          : res.status === 429
+            ? "OpenRouter is rate limiting speech. Try again shortly."
+            : "Try another speech model or voice.";
+    throw new SpeechError(
+      `OpenRouter speech failed (${res.status}). ${recovery}`,
+      res.status,
+    );
+  }
+  if (!res.headers.get("Content-Type")?.startsWith("audio/"))
+    throw new SpeechError(
+      "OpenRouter returned no playable speech. Try another model or voice.",
+    );
   const bytes = await readBodyCapped(
     new Request("https://speech.local", { method: "POST", body: res.body }),
     4 * 1024 * 1024,
   );
-  if (!bytes?.length) throw new Error("Speech audio unavailable");
-  return Buffer.from(bytes);
+  if (!bytes?.length)
+    throw new SpeechError(
+      "OpenRouter speech audio was empty or too large. Try another model.",
+    );
+  const audio = Buffer.from(bytes);
+  if (!pcm) return audio;
+  // Accept WAV if a provider starts returning a container instead of raw PCM.
+  if (
+    audio.toString("ascii", 0, 4) === "RIFF" &&
+    audio.toString("ascii", 8, 12) === "WAVE"
+  )
+    return audio;
+  if (audio.length % 2)
+    throw new SpeechError(
+      "OpenRouter returned invalid Gemini PCM audio. Try again.",
+    );
+  return Buffer.from(pcmWav(audio, 24000));
+}
+export class SpeechError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "SpeechError";
+  }
 }

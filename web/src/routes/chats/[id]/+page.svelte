@@ -157,6 +157,7 @@
 {#snippet voiceStatus()}
 	<VoiceCallBar
 		mode={voice.mode}
+		apiLabel={voice.apiLabel}
 		turnBusy={voice.turnBusy}
 		onturn={() => voice.finishTurn()}
 		oninterrupt={() => voice.interrupt()}

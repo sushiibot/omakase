@@ -23,7 +23,7 @@ test("speech discovery includes uncurated models, filters modalities and preserv
     ],
   });
   expect(models).toHaveLength(3);
-  expect(models[0]?.curated).toBe("Budget");
+  expect(models[0]?.curated).toBeNull();
   expect(models[1]?.curated).toBeNull();
   expect(models[1]?.price.input).toBe(0);
   expect(models[2]?.price.input).toBeNull();
@@ -44,6 +44,41 @@ test("catalog coalesces concurrent requests, caches success and retries failures
   await expect(failed()).rejects.toThrow();
   await expect(failed()).rejects.toThrow();
   expect(count).toBe(3);
+});
+test("Qwen is recommended ahead of Gemini and Kokoro stays discoverable without a recommendation", () => {
+  const models = parseSpeechModels({
+    data: [
+      row(),
+      row("google/gemini-3.8-flash-lite-tts"),
+      row("qwen/qwen-audio-3.0-tts-flash"),
+    ],
+  });
+  expect(models.map((m) => m.id)).toEqual([
+    "qwen/qwen-audio-3.0-tts-flash",
+    "google/gemini-3.8-flash-lite-tts",
+    "hexgrad/kokoro-82m",
+  ]);
+  expect(models[0]?.curated).toBe("Recommended");
+  expect(models[2]?.curated).toBeNull();
+});
+test("OpenRouter failures report status and recovery without passing upstream error bodies to the browser", async () => {
+  for (const status of [401, 402, 429, 502]) {
+    try {
+      await synthesizeSpeech(
+        "secret",
+        parseSpeechModels({ data: [row()] })[0]!,
+        "bella",
+        "Done.",
+        new AbortController().signal,
+        async () =>
+          Response.json({ error: "secret provider payload" }, { status }),
+      );
+      throw new Error("Expected rejection");
+    } catch (error) {
+      expect(String(error)).toContain(`OpenRouter speech failed (${status})`);
+      expect(String(error)).not.toContain("secret");
+    }
+  }
 });
 test("speech requests use selected IDs and voice, and reject provider errors without exposing credentials", async () => {
   const model = parseSpeechModels({ data: [row()] })[0]!;
@@ -69,6 +104,27 @@ test("speech requests use selected IDs and voice, and reject provider errors wit
       )
     ).toString(),
   ).toBe("audio");
+});
+test("Gemini requests PCM and returns a playable 24kHz WAV without changing PCM samples", async () => {
+  const model = parseSpeechModels({
+    data: [row("google/gemini-3.8-flash-lite-tts")],
+  })[0]!;
+  const pcm = Buffer.from([1, 0, 255, 127, 0, 128]);
+  const audio = await synthesizeSpeech(
+    "secret",
+    model,
+    "Kore",
+    "Hello.",
+    new AbortController().signal,
+    async (_url, init) => {
+      expect(JSON.parse(String(init?.body)).response_format).toBe("pcm");
+      return new Response(pcm, { headers: { "Content-Type": "audio/pcm" } });
+    },
+  );
+  expect(audio.toString("ascii", 0, 4)).toBe("RIFF");
+  expect(audio.readUInt32LE(24)).toBe(24000);
+  expect(audio.readUInt32LE(28)).toBe(48000);
+  expect(audio.subarray(44)).toEqual(pcm);
 });
 test("turn-mode upgrades validate discovered models and voices and share the live session limit", async () => {
   const model = parseSpeechModels({ data: [row("future/new-speech")] })[0]!;
@@ -106,5 +162,40 @@ test("turn-mode upgrades validate discovered models and voices and share the liv
     (await routes.handle(req(model.id), "/api/voice/connect", actor, server))
       ?.status,
   ).toBe(409);
+  routes.close();
+});
+test("voice previews validate models and voices, use a fixed sample and cache repeated auditions", async () => {
+  const model = parseSpeechModels({ data: [row()] })[0]!;
+  let generated = 0;
+  const routes = createVoiceRoutes(
+    { OPENROUTER_API_KEY: "secret" },
+    async () => "",
+    undefined,
+    async () => ({ models: [model], updatedAt: new Date().toISOString() }),
+    async (key, chosen, voice, text) => {
+      expect(key).toBe("secret");
+      expect(chosen.id).toBe(model.id);
+      expect(voice).toBe("bella");
+      expect(text).toBe("Hi, I'm Sushii. What would you like to work on?");
+      generated++;
+      return Buffer.from("sample");
+    },
+  );
+  const actor = mintWebActor("owner@example.com");
+  const preview = (id: string, voice: string) =>
+    routes.handle(
+      new Request("https://agent.test/api/voice/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: id, voice, input: "untrusted input" }),
+      }),
+      "/api/voice/preview",
+      actor,
+    );
+  expect((await preview("unknown", "bella"))?.status).toBe(400);
+  expect((await preview(model.id, "unknown"))?.status).toBe(400);
+  expect(await (await preview(model.id, "bella"))?.text()).toBe("sample");
+  expect(await (await preview(model.id, "bella"))?.text()).toBe("sample");
+  expect(generated).toBe(1);
   routes.close();
 });

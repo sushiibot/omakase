@@ -1,7 +1,11 @@
 <script lang="ts">
+	import Play from '@lucide/svelte/icons/play';
+	import Square from '@lucide/svelte/icons/square';
 	import { Button } from '$lib/ui/button';
 	import type { SpeechModel, VoiceModel } from '../types';
 	import { speechPrice } from '../render/speech-price';
+	import { voiceProvider } from '../render/voice-provider';
+	import { voiceTrait } from '../render/voice-traits';
 	import { Input } from '$lib/ui/input';
 	let {
 		models,
@@ -28,6 +32,9 @@
 		speechError = null,
 		pricesUpdatedAt = null,
 		turnBusy = false,
+		previewState = 'idle',
+		previewError = null,
+		onpreview,
 		onmode,
 		onspeech,
 		onvoice,
@@ -58,6 +65,9 @@
 		speechError?: string | null;
 		pricesUpdatedAt?: string | null;
 		turnBusy?: boolean;
+		previewState?: 'idle' | 'loading' | 'playing';
+		previewError?: string | null;
+		onpreview?: () => void;
 		onmode?: (mode: 'turns' | 'live') => void;
 		onspeech?: (id: string) => void;
 		onvoice?: (voice: string) => void;
@@ -87,7 +97,9 @@
 						? mode === 'turns'
 							? 'Speaking — tap Stop speaking to interrupt'
 							: 'Speaking — interrupt anytime'
-						: 'Listening'
+						: mode === 'turns'
+							? 'Listening — sends after a pause'
+							: 'Listening'
 	);
 </script>
 
@@ -117,12 +129,15 @@
 	</div>
 	{#if mode === 'turns'}
 		<p class="text-sm text-muted-foreground">
-			Speak, then tap Send voice turn. Your chosen speech model reads the reply. Tap Stop speaking
-			to interrupt.
+			Speak naturally. After a short pause, Sushii sends your turn automatically. Your chosen speech
+			model reads the reply. Tap Stop speaking to interrupt.
 		</p>
 		{#if speech}
 			<div class="flex flex-col gap-2">
 				<h3 class="font-medium [overflow-wrap:anywhere]">{speech.name}</h3>
+				<p class="text-sm text-muted-foreground">
+					Speech API: OpenRouter · uses the server’s OpenRouter key
+				</p>
 				<p class="text-sm text-muted-foreground tabular-nums">{speechPrice(speech)}</p>
 				{#if speech.voices.length}
 					<label for="speech-voice" class="text-sm font-medium">Speaking voice</label>
@@ -133,11 +148,33 @@
 						disabled={active || loading}
 						onchange={(e) => onvoice?.(e.currentTarget.value)}
 					>
-						{#each speech.voices as name}<option value={name}>{name}</option>{/each}
+						{#each speech.voices as name}<option value={name}
+								>{name}{voiceTrait(speech.id, name)
+									? ` · ${voiceTrait(speech.id, name)}`
+									: ''}</option
+							>{/each}
 					</select>
 				{:else}<p class="text-sm text-muted-foreground">
 						This model chooses its default voice.
 					</p>{/if}
+				<Button
+					variant="outline"
+					class="w-full"
+					disabled={active || loading || !speechConfigured}
+					onclick={onpreview}
+				>
+					{#if previewState === 'idle'}<Play aria-hidden="true" /> Preview {speechVoice ||
+							'default voice'}{:else}<Square aria-hidden="true" />
+						{previewState === 'loading' ? 'Cancel preview' : 'Stop preview'}{/if}
+				</Button>
+				<p class="text-xs text-muted-foreground">
+					Listen before starting a call. The first preview uses a short billed OpenRouter sample;
+					replays are cached.
+				</p>
+				{#if previewState === 'loading'}<p role="status" class="text-sm text-muted-foreground">
+						Generating voice preview…
+					</p>{/if}
+				{#if previewError}<p role="alert" class="text-sm text-failed">{previewError}</p>{/if}
 			</div>
 		{/if}
 		<section aria-label="Curated speech models" class="flex flex-col gap-2">
@@ -214,12 +251,22 @@
 				{#if !provider}<option value="">Choose a configured model</option>{/if}
 				{#each models as model}
 					<option value={model.id} disabled={!model.configured}
-						>{model.name}{model.configured ? '' : ' (not configured)'}</option
+						>{model.name} · {voiceProvider(model.provider).name}{model.configured
+							? ''
+							: ' (not configured)'}</option
 					>
 				{/each}
 			</select>
 			{#if selected}
 				<p class="text-sm text-muted-foreground">{selected.description}</p>
+				<p class="text-sm text-muted-foreground">
+					API: {voiceProvider(selected.provider).name}. {selected.configured
+						? 'Configured on the server.'
+						: 'Not configured.'} Live conversation uses a separate provider key.
+				</p>
+				<p class="text-xs [overflow-wrap:anywhere] text-muted-foreground">
+					Server credential: {voiceProvider(selected.provider).key}
+				</p>
 				<p class="text-xs text-muted-foreground">
 					Audio: ${selected.audioInputUsd} input / ${selected.audioOutputUsd} output per million tokens.
 					Text, transcription and agent usage may add costs.
@@ -253,11 +300,7 @@
 			<Button
 				disabled={callState === 'connecting' || (callState !== 'speaking' && (turnBusy || muted))}
 				onclick={callState === 'speaking' ? oninterrupt : onturn}
-				>{callState === 'speaking'
-					? 'Stop speaking'
-					: turnBusy
-						? 'Working…'
-						: 'Send voice turn'}</Button
+				>{callState === 'speaking' ? 'Stop speaking' : turnBusy ? 'Working…' : 'Send now'}</Button
 			>
 		{/if}
 		<p class="text-xs text-muted-foreground">

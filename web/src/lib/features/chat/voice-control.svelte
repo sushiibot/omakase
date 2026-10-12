@@ -65,7 +65,15 @@
 			aria-hidden="true"
 		/>{/if}
 </Button>
-<RoutedSheet {open} label="Voice chat" {onclose} returnFocus={trigger}>
+<RoutedSheet
+	{open}
+	label="Voice chat"
+	onclose={() => {
+		voice.stopPreview();
+		onclose();
+	}}
+	returnFocus={trigger}
+>
 	<VoicePanel
 		mode={voice.mode}
 		speechModels={voice.speechModels}
@@ -75,15 +83,16 @@
 		speechError={voice.speechError}
 		pricesUpdatedAt={voice.pricesUpdatedAt}
 		turnBusy={voice.turnBusy}
+		previewState={voice.previewState}
+		previewError={voice.previewError}
+		onpreview={() => void voice.preview()}
 		onmode={(mode) => {
+			voice.stopPreview();
 			voice.mode = mode;
 			voice.persist();
 		}}
 		onspeech={(id) => voice.selectSpeech(id)}
-		onvoice={(name) => {
-			voice.speechVoice = name;
-			voice.persist();
-		}}
+		onvoice={(name) => voice.selectVoice(name)}
 		onturn={() => voice.finishTurn()}
 		oninterrupt={() => voice.interrupt()}
 		models={voice.models}
@@ -108,6 +117,9 @@
 		onstop={() => voice.stop()}
 		onmute={() => voice.mute()}
 		onretry={() => void voice.load()}
-		{onclose}
+		onclose={() => {
+			voice.stopPreview();
+			onclose();
+		}}
 	/>
 </RoutedSheet>

@@ -273,7 +273,13 @@ export class VoiceSession {
     }
   }
   private fail(message: string) {
-    this.emit({ type: "error", message });
+    const api =
+      this.config.provider === "gemini"
+        ? "Google Gemini (direct)"
+        : this.config.provider === "qwen"
+          ? "Alibaba DashScope (direct)"
+          : "OpenAI (direct)";
+    this.emit({ type: "error", message: `${api}: ${message}` });
     this.close();
   }
   close() {
