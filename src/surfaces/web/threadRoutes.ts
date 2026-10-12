@@ -16,6 +16,7 @@ import {
 } from "./workspaceAdapter.ts";
 import { historyPage } from "./history.ts";
 import { json, readJson } from "./http.ts";
+import type { PendingState } from "./events.ts";
 
 interface ThreadRow {
   id: string;
@@ -40,6 +41,36 @@ const branchBody = z
   .strict();
 const IDLE_DAYS = 7;
 
+/** Additive navigator projection. Conversation IDs and their existing routes remain unchanged. */
+export interface ChannelCatalogEntry {
+  id: string;
+  title: string;
+  kind: "main" | "channel" | "task";
+  taskId?: string;
+  state: "archived" | "needs-you" | "running" | "idle";
+  lastActivity: string | null;
+  preview: string;
+  pending: { asks: number; approvals: number; total: number };
+  /** Canonical IDs and stored sequence positions for navigation to an exact request. */
+  attention: { kind: "ask" | "approval"; id: string; seq: number; at: string }[];
+  activity: { running: boolean; turnCount: number };
+  headSeq: number;
+  lastMessageSeq: number | null;
+  /** Read receipts currently suppress push only; unknown is not the same as read. */
+  unread: null;
+  archived?: { at: string; by: "you" | "idle" | null };
+}
+
+const CATALOG_EVENTS = new Set([
+  "user", "reply", "proactive", "ask", "ask_resolved", "approval",
+  "approval_resolved", "turn_final",
+]);
+
+/** Bot-log projection, not a claim that a workspace ask is still live. Approval views match chat. */
+export type ChannelPendingRequest = { state: "unresolved" } & (
+  | { kind: "ask"; id: string; conversationId: string; createdAt: string; question: string; choices: string[]; toolConfirmation?: NonNullable<PendingState["asks"][number]["toolConfirmation"]> }
+  | { kind: "approval"; id: string; conversationId: string; createdAt: string; view: PendingState["approvals"][number]["view"] });
+
 /** Thread metadata and isolated web channels share the existing bot database. */
 export class WebThreads {
   private mutation: Promise<unknown> = Promise.resolve();
@@ -61,18 +92,12 @@ export class WebThreads {
   ) {
     for (const row of this.rows())
       this.channel(row.id).log.cancelUnresolvedApprovals();
+    let active = false;
     this.deps.main.log.subscribe(null, (ev) => {
-      if (
-        [
-          "user",
-          "reply",
-          "proactive",
-          "ask",
-          "approval",
-          "turn_final",
-        ].includes(ev.type)
-      )
-        this.changed("main");
+      const running = this.deps.main.adapter.openTurns().length > 0;
+      const changed = running !== active || CATALOG_EVENTS.has(ev.type);
+      active = running;
+      if (changed) this.changed("main");
     });
   }
   private changed(id: string) {
@@ -117,16 +142,7 @@ export class WebThreads {
       const running = adapter.openTurns().length > 0;
       if (
         running !== active ||
-        [
-          "user",
-          "reply",
-          "proactive",
-          "ask",
-          "ask_resolved",
-          "approval",
-          "approval_resolved",
-          "turn_final",
-        ].includes(ev.type)
+        CATALOG_EVENTS.has(ev.type)
       )
         this.changed(id);
       active = running;
@@ -138,6 +154,7 @@ export class WebThreads {
     const originMethods = new Set([
       "sendReply",
       "askPrompt",
+      "askResolved",
       "authPrompt",
       "alertPrompt",
       "progressCreate",
@@ -222,8 +239,8 @@ export class WebThreads {
     const c = this.channel(row.id);
     const latest = c.log.page(["user", "reply", "proactive"], { limit: 1 })[0];
     const pending = c.log.pending({
-      approvalsSince: Date.now() - 15 * 60_000,
-      asks: 10,
+      approvalsSince: 0,
+      asks: Number.MAX_SAFE_INTEGER,
     });
     return {
       id: row.id,
@@ -250,6 +267,50 @@ export class WebThreads {
           }
         : {}),
     };
+  }
+  /** Complete pending state is independent of the capped transcript bootstrap. */
+  private catalogEntry(id: string, row?: ThreadRow): ChannelCatalogEntry {
+    const c = this.channel(id);
+    const latest = c.log.page(["user", "reply", "proactive"], { limit: 1 })[0];
+    const pending = c.log.pending({ approvalsSince: 0, asks: Number.MAX_SAFE_INTEGER });
+    const asks = pending.asks.length;
+    const approvals = pending.approvals.length;
+    const turnCount = c.adapter.openTurns().length;
+    const taskId = id.startsWith("task-t-") ? id.slice("task-".length) : undefined;
+    return {
+      id,
+      title: row?.title ?? "Main",
+      kind: id === "main" ? "main" : taskId ? "task" : "channel",
+      ...(taskId ? { taskId } : {}),
+      state: row?.archived_at ? "archived" : asks + approvals ? "needs-you" : turnCount ? "running" : "idle",
+      lastActivity: latest || row ? new Date(latest?.createdAt ?? row!.created_at).toISOString() : null,
+      preview: latest ? (latest.data as { text: string }).text.slice(0, 200) : id === "main" ? "Main conversation" : "No messages yet",
+      pending: { asks, approvals, total: asks + approvals },
+      attention: [
+        ...pending.asks.map(ask => ({ kind: "ask" as const, id: ask.askId, seq: ask.seq, at: ask.at })),
+        ...pending.approvals.map(approval => ({ kind: "approval" as const, id: approval.nonce, seq: approval.seq, at: approval.at })),
+      ].sort((a, b) => a.seq - b.seq),
+      activity: { running: turnCount > 0, turnCount },
+      headSeq: c.log.head(),
+      lastMessageSeq: latest?.seq ?? null,
+      unread: null,
+      ...(row?.archived_at ? { archived: { at: new Date(row.archived_at).toISOString(), by: row.archived_by } } : {}),
+    };
+  }
+
+  catalog(): ChannelCatalogEntry[] {
+    return [this.catalogEntry("main"), ...this.rows().map(row => this.catalogEntry(row.id, row))];
+  }
+
+  pendingRequests(): ChannelPendingRequest[] {
+    return ["main", ...this.rows().map(row => row.id)].flatMap(conversationId => {
+      const pending = this.channel(conversationId).log.pending({ approvalsSince: 0, asks: Number.MAX_SAFE_INTEGER });
+      const requests: ChannelPendingRequest[] = [
+        ...pending.asks.map(ask => ({ state: "unresolved" as const, kind: "ask" as const, id: ask.askId, conversationId, createdAt: ask.at, question: ask.question, choices: ask.choices, ...(ask.toolConfirmation ? { toolConfirmation: ask.toolConfirmation } : {}) })),
+        ...pending.approvals.map(approval => ({ state: "unresolved" as const, kind: "approval" as const, id: approval.nonce, conversationId, createdAt: approval.at, view: approval.view })),
+      ];
+      return requests;
+    }).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   }
   private async close(row: ThreadRow, by: "you" | "idle") {
     if (row.archived_at) return this.summary(row);
@@ -298,12 +359,16 @@ export class WebThreads {
     actor: SurfaceActor,
     server?: { timeout(req: Request, seconds: number): void },
   ): Promise<Response | null> {
+    if (path === "/api/channels") {
+      if (req.method !== "GET") return json({ error: "method not allowed" }, 405);
+      return json({ channels: this.catalog(), archiveAfterDays: IDLE_DAYS });
+    }
     if (path === "/api/chats") {
       if (req.method !== "GET")
         return json({ error: "method not allowed" }, 405);
       const pending = this.deps.main.log.pending({
-        approvalsSince: Date.now() - 15 * 60_000,
-        asks: 10,
+        approvalsSince: 0,
+        asks: Number.MAX_SAFE_INTEGER,
       });
       const latest = this.deps.main.log.page(["user", "reply", "proactive"], {
         limit: 1,

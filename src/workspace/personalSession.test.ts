@@ -1786,6 +1786,14 @@ describe("PersonalSession memory upkeep", () => {
   });
 });
 
+async function waitForAsks(transport: FakeTransport, count = 1): Promise<void> {
+  const deadline = Date.now() + 1000;
+  while (transport.delivered().filter(d => d.kind === "ask").length < count) {
+    if (Date.now() > deadline) throw new Error("question delivery did not complete");
+    await sleep(2);
+  }
+}
+
 describe("PersonalSession extension dialogs", () => {
   const asks = (t: FakeTransport) => t.delivered().filter((d) => d.kind === "ask");
 
@@ -1803,6 +1811,7 @@ describe("PersonalSession extension dialogs", () => {
     await host.start();
     await host.handleMessage(msg("m-1", "clean up"));
     const confirmed = host.ui.confirm("Run rm -rf build?", "bash wants to delete build/");
+    await waitForAsks(transport);
     const [ask] = asks(transport);
     expect(ask).toMatchObject({
       kind: "ask",
@@ -1837,16 +1846,19 @@ describe("PersonalSession extension dialogs", () => {
     const { host, transport } = setup();
     await host.start();
     const first = host.ui.select("Which branch?", ["main", "dev", " "]);
+    await waitForAsks(transport);
     const [ask] = asks(transport);
     expect(ask!.ask!.choices).toEqual(["main", "dev", " "]);
     await host.handleMessage(msg(`wsask:${ask!.ask!.askId}`, "dev"));
     expect(await first).toBe("dev");
 
     const second = host.ui.select("Which branch?", ["main", "dev"]);
+    await waitForAsks(transport, 2);
     await host.handleMessage(msg("m-2", "MAIN"));
     expect(await second).toBe("main");
 
     const third = host.ui.select("Which?", ["a", " "]);
+    await waitForAsks(transport, 3);
     const blank = asks(transport)[2]!;
     // The bot labels a blank choice "(option N)" and sends that label as the answer.
     await host.handleMessage(msg(`wsask:${blank.ask!.askId}`, "(option 2)"));
@@ -1861,6 +1873,7 @@ describe("PersonalSession extension dialogs", () => {
     const { host, sessions, transport } = setup();
     await host.start();
     const named = host.ui.input("Branch name?", "feat/...");
+    await waitForAsks(transport);
     const [ask] = asks(transport);
     expect(ask!.ask).toEqual({ askId: expect.any(String), question: "Branch name?\nfeat/..." });
     expect(await host.handleMessage(msg("m-1", "  feat/ui-context "))).toEqual({ accepted: true, mode: "prompt" });
@@ -1896,6 +1909,7 @@ describe("PersonalSession extension dialogs", () => {
     const { host, sessions, transport } = setup({ askTimeoutMs: 10 });
     await host.start();
     await host.ui.confirm("Ok?", "");
+    await waitForAsks(transport);
     const [ask] = asks(transport);
     expect(await host.handleMessage(msg(`wsask:${ask!.ask!.askId}`, "Yes"))).toEqual({ accepted: true, mode: "duplicate" });
     expect(sessions[0]!.prompts).toEqual([]);
@@ -1934,6 +1948,7 @@ describe("PersonalSession extension dialogs", () => {
     expect(asks(transport)).toEqual([]);
     // Open again once the reset is done; the owner's next message is a prompt, not an answer to a stale dialog.
     const fresh = host.ui.confirm("Again?", "");
+    await waitForAsks(transport);
     expect(asks(transport)).toHaveLength(1);
     expect(await host.handleMessage(msg("m-2", "yes"))).toEqual({ accepted: true, mode: "prompt" });
     expect(await fresh).toBe(true);
@@ -2445,6 +2460,7 @@ describe("PersonalSession owner asks", () => {
     const { host, sessions, transport } = setup();
     await host.start();
     const answer = host.askOwner("Stale: 1. Dentist. Keep or drop?", ["Keep 1", "Drop 1"], parseKeep);
+    await waitForAsks(transport);
     const ask = transport.delivered()[0]!;
     expect(ask).toMatchObject({ kind: "ask", text: "Stale: 1. Dentist. Keep or drop?", ask: { choices: ["Keep 1", "Drop 1"] } });
     expect(ask.turnId).toBeUndefined();
@@ -2755,6 +2771,7 @@ describe("send_file", () => {
     await host.handleMessage(fileMsg("m1", "send the token file"));
     const sending = run(tool(stateDir, home, () => sessions[0]!), { path: "token.txt" });
     await until(() => asks(transport).length === 1);
+    await waitForAsks(transport);
     const [ask] = asks(transport);
     expect(ask!.ask).toEqual({
       askId: expect.any(String),
@@ -2932,6 +2949,7 @@ describe("history markers", () => {
     const { host, sessions } = setup();
     await host.start();
     void host.askOwner("Keep 1?", ["Keep 1", "Drop 1"], () => ({ value: true }));
+    await tick();
     const [ask] = markers(sessions[0]!) as Array<Record<string, unknown>>;
     expect(ask).toMatchObject({ kind: "ask", text: "Keep 1?", ask: { askId: expect.any(String), question: "Keep 1?", choices: ["Keep 1", "Drop 1"] } });
   });
@@ -3079,5 +3097,60 @@ describe("job alerts and the bot's alert feature", () => {
     expect(isContractRefusal(new RpcErrorResponse("[]", -32000))).toBe(false);
     expect(isContractRefusal(new RpcErrorResponse("busy", -32000))).toBe(false);
     expect(isContractRefusal(new Error("[{\"code\":\"x\",\"path\":[]}]"))).toBe(false);
+  });
+});
+
+describe("durable owner request lifecycle", () => {
+  test("timeout emits a durable terminal record with the originating channel", async () => {
+    const stateDir = tempDir();
+    const { host, transport } = setup({ stateDir, askTimeoutMs: 15 });
+    await host.start();
+    await host.handleMessage(msg("origin", "question", { origin: { surface: "web", conversationId: "travel" } }));
+    const answer = host.ui.select("When?", ["Monday", "Tuesday"]);
+    await waitForAsks(transport);
+    const ask = transport.delivered().find(d => d.kind === "ask")!;
+    expect(await answer).toBeUndefined();
+    await host.dispose();
+    const resolved = transport.delivered().find(d => d.kind === "ask_resolved")!;
+    expect(resolved).toMatchObject({ origin: { surface: "web", conversationId: "travel" }, askResolution: { askId: ask.ask!.askId, status: "expired", answer: null } });
+    const disk = new (await import("./outbox.ts")).Outbox(stateDir);
+    expect(disk.unacked().some(e => e.kind === "ask_resolved")).toBe(true);
+  });
+
+  test("shutdown withdraws outside-turn owner questions through the preferred surface", async () => {
+    const { host, transport } = setup();
+    await host.start();
+    const answer = host.askOwner("Keep this task?", ["Keep", "Drop"], text => ({ value: text }));
+    await waitForAsks(transport);
+    const ask = transport.delivered().find(d => d.kind === "ask")!;
+    await host.dispose();
+    expect(await answer).toBeUndefined();
+    const resolved = transport.delivered().find(d => d.kind === "ask_resolved")!;
+    expect(resolved.origin).toBeUndefined();
+    expect(resolved.askResolution).toEqual({ askId: ask.ask!.askId, status: "withdrawn", answer: null });
+  });
+
+  test("restart withdraws orphan journal handles before question replay even without a transcript", async () => {
+    const { DurableState } = await import("../agentRuntime/durableState.ts");
+    const { PendingOwnerAsks } = await import("./pendingOwnerAsks.ts");
+    const stateDir = tempDir();
+    const store = new DurableState(stateDir);
+    const journal = new PendingOwnerAsks(store, "main");
+    await journal.prepare({ askId: "orphan-question", origin: DM_ORIGIN });
+    await journal.prepare({ askId: "preferred-question" });
+    await store.close();
+    const { host, transport } = setup({ stateDir });
+    await host.start();
+    const resolved = transport.delivered().filter(d => d.kind === "ask_resolved");
+    expect(resolved).toHaveLength(2);
+    expect(resolved[0]).toMatchObject({ origin: DM_ORIGIN, askResolution: { askId: "orphan-question", status: "withdrawn", answer: null } });
+    expect(resolved[1]?.origin).toBeUndefined();
+    expect(transport.delivered().filter(d => d.kind === "ask")).toEqual([]);
+    await host.dispose();
+    const restart = setup({ stateDir });
+    await restart.host.start();
+    // Existing unacked terminal records remain in outbox; no new orphan records are generated.
+    expect(readFileSync(join(stateDir, "outbox.jsonl"), "utf8").split("\n").filter(line => line.includes('"type":"entry"'))).toHaveLength(2);
+    await restart.host.dispose();
   });
 });

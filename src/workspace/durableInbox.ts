@@ -41,6 +41,9 @@ export class DurableInbox {
     this.key = options.conversationId ?? "main";
   }
 
+  /** Domain journals share the same connection even for standalone session hosts. */
+  get durableState(): DurableState { return this.store; }
+
   async open(): Promise<void> {
     this.opening ??= this.load();
     await this.opening;

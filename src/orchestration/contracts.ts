@@ -566,7 +566,7 @@ export type JobAlertWire = z.infer<typeof jobAlert>;
 export const deliverJob = z.object({ name: z.string().min(1).max(JOB_NAME_MAX), runId: runId.optional() });
 export type DeliverJob = z.infer<typeof deliverJob>;
 
-export const CHAT_DELIVER_KINDS = ["reply", "proactive", "ask", "auth", "alert", "session"] as const;
+export const CHAT_DELIVER_KINDS = ["reply", "proactive", "ask", "ask_resolved", "auth", "alert", "session"] as const;
 export type ChatDeliverKind = (typeof CHAT_DELIVER_KINDS)[number];
 
 /** Delivery kinds a bot may advertise in its register result. The workspace sends `alert` only when listed;
@@ -584,6 +584,14 @@ export const deliverFile = z.object({
 });
 export type DeliverFile = z.infer<typeof deliverFile>;
 
+/** Durable terminal state of an owner question; independent of chat delivery retries. */
+export const askResolution = z.object({
+  askId: z.string().min(1).max(ID_MAX),
+  answer: z.string().max(16000).nullable(),
+  status: z.enum(["answered", "expired", "withdrawn", "delivery_failed"]),
+});
+export type AskResolution = z.infer<typeof askResolution>;
+
 export const chatDeliverParams = z
   .object({
     origin: chatOrigin.optional(),
@@ -596,6 +604,7 @@ export const chatDeliverParams = z
     turnId: z.string().optional(),
     usage: chatUsage.optional(),
     ask: z.object({ askId: z.string(), question: z.string(), choices: z.array(z.string()).optional(), toolConfirmation: z.object({ tool: z.string().max(256), input: z.string().max(16000), reason: z.string().max(1000).optional(), toolCallId: z.string().max(256).optional() }).optional() }).optional(),
+    askResolution: askResolution.optional(),
     // kind "auth": a sign-in link to open. https only: zod's url() alone accepts javascript: and data:.
     auth: z.object({ url: z.string().max(4096).refine(isHttpsUrl, "must be an https: URL"), instructions: z.string() }).optional(),
     // Set on the reply that ends a surface login, so the bot stops treating pastes as its callback.
@@ -614,6 +623,7 @@ export const chatDeliverParams = z
     job: deliverJob.optional(),
   })
   .refine((p) => (p.kind === "session") === (p.session !== undefined), { message: 'kind "session" needs session, and only it may carry one', path: ["session"] })
+  .refine((p) => (p.kind === "ask_resolved") === (p.askResolution !== undefined), { message: 'kind "ask_resolved" needs askResolution, and only it may carry one', path: ["askResolution"] })
   .refine((p) => (p.kind === "alert") === (p.alert !== undefined), { message: 'kind "alert" needs alert, and only it may carry one', path: ["alert"] })
   .refine((p) => p.job === undefined || p.kind === "proactive", { message: 'only kind "proactive" may carry job', path: ["job"] });
 export type ChatDeliverParams = z.infer<typeof chatDeliverParams>;

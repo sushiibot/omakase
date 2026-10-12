@@ -2,10 +2,12 @@
 /** sha256 of every earlier shipped version of each upgradable home template file (not the current one). */
 export const SHIPPED_TEMPLATE_HASHES: Record<string, readonly string[]> = {
   "AGENTS.md": [
+    "1c7f4c2a2c4d6486a40c15763787b41a67a653d233ef12811530317f007a3ca0",
     "200998d25e337b4b1210c77ae72ebee4e56a5eadd436c363e19fe23de26a90e5",
     "25fea718271e53a647999eb771c51e2f6606d8ed33184095dc3d54eff0cff2b8",
     "2caa04afc6e847e6b8953ef095dc275238d543452bb7d421214c40818472f243",
     "2d3a616b72235652ee95a6af316d5001fc39c29008fb04613baad110f8901807",
+    "2f392281859aefb4650770ce90b77f6594baf8589fb761925ce39bb4894d2355",
     "439b795666f2bc7edff3fdb3f8b97a853eb8118bf349ce68e1171edc1f1021a0",
     "670493afb42c0b3c67659fdce567d9ccc84018f50d31e5ee045b1ead2e5b8f2a",
     "6b8047babb11f4e20bd1c71e98045d23d7c968d2530b6ecb1278053fd8fd004b",

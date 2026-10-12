@@ -114,7 +114,7 @@ export function createWebHandler(deps: WebHandlerDeps): WebHandler {
       if (site !== null && site !== "same-origin") return forbidden();
     } else if (!isSameOrigin(req)) return forbidden();
 
-    if (path === "/api/chats" || path === "/api/threads" || path.startsWith("/api/threads/")) {
+    if (path === "/api/channels" || path === "/api/chats" || path === "/api/threads" || path.startsWith("/api/threads/")) {
       if (!deps.threads) return json({ error: "not found" }, 404);
       try { return (await deps.threads.handle(req, path, actor, server)) ?? json({ error: "not found" }, 404); }
       catch (err) { logger.warn({ err }, "thread request failed"); return json({ error: err instanceof Error ? err.message : "Thread request failed" }, 409); }

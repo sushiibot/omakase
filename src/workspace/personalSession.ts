@@ -1,3 +1,5 @@
+import { PendingOwnerAsks } from "./pendingOwnerAsks.ts";
+import type { OwnerRequests, RequestEnd } from "./ownerRequests.ts";
 import { SessionBoundaryRecorder } from "./sessionBoundary.ts";
 import { SESSION_TEXT_MAX, type SessionBoundary } from "../orchestration/sessionContracts.ts";
 import { existsSync } from "node:fs";
@@ -194,6 +196,7 @@ export interface PersonalSessionOptions {
   /** Process-wide storage shared by main and every topic. Standalone hosts own a store when absent. */
   durableState?: DurableState;
   conversationId?: string;
+  ownerRequests?: OwnerRequests;
   factory: ChatSessionFactory;
   transport: ChatTransport;
   /** Coalescing window for text_delta events; null omits them. Default 500ms. */
@@ -341,6 +344,8 @@ export class PersonalSession {
   // Tasks on the serial chain not yet finished.
   private queued = 0;
   private reloadDue = false;
+  private readonly askClosures = new Set<Promise<void>>();
+  private readonly pendingOwnerAsks: PendingOwnerAsks;
   private readonly asks: ChatAsks;
   // Asks the workspace itself sends outside any turn (the TASKS.md review): never cancelled by a run ending.
   private readonly ownerAsks: ChatAsks;
@@ -358,10 +363,11 @@ export class PersonalSession {
     this.opts = opts;
     this.outbox = new Outbox(opts.stateDir);
     this.inbox = new DurableInbox(opts.stateDir, 500, { store: opts.durableState, conversationId: opts.conversationId });
+    this.pendingOwnerAsks = new PendingOwnerAsks(this.inbox.durableState, opts.conversationId ?? "main");
     this.newId = opts.newId ?? ulid;
-    this.asks = new ChatAsks({ deliver: (ask) => this.deliverAsk(ask), timeoutMs: opts.askTimeoutMs, newId: this.newId });
+    this.asks = new ChatAsks({ deliver: (ask) => this.deliverAsk(ask), onClosed: (ask, status, answer) => this.closeOwnerAsk(ask, status, answer), timeoutMs: opts.askTimeoutMs, newId: this.newId, ownerRequests: opts.ownerRequests, origin: () => this.run?.origin ?? this.lastOrigin ?? { surface: "web", conversationId: opts.conversationId ?? "main" } });
     this.ui = createHeadlessUIContext(this.asks);
-    this.ownerAsks = new ChatAsks({ deliver: (ask) => this.deliverOwnerAsk(ask), timeoutMs: OWNER_ASK_TIMEOUT_MS, newId: this.newId });
+    this.ownerAsks = new ChatAsks({ deliver: (ask) => this.deliverOwnerAsk(ask), onClosed: (ask, status, answer) => this.closeOwnerAsk(ask, status, answer), timeoutMs: OWNER_ASK_TIMEOUT_MS, newId: this.newId, ownerRequests: opts.ownerRequests, origin: () => ({ surface: "web", conversationId: opts.conversationId ?? "main" }) });
     this.lastActivityAt = this.clock();
     for (const [surface, uploads] of Object.entries(readFileSurfaces(opts.stateDir))) this.fileSurfaces.set(surface, uploads);
   }
@@ -434,6 +440,10 @@ export class PersonalSession {
   async start(): Promise<void> {
     await this.boundaryRecorder?.initialize().catch(err => log.warn({ err }, "initializing context boundary memory snapshot failed"));
     await this.inbox.open();
+    for (const ask of await this.pendingOwnerAsks.list()) {
+      this.deliverAskResolution(ask.askId, ask.origin, "withdrawn", null);
+      await this.pendingOwnerAsks.retire(ask.askId);
+    }
     this.recoveredInputs = await this.inbox.pending();
     const exists = this.opts.fileExists ?? existsSync;
     const recorded = readWorkspaceState(this.opts.stateDir);
@@ -516,6 +526,7 @@ export class PersonalSession {
     if (answered) {
       this.inbox.add(id);
       await this.inbox.flush();
+      await Promise.all([...this.askClosures]);
       return answered === "answered" ? { accepted: true, mode: "prompt" } : DUPLICATE;
     }
     const handling = this.accept(params);
@@ -1093,6 +1104,8 @@ export class PersonalSession {
     for (const abort of this.backgroundRecaps) abort.abort();
     await this.turnCommit;
     await this.recovering?.catch((err) => log.warn({ err }, "input recovery interrupted at shutdown"));
+    await Promise.all([...this.askClosures]);
+    await this.pendingOwnerAsks.flush();
     await this.inbox.close();
   }
 
@@ -1546,7 +1559,10 @@ export class PersonalSession {
   }
 
   // Like a proactive message: no turn, and the preferred surface.
-  private deliverOwnerAsk(ask: AskRequest): void {
+  private async deliverOwnerAsk(ask: AskRequest): Promise<void> {
+    // Outside a turn these asks use the preferred surface, as does their resolution.
+    await this.pendingOwnerAsks.prepare({ askId: ask.askId });
+    if (!this.ownerAsks.isPending(ask.askId)) return;
     const entry: ChatDeliverParams = {
       outboxId: this.newId(),
       principalId: this.opts.principalId,
@@ -1559,9 +1575,11 @@ export class PersonalSession {
     this.send(entry);
   }
 
-  private deliverAsk(ask: AskRequest): void {
+  private async deliverAsk(ask: AskRequest): Promise<void> {
     const run = this.run;
-    const origin = run?.origin ?? this.lastOrigin;
+    const origin = run?.origin ?? this.lastOrigin ?? { surface: "web" as const, conversationId: this.opts.conversationId ?? "main" };
+    await this.pendingOwnerAsks.prepare({ askId: ask.askId, origin });
+    if (!this.asks.isPending(ask.askId)) return;
     const entry: ChatDeliverParams = {
       ...(origin ? { origin } : {}),
       outboxId: this.newId(),
@@ -1573,6 +1591,26 @@ export class PersonalSession {
     };
     this.outbox.append(entry);
     this.markDelivery(entry, false);
+    this.send(entry);
+  }
+
+  private closeOwnerAsk(ask: AskRequest, status: RequestEnd, answer: string | null): void {
+    const closure = (async () => {
+      const saved = (await this.pendingOwnerAsks.list()).find(p => p.askId === ask.askId);
+      if (!saved) return;
+      this.deliverAskResolution(ask.askId, saved.origin, status, answer);
+      await this.pendingOwnerAsks.retire(ask.askId);
+    })().catch(err => log.warn({ err, askId: ask.askId }, "saving owner request resolution failed; restart will withdraw it"));
+    this.askClosures.add(closure);
+    void closure.finally(() => this.askClosures.delete(closure));
+  }
+
+  private deliverAskResolution(askId: string, origin: ChatOrigin | undefined, status: RequestEnd, answer: string | null): void {
+    const entry: ChatDeliverParams = {
+      origin, outboxId: this.newId(), principalId: this.opts.principalId,
+      kind: "ask_resolved", text: "", askResolution: { askId, status, answer },
+    };
+    this.outbox.append(entry);
     this.send(entry);
   }
 

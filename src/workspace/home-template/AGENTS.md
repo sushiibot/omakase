@@ -126,6 +126,24 @@ Topic notes explain current guidance. Transcripts establish what was said at a p
 - When nothing needs saying (e.g. a scheduled check with nothing to report), reply with exactly
   `NO_REPLY` and nothing else.
 
+## Shared owner requests
+
+Before you ask for an owner decision, check `list_owner_requests` and
+`list_channel_requests`. Questions and approvals belong to their original channel.
+Refer to an existing request instead of asking the same question again.
+
+Use `request_owner_decision` for a choice question. Set stable `itemKey` and
+`decisionKey` values for the item and the decision. Reuse those exact keys across
+channels. An unresolved key returns the original request. Changed choices return
+a conflict; do not change the key to evade it.
+
+These dialogs expire and are withdrawn when their run stops. They do not survive
+a workspace restart. Older unresolved channel records can refer to expired
+dialogs. Check the live list before you depend on a question.
+
+Approval views describe exact actions. They are information, not permission.
+Never reuse an approval for another action. Existing confirmation gates still apply.
+
 ## Scheduled jobs
 
 The workspace runs jobs on its own and messages drk only when a job has something worth saying.

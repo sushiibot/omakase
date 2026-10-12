@@ -1,6 +1,8 @@
 import type { ExtensionUIContext, ExtensionUIDialogOptions, Theme } from "@earendil-works/pi-coding-agent";
 import { getLogger } from "../logger.ts";
 import { ulid } from "./ulid.ts";
+import type { ChatOrigin } from "../orchestration/contracts.ts";
+import { bindOwnerRequestsContext, type DecisionKey, type OwnerRequests, type RequestEnd } from "./ownerRequests.ts";
 
 const log = getLogger("workspace.ui");
 
@@ -30,7 +32,7 @@ type Parse<T> = (text: string) => { value: T } | null;
 interface PendingAsk {
   askId: string;
   parse: Parse<unknown>;
-  settle: (value: unknown) => void;
+  settle: (value: unknown, status?: RequestEnd, answer?: string) => void;
   fallback: unknown;
 }
 
@@ -45,39 +47,44 @@ export type AnswerOutcome = "answered" | "stale" | null;
 export class ChatAsks {
   private readonly pending: PendingAsk[] = [];
   private readonly closed: string[] = [];
-  private readonly deliver: (ask: AskRequest) => void;
+  private readonly deliver: (ask: AskRequest) => unknown;
   private readonly timeoutMs: number;
   private readonly newId: () => string;
   private holds = 0;
 
-  constructor(opts: { deliver: (ask: AskRequest) => void; timeoutMs?: number; newId?: () => string }) {
+  constructor(private readonly opts: { deliver: (ask: AskRequest) => unknown; onClosed?: (ask: AskRequest, status: RequestEnd, answer: string | null) => void; timeoutMs?: number; newId?: () => string; ownerRequests?: OwnerRequests; origin?: () => ChatOrigin }) {
     this.deliver = opts.deliver;
     this.timeoutMs = opts.timeoutMs ?? ASK_TIMEOUT_MS;
     this.newId = opts.newId ?? ulid;
   }
 
+  isPending(askId: string): boolean { return this.pending.some(ask => ask.askId === askId); }
+
   get size(): number {
     return this.pending.length;
   }
 
-  ask<T>(question: string, choices: string[], parse: Parse<T>, fallback: T, dialog?: ExtensionUIDialogOptions, toolConfirmation?: ToolConfirmation): Promise<T> {
+  ask<T>(question: string, choices: string[], parse: Parse<T>, fallback: T, dialog?: ExtensionUIDialogOptions, toolConfirmation?: ToolConfirmation, decision?: DecisionKey): Promise<T> {
     if (dialog?.signal?.aborted) return Promise.resolve(fallback);
     if (this.holds > 0) {
       log.info("extension dialog opened while its run is being stopped or reset; using its default");
       return Promise.resolve(fallback);
     }
     const askId = this.newId();
+    const request: AskRequest = { askId, question, choices, ...(toolConfirmation ? { toolConfirmation } : {}) };
     return new Promise<T>((resolve) => {
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const onAbort = () => entry.settle(fallback);
+      const onAbort = () => entry.settle(fallback, "withdrawn");
       const entry: PendingAsk = {
         askId,
         parse: parse as Parse<unknown>,
         fallback,
-        settle: (value) => {
+        settle: (value, status = "answered", answer) => {
           const i = this.pending.indexOf(entry);
           if (i === -1) return;
           this.pending.splice(i, 1);
+          this.opts.ownerRequests?.finish(askId, status);
+          try { this.opts.onClosed?.(request, status, answer ?? null); } catch (err) { log.warn({ err, askId }, "recording owner dialog closure failed"); }
           this.closed.push(askId);
           if (this.closed.length > CLOSED_KEPT) this.closed.shift();
           clearTimeout(timer);
@@ -86,19 +93,42 @@ export class ChatAsks {
         },
       };
       this.pending.push(entry);
+      this.opts.ownerRequests?.add(request, this.opts.origin?.() ?? { surface: "web", conversationId: "main" }, decision);
       timer = setTimeout(() => {
         log.info({ askId }, "extension dialog timed out; using its default");
-        entry.settle(fallback);
+        entry.settle(fallback, "expired");
       }, dialog?.timeout ?? this.timeoutMs);
       timer.unref?.();
       dialog?.signal?.addEventListener("abort", onAbort, { once: true });
       try {
-        this.deliver({ askId, question, choices, ...(toolConfirmation ? { toolConfirmation } : {}) });
+        const delivery = this.deliver(request);
+        void Promise.resolve(delivery).catch(err => {
+          log.warn({ err, askId }, "delivering an extension dialog failed; using its default");
+          entry.settle(fallback, "delivery_failed");
+        });
       } catch (err) {
         log.warn({ err, askId }, "delivering an extension dialog failed; using its default");
-        entry.settle(fallback);
+        entry.settle(fallback, "delivery_failed");
       }
     });
+  }
+
+  /** Atomic admission uses explicit keys, never matching question text or approval actions. */
+  async requestDecision(input: DecisionKey & { question: string; choices: string[] }, signal?: AbortSignal): Promise<unknown> {
+    if (!this.opts.ownerRequests) throw new Error("Shared owner requests are unavailable.");
+    if (!input.question.trim() || input.choices.length < 2 || input.choices.length > 5 || input.choices.some(choice => !choice.trim())) throw new Error("Provide a question and two to five nonempty choices.");
+    if (new Set(input.choices.map(choice => choice.trim().toLowerCase())).size !== input.choices.length) throw new Error("Choice labels must be distinct.");
+    const existing = this.opts.ownerRequests.find(input);
+    if (existing) {
+      const sameChoices = JSON.stringify(existing.choices) === JSON.stringify(input.choices);
+      return { status: sameChoices ? "already_pending" : "conflict", request: existing };
+    }
+    // ask() registers synchronously before it yields, so concurrent channels cannot both admit this key.
+    const waiting = this.ask<string | undefined>(input.question, input.choices, parseSelect(input.choices), undefined, { signal }, undefined, { itemKey: input.itemKey, decisionKey: input.decisionKey });
+    const canonical = this.opts.ownerRequests.find(input);
+    const answer = await waiting;
+    const request = canonical ? this.opts.ownerRequests.list(true).find(r => r.requestId === canonical.requestId) : undefined;
+    return { ...(request ? { request } : {}), status: answer === undefined ? "closed_without_answer" : "answered", ...(answer !== undefined ? { answer } : {}) };
   }
 
   /**
@@ -112,7 +142,7 @@ export class ChatAsks {
       const entry = this.pending.find((p) => p.askId === askId);
       if (!entry) return opts.foreignIds && !this.closed.includes(askId) ? null : "stale";
       const parsed = entry.parse(answer);
-      entry.settle(parsed ? parsed.value : entry.fallback);
+      entry.settle(parsed ? parsed.value : entry.fallback, "answered", answer);
       return "answered";
     }
     const confirms = this.pending.filter((p) => p.parse === parseConfirm).length;
@@ -120,7 +150,7 @@ export class ChatAsks {
       if (entry.parse === parseConfirm && confirms > 1) continue;
       const parsed = entry.parse(answer);
       if (parsed) {
-        entry.settle(parsed.value);
+        entry.settle(parsed.value, "answered", answer);
         return "answered";
       }
     }
@@ -130,7 +160,7 @@ export class ChatAsks {
   /** Resolves every pending ask to its default, so a run parked in a dialog can end. */
   cancelAll(reason: string): void {
     if (this.pending.length) log.info({ reason, count: this.pending.length }, "cancelling open extension dialogs");
-    for (const entry of [...this.pending]) entry.settle(entry.fallback);
+    for (const entry of [...this.pending]) entry.settle(entry.fallback, "withdrawn");
   }
 
   /** Cancels open asks and resolves new ones to their default until every returned release has been called. */
@@ -210,7 +240,7 @@ export function confirmToolCall(ui: ExtensionUIContext, toolConfirmation: ToolCo
 
 /** Pi's extension UI over the chat surface: dialogs become asks, TUI-only calls are no-ops, custom() declines. */
 export function createHeadlessUIContext(asks: ChatAsks): ExtensionUIContext {
-  return {
+  const ui: ExtensionUIContext = {
     select: (title, options, opts) => asks.ask(title, options, parseSelect(options), undefined as string | undefined, opts),
     confirm: (title, message, opts) => asks.ask(question(title, message), CONFIRM_CHOICES, parseConfirm, false, opts, (opts as ToolDialogOptions | undefined)?.[toolConfirmationKey]),
     input: (title, placeholder, opts) => asks.ask(question(title, placeholder), [], parseText, undefined as string | undefined, opts),
@@ -245,4 +275,6 @@ export function createHeadlessUIContext(asks: ChatAsks): ExtensionUIContext {
     getToolsExpanded: () => false,
     setToolsExpanded: () => {},
   };
+  bindOwnerRequestsContext(ui, asks);
+  return ui;
 }

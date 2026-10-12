@@ -1,5 +1,5 @@
 import type { SessionBoundary } from "../../orchestration/sessionContracts.ts";
-import { ID_MAX, jobAlert, webChatOrigin, type ChatOrigin, type DeliverFile, type DeliverJob, type JobAlertWire, type ToolCallResult } from "../../orchestration/contracts.ts";
+import { ID_MAX, jobAlert, webChatOrigin, type AskResolution, type ChatOrigin, type DeliverFile, type DeliverJob, type JobAlertWire, type ToolCallResult } from "../../orchestration/contracts.ts";
 import { MAX_OPEN_TURNS } from "../../orchestration/workspace/link.ts";
 import { realTimers, type Timers } from "../../orchestration/workspace/progress.ts";
 import {
@@ -224,7 +224,16 @@ export class WebWorkspaceAdapter implements SurfaceAdapter<WebInbound, WebHandle
       const choices = askId ? ask.choices.slice(0, ASK_CHOICES_MAX).map((c) => capText(c, ID_MAX)) : [];
       return { ...this.deps.log.appendResult("ask", { key, askId, question: capText(ask.question, MESSAGE_TEXT_MAX), choices, ...(ask.toolConfirmation ? { toolConfirmation: { tool: capText(ask.toolConfirmation.tool, ID_MAX), input: capText(ask.toolConfirmation.input, MESSAGE_TEXT_MAX), ...(ask.toolConfirmation.reason ? { reason: capText(ask.toolConfirmation.reason, 1000) } : {}), ...(ask.toolConfirmation.toolCallId ? { toolCallId: capText(ask.toolConfirmation.toolCallId, ID_MAX) } : {}) } } : {}) }, key), askId };
     });
-    if (created) void this.notify(seq, { kind: "ask", askId, question: ask.question });
+    if (created && (!askId || !this.deps.log.find("ask_resolved", askId)))
+      void this.notify(seq, { kind: "ask", askId, question: ask.question });
+  }
+
+  async askResolved(origin: ChatOrigin | null, resolution: AskResolution, _attempt: SendAttempt): Promise<void> {
+    this.checkOrigin(origin);
+    // Keep the terminal marker even when a reconnect delivers it before the question.
+    // The canonical ID also deduplicates resolution received through the answer HTTP route.
+    if (this.deps.log.find("ask_resolved", resolution.askId)) return;
+    this.deps.log.append("ask_resolved", { askId: resolution.askId, answer: resolution.answer }, resolution.askId);
   }
 
   async authPrompt(origin: ChatOrigin | null, view: AuthPromptView, attempt: SendAttempt): Promise<void> {

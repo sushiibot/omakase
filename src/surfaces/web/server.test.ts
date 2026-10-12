@@ -431,3 +431,25 @@ describe("startWebGateway", () => {
     expect(await startWebGateway({}, freshDb())).toBeUndefined();
   });
 });
+
+test("channel catalog route uses owner authentication and fetch-metadata checks", async () => {
+  const calls: string[] = [];
+  const config = webConfig();
+  const handler = createWebHandler({
+    config,
+    peers: createPeerMatcher(config.trustedPeers),
+    threads: {
+      handle: async (_request: Request, path: string) => {
+        calls.push(path);
+        return Response.json({ channels: [{ id: "main", kind: "main" }] });
+      },
+    } as unknown as import("./threadRoutes.ts").WebThreads,
+  });
+  expect((await handler(req("/api/channels", { login: "other@example.com" }), GW)).status).toBe(403);
+  expect((await handler(req("/api/channels", { headers: { "Sec-Fetch-Site": "cross-site" } }), GW)).status).toBe(403);
+  expect(calls).toEqual([]);
+  const response = await handler(req("/api/channels", { headers: { "Sec-Fetch-Site": "same-origin" } }), GW);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ channels: [{ id: "main", kind: "main" }] });
+  expect(calls).toEqual(["/api/channels"]);
+});

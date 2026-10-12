@@ -154,6 +154,7 @@ async function main() {
     uploads,
   });
   const taskRoutes = new TaskRoutes(workspace.link, webChat.threads);
+  workspace.tools.setChannelRequests(() => webChat.threads.pendingRequests());
   workspace.tools.setTaskControl((args, actor, conversationId) => taskRoutes.action(args, actor, conversationId));
   const webVoice = createVoiceRoutes(process.env, createVoiceAgent(webChat.threads));
   const webServer = await startWebGateway(process.env, db, {

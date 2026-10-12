@@ -334,3 +334,139 @@ test("new topic context and lifecycle boundaries stay in the topic history", asy
   expect(topic.list(["session"]).at(-1)?.data).toMatchObject({ kind: "compacted", summary: "Keep planning the trip." });
   expect(h.log.list(["session"])).toHaveLength(0);
 });
+
+test("channel catalog includes Main, channels, archived channels and stable task work conversations", async () => {
+  const h = setup();
+  const { id } = await h.create();
+  await h.call(`/api/threads/${id}/close`, {});
+  // ensureTask uses task-${task.id}; existing task identity and history remain intact.
+  await h.threads.ensureTask("task-t-release", "Release", "Ship the release");
+  const response = await h.call("/api/channels");
+  expect(response!.status).toBe(200);
+  const catalog = await response!.json();
+  expect(catalog.archiveAfterDays).toBe(7);
+  expect(catalog.channels).toHaveLength(3);
+  expect(catalog.channels[0]).toMatchObject({
+    id: "main", title: "Main", kind: "main", state: "idle", lastActivity: null,
+    pending: { asks: 0, approvals: 0, total: 0 }, attention: [],
+    activity: { running: false, turnCount: 0 }, headSeq: h.log.head(), lastMessageSeq: null, unread: null,
+  });
+  expect(catalog.channels.find((c: { id: string }) => c.id === id)).toMatchObject({
+    kind: "channel", state: "archived", archived: { by: "you" },
+  });
+  expect(catalog.channels.find((c: { id: string }) => c.id === "task-t-release")).toMatchObject({
+    kind: "task", taskId: "t-release", title: "Release", state: "idle",
+  });
+  const legacy = await (await h.call("/api/chats"))!.json();
+  expect(legacy.threads.map((t: { id: string }) => t.id)).toEqual([id]);
+  expect((await h.call("/api/channels", {}))!.status).toBe(405);
+});
+
+test("catalog counts all unanswered requests and retains old approvals until a resolution", async () => {
+  const h = setup();
+  const { id } = await h.create();
+  const topic = h.threads.channel(id).log;
+  for (let i = 0; i < 12; i++) topic.append("ask", {
+    key: `question-${i}`, askId: `question-${i}`, question: "Which option?", choices: [],
+  }, `question-${i}`);
+  const approval = topic.append("approval", {
+    nonce: "old-approval", view: { tool: "deploy", agentId: "main", agentName: "Sushii", fields: [] },
+  }, "old-approval");
+  h.db.run("UPDATE web_events SET created_at = ? WHERE conversation_id = ? AND type = 'approval'", [Date.now() - 60 * 60_000, id]);
+  let entry = h.threads.catalog().find(c => c.id === id)!;
+  expect(entry.pending).toEqual({ asks: 12, approvals: 1, total: 13 });
+  expect(entry.attention).toHaveLength(13);
+  expect(entry.attention.at(-1)).toMatchObject({ kind: "approval", id: "old-approval", seq: approval });
+  expect(entry.state).toBe("needs-you");
+  expect((await (await h.call(`/api/threads/${id}`))!.json()).summary.state).toBe("needs-you");
+  topic.append("approval_resolved", { nonce: "old-approval", decision: "deny" }, "old-approval");
+  for (let i = 0; i < 12; i++) topic.append("ask_resolved", { askId: `question-${i}`, answer: "yes" }, `question-${i}`);
+  entry = h.threads.catalog().find(c => c.id === id)!;
+  expect(entry.pending.total).toBe(0);
+  expect(entry.attention).toEqual([]);
+  expect(entry.state).toBe("idle");
+});
+
+test("Main and topic resolutions invalidate the shared catalog stream", async () => {
+  const h = setup();
+  const { id } = await h.create();
+  const changes: string[] = [];
+  const sub = h.log.subscribe(null, event => { if (event.type === "threads") changes.push(event.data.id); });
+  for (const [channelId, log] of [["main", h.log], [id, h.threads.channel(id).log]] as const) {
+    log.append("ask", { key: channelId, askId: channelId, question: "Continue?", choices: [] }, channelId);
+    changes.length = 0;
+    log.append("ask_resolved", { askId: channelId, answer: "yes" }, channelId);
+    expect(changes).toEqual([channelId]);
+    changes.length = 0;
+    log.append("approval_resolved", { nonce: channelId, decision: "cancelled" }, channelId);
+    expect(changes).toEqual([channelId]);
+  }
+  sub.close();
+});
+
+test("Main activity starts and stops invalidate catalog without recursive stream publications", async () => {
+  const h = setup();
+  const changes: string[] = [];
+  const sub = h.log.subscribe(null, event => { if (event.type === "threads") changes.push(event.data.id); });
+  const adapter = h.threads.surface();
+  const origin = { surface: "web", conversationId: "main" };
+  const handle = await adapter.progressCreate(origin, { turnId: "main-turn", startedAt: Date.now(), text: "", lines: [], toolCount: 0 });
+  expect(changes).toEqual(["main"]);
+  expect(h.threads.catalog()[0]!.activity).toEqual({ running: true, turnCount: 1 });
+  expect(h.threads.catalog()[0]!.state).toBe("running");
+  await adapter.progressFinalize(origin, handle, { outcome: "done", summary: null });
+  expect(h.threads.catalog()[0]!.activity).toEqual({ running: false, turnCount: 0 });
+  expect(changes).toEqual(["main", "main"]);
+  sub.close();
+});
+
+test("old pending approvals prevent idle archive and keep Main needs-you in the legacy view", async () => {
+  const h = setup();
+  const { id } = await h.create();
+  for (const log of [h.log, h.threads.channel(id).log]) log.append("approval", {
+    nonce: "waiting", view: { tool: "deploy", agentId: "main", agentName: "Sushii", fields: [] },
+  }, "waiting");
+  h.db.run("UPDATE web_events SET created_at = ? WHERE type = 'approval'", [Date.now() - 8 * 86400000]);
+  h.db.run("UPDATE web_threads SET created_at = ? WHERE id = ?", [Date.now() - 8 * 86400000, id]);
+  await h.threads.prune();
+  expect(h.managed.filter(m => m.action === "close")).toHaveLength(0);
+  expect((await (await h.call("/api/chats"))!.json()).main.state).toBe("needs-you");
+  expect(h.threads.catalog().find(c => c.id === id)!.state).toBe("needs-you");
+});
+
+test("read-only pending request projection includes exact action snapshots across channels", async () => {
+  const h = setup();
+  const { id } = await h.create();
+  const view = { tool: "deploy", agentId: "delegate", agentName: "Deployer", fields: [{ key: "target", value: "production", kind: "single" as const, max: 100 }] };
+  h.log.append("ask", { key: "main-question", askId: "main-question", question: "Which region?", choices: ["US", "EU"] }, "main-question");
+  h.threads.channel(id).log.append("approval", { nonce: "deploy-production", view }, "deploy-production");
+  expect(h.threads.pendingRequests()).toEqual(expect.arrayContaining([
+    expect.objectContaining({ state: "unresolved", kind: "ask", id: "main-question", conversationId: "main", question: "Which region?", choices: ["US", "EU"] }),
+    expect.objectContaining({ state: "unresolved", kind: "approval", id: "deploy-production", conversationId: id, view }),
+  ]));
+  h.threads.channel(id).log.append("approval_resolved", { nonce: "deploy-production", decision: "approve" }, "deploy-production");
+  expect(h.threads.pendingRequests()).toHaveLength(1);
+});
+
+test("catalog carries per-channel last-message sequence despite the shared stream cursor", async () => {
+  const h = setup();
+  const { id } = await h.create();
+  const mainSeq = h.log.append("reply", { key: "main-reply", text: "Main", files: [] }, "main-reply");
+  const channelSeq = h.threads.channel(id).log.append("reply", { key: "channel-reply", text: "Channel", files: [] }, "channel-reply");
+  const catalog = h.threads.catalog();
+  expect(catalog.find(c => c.id === "main")!.lastMessageSeq).toBe(mainSeq);
+  expect(catalog.find(c => c.id === id)!.lastMessageSeq).toBe(channelSeq);
+  expect(catalog.find(c => c.id === "main")!.headSeq).toBe(channelSeq);
+});
+
+test("durable question resolution is routed to its channel and immediately clears catalog attention", async () => {
+  const h = setup();
+  const { id } = await h.create();
+  const topic = h.threads.channel(id).log;
+  topic.append("ask", { key: "question", askId: "question", question: "Continue?", choices: [] }, "question");
+  expect(h.threads.catalog().find(c => c.id === id)!.pending.total).toBe(1);
+  await h.threads.surface().askResolved!({ surface: "web", conversationId: id }, { askId: "question", answer: null, status: "expired" }, { outboxId: "question-expired", plain: false, ledger: { isSent: () => false, markSent: () => {} } });
+  expect(h.threads.catalog().find(c => c.id === id)!.pending.total).toBe(0);
+  expect(topic.find("ask_resolved", "question")?.data.answer).toBeNull();
+  expect(h.log.list(["ask_resolved"])).toHaveLength(0);
+});

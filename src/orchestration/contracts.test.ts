@@ -423,3 +423,17 @@ describe("register result features", () => {
     bad(workspaceRegisterResult, { ok: true, tools: [], features: ["x".repeat(33)] });
   });
 });
+
+describe("chat/deliver ask resolution", () => {
+  const base = { outboxId: "resolved-1", principalId: "owner", kind: "ask_resolved", text: "", askResolution: { askId: "question-1", answer: null, status: "expired" } };
+  test("accepts each terminal state and requires the resolution only on its own kind", () => {
+    for (const status of ["answered", "expired", "withdrawn", "delivery_failed"]) {
+      expect(chatDeliverParams.safeParse({ ...base, askResolution: { ...base.askResolution, status } }).success).toBe(true);
+    }
+    expect(chatDeliverParams.safeParse({ ...base, askResolution: undefined }).success).toBe(false);
+    expect(chatDeliverParams.safeParse({ ...base, kind: "reply" }).success).toBe(false);
+    for (const resolution of [{ ...base.askResolution, askId: "" }, { ...base.askResolution, askId: "a".repeat(257) }, { ...base.askResolution, status: "pending" }, { ...base.askResolution, answer: "a".repeat(16001) }]) {
+      expect(chatDeliverParams.safeParse({ ...base, askResolution: resolution }).success).toBe(false);
+    }
+  });
+});

@@ -1281,3 +1281,46 @@ describe("delivery failures on the web surface", () => {
     expect(rpc.handler!.toolManifest!(CONN)).toEqual([]);
   });
 });
+
+describe("terminal owner-question delivery", () => {
+  test("failed terminal-state commit remains unacknowledged and retry routes to the same origin", async () => {
+    const h = setup();
+    await h.link.deliver(deliverParams({ origin: TEST, kind: "ask", ask: { askId: "question", question: "Which?", choices: ["Yes"] } }));
+    let fail = true;
+    const origins: (ChatOrigin | null)[] = [];
+    Object.assign(h.test, { askResolved: async (origin: ChatOrigin | null) => {
+      origins.push(origin);
+      if (fail) throw new Error("database unavailable");
+    } });
+    const resolution = deliverParams({ origin: TEST, outboxId: "expired-question", kind: "ask_resolved", text: "", askResolution: { askId: "question", answer: null, status: "expired" } });
+    await h.link.deliver(resolution);
+    expect(h.rpc.calls.filter(c => c.method === RPC_METHODS.chatAck && (c.params as { outboxId: string }).outboxId === resolution.outboxId)).toHaveLength(0);
+    expect(h.store.hasSeenOutbox(resolution.outboxId)).toBe(false);
+    expect(h.link.askChoice("question", 0, null)).toBe("Yes");
+    fail = false;
+    await h.link.deliver(resolution);
+    await h.link.deliver(resolution);
+    expect(origins).toEqual([TEST, TEST]);
+    expect(h.store.hasSeenOutbox(resolution.outboxId)).toBe(true);
+    expect(h.link.askChoice("question", 0, null)).toBeNull();
+    expect(h.test.of("sendReply")).toHaveLength(0);
+  });
+
+  test("a surface without a pending-question panel clears numbered choices without sending a reply", async () => {
+    const h = approvalSetup();
+    await h.link.deliver(deliverParams({ origin: TEST, kind: "ask", ask: { askId: "question", question: "Which?", choices: ["Yes"] } }));
+    await h.link.deliver(deliverParams({ origin: TEST, outboxId: "withdrawn-question", kind: "ask_resolved", text: "", askResolution: { askId: "question", answer: null, status: "withdrawn" } }));
+    await h.route(h.from(TEST, "1"));
+    expect(h.chatMessages().map(m => m.messageId)).toEqual(["m-1"]);
+    expect(h.test.of("sendReply")).toHaveLength(0);
+  });
+
+  test("retiring an older question preserves a newer numbered question on the same surface", async () => {
+    const h = approvalSetup();
+    await h.link.deliver(deliverParams({ origin: TEST, kind: "ask", ask: { askId: "old", question: "Old?", choices: ["Yes"] } }));
+    await h.link.deliver(deliverParams({ origin: TEST, outboxId: "new-question", kind: "ask", ask: { askId: "new", question: "New?", choices: ["No"] } }));
+    await h.link.deliver(deliverParams({ origin: TEST, outboxId: "old-expired", kind: "ask_resolved", text: "", askResolution: { askId: "old", answer: null, status: "expired" } }));
+    await h.route(h.from(TEST, "1"));
+    expect(h.chatMessages()).toEqual([expect.objectContaining({ messageId: "wsask:new", text: "No" })]);
+  });
+});

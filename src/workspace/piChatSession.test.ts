@@ -9,6 +9,7 @@ import { createPiChatSessionFactory, createWorkspaceBashTool, currentRunId, relo
 import { RunLog } from "./runLog.ts";
 import { runWsRuns } from "./wsRuns.ts";
 import { ChatAsks, createHeadlessUIContext } from "./uiContext.ts";
+import { OwnerRequests } from "./ownerRequests.ts";
 import { WakeupManager } from "./wakeups.ts";
 
 let root: string;
@@ -218,4 +219,34 @@ describe("extensions", () => {
     expect(session.extensionRunner.hasUI()).toBe(false);
     session.dispose();
   });
+});
+
+
+test("shared owner-request tools survive real Pi main/topic reload and share canonical decisions", async () => {
+  const config = testConfig();
+  const ownerRequests = new OwnerRequests();
+  let n = 0;
+  const asks = ["main", "topic"].map(conversationId => new ChatAsks({ ownerRequests, origin: () => ({ surface: "web", conversationId }), newId: () => `shared-${++n}`, deliver: () => {} }));
+  const sessions: AgentSession[] = [];
+  try {
+    for (const [index, conversationId] of ["main", "topic"].entries()) {
+      const built = await createPiChatSessionFactory(config, { ownerRequests, origin: { surface: "web", conversationId } })({ sessionFile: null, ui: createHeadlessUIContext(asks[index]!) });
+      const session = built.session as AgentSession;
+      sessions.push(session);
+      expect(session.getActiveToolNames()).toContain("list_owner_requests");
+      expect(session.getActiveToolNames()).toContain("request_owner_decision");
+      await reloadContext(session);
+      expect(session.getActiveToolNames()).toContain("request_owner_decision");
+    }
+    const tools = ownerRequests.tools(asks[0]);
+    const decision = { itemKey: "task:t-one", decisionKey: "date", question: "Which day?", choices: ["Monday", "Tuesday"] };
+    const first = tools.find(t => t.name === "request_owner_decision")!.execute("one", decision, undefined, undefined, {} as any);
+    const duplicate = await ownerRequests.tools(asks[1]).find(t => t.name === "request_owner_decision")!.execute("two", decision, undefined, undefined, {} as any);
+    expect(duplicate.content[0]).toMatchObject({ type: "text", text: expect.stringContaining('"status":"already_pending"') });
+    asks[0]!.answer("wsask:shared-1", "Monday");
+    expect((await first).content[0]).toMatchObject({ type: "text", text: expect.stringContaining('"answer":"Monday"') });
+  } finally {
+    for (const ask of asks) ask.cancelAll("test");
+    for (const session of sessions) session.dispose();
+  }
 });

@@ -54,7 +54,7 @@ function byName(s: ToolStubs, name: string, ctx?: Parameters<ToolStubs["definiti
 
 describe("manifest → stubs", () => {
   test("the known names match the bot's proxied tools", () => {
-    expect([...KNOWN_PROXIED_TOOLS].sort()).toEqual([...Object.keys(PROXIED_TOOLS), LOCATION_TOOL, taskManifest.name].sort());
+    expect([...KNOWN_PROXIED_TOOLS].sort()).toEqual([...Object.keys(PROXIED_TOOLS), LOCATION_TOOL, taskManifest.name, "list_channel_requests"].sort());
   });
 
   test("one stub per known manifest entry, carrying its name, description and schema", () => {

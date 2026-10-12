@@ -1,5 +1,5 @@
 import type { SessionBoundary } from "../sessionContracts.ts";
-import type { ChatOrigin, ChatUsage, DeliverFile, DeliverJob, JobAlertWire, ToolCallResult } from "../contracts.ts";
+import type { AskResolution, ChatOrigin, ChatUsage, DeliverFile, DeliverJob, JobAlertWire, ToolCallResult } from "../contracts.ts";
 
 /** What a chat surface can render. The core consults these instead of assuming Discord's feature set. */
 export interface SurfaceCapabilities {
@@ -198,6 +198,8 @@ export interface SurfaceAdapter<M extends InboundMessage = InboundMessage, H ext
   sendReply(origin: ChatOrigin | null, reply: ReplyView, attempt: SendAttempt): Promise<void>;
   /** Without `richButtons`, choices are answered by their number (1-based) in a reply. */
   askPrompt(origin: ChatOrigin | null, ask: AskView, attempt: SendAttempt): Promise<void>;
+  /** Commits an owner question's terminal state; surfaces without pending-question UI may omit it. */
+  askResolved?(origin: ChatOrigin | null, resolution: AskResolution, attempt: SendAttempt): Promise<void>;
   /** A sign-in link. With `attempt.plain`, the URL and instructions as plain text. */
   authPrompt(origin: ChatOrigin | null, view: AuthPromptView, attempt: SendAttempt): Promise<void>;
   /** A structured scheduled-job alert. Without it the link sends `text` as a proactive reply. */

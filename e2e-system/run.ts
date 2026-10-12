@@ -224,7 +224,10 @@ function controlServer(bot: Proc, ws: Proc, llmURL: string) {
         return fetch("http://scheduler/tick", { method: "POST", unix: SCHEDULER_SOCKET } as RequestInit);
       }
       if (req.method === "POST" && url.pathname === "/workspace/restart") {
-        await stop(ws);
+        if (url.searchParams.get("crash") === "true") {
+          signal(ws, "SIGKILL");
+          await ws.exited;
+        } else await stop(ws);
         if (tornDown) return new Response("tearing down", { status: 503 });
         const offset = logSize("bot");
         start(ws);

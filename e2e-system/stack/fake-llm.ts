@@ -84,9 +84,14 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
   const last = msgs[msgs.length - 1];
   const tag = /#([a-z0-9]{4,16})\b/.exec(userText)?.[1];
   if (last?.role === "tool") {
-    if (userText.includes("E2E-LIST-CHECKS")) return stream([textOf(last.content)], 10, tag);
+    if (userText.includes("E2E-LIST-CHECKS") || userText.includes("E2E-OWNER-DECISION") || userText.includes("E2E-CHANNEL-REQUESTS")) return stream([textOf(last.content)], 10, tag);
     if (userText.includes("E2E-BROWSER")) return stream(["Browser is open. ", "Browser task finished."], 50, tag, 0, false, 1);
     return stream([`Tool finished. Result: ${textOf(last.content).slice(0, 160).replace(/\n/g, " ")}`], 50, tag);
+  }
+  if (userText.includes("E2E-CHANNEL-REQUESTS")) return toolCall("list_channel_requests", {});
+  if (userText.includes("E2E-OWNER-DECISION")) {
+    const key = /key-([a-z0-9]{4,16})\b/.exec(userText)?.[1] ?? tag ?? "test";
+    return toolCall("request_owner_decision", { itemKey: `e2e:${key}`, decisionKey: "date", question: `Choose day for ${key}`, choices: ["Monday", "Tuesday"] });
   }
   if (userText.includes("E2E-BROWSER")) return toolCall("browser", { args: ["open", `http://${addrs.local}:${ports.llm}/browser-preview`] });
   // 400 is outside Pi's retryable errors, so the run fails at once.

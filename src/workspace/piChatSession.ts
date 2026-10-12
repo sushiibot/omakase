@@ -1,3 +1,4 @@
+import { OwnerRequests, ownerRequestAsks } from "./ownerRequests.ts";
 import { taskAwareness } from "./taskAwareness.ts";
 import type { TaskStore } from "./taskStore.ts";
 import type { WakeupManager } from "./wakeups.ts";
@@ -177,6 +178,7 @@ export function createPiChatSessionFactory(
     runs?: RunRecorder;
     tasks?: TaskStore;
     wakeups?: WakeupManager;
+    ownerRequests?: OwnerRequests;
     toolStubs?: ToolStubs;
     selector?: BackendSelector;
     subagents?: SubagentHost;
@@ -201,6 +203,8 @@ export function createPiChatSessionFactory(
     const topicTools = opts.origin?.conversationId && opts.origin.conversationId !== "main" ? [] : threadContextTools({ principalId: config.principalId, stateDir: config.stateDir, home: config.home, tz: config.tz, agentDirs: [config.agentDir] });
     const topicToolNames = topicTools.map((t) => t.name);
     const wakeupTools = opts.wakeups?.tools(() => opts.parentTurn?.()?.origin ?? opts.origin ?? { surface: "web", conversationId: "main" }) ?? [];
+    const ownerRequestTools = opts.ownerRequests?.tools(ownerRequestAsks(ui)) ?? [];
+    const ownerRequestToolNames = ownerRequestTools.map(t => t.name);
     const wakeupToolNames = wakeupTools.map(t => t.name);
     const { createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager } = await import("@earendil-works/pi-coding-agent");
     const economy = economyOf(config);
@@ -288,6 +292,7 @@ export function createPiChatSessionFactory(
       noExtensions: true,
       extensionFactories: [
         ...(opts.tasks ? [{ name: "sushii-tasks", factory: taskAwareness(opts.tasks, opts.origin?.conversationId ?? "main") }] : []),
+        ...(opts.ownerRequests ? [{ name: "sushii-owner-requests", factory: opts.ownerRequests.awareness() }] : []),
         ...(opts.wakeups ? [{ name: "sushii-scheduled-checks", factory: opts.wakeups.awareness() }] : []),
         ...(checkpoint || opts.wakeups ? [{ name: "sushii-durable-input", factory: createInputCheckpointExtension(async () => { await checkpoint?.(); await opts.wakeups?.flush(); }) }] : []),
         ...(!opts.origin || opts.origin.conversationId === "main" ? [{ name: "sushii-thread-awareness", factory: threadAwareness(config.stateDir) }] : []),
@@ -379,13 +384,13 @@ export function createPiChatSessionFactory(
         settingsManager,
         // Pi filters customTools by this allowlist: "bash" here is the env-allowlisted override.
         // Pi freezes this at creation, so it names every tool the bot may offer later, registered or not.
-        tools: [...WORKSPACE_TOOLS, ...wakeupToolNames, ...browserTools, ...topicToolNames, ...pushTools, ...connectorTools, ...delegate, ...(stubs ? KNOWN_PROXIED_TOOLS : [])],
-        customTools: [bashTool, sendFileTool, ...wakeupTools, ...(browser ? [browser.tool()] : []), ...topicTools, ...(opts.github ? [createGitHubPushTool(cwd, opts.github, config.agentDir)] : [])],
+        tools: [...WORKSPACE_TOOLS, ...wakeupToolNames, ...ownerRequestToolNames, ...browserTools, ...topicToolNames, ...pushTools, ...connectorTools, ...delegate, ...(stubs ? KNOWN_PROXIED_TOOLS : [])],
+        customTools: [bashTool, sendFileTool, ...wakeupTools, ...ownerRequestTools, ...(browser ? [browser.tool()] : []), ...topicTools, ...(opts.github ? [createGitHubPushTool(cwd, opts.github, config.agentDir)] : [])],
         excludeTools: ["ask_question"],
         sessionManager,
       }));
       sessionRef.current = session;
-      assertExactTools(session, [...WORKSPACE_TOOLS, ...wakeupToolNames, ...browserTools, ...topicToolNames, ...pushTools, ...connectorTools, ...delegate, ...(stubs?.registeredNames() ?? [])], "workspace", [...WORKSPACE_TOOLS, ...wakeupToolNames, ...browserTools, ...topicToolNames, ...pushTools, ...connectorTools, ...delegate, ...(stubs?.offered() ?? [])]);
+      assertExactTools(session, [...WORKSPACE_TOOLS, ...wakeupToolNames, ...ownerRequestToolNames, ...browserTools, ...topicToolNames, ...pushTools, ...connectorTools, ...delegate, ...(stubs?.registeredNames() ?? [])], "workspace", [...WORKSPACE_TOOLS, ...wakeupToolNames, ...ownerRequestToolNames, ...browserTools, ...topicToolNames, ...pushTools, ...connectorTools, ...delegate, ...(stubs?.offered() ?? [])]);
       stubs?.assertOwned(session, "workspace");
       // Pi keeps this binding across session.reload(), so each new session binds once.
       if (ui) await session.bindExtensions({ uiContext: ui, mode: "rpc" });

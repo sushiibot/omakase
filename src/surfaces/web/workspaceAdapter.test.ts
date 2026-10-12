@@ -637,3 +637,39 @@ test("tool confirmation metadata survives RPC delivery, replay, pending state an
   const history = historyPage(h.log, { limit: 10 }, { maxBytes: 100_000 });
   expect(history.items.find((item) => item.type === "ask")).toMatchObject({ toolConfirmation });
 });
+
+describe("durable ask resolution deliveries", () => {
+  test("expiry retires a pending question before acknowledgement and redelivery is idempotent", async () => {
+    const h = setup();
+    await h.link.deliver(deliver({ kind: "ask", ask: { askId: "question", question: "Which region?", choices: ["US"] } }));
+    expect(h.log.pending({ approvalsSince: 0, asks: 100 }).asks).toHaveLength(1);
+    const resolution = deliver({ outboxId: "expired-question", kind: "ask_resolved", text: "", askResolution: { askId: "question", answer: null, status: "expired" } });
+    h.rpc.onAck = () => expect(h.log.find("ask_resolved", "question")?.data).toEqual({ askId: "question", answer: null });
+    await h.link.deliver(resolution);
+    h.db.run("DELETE FROM workspace_outbox_seen WHERE outbox_id = ?", [resolution.outboxId]);
+    await h.link.deliver(resolution);
+    const reconnected = setup({ db: h.db });
+    await reconnected.link.deliver(resolution);
+    expect(h.log.pending({ approvalsSince: 0, asks: 100 }).asks).toHaveLength(0);
+    expect(h.log.list(["ask_resolved"])).toHaveLength(1);
+    expect(h.log.list(["reply"])).toHaveLength(0);
+    expect(h.events.filter(e => e.type === "ask_resolved")).toHaveLength(1);
+  });
+
+  test("a resolution before question replay prevents resurrecting a pending ping", async () => {
+    const h = setup();
+    await h.link.deliver(deliver({ outboxId: "withdraw-question", kind: "ask_resolved", text: "", askResolution: { askId: "question", answer: null, status: "withdrawn" } }));
+    await h.link.deliver(deliver({ kind: "ask", ask: { askId: "question", question: "Which region?", choices: [] } }));
+    expect(h.log.pending({ approvalsSince: 0, asks: 100 }).asks).toHaveLength(0);
+    expect(h.log.list(["ask_resolved"])).toHaveLength(1);
+    await tick();
+    expect(h.pushes).toHaveLength(0);
+  });
+
+  test("HTTP answer and durable answer delivery share one canonical terminal marker", async () => {
+    const h = setup();
+    h.log.append("ask_resolved", { askId: "question", answer: "US" }, "question");
+    await h.link.deliver(deliver({ kind: "ask_resolved", text: "", askResolution: { askId: "question", answer: "US", status: "answered" } }));
+    expect(h.log.list(["ask_resolved"])).toHaveLength(1);
+  });
+});

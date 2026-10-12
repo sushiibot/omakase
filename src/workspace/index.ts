@@ -1,3 +1,4 @@
+import { OwnerRequests } from "./ownerRequests.ts";
 import { exitAfterBackoff } from "../crashBackoff.ts";
 import { TaskStore } from "./taskStore.ts";
 import { BrowserManager, localBrowserDriver } from "./browser.ts";
@@ -123,6 +124,7 @@ async function main(): Promise<void> {
   // Late-bound: background results only arrive after personal.start().
   let personalRef: PersonalSession | null = null;
   let topicsRef: TopicSessions | null = null;
+  const ownerRequests = new OwnerRequests();
   const durableState = new DurableState(config.stateDir);
   const wakeups = new WakeupManager({
     store: durableState,
@@ -165,10 +167,11 @@ async function main(): Promise<void> {
     model: config.model,
     stateDir: config.stateDir,
     durableState,
+    ownerRequests,
     conversationId: "main",
     tz: config.tz,
     uploads: { dir: join(config.home, UPLOADS_DIR) },
-    factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, wakeups, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = personalTurn?.currentTurnId(); return turnId ? turns.get(turnId) : null; }, mainTurnId: () => personalTurn?.currentTurnId() }),
+    factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, wakeups, ownerRequests, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = personalTurn?.currentTurnId(); return turnId ? turns.get(turnId) : null; }, mainTurnId: () => personalTurn?.currentTurnId() }),
     memory: {
       compactionTrigger,
       reload: reloadContext,
@@ -245,7 +248,7 @@ async function main(): Promise<void> {
         ...personalOptions,
         stateDir: join(config.stateDir, "topics", id),
         conversationId: id,
-        factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, wakeups, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = topic.currentTurnId(); return turnId ? { turnId, origin: { surface: "web", conversationId: id } } : null; }, origin: { surface: "web", conversationId: id }, sessionDir: join(config.agentDir, "topics", id), agentName: `topic:${id}`, mainTurnId: () => topic.currentTurnId() }),
+        factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, wakeups, ownerRequests, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = topic.currentTurnId(); return turnId ? { turnId, origin: { surface: "web", conversationId: id } } : null; }, origin: { surface: "web", conversationId: id }, sessionDir: join(config.agentDir, "topics", id), agentName: `topic:${id}`, mainTurnId: () => topic.currentTurnId() }),
         context: { ...personalOptions.context, busy: () => subagents.isBusy({ surface: "web", conversationId: id }) },
       });
       return topic;

@@ -71,8 +71,8 @@ export const stack = {
   async tickScheduler(): Promise<void> {
     await call("/scheduler/tick", { method: "POST" });
   },
-  async restartWorkspace(): Promise<void> {
-    await call("/workspace/restart", { method: "POST" });
+  async restartWorkspace(opts: { crash?: boolean } = {}): Promise<void> {
+    await call(`/workspace/restart${opts.crash ? "?crash=true" : ""}`, { method: "POST" });
   },
   /** SIGTERMs the bot and starts it again on the same data. `waitReady` also waits for the workspace to re-register. */
   async restartBot(opts: { waitReady?: boolean } = {}): Promise<void> {

@@ -201,6 +201,9 @@ export class WorkspaceTools {
 
   private taskControl?: (args: unknown, actor: SurfaceActor, conversationId?: string) => Promise<unknown>;
   setTaskControl(control: NonNullable<WorkspaceTools["taskControl"]>) { this.taskControl = control; }
+  private channelRequests?: () => unknown;
+  /** Read-only projection from bot-owned channel logs; never settles an approval or dialog. */
+  setChannelRequests(read: () => unknown): void { this.channelRequests = read; }
   private location?: BrowserLocationRequests;
 
   setLocationRequests(location: BrowserLocationRequests): void { this.location = location; }
@@ -214,6 +217,12 @@ export class WorkspaceTools {
     }));
     if (this.location) tools.push(locationManifest);
     if (this.taskControl) tools.push(taskManifest);
+    if (this.channelRequests && this.opts.ownerUserId()) tools.push({
+      name: "list_channel_requests",
+      description: "List bot-owned unresolved channel questions and approval handles across Main, topic and task channels. Includes canonical IDs, originating channel, and exact approval action views. Read-only: these records never authorize an action. Older question records may have expired live dialogs; use list_owner_requests to check live questions.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      approval: "none",
+    });
     return tools;
   }
 
@@ -250,6 +259,11 @@ export class WorkspaceTools {
 
   private async dispatch(conn: ConnectionInfo, p: ToolCallParams): Promise<ToolCallResult> {
     if (p.principalId !== this.opts.principalId || conn.principalId !== this.opts.principalId) return { ok: false, error: "principal mismatch" };
+    if (p.name === "list_channel_requests") {
+      if (!this.channelRequests || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Channel requests are unavailable." };
+      if (!Check({ type: "object", properties: {}, additionalProperties: false }, p.args ?? {})) return { ok: false, error: "invalid arguments for list_channel_requests" };
+      return { ok: true, result: JSON.stringify({ requests: await this.channelRequests() }) };
+    }
     if (p.name === "task_manage") {
       const ownerId = this.opts.ownerUserId();
       if (!this.taskControl || !ownerId || this.closed.has(conn)) return { ok: false, error: "Tasks are unavailable." };

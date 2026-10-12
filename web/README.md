@@ -56,6 +56,12 @@ They cover interaction hierarchy, lists and filters, forms and recovery, mobile 
 The guidelines include review and verification methods. Document new reusable patterns there alongside their shared implementation.
 See the [UI and UX review](docs/ux-review.md) for addressed issues and remaining implementation gaps.
 
+The [channel interaction rules](docs/channel-interaction-rules.md) define the workspace revision,
+source evidence, gesture behavior, and acceptance checks. The isolated motion prototype is available
+at `/interaction-lab` with `bun run dev:proto`. It uses sample content and does not replace live screens.
+Run its touch, recovery, history, and timing checks with
+`bunx playwright test -c interaction/playwright.config.ts`.
+
 ## Layout
 
 Imports point down this list only:

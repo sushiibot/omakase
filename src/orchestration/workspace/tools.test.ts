@@ -722,3 +722,22 @@ test("location dispatch binds principal, owner, connection and nonce; plain appr
   expect(await pending).toMatchObject({ ok: false, error: "location request cancelled" });
   expect(JSON.stringify(log.lines)).not.toContain("latitude");
 });
+
+test("channel request discovery is read-only, owner-scoped and rejects extra arguments", async () => {
+  const { tools } = setup();
+  const records = [{ kind: "approval", id: "canonical-nonce", conversationId: "deployment", state: "unresolved", view: { tool: "file_linear_issue", fields: [{ key: "title", value: "Exact action" }] } }];
+  let reads = 0;
+  tools.setChannelRequests(() => { reads++; return records; });
+  expect(tools.manifest().find(t => t.name === "list_channel_requests")).toMatchObject({ approval: "none" });
+  expect(await tools.handleCall(conn(), call("list_channel_requests", {}))).toEqual({ ok: true, result: JSON.stringify({ requests: records }) });
+  expect(reads).toBe(1);
+  expect(await tools.handleCall(conn(), call("list_channel_requests", { approve: "canonical-nonce" }))).toMatchObject({ ok: false, error: "invalid arguments for list_channel_requests" });
+  expect(await tools.handleCall({ principalId: "other" } as ConnectionInfo, call("list_channel_requests", {}))).toMatchObject({ ok: false, error: "principal mismatch" });
+  expect(reads).toBe(1);
+  const closed = conn(); tools.onSocketClosed(closed);
+  expect(await tools.handleCall(closed, call("list_channel_requests", {}))).toMatchObject({ ok: false, error: "Channel requests are unavailable." });
+  const unavailable = setup({ ownerUserId: () => undefined }).tools;
+  unavailable.setChannelRequests(() => records);
+  expect(unavailable.manifest().some(t => t.name === "list_channel_requests")).toBe(false);
+  expect(await unavailable.handleCall(conn(), call("list_channel_requests", {}))).toMatchObject({ ok: false });
+});
