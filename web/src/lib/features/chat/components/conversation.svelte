@@ -126,6 +126,7 @@
 				id: 'speak',
 				label: readingId === message.id ? 'Stop reading aloud' : 'Read aloud',
 				icon: readingId === message.id ? Square : Volume2,
+				loading: readingId === message.id && readingState === 'loading',
 				onclick: () => onspeak(message)
 			});
 		if (onshare)
@@ -485,7 +486,7 @@
 						beside={owner}
 					/>
 				{/if}
-				{#if readingId === message.id}<p role="status" class="text-xs text-muted-foreground">
+				{#if readingId === message.id}<p role="status" class="sr-only">
 						{readingState === 'loading' ? 'Preparing voice…' : 'Reading aloud'}
 					</p>{/if}
 				{#if readingError?.id === message.id}<p role="alert" class="text-sm text-failed">

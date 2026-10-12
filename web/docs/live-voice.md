@@ -136,7 +136,9 @@ Markdown is converted to plain text. Tool activity is excluded.
 **Stop reading aloud** cancels generation and playback. Starting another reply replaces the current playback.
 Calls, previews, dictation, navigation and a hidden page stop read-aloud.
 Replies longer than 24,000 characters show an error instead of being cut off.
-Loading and playback status appear under the message. Errors remain beside that reply so you can retry.
+The speaker button shows a spinner during loading and a stop icon during playback.
+Screen readers receive status announcements without adding visible text or shifting the message.
+Errors remain beside that reply so you can retry.
 Read-aloud uses the same owner-only WebSocket, synthesis and playback acknowledgments as turn calls.
 A call or read-aloud session occupies the single speech-session slot.
 

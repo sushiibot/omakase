@@ -802,10 +802,17 @@ test('read aloud uses saved speech settings without a microphone and supports st
 		ws.send(JSON.stringify({ type: 'ready' }));
 	});
 	await page.goto('/chat');
+	const reply = page.locator('[data-message-id]').filter({ hasText: 'Your calendar is clear.' });
+	await expect(page.getByRole('button', { name: 'Read aloud', exact: true })).toBeVisible();
+	const idleHeight = (await reply.boundingBox())!.height;
 	await page.getByRole('button', { name: 'Read aloud', exact: true }).click();
 	await expect.poll(() => packets.filter((p) => p.type === 'speak').length).toBe(1);
 	expect(packets[0].text).toBe('Your calendar is clear.\n\nEnjoy your afternoon.');
-	await expect(page.getByText('Preparing voice…', { exact: true })).toBeVisible();
+	await expect(page.getByText('Preparing voice…', { exact: true })).toHaveClass('sr-only');
+	await expect(
+		page.getByRole('button', { name: 'Stop reading aloud', exact: true })
+	).toHaveAttribute('data-loading', 'true');
+	expect((await reply.boundingBox())!.height).toBe(idleHeight);
 	await expect(page.getByRole('region', { name: 'Voice call', exact: true })).toHaveCount(0);
 	socket.send(
 		JSON.stringify({
@@ -816,7 +823,11 @@ test('read aloud uses saved speech settings without a microphone and supports st
 		})
 	);
 	await expect.poll(() => packets.some((p) => p.type === 'playback_done' && p.id === 1)).toBe(true);
-	await expect(page.getByText('Reading aloud', { exact: true })).toBeVisible();
+	await expect(page.getByText('Reading aloud', { exact: true })).toHaveClass('sr-only');
+	await expect(
+		page.getByRole('button', { name: 'Stop reading aloud', exact: true })
+	).not.toHaveAttribute('data-loading');
+	expect((await reply.boundingBox())!.height).toBe(idleHeight);
 	await checkScreen(page);
 	await page.screenshot({ path: '/tmp/sushii-read-aloud-mobile.png' });
 	await page.setViewportSize({ width: 1440, height: 900 });

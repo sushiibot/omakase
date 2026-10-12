@@ -6,10 +6,12 @@
 		label: string;
 		icon: Component<{ class?: string; 'aria-hidden'?: boolean | 'true' }>;
 		onclick: () => void;
+		loading?: boolean;
 	}
 </script>
 
 <script lang="ts">
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { cn } from '$lib/utils';
 
 	let {
@@ -54,9 +56,14 @@
 			aria-label={a.label}
 			title={a.label}
 			onclick={a.onclick}
+			data-loading={a.loading || undefined}
 			class="grid size-12 place-items-center rounded-full text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
 		>
-			<a.icon class="size-4" aria-hidden="true" />
+			{#if a.loading}
+				<LoaderCircle class="size-4 motion-safe:animate-spin" aria-hidden="true" />
+			{:else}
+				<a.icon class="size-4" aria-hidden="true" />
+			{/if}
 		</button>
 	{/each}
 </div>
