@@ -97,7 +97,7 @@ class NAS(BaseHTTPRequestHandler):
                 else:
                     key = re.search(rb'name="([^"]+)"', header).group(1).decode()
                     fields[key] = content.decode()
-            if fields.get('_sid') != 'test-session':
+            if self.headers.get('Cookie') != 'id=test-session':
                 return self.json({'success': False, 'error': {'code': 119}})
             path = fields['path'] + '/' + name
             if path in self.server.files and fields.get('overwrite') != 'overwrite':

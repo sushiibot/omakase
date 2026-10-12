@@ -75,16 +75,21 @@ Reports contain request timings, response sizes, HTTP status codes, API error co
 
 The WebDAV test writes two different versions with the same length, then attempts a stale conditional write. It checks both the rejection status and retained newer content. A server that ignores `If-Match` is reported as a failed write test. Before production use, also test external changes made through SMB/File Station; the spike's two edits alone do not establish cross-protocol validator behavior.
 
-## Initial live discovery
+## Live NAS results
 
 Unauthenticated checks on the owner's LAN found:
 
 - DSM responds and advertises the required File Station list/search/upload/download/delete APIs.
-- DSM HTTPS presents a certificate not trusted by this environment.
-- The default WebDAV HTTPS port, 5006, refuses connections. WebDAV may be disabled or configured on another port.
-- A local Tailscale device list contains a Linux peer named `fileserver`, reported offline. A direct Tailscale ping timed out. This does not establish that it is the current Synology or that its package is currently installed.
+- DSM HTTPS uses a private certificate. Its fingerprint was verified by running `openssl s_client` against the NAS loopback endpoint through trusted SSH. The spike then pinned that certificate before sending credentials.
+- SSH succeeds with the existing key as `drklee3@192.168.1.100`; the hostname is `fileserver`. Passwordless sudo is unavailable.
+- Tailscale version `1.58.2` is installed, but its package is stopped and `tailscaled` is not running. A local Tailscale peer named `fileserver` is also offline; its current NAS identity cannot be confirmed until the daemon runs.
+- WebDAV Server is not installed. The default HTTPS port, 5006, refuses connections. No live WebDAV conflict test has been possible.
 
-Authenticated NAS reads/writes and a NAS-side Tailscale package check have not been completed. The owner explicitly authorized reuse of the existing mount credentials after automatic review requested that authorization. The NAS then rejected SSH login with that account. HTTPS API testing awaits either explicit trust of the observed NAS certificate or a separately verified certificate. No existing property document has been changed.
+The owner explicitly authorized reuse of the existing mount credentials. File Station login and listing succeeded: Property contained 26 immediate entries. One recursive filename search completed with 125 results, of which the spike requested the first 100. A later search returned `finished` without files or a total; search-result consistency needs further investigation before production use.
+
+The live write test created a unique scratch file, verified its bytes, replaced it, verified the replacement, deleted it, and logged out successfully. Existing property documents were not changed. The first upload attempt returned API error 119: DSM did not accept a session ID inside the multipart body. Using a session cookie resolved it; uploads and downloads now keep session IDs out of URLs.
+
+These tests ran on the California LAN, not from Hetzner. They establish File Station functionality, not WAN performance or atomic conflict protection. Tailscale has not been started or reconfigured, and WebDAV has not been installed.
 
 ## References
 

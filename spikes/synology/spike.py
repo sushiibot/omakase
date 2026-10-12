@@ -209,7 +209,7 @@ class FileStation:
         version = min(info['maxVersion'], 3)
         boundary = 'sushii-' + secrets.token_hex(12)
         folder, name = path.rsplit('/', 1)
-        fields = {'api': 'SYNO.FileStation.Upload', 'version': str(version), 'method': 'upload', 'path': folder, 'create_parents': 'false', '_sid': self.sid}
+        fields = {'api': 'SYNO.FileStation.Upload', 'version': str(version), 'method': 'upload', 'path': folder, 'create_parents': 'false'}
         # Missing overwrite means fail on existing file; "skip" is not a successful create.
         if overwrite:
             fields['overwrite'] = 'overwrite' if version >= 3 else 'true'
@@ -217,7 +217,9 @@ class FileStation:
         for key, value in fields.items():
             parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n'.encode())
         parts.extend([f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{name}"\r\nContent-Type: text/plain\r\n\r\n'.encode(), data, f'\r\n--{boundary}--\r\n'.encode()])
-        status, _, response = self.transport.request('upload-overwrite' if overwrite else 'upload-create', 'POST', '/webapi/' + info['path'], b''.join(parts), {'Content-Type': 'multipart/form-data; boundary=' + boundary})
+        # DSM authenticates uploads before parsing multipart fields. Use the session
+        # cookie, as for downloads, rather than putting the SID in the body or URL.
+        status, _, response = self.transport.request('upload-overwrite' if overwrite else 'upload-create', 'POST', '/webapi/' + info['path'], b''.join(parts), {'Content-Type': 'multipart/form-data; boundary=' + boundary, 'Cookie': 'id=' + self.sid})
         require_status(status, (200,))
         result = json.loads(response)
         if not result.get('success'):
