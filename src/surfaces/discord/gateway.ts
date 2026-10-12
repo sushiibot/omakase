@@ -340,7 +340,8 @@ export function startDiscordSurface(deps: DiscordSurfaceDeps): void {
     // Conversational entry gate: guild configured (checked above) + mention/reply + sender holds an
     // allowedRoles role. Independent of enabledModules — moderation only gates moderation features.
     const isMention = message.mentions.has(client.user.id);
-    const isReply = !isMention && (await isReplyToBot(message, client.user.id));
+    // A reply without a ping arrives blank when MessageContent is off, so it isn't a trigger then.
+    const isReply = !isMention && config.discordMessageContent && (await isReplyToBot(message, client.user.id));
     if (!chatEntryGateOpen(guildConfig, { isMention, isReply, memberRoleIds: message.member ? [...message.member.roles.cache.keys()] : null })) return;
 
     const guildId = message.guildId;
