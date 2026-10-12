@@ -11,7 +11,6 @@ import { bootWorkspace, listenWorkspace } from "./orchestration/workspace/boot.t
 import { resolveOwnerPrincipalId } from "./orchestration/transport/server.ts";
 import { WorkspaceLinkStore } from "./db/workspaceLink.ts";
 import { personalConfig } from "./surfaces/web/config.ts";
-import { runImportFromBot } from "./surfaces/web/importFromBot.ts";
 import { TaskRoutes } from "./surfaces/web/taskRoutes.ts";
 import { FileStores } from "./orchestration/workspace/fileStores/service.ts";
 import { FileStoreRoutes } from "./surfaces/web/fileStoreRoutes.ts";
@@ -33,7 +32,6 @@ async function main() {
   await initDb();
   logger.info({ path: config.databasePath }, "Database initialized");
   const db = getDb();
-  runImportFromBot(db, process.env["IMPORT_FROM_DATABASE_PATH"]?.trim() || undefined);
 
   const store = new SqliteConversationStore(db);
   const memory = new DiscordSpaceMemoryStore(db);

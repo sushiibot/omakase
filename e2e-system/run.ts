@@ -46,8 +46,6 @@ const P = {
 };
 for (const d of Object.values(P)) mkdirSync(d, { recursive: true });
 const DB_PATH = join(P.personalData, "personal.db");
-// The community bot's database, which the gateway imports its tables from on first boot (flows/bot-import).
-const BOT_DB_PATH = join(TMP, "bot-data", "sushii-agent.db");
 const PUSH_CAPTURE = join(TMP, "push.jsonl");
 // The gateway's link probe (stack/link-probe.preload.ts) listens here; the control server forwards to it.
 const LINK_SOCKET = join(TMP, "link.sock");
@@ -322,10 +320,6 @@ async function main(): Promise<number> {
   const distDir = join(REPO, "web", "build");
   if (!existsSync(join(distDir, "index.html"))) throw new Error(`${distDir} has no index.html; build web/ first`);
 
-  mkdirSync(join(TMP, "bot-data"), { recursive: true });
-  const seeded = await runToExit([BUN, "--no-env-file", join(HERE, "stack", "seed-bot-db.ts"), BOT_DB_PATH], REPO, { PATH: process.env["PATH"] ?? "/usr/bin:/bin", OPENAI_API_KEY: "e2e-stub" });
-  if (seeded !== 0) throw new Error(`seeding the bot database failed (${seeded})`);
-
   const vapid = await vapidPair();
   const orchSecret = crypto.randomUUID();
   const ownerDiscordId = "100000000000000001";
@@ -342,7 +336,7 @@ async function main(): Promise<number> {
 
   const llm: Proc = { name: "llm", cmd: [BUN, "--no-env-file", join(HERE, "stack", "fake-llm.ts")], cwd: HERE, env: { ...common, ...portEnv, HOME: P.personalHome } };
   const proxy: Proc = { name: "proxy", cmd: [BUN, "--no-env-file", join(HERE, "stack", "proxy.ts")], cwd: HERE, env: { ...common, ...portEnv, HOME: P.personalHome } };
-  // The personal gateway with the personal service's env only: no Discord, Slack or buzz settings.
+  // The gateway with its service's env only.
   const personal: Proc = {
     name: "personal",
     // cwd is the repo: the drizzle migrations folder resolves from it.
@@ -356,7 +350,6 @@ async function main(): Promise<number> {
       OPENAI_API_KEY: "e2e-stub",
       OPENAI_BASE_URL: `${llmURL}/v1`,
       DATABASE_PATH: DB_PATH,
-      IMPORT_FROM_DATABASE_PATH: BOT_DB_PATH,
       PRINCIPALS_PATH: principals,
       TEAMS_PATH: teams,
       OWNER_DISCORD_ID: ownerDiscordId,

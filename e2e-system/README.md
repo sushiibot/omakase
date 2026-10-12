@@ -4,7 +4,7 @@ End-to-end tests against the real processes. The runner builds `web/` and starts
 
 | Production piece | Here |
 |---|---|
-| personal gateway (`src/personal.ts`, `NODE_ENV=production`) | a gateway process bound to `E2E_GATEWAY_ADDR` (127.0.0.2), with `WEB_TRUSTED_PEERS` set to the proxy's peer address, all live web routes available, and only the personal service's env (no Discord, Slack or buzz). It boots with `IMPORT_FROM_DATABASE_PATH` pointing at a bot DB seeded by `stack/seed-bot-db.ts`, so the one-shot import runs (`flows/bot-import.e2e.ts`). The community bot (`src/index.ts`) is not part of this stack. |
+| personal gateway (`src/personal.ts`, `NODE_ENV=production`) | a gateway process bound to `E2E_GATEWAY_ADDR` (127.0.0.2), with `WEB_TRUSTED_PEERS` set to the proxy's peer address, all live web routes available, and only the gateway service's env. It boots on a fresh database. |
 | workspace (`src/workspace/index.ts`) | a workspace process running the real Pi session, connected to the gateway over the real orchestration WebSocket |
 | OpenRouter | `stack/fake-llm.ts`, which returns scripted streaming chat completions |
 | Traefik + Tailscale whois shim | `stack/proxy.ts`. It strips client `Tailscale-*` headers, sets the owner login, and dials the gateway from `E2E_PEER_ADDR` (127.0.0.3). |
@@ -22,7 +22,7 @@ bun run e2e:system approval           # extra args go to `playwright test`
 E2E_SKIP_BUILD=1 bun run e2e:system   # reuse web/build
 ```
 
-Each run gets a fresh temp dir holding the gateway DB, the seeded bot DB, the workspace home, the generated VAPID pair and secrets, the logs (`logs/{llm,proxy,personal,ws}.log`) and Playwright's output (traces and screenshots of failures).
+Each run gets a fresh temp dir holding the gateway DB, the workspace home, the generated VAPID pair and secrets, the logs (`logs/{llm,proxy,personal,ws}.log`) and Playwright's output (traces and screenshots of failures).
 - The dir is deleted after a green run.
 - It is kept after a failure or with `E2E_KEEP=1`; the runner prints its path.
 
