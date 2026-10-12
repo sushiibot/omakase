@@ -19,6 +19,8 @@ Swipe right, press Back, or use Close tasks to return to chat.
 The chat draft stays in place.
 Each conversation panel shows tasks created there or assigned to that conversation.
 The main Tasks page shows all tasks.
+Done tasks are collapsed by default in both lists. Expand Done to view them,
+then uncheck a task to return it to To do. Details and execution history stay available.
 
 ## State and execution
 
@@ -32,6 +34,8 @@ The main Tasks page shows all tasks.
 
 Creating a task does not execute it.
 Completing an execution attempt does not automatically complete a task.
+Conversation follow-ups and delegated runs preserve Done and Cancelled status.
+Reopen the task explicitly to return it to active work.
 Stopping work stops its recorded runs and conversation turn, then returns the task to To do.
 The checklist and conversation remain available.
 Age does not remove or archive a task.

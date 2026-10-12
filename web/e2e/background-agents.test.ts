@@ -172,3 +172,42 @@ test('starting saves the visible brief, and a failed save never starts work', as
 	);
 	expect(starts).toBe(0);
 });
+
+for (const destination of ['/tasks', '/chat']) {
+	test(`completed tasks stay hidden, viewable and recoverable in ${destination}`, async ({
+		page,
+		context
+	}) => {
+		await fixtureApp(context);
+		await page.goto(destination);
+		if (destination === '/chat') await page.getByRole('button', { name: 'Tasks, 3 open' }).click();
+		const list = page.locator('[data-task-list]');
+		const title = 'Book a dentist appointment';
+		await list.getByRole('checkbox', { name: `Mark ${title} done`, exact: true }).click();
+		const done = list.getByRole('button', { name: /^Done \d+$/ });
+		await expect(done).toHaveAttribute('aria-expanded', 'false');
+		await expect(list.getByRole('button', { name: title, exact: true })).toBeHidden();
+		await page.reload();
+		if (destination === '/chat') await page.getByRole('button', { name: 'Tasks, 2 open' }).click();
+		await expect(done).toHaveAttribute('aria-expanded', 'false');
+		await done.click();
+		await expect(
+			list.getByRole('checkbox', { name: `Mark ${title} to do`, exact: true })
+		).toBeChecked();
+		await expect(list.getByRole('button', { name: title, exact: true })).toBeVisible();
+		await expect.poll(() => horizontalOverflow(page)).toEqual([]);
+		await expect.poll(() => smallTargets(page)).toEqual([]);
+		expect(await axe(page)).toEqual([]);
+		await list.getByRole('checkbox', { name: `Mark ${title} to do`, exact: true }).click();
+		await expect(
+			list
+				.getByRole('region', { name: 'To do', exact: true })
+				.getByRole('button', { name: title, exact: true })
+		).toBeVisible();
+		await page.reload();
+		if (destination === '/chat') await page.getByRole('button', { name: 'Tasks, 3 open' }).click();
+		await expect(
+			list.getByRole('checkbox', { name: `Mark ${title} done`, exact: true })
+		).not.toBeChecked();
+	});
+}

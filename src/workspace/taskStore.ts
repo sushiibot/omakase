@@ -133,7 +133,10 @@ export class TaskStore {
     if (!task.runIds.includes(runId))
       task.runIds = [...task.runIds, runId].slice(-100);
     task.agent = agent;
-    task.status = "in-progress";
+    // Conversation follow-ups and late delegated runs must not reopen closed work.
+    // Reopening is an explicit task update, independent of execution history.
+    if (task.status !== "done" && task.status !== "cancelled")
+      task.status = "in-progress";
     this.save(task);
   }
   settleRun(runId: string, status: string, result?: string) {

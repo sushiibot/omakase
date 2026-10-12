@@ -65,6 +65,21 @@ test("manual tasks persist, execute in their own conversation, and accept follow
   expect(task.workConversationId).toBe(`task-${id}`);
   expect(task.runIds.length).toBeGreaterThanOrEqual(2);
   expect(task.status).toBe("needs-you");
+  await page.getByRole("button", { name: "Mark done", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Reopen task" })).toBeVisible();
+  await page.getByRole("button", { name: "Conversation", exact: true }).click();
+  const acknowledgement = nonce();
+  await textbox(page).fill(`Thanks for finishing #${acknowledgement}`);
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(bubble(page, `re-${acknowledgement}`)).toContainText("Done.");
+  await stack.restartWorkspace();
+  await page.goto("/tasks");
+  await expect(page.getByRole("checkbox", { name: `Mark Task ${tag} to do`, exact: true })).toBeHidden();
+  await page.getByRole("button", { name: /^Done \d+$/ }).click();
+  const completed = page.getByRole("checkbox", { name: `Mark Task ${tag} to do`, exact: true });
+  await expect(completed).toBeChecked();
+  await completed.uncheck();
+  await expect(page.getByRole("region", { name: "To do", exact: true }).getByRole("checkbox", { name: `Mark Task ${tag} done`, exact: true })).toBeVisible();
   const conversations = await page.evaluate(
     async () => await (await fetch("/api/chats")).json(),
   );

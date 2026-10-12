@@ -128,3 +128,24 @@ test("one finished attempt does not hide another active attempt", () => {
   active.delete("run-b"); store.settleRun("run-b", "done", "Review ready");
   expect(store.get(task.id).status).toBe("needs-you");
 });
+
+for (const status of ["done", "cancelled"] as const) {
+  test(`conversation follow-ups preserve ${status} tasks until explicitly reopened`, () => {
+    const { home, state } = env();
+    const store = new TaskStore(state, home);
+    const task = store.manage({ action: "create", title: "Add product images" }).tasks[0]!;
+    store.manage({ action: "bind", id: task.id, conversationId: "task-images" });
+    store.attachRun(task.id, "original", "Sushii");
+    store.settleRun("original", "done");
+    store.manage({ action: "update", id: task.id, revision: store.get(task.id).revision, patch: { status } });
+    store.attachRun(task.id, "follow-up", "Sushii");
+    expect(store.get(task.id).status).toBe(status);
+    store.settleRun("follow-up", "done", "Acknowledged");
+    const restarted = new TaskStore(state, home);
+    expect(restarted.get(task.id).status).toBe(status);
+    expect(restarted.get(task.id).runIds).toEqual(["original", "follow-up"]);
+    restarted.manage({ action: "update", id: task.id, revision: restarted.get(task.id).revision, patch: { status: "todo" } });
+    restarted.attachRun(task.id, "resumed", "Sushii");
+    expect(restarted.get(task.id).status).toBe("in-progress");
+  });
+}

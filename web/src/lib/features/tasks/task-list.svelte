@@ -26,6 +26,8 @@
 		onretry: () => void;
 	} = $props();
 	let title = $state('');
+	let showDone = $state(false);
+	const disclosureId = $props.id();
 	async function add() {
 		if (title.trim() && (await oncreate(title.trim()))) title = '';
 	}
@@ -72,10 +74,29 @@
 			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))}
 		{#if section.length}
 			<section aria-label={taskLabels[status]} class="flex flex-col gap-1">
-				<h2 class="mb-1 text-sm font-semibold">
-					{taskLabels[status]} <span class="ml-1 text-muted-foreground">{section.length}</span>
-				</h2>
-				<ul class="divide-y">
+				{#if status === 'done'}
+					<h2>
+						<button
+							type="button"
+							class="flex min-h-12 w-full items-center gap-2 rounded-sm text-left text-sm font-semibold hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
+							aria-expanded={showDone}
+							aria-controls={`${disclosureId}-done`}
+							onclick={() => (showDone = !showDone)}
+						>
+							<ChevronRight class={showDone ? 'size-4 rotate-90' : 'size-4'} aria-hidden="true" />
+							Done <span class="text-muted-foreground">{section.length}</span>
+						</button>
+					</h2>
+				{:else}
+					<h2 class="mb-1 text-sm font-semibold">
+						{taskLabels[status]} <span class="ml-1 text-muted-foreground">{section.length}</span>
+					</h2>
+				{/if}
+				<ul
+					id={status === 'done' ? `${disclosureId}-done` : undefined}
+					class="divide-y"
+					hidden={status === 'done' && !showDone}
+				>
 					{#each section as task (task.id)}
 						<li class="flex min-w-0 items-start gap-1">
 							<ChecklistCheckbox
