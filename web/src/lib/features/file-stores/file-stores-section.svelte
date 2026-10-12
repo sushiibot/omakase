@@ -296,7 +296,7 @@
 						class="min-h-12"
 						bind:value={form.certificateSha256}
 						maxlength={64}
-						pattern="[a-fA-F0-9]{64}"
+						pattern={'[a-fA-F0-9]{64}'}
 						aria-describedby="store-cert-help"
 					/>
 					{@render issue('certificateSha256')}

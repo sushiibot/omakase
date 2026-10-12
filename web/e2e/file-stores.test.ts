@@ -173,3 +173,22 @@ test('file stores opens from Workspace and stays out of Settings', async ({ page
 	await page.goto('/settings');
 	await expect(page.getByRole('button', { name: 'Add file store' })).toHaveCount(0);
 });
+
+test('verified certificate hex passes native validation and saves', async ({ page, context }) => {
+	await api(context);
+	await page.goto('/file-stores');
+	await fill(page);
+	await page.getByText('Private certificate', { exact: true }).click();
+	const fingerprint = page.getByLabel('Verified SHA-256 fingerprint');
+	await fingerprint.fill('8e5aefbe171459849e908b8c489b86f9ebfead0661d8e95acaacbf04ea16b50d');
+	expect(
+		await fingerprint.evaluate((input: HTMLInputElement) => ({
+			value: input.value,
+			pattern: input.pattern,
+			valid: input.checkValidity(),
+			message: input.validationMessage
+		}))
+	).toMatchObject({ valid: true });
+	await page.getByRole('button', { name: 'Save connection' }).click();
+	await expect(page.getByRole('heading', { name: 'Property documents' })).toBeVisible();
+});

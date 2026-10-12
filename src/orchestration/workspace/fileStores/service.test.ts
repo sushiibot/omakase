@@ -9,6 +9,7 @@ import { execFileSync } from "node:child_process";
 import {
   FileStores,
   davRequest,
+  connectionError,
   type DavTransport,
   type StoreConfig,
 } from "./service.ts";
@@ -267,6 +268,11 @@ describe("external file stores", () => {
           davRequest(config, "GET", "/public/Property/test"),
         ).rejects.toThrow("certificate");
         expect(received).toBe(0);
+        config.certificateSha256 = "";
+        await expect(
+          davRequest(config, "GET", "/public/Property/test"),
+        ).rejects.toThrow("self-signed");
+        expect(received).toBe(0);
         config.certificateSha256 = createHash("sha256")
           .update(new X509Certificate(readFileSync(cert)).raw)
           .digest("hex");
@@ -330,5 +336,48 @@ test("one connection supports several folders with independent write grants", as
     ).rejects.toThrow("folderId");
   } finally {
     db.close();
+  }
+});
+
+test("connection diagnostics distinguish causes without leaking raw errors", () => {
+  for (const [code, text] of [
+    ["ENOTFOUND", "resolved"],
+    ["ECONNREFUSED", "refused"],
+    ["ETIMEDOUT", "timed out"],
+    ["DEPTH_ZERO_SELF_SIGNED_CERT", "self-signed"],
+    ["ERR_TLS_CERT_ALTNAME_INVALID", "does not match"],
+  ]) {
+    const error = connectionError(
+      Object.assign(new Error("Authorization: secret"), { code }),
+      "PROPFIND",
+    );
+    expect(error.message).toContain(text!);
+    expect(error.message).toContain(code!);
+    expect(error.message).not.toContain("secret");
+    expect(error.message).not.toContain("write");
+  }
+  expect(
+    connectionError({ cause: { code: "ECONNREFUSED" } }, "PUT").message,
+  ).toContain("before retrying the write");
+  expect(
+    connectionError(new Error("password=secret"), "GET").message,
+  ).not.toContain("secret");
+});
+
+test("connection checks distinguish rejected login, permission and missing folder", async () => {
+  for (const [code, message] of [
+    [401, "login"],
+    [403, "denied access"],
+    [404, "folder path"],
+  ] as const) {
+    const { db, stores } = setup(async () => response(code));
+    try {
+      const result = await stores.check(stores.save(input).id);
+      expect(result.ok).toBe(false);
+      expect(result.folders[0]?.message).toContain(message);
+      expect(result.folders[0]?.message).toContain(`HTTP ${code}`);
+    } finally {
+      db.close();
+    }
   }
 });

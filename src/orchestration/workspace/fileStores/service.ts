@@ -51,6 +51,64 @@ export class FileStoreError extends Error {
     super(message);
   }
 }
+/** Only expose known diagnostic codes, never raw errors containing credentials or request headers. */
+export function connectionError(
+  error: unknown,
+  method: string,
+): FileStoreError {
+  if (error instanceof FileStoreError) return error;
+  let cause = error;
+  let code = "";
+  for (let i = 0; i < 4 && cause && typeof cause === "object"; i++) {
+    const item = cause as { code?: unknown; cause?: unknown };
+    if (typeof item.code === "string" && /^[A-Z0-9_]+$/.test(item.code))
+      code = item.code;
+    cause = item.cause;
+  }
+  const reasons: Record<string, string> = {
+    ENOTFOUND:
+      "Server name could not be resolved. Check the address or use the NAS Tailscale IP.",
+    EAI_AGAIN:
+      "Server name lookup temporarily failed. Try again or use the NAS Tailscale IP.",
+    ECONNREFUSED:
+      "The server refused the connection. Check that HTTPS WebDAV is enabled on this port.",
+    ETIMEDOUT:
+      "The connection timed out. Check Tailscale access rules and the NAS firewall.",
+    EHOSTUNREACH:
+      "The server is unreachable. Check that the NAS is online in Tailscale.",
+    ENETUNREACH:
+      "No network route to the server. Check the server’s Tailscale connection.",
+    ECONNRESET:
+      "The server closed the connection. Check the HTTPS port and WebDAV service.",
+    DEPTH_ZERO_SELF_SIGNED_CERT:
+      "The NAS certificate is self-signed. Enter its verified SHA-256 fingerprint under Private certificate, or use a trusted certificate.",
+    SELF_SIGNED_CERT_IN_CHAIN:
+      "The NAS certificate chain is self-signed. Enter its verified SHA-256 fingerprint under Private certificate, or use a trusted certificate.",
+    UNABLE_TO_VERIFY_LEAF_SIGNATURE:
+      "The NAS certificate chain could not be verified. Check its intermediate certificates or enter its verified SHA-256 fingerprint.",
+    UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
+      "The NAS certificate issuer is not trusted. Use a trusted certificate or enter its verified SHA-256 fingerprint.",
+    CERT_HAS_EXPIRED: "The NAS certificate has expired. Renew it in DSM.",
+    CERT_NOT_YET_VALID:
+      "The NAS certificate is not valid yet. Check the server clock and certificate dates.",
+    ERR_TLS_CERT_ALTNAME_INVALID:
+      "The NAS certificate does not match the server address. Use its certificate hostname or enter its verified SHA-256 fingerprint.",
+    ERR_SSL_WRONG_VERSION_NUMBER:
+      "This port did not provide HTTPS. Use the HTTPS WebDAV port, normally 5006.",
+  };
+  const reason = reasons[code];
+  const caution =
+    method === "PUT"
+      ? " Inspect the remote file before retrying the write."
+      : "";
+  return new FileStoreError(
+    (reason
+      ? `${reason} (${code})`
+      : "Connection failed. Check the HTTPS address, certificate, Tailscale access rules and NAS firewall.") +
+      caution,
+    code === "ETIMEDOUT" ? 504 : 502,
+  );
+}
 const MAX_BYTES = 2 * 1024 * 1024;
 const TEXT_BYTES = 256 * 1024;
 function normalizedPath(path: string, absolute = false): string {
@@ -110,10 +168,8 @@ export const davRequest: DavTransport = async (
       socket.setTimeout(10_000, () =>
         finish(new FileStoreError("NAS TLS connection timed out.", 504)),
       );
-      socket.once("error", () =>
-        finish(
-          new FileStoreError("Could not establish NAS TLS connection.", 502),
-        ),
+      socket.once("error", (error: Error) =>
+        finish(connectionError(error, method)),
       );
       socket.once("secureConnect", () => {
         const raw = socket.getPeerCertificate().raw;
@@ -165,7 +221,9 @@ export const davRequest: DavTransport = async (
           res.on("error", () =>
             reject(
               new FileStoreError(
-                "NAS response interrupted. Inspect a write before retrying.",
+                method === "PUT"
+                  ? "NAS response interrupted. Inspect the remote file before retrying the write."
+                  : "NAS response interrupted. Try the connection test again.",
                 502,
               ),
             ),
@@ -188,23 +246,16 @@ export const davRequest: DavTransport = async (
         () =>
           req.destroy(
             new FileStoreError(
-              "NAS request timed out. Inspect a write before retrying.",
+              method === "PUT"
+                ? "NAS request timed out after 15 seconds. Inspect the remote file before retrying the write."
+                : "NAS request timed out after 15 seconds. Check Tailscale access rules and the NAS firewall.",
               504,
             ),
           ),
         15_000,
       );
       req.once("close", () => clearTimeout(timer));
-      req.on("error", (error) =>
-        reject(
-          error instanceof FileStoreError
-            ? error
-            : new FileStoreError(
-                "Could not reach the file store. Check its address, certificate, Tailscale access rules and NAS firewall. Inspect a write before retrying.",
-                502,
-              ),
-        ),
-      );
+      req.on("error", (error) => reject(connectionError(error, method)));
       req.end(body);
     });
   } finally {
@@ -219,13 +270,21 @@ function status(response: DavResponse, expected: number[]) {
       "The file changed or already exists. Read the current version before deciding how to proceed.",
       409,
     );
-  if ([401, 403].includes(response.status))
+  if (response.status === 401)
     throw new FileStoreError(
-      "The NAS refused access. Check the account, folder permissions and WebDAV application permission.",
+      "The NAS rejected the login (HTTP 401). Check the account and password.",
+      422,
+    );
+  if (response.status === 403)
+    throw new FileStoreError(
+      "The NAS denied access (HTTP 403). Check folder permissions and the account’s WebDAV application permission.",
       422,
     );
   if (response.status === 404)
-    throw new FileStoreError("The remote file or folder was not found.", 404);
+    throw new FileStoreError(
+      "The remote file or folder was not found (HTTP 404). Check the allowed folder path.",
+      404,
+    );
   throw new FileStoreError(`The NAS returned HTTP ${response.status}.`, 502);
 }
 const xml = new XMLParser({
