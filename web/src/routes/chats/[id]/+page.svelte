@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { AgentsBar } from '$lib/features/agents';
 	import { getWorkspace } from '$lib/ui/workspace/context';
 	const workspaceLayout = getWorkspace();
 	import { TaskWorkspace } from '$lib/features/tasks';
@@ -139,6 +140,8 @@
 
 <svelte:head><title>{detail?.summary.title ?? 'Channel'} · sushii</title></svelte:head>
 
+{#snippet agents()}<AgentsBar conversationId={id} />{/snippet}
+
 {#snippet browserPreview()}
 	<BrowserPreviewPanel
 		status={browser.status}
@@ -278,6 +281,7 @@
 						voice: voiceControls,
 						voiceStatus,
 						browserPreview,
+						backgroundActivity: agents,
 						voiceActive: voice.state !== 'idle',
 						voiceHasContent: voice.state !== 'idle' && !!(voice.userText || voice.assistantText),
 						usage: store.usage,

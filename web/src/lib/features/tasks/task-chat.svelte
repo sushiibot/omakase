@@ -2,6 +2,7 @@
 	import { untrack, type Snippet } from 'svelte';
 	import { getWorkspace } from '$lib/ui/workspace/context';
 	import { ChatScreen, chatStore, createHttpChatApi } from '$lib/features/chat';
+	import { AgentsBar } from '$lib/features/agents';
 	import { createHub } from '$lib/core/realtime/hub.svelte';
 	import { fetchSse } from '$lib/core/realtime/transport';
 	import { taskChatDeps } from './tasks.svelte';
@@ -42,8 +43,11 @@
 	});
 </script>
 
+{#snippet agents()}<AgentsBar conversationId={id} />{/snippet}
+
 <ChatScreen
 	title={task.title}
+	backgroundActivity={agents}
 	{headerActions}
 	{focusTurn}
 	{focusAsk}

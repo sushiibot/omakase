@@ -1,5 +1,4 @@
 <script lang="ts">
-	import RemoteTask from './remote-task.svelte';
 	import { untrack, type Snippet } from 'svelte';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Play from '@lucide/svelte/icons/play';
@@ -221,21 +220,13 @@
 					>
 				</form>
 			</section>
-			{#if task.execution}<Button variant="outline" onclick={() => (tab = 'activity')}
-					>View remote session</Button
-				>{:else}
-				<RemoteTask
-					{task}
-					beforeStart={async () => (title !== task.title || brief !== task.brief ? save() : true)}
-				/>{/if}
 			<div class="flex flex-col gap-2">
-				{#if !task.execution}<Button disabled={busy} onclick={() => void start()}
-						><Play />{task.workConversationId
-							? 'Continue with Sushii'
-							: 'Ask Sushii to work on this'}</Button
-					>
-				{/if}
-				{#if task.status === 'in-progress' && !task.execution}<Button
+				<Button disabled={busy} onclick={() => void start()}
+					><Play />{task.workConversationId
+						? 'Continue with Sushii'
+						: 'Ask Sushii to work on this'}</Button
+				>
+				{#if task.status === 'in-progress'}<Button
 						variant="outline"
 						disabled={busy}
 						onclick={onstop}><Square />Stop active work</Button
@@ -258,16 +249,14 @@
 		class:hidden={tab !== 'activity'}
 		class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"
 	>
-		{#if task.execution}<RemoteTask {task} />{:else}
-			<h3 class="mb-2 text-sm font-semibold">Execution activity</h3>
-			<p class="mb-4 text-sm text-muted-foreground">
-				Open an attempt to review its steps, checks and outputs. Finishing an attempt does not
-				automatically complete the task.
-			</p>
-			{#if task.runIds.length}{@render runs?.()}{:else}<p class="text-sm text-muted-foreground">
-					No execution activity yet. Ask Sushii to work on this task from Details.
-				</p>{/if}
-		{/if}
+		<h3 class="mb-2 text-sm font-semibold">Execution activity</h3>
+		<p class="mb-4 text-sm text-muted-foreground">
+			Open an attempt to review its steps, checks and outputs. Finishing an attempt does not
+			automatically complete the task.
+		</p>
+		{#if task.runIds.length}{@render runs?.()}{:else}<p class="text-sm text-muted-foreground">
+				No execution activity yet. Ask Sushii to work on this task from Details.
+			</p>{/if}
 	</div>
 	<div
 		class:hidden={tab !== 'results'}

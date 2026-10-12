@@ -2,6 +2,7 @@
 	import { getWorkspace } from '$lib/ui/workspace/context';
 	const workspaceLayout = getWorkspace();
 	import { TaskWorkspace } from '$lib/features/tasks';
+	import { AgentsBar } from '$lib/features/agents';
 	import { Button } from '$lib/ui/button';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import { BrowserPreview, BrowserPreviewPanel } from '$lib/features/browser';
@@ -186,6 +187,8 @@
 
 <svelte:head><title>Chat · sushii</title></svelte:head>
 
+{#snippet agents()}<AgentsBar conversationId="main" />{/snippet}
+
 {#snippet browserPreview()}
 	<BrowserPreviewPanel
 		status={browser.status}
@@ -319,6 +322,7 @@
 			voice={voiceControls}
 			{voiceStatus}
 			{browserPreview}
+			backgroundActivity={agents}
 			voiceActive={voice.state !== 'idle'}
 			voiceHasContent={voice.state !== 'idle' && !!(voice.userText || voice.assistantText)}
 			onpickmodel={(alias, role) => void models.pick(alias, role).then((ok) => ok && closeSheet())}

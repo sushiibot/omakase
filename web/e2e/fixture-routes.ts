@@ -67,6 +67,7 @@ export async function fixtureRoutes(
 		let hit: RegExpExecArray | null;
 
 		if (path === '/machines') return route.fulfill({ json: { machines: [] } });
+		if (path.startsWith('/agents')) return route.fulfill({ json: { agents: [] } });
 		if (path === '/tasks')
 			return route.fulfill({ json: await (post ? tasks.action(body) : tasks.list()) });
 		if ((hit = m(/^\/tasks\/([^/]+)\/chat\/(.*)$/))) {
