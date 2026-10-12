@@ -36,12 +36,6 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
-      # Matches the Dockerfile's lychee install (same version, amd64 since GitHub-hosted runners
-      # are always x86_64) -- without it, wiki-sync's findBrokenLinks tests skip rather than run.
-      - name: Install lychee
-        run: |
-          curl -fsSL "https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-unknown-linux-gnu.tar.gz" \
-            | tar -xz -C /usr/local/bin --strip-components=1 "lychee-x86_64-unknown-linux-gnu/lychee"
       # The workspace image ships ripgrep for history/search; without it those tests skip rather than run.
       - name: Install ripgrep and ffmpeg
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep ffmpeg
@@ -49,9 +43,7 @@ jobs:
       # Keep Git subprocess tests on Bun's established sequential runner within each shard.
       - run: bun run test --shard=${{ matrix.shard }}/2
         env:
-          # config.ts requires the OpenAI key at import time; no test calls Discord or OpenAI, so
-          # dummy values are enough.
-          DISCORD_BOT_TOKEN: test-token
+          # config.ts requires the OpenAI key at import time; no test calls OpenAI, so a dummy is enough.
           OPENAI_API_KEY: test-key
 
   # Web static checks and unit tests. Browser shards build and test the app separately.
@@ -105,7 +97,7 @@ jobs:
             web/playwright-results.json
           retention-days: 7
 
-  # Real-process e2e (e2e-system/README.md): the built web app, the personal gateway and the workspace as processes,
+  # Real-process e2e (e2e-system/README.md): the built web app, the gateway and the workspace as processes,
   # with a fake model and a Traefik stand-in dialing from loopback aliases.
   e2e-system:
     runs-on: ubuntu-latest
@@ -154,22 +146,22 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - run: docker build -t sushii-agent:smoke .
-      - run: docker run --rm --init --entrypoint sh sushii-agent:smoke scripts/browser-smoke.sh
+      - run: docker build -t omakase:smoke .
+      - run: docker run --rm --init omakase:smoke sh scripts/browser-smoke.sh
       # Workspace target under its production hardening (non-root, no caps, no privilege escalation),
       # through its own entrypoint. docker-build-workspace needs this job, so a failure blocks the push.
-      - run: docker build --target workspace -t sushii-agent:smoke-workspace .
+      - run: docker build --target workspace -t omakase:smoke-workspace .
       - run: >-
           docker run --rm --init --user 1000:1000 --cap-drop ALL
           --security-opt no-new-privileges --shm-size 1g
-          sushii-agent:smoke-workspace sh scripts/browser-smoke.sh
+          omakase:smoke-workspace sh scripts/browser-smoke.sh
 
   docker-build:
     needs: [typecheck, test, web, web-e2e, browser-smoke, e2e-system]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: sushiibot/sushii-workflows/.github/workflows/docker-build.yml@main # zizmor: ignore[unpinned-uses] first-party, tracked at @main by design
     with:
-      image_name: ghcr.io/sushiibot/sushii-agent
+      image_name: ghcr.io/sushiibot/omakase
     permissions:
       contents: read
       packages: write
@@ -205,31 +197,17 @@ jobs:
           target: workspace
           platforms: linux/amd64,linux/arm64
           push: true
-          # No :latest -- that tag belongs to the bot image in the same package.
-          tags: ghcr.io/sushiibot/sushii-agent:${{ steps.version.outputs.short_sha }}-workspace
+          # No :latest -- that tag belongs to the gateway image in the same package.
+          tags: ghcr.io/sushiibot/omakase:${{ steps.version.outputs.short_sha }}-workspace
           cache-from: |
-            type=registry,ref=ghcr.io/sushiibot/sushii-agent:buildcache
-            type=registry,ref=ghcr.io/sushiibot/sushii-agent:buildcache-workspace
-          cache-to: type=registry,ref=ghcr.io/sushiibot/sushii-agent:buildcache-workspace,mode=max
+            type=registry,ref=ghcr.io/sushiibot/omakase:buildcache
+            type=registry,ref=ghcr.io/sushiibot/omakase:buildcache-workspace
+          cache-to: type=registry,ref=ghcr.io/sushiibot/omakase:buildcache-workspace,mode=max
 
+  # Serial gateway → workspace: each deploy pushes a tag bump to sushii-ansible, and parallel deploys
+  # would race those pushes.
   deploy:
-    needs: docker-build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: sushiibot/sushii-workflows/.github/workflows/deploy.yml@main # zizmor: ignore[unpinned-uses] first-party, tracked at @main by design
-    with:
-      service: private-bots/sushii-agent
-      image_version: ${{ needs.docker-build.outputs.image_version }}
-      host: apps
-    secrets:
-      ANSIBLE_REPO_TOKEN: ${{ secrets.ANSIBLE_REPO_TOKEN }}
-      ANSIBLE_SSH_PRIVATE_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
-      ANSIBLE_KNOWN_HOSTS: ${{ secrets.ANSIBLE_KNOWN_HOSTS }}
-      ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-
-  # Serial bot → personal → workspace: each deploy pushes a tag bump to sushii-ansible, and parallel
-  # deploys would race those pushes. The personal gateway runs the bot image with `bun src/personal.ts`.
-  deploy-personal:
-    needs: [deploy, docker-build]
+    needs: [docker-build, typecheck, test, web, web-e2e, browser-smoke, e2e-system]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: sushiibot/sushii-workflows/.github/workflows/deploy.yml@main # zizmor: ignore[unpinned-uses] first-party, tracked at @main by design
     with:
@@ -242,9 +220,9 @@ jobs:
       ANSIBLE_KNOWN_HOSTS: ${{ secrets.ANSIBLE_KNOWN_HOSTS }}
       ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
 
-  # After the personal gateway: a new workspace may send fields an older gateway drops.
+  # After the gateway: a new workspace may send fields an older gateway drops.
   deploy-workspace:
-    needs: [deploy-personal, docker-build-workspace]
+    needs: [deploy, docker-build-workspace]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: sushiibot/sushii-workflows/.github/workflows/deploy.yml@main # zizmor: ignore[unpinned-uses] first-party, tracked at @main by design
     with:
