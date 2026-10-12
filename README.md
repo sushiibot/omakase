@@ -31,7 +31,7 @@ Discord moderation intelligence bot. Mention it in a whitelisted channel with a 
 
 ## Setup
 
-**Prerequisites:** [Bun](https://bun.sh) v1.0+, a Discord bot token with **Message Content** and **Server Members** privileged intents, and bot permissions: Read Messages, Send Messages, Create/Send in Threads, Read Message History.
+**Prerequisites:** [Bun](https://bun.sh) v1.0+, a Discord bot token with the **Server Members** privileged intent (and **Message Content** once approved, see `DISCORD_MESSAGE_CONTENT`), and bot permissions: Read Messages, Send Messages, Create/Send in Threads, Read Message History.
 
 ```bash
 git clone <repo> && cd sushii-agent
@@ -82,6 +82,7 @@ docker compose up -d      # or Docker (./data volume for SQLite)
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `DISCORD_BOT_TOKEN` | yes | — | Bot token from Discord Developer Portal |
+| `DISCORD_MESSAGE_CONTENT` | no | `false` | Set to `true` once the privileged Message Content intent is approved. Off, the bot reads only messages that mention it; message caching, wiki-sync, server auto-scan, screening and the auto-mod trigger stand down |
 | `OPENAI_API_KEY` | yes | — | API key for your LLM provider |
 | `OPENAI_BASE_URL` | no | `https://api.anthropic.com/v1` | OpenAI-compatible endpoint |
 | `OPENAI_MODEL` | no | `claude-opus-4-6` | Model name |

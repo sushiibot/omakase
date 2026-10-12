@@ -64,6 +64,8 @@ async function postSyncStatus(
  *  null otherwise (that source's surface isn't wired here — e.g. a future Slack source). */
 export function makeDiscordWikiSyncContext(client: Client, _wikiId: string, source: WikiSource): WikiSyncContext | null {
   if (source.surface !== "discord") return null;
+  // Without MessageContent the cache holds no ordinary messages; null skips the source and keeps its watermark.
+  if (!config.discordMessageContent) return null;
   return createDiscordWikiSyncContext(client, source);
 }
 

@@ -84,15 +84,19 @@ function gc(overrides: Partial<GuildConfig> = {}): GuildConfig {
 
 describe("autoModGateOpen", () => {
   test("open when the moderation module is resolved (default) and the message is eligible", () => {
-    expect(autoModGateOpen(gc(), true)).toBe(true);
+    expect(autoModGateOpen(gc(), true, true)).toBe(true);
   });
 
   test("closed when the message isn't eligible, even with moderation resolved", () => {
-    expect(autoModGateOpen(gc(), false)).toBe(false);
+    expect(autoModGateOpen(gc(), false, true)).toBe(false);
   });
 
   test("closed when moderation isn't among the resolved modules, even if eligible", () => {
-    expect(autoModGateOpen(gc({ enabledModules: ["mcp"] }), true)).toBe(false);
+    expect(autoModGateOpen(gc({ enabledModules: ["mcp"] }), true, true)).toBe(false);
+  });
+
+  test("closed without the MessageContent intent, even if eligible with moderation resolved", () => {
+    expect(autoModGateOpen(gc(), true, false)).toBe(false);
   });
 });
 

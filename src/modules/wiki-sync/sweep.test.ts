@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { config } from "../../config.ts";
+import type { Client } from "discord.js";
 import type { WikiSyncContext } from "./context.ts";
 import type { WikiSource } from "./sources.ts";
 
@@ -24,12 +25,14 @@ mock.module("./piSession.ts", () => ({
 const { getDb, initDb, closeDb } = await import("../../db/index.ts");
 const { getWikiSyncWatermark } = await import("../../db/wikiSync.ts");
 const { runWikiSyncSweep } = await import("./sweep.ts");
+const { makeDiscordWikiSyncContext } = await import("../../surfaces/discord/wikiSync.ts");
 
 const saved = {
   guildConfig: config.guildConfig,
   teams: config.teams,
   inboxDir: config.wikiSync.inboxDir,
   databasePath: config.databasePath,
+  discordMessageContent: config.discordMessageContent,
 };
 
 let tmp: string;
@@ -53,6 +56,7 @@ afterAll(async () => {
 afterEach(() => {
   config.guildConfig = saved.guildConfig;
   config.teams = saved.teams;
+  config.discordMessageContent = saved.discordMessageContent;
 });
 
 function contextFor(source: WikiSource, createdAt: number): WikiSyncContext {
@@ -103,5 +107,27 @@ describe("runWikiSyncSweep (multi-source)", () => {
     const db = getDb();
     expect(getWikiSyncWatermark(db, "w1", "discord", "a")).toBe(1000);
     expect(getWikiSyncWatermark(db, "w1", "discord", "b")).toBe(2000);
+  });
+});
+
+describe("runWikiSyncSweep without the MessageContent intent", () => {
+  test("skips the discord source and leaves its watermark where it was", async () => {
+    config.guildConfig = {};
+    config.teams = {
+      w2team: { wiki: { wikiId: "w2" }, spaces: [{ surface: "discord", spaceId: "c", wiki: "source" }] },
+    };
+
+    config.discordMessageContent = true;
+    await runWikiSyncSweep("w2", (source) => contextFor(source, 500));
+    const db = getDb();
+    expect(getWikiSyncWatermark(db, "w2", "discord", "c")).toBe(500);
+
+    config.discordMessageContent = false;
+    const client = { channels: { fetch: async () => null, cache: { get: () => undefined } } } as unknown as Client;
+    const result = await runWikiSyncSweep("w2", (source) => makeDiscordWikiSyncContext(client, "w2", source));
+
+    expect(result.ran).toBe(true);
+    expect(result.sources).toEqual([]);
+    expect(getWikiSyncWatermark(db, "w2", "discord", "c")).toBe(500);
   });
 });

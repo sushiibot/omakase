@@ -71,6 +71,7 @@ export function assembleSystemPrompt(inputs: SystemPromptInputs): string {
     if (ch.categoryName) lines.push(`Category: ${ch.categoryName}`);
     if (ch.parentChannelName) lines.push(`Parent channel: #${ch.parentChannelName}`);
     if (ch.topic) lines.push(`Topic: ${ch.topic}`);
+    if (ch.contextNote) lines.push(ch.contextNote);
     systemParts.push(lines.join("\n"));
   }
 

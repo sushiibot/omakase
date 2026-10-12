@@ -1,12 +1,23 @@
 import { MessageType, type Message } from "discord.js";
+import { config } from "../config.ts";
 import { getDb } from "./index.ts";
 import { buildMessageContent } from "../utils/flattenMessage.ts";
 import { getLogger } from "../logger.ts";
 
 const logger = getLogger("db");
 
+/** Without the MessageContent intent, Discord blanks every guild message except the bot's own and
+ *  ones that mention it, so only those carry text worth storing. */
+export function hasMessageContent(message: Message): boolean {
+  if (config.discordMessageContent) return true;
+  const botId = message.client.user?.id;
+  if (!botId) return false;
+  return message.author.id === botId || message.mentions.users.has(botId);
+}
+
 export function insertMessage(message: Message): void {
   if (!message.guildId) return;
+  if (!hasMessageContent(message)) return;
 
   const db = getDb();
   const displayName = message.member?.displayName ?? message.author.displayName;

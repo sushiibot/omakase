@@ -73,6 +73,8 @@ let loggedMemberShape = false;
 
 /** Fire-and-forget from MessageCreate/MessageUpdate. */
 export function screenDiscordMessage(client: Client, message: Message<true>, opts: { skipText?: boolean } = {}): void {
+  // Without MessageContent, the text and media screening reads are blank.
+  if (!config.discordMessageContent) return;
   const cfg = config.guildConfig[message.guildId];
   if (!cfg || !screeningEnabled(cfg)) return;
   // AutoMod alert (type 24) and other system messages are authored by the offending user but
@@ -146,6 +148,7 @@ export function handleScreeningDeletes(client: Client, guildId: string, messageI
 /** Needs the AutoModerationExecution intent and Manage Server. One event fires per rule action,
  *  so only the block action is recorded — a block+alert rule would otherwise count twice. */
 export function handleScreeningAutomod(client: Client, execution: AutoModerationActionExecution): void {
+  if (!config.discordMessageContent) return;
   const cfg = config.guildConfig[execution.guild.id];
   if (!cfg || !screeningEnabled(cfg)) return;
   if (execution.action.type !== AutoModerationActionType.BlockMessage) return;

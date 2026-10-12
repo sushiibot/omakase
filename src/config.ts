@@ -65,6 +65,9 @@ export interface Config {
   orchSecret: string | undefined;
   /** Route the owner's web chat to the personal-agent workspace when it is connected (DM_WORKSPACE_ENABLED). Default off. */
   dmWorkspaceEnabled: boolean;
+  /** Request the privileged MessageContent intent (DISCORD_MESSAGE_CONTENT=true). Off → guild message
+   *  text is blank except for messages that mention the bot, so content-dependent features stand down. */
+  discordMessageContent: boolean;
   buzz: {
     /** Nostr private key (hex or nsec). Unset → the buzz surface is disabled entirely. */
     privateKey: string | undefined;
@@ -375,6 +378,7 @@ export const config: Config = {
   orchPort: optionalPort("ORCH_PORT", 8788),
   orchSecret: process.env["ORCH_SECRET"]?.trim() || undefined,
   dmWorkspaceEnabled: ["1", "true", "yes"].includes(optional("DM_WORKSPACE_ENABLED", "false").toLowerCase()),
+  discordMessageContent: process.env["DISCORD_MESSAGE_CONTENT"] === "true",
   buzz: {
     privateKey: process.env["BUZZ_PRIVATE_KEY"],
     relayUrls: parseRelayUrls(process.env["BUZZ_RELAY_URL"]),

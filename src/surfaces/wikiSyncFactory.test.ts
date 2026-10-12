@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Client } from "discord.js";
+import { config } from "../config.ts";
 import type { SlackWikiSyncClient } from "./slack/wikiSync.ts";
 import { makeCombinedWikiSourceContext } from "./wikiSyncFactory.ts";
 
@@ -16,7 +17,13 @@ const slackClient = {
 describe("makeCombinedWikiSourceContext", () => {
   test("routes a discord source to the Discord context", () => {
     const make = makeCombinedWikiSourceContext({ discordClient, getSlack: () => undefined });
-    expect(make("w1", { surface: "discord", spaceId: "g1" })).not.toBeNull();
+    const saved = config.discordMessageContent;
+    config.discordMessageContent = true;
+    try {
+      expect(make("w1", { surface: "discord", spaceId: "g1" })).not.toBeNull();
+    } finally {
+      config.discordMessageContent = saved;
+    }
   });
 
   test("routes a slack source to the Slack context when Slack is wired", () => {

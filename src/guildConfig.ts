@@ -67,8 +67,9 @@ export function moderationEnabled(surface: string, spaceId: string): boolean {
 /** Whether the auto-mod trigger path is even in play for this guild — factored out of the gateway's
  *  MessageCreate handler so it's unit-testable without a discord.js Client. The moderation module
  *  gates this; it no longer doubles as the conversational entry gate below. */
-export function autoModGateOpen(cfg: GuildConfig, autoModEligible: boolean): boolean {
-  return resolvedModules(cfg).includes("moderation") && autoModEligible;
+export function autoModGateOpen(cfg: GuildConfig, autoModEligible: boolean, messageContent: boolean): boolean {
+  // Without message text the trigger would act on blank evidence.
+  return messageContent && resolvedModules(cfg).includes("moderation") && autoModEligible;
 }
 
 /** The conversational entry gate: mention/reply + sender holds an allowedRoles role. Independent

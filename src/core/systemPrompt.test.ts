@@ -52,3 +52,16 @@ describe("caller section", () => {
     expect(text).not.toContain("null");
   });
 });
+
+describe("channel context note", () => {
+  const channel = { id: "c1", name: "general", type: "text", isPrivate: false };
+
+  test("renders the channel's context note in the channel section", () => {
+    const text = assembleSystemPrompt({ behavior: "b", channel: { ...channel, contextNote: "Message text is unavailable." } });
+    expect(text).toContain("Current channel: #general (c:c1) — text, public\nMessage text is unavailable.");
+  });
+
+  test("omits it when the channel has none", () => {
+    expect(assembleSystemPrompt({ behavior: "b", channel })).not.toContain("unavailable");
+  });
+});

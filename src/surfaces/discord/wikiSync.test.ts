@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Client } from "discord.js";
+import { config } from "../../config.ts";
 import type { WikiSyncMessage } from "../../db/wikiSync.ts";
 import type { Replacement } from "../../modules/wiki-sync/context.ts";
 import { createDiscordWikiSyncContext, makeDiscordWikiSyncContext } from "./wikiSync.ts";
@@ -70,6 +71,23 @@ describe("makeDiscordWikiSyncContext", () => {
 
   test("builds a context for a discord source", () => {
     const { client } = trackingClient();
-    expect(makeDiscordWikiSyncContext(client, "w1", { surface: "discord", spaceId: "g1" })).not.toBeNull();
+    const saved = config.discordMessageContent;
+    config.discordMessageContent = true;
+    try {
+      expect(makeDiscordWikiSyncContext(client, "w1", { surface: "discord", spaceId: "g1" })).not.toBeNull();
+    } finally {
+      config.discordMessageContent = saved;
+    }
+  });
+
+  test("returns null for a discord source without the MessageContent intent", () => {
+    const { client } = trackingClient();
+    const saved = config.discordMessageContent;
+    config.discordMessageContent = false;
+    try {
+      expect(makeDiscordWikiSyncContext(client, "w1", { surface: "discord", spaceId: "g1" })).toBeNull();
+    } finally {
+      config.discordMessageContent = saved;
+    }
   });
 });

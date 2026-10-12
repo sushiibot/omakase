@@ -60,6 +60,8 @@ export interface ChannelRef {
   categoryName?: string | null;
   parentChannelId?: string | null;
   parentChannelName?: string | null;
+  /** Surface caveat about this channel's message data, rendered in the channel-context section. */
+  contextNote?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

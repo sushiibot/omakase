@@ -51,6 +51,12 @@ const tracer = trace.getTracer("sushii-agent");
 const SURFACE = "discord" as const;
 const DEFAULT_THREAD_NAME = "sushii-agent investigation";
 const INTERSTITIAL_MAX_CHARS = 8000;
+const NO_MESSAGE_CONTENT_NOTE =
+  'Message text is unavailable right now for messages that don\'t mention you, so their "[empty message]" lines are blank text, not empty messages.';
+
+function withContentNote(ref: ChannelRef): ChannelRef {
+  return config.discordMessageContent ? ref : { ...ref, contextNote: NO_MESSAGE_CONTENT_NOTE };
+}
 
 function withInteractionSpan<T>(name: string, attributes: Record<string, string | undefined>, fn: (span: Span) => Promise<T>): Promise<T> {
   return tracer.startActiveSpan(name, { attributes }, async (span) => {
@@ -73,7 +79,7 @@ function getChannelRef(message: Message): ChannelRef {
   const ch = message.channel;
   if (ch.isThread()) {
     const isPrivate = ch.type === ChannelType.PrivateThread;
-    return {
+    return withContentNote({
       id: ch.id,
       name: ch.name,
       type: isPrivate ? "thread (private)" : "thread (public)",
@@ -81,7 +87,7 @@ function getChannelRef(message: Message): ChannelRef {
       parentChannelId: ch.parentId ?? undefined,
       parentChannelName: ch.parent?.name ?? undefined,
       categoryName: (ch.parent as { parent?: { name?: string } } | null)?.parent?.name ?? undefined,
-    };
+    });
   }
   const everyoneId = message.guild?.roles.everyone.id;
   const isPrivate = everyoneId ? isPrivateChannel(ch as Parameters<typeof isPrivateChannel>[0], everyoneId) : false;
@@ -92,7 +98,7 @@ function getChannelRef(message: Message): ChannelRef {
   const topic = "topic" in ch && ch.topic ? ch.topic : undefined;
   const parent = "parent" in ch ? ch.parent : null;
   const categoryName = parent && "type" in parent && parent.type === ChannelType.GuildCategory ? parent.name : undefined;
-  return { id: ch.id, name, type, isPrivate, topic, categoryName };
+  return withContentNote({ id: ch.id, name, type, isPrivate, topic, categoryName });
 }
 
 function triggeringAuthor(message: Message, allowedRoles: string[]): AuthorRef {
@@ -230,6 +236,12 @@ export function startDiscordSurface(deps: DiscordSurfaceDeps): void {
   // instead of racing ahead with empty awareness.
   const scanningGuilds = new Map<string, Promise<void>>();
   const pendingApprovals = new Map<string, PendingApproval>();
+  if (!config.discordMessageContent) {
+    logger.info(
+      { disabled: ["message cache (non-mention)", "message edits", "wiki-sync discord sources", "server auto-scan", "screening", "auto-mod trigger", "thread context"] },
+      "DISCORD_MESSAGE_CONTENT is off: running without the MessageContent intent",
+    );
+  }
 
   registerDiscordHooks(hookBus, {
     resolveThread: async (conversation) => {
@@ -316,7 +328,7 @@ export function startDiscordSurface(deps: DiscordSurfaceDeps): void {
     screenDiscordMessage(client, message as Message<true>);
 
     // Auto-mod trigger: mod role pinged by an authorized role (no bot mention required).
-    if (autoModGateOpen(guildConfig, isAutoModEligible(message, guildConfig))) {
+    if (autoModGateOpen(guildConfig, isAutoModEligible(message, guildConfig), config.discordMessageContent)) {
       if (!checkAndSetAutoModCooldown(message.guildId, message.channelId, guildConfig)) {
         logger.debug({ guildId: message.guildId, channelId: message.channelId }, "auto-mod trigger suppressed by cooldown");
         return;
@@ -388,13 +400,15 @@ export function startDiscordSurface(deps: DiscordSurfaceDeps): void {
         const { messages: existingHistory, initialThreadContext } = store.load(conversation);
         let threadContext: string;
         if (initialThreadContext != null) threadContext = initialThreadContext;
+        // Blank without MessageContent; an empty context also keeps it from being persisted.
+        else if (!config.discordMessageContent) threadContext = "";
         else if (isNew) threadContext = await fetchParentChannelContext(message, client.user.id);
         else threadContext = await fetchThreadContext(thread, client.user.id);
 
         // threadContext is frozen after the first turn (prompt-cache stability), so new thread
         // activity since the last reply is appended to the query instead of the (frozen) context.
         let turnText = baseText;
-        if (existingHistory.length > 0 && initialThreadContext != null) {
+        if (config.discordMessageContent && existingHistory.length > 0 && initialThreadContext != null) {
           const interstitial = await fetchInterstitialMessages(thread, client.user.id, new Set([message.id]));
           if (interstitial) turnText = `[Thread activity since your last response]\n${interstitial}\n\n${baseText}`;
         }
@@ -404,7 +418,8 @@ export function startDiscordSurface(deps: DiscordSurfaceDeps): void {
         // no approval prompt. Attempted at most once per guild per process, so a scan that fails
         // (e.g. missing channel-read perms) doesn't re-fire on every mention; the turn then just
         // runs with limited awareness.
-        if (memory.getServerContext(guildId) === null && !scannedGuilds.has(guildId)) {
+        // Skipped without MessageContent: the scan would save a hollow context from blank activity.
+        if (config.discordMessageContent && memory.getServerContext(guildId) === null && !scannedGuilds.has(guildId)) {
           const existing = scanningGuilds.get(guildId);
           if (existing) {
             await existing; // a concurrent mention already kicked off the scan — wait for its context
@@ -733,7 +748,8 @@ export function startDiscordSurface(deps: DiscordSurfaceDeps): void {
   // ── Message cache lifecycle ─────────────────────────────────────────────────
   client.on(Events.MessageUpdate, (oldMsg, newMsg) => {
     if (!newMsg.guildId || newMsg.partial) return;
-    updateMessageContent(newMsg.id, buildMessageContent(newMsg as Message), newMsg.editedTimestamp ?? Date.now());
+    // Without MessageContent the update is blank and would overwrite a good cached row.
+    if (config.discordMessageContent) updateMessageContent(newMsg.id, buildMessageContent(newMsg as Message), newMsg.editedTimestamp ?? Date.now());
     // Unfurled embeds arrive as an update with unchanged content: only the image checks need rerunning.
     const contentChanged = oldMsg.partial || oldMsg.content !== newMsg.content;
     if (!newMsg.author.bot) screenDiscordMessage(client, newMsg as Message<true>, { skipText: !contentChanged });
@@ -767,14 +783,14 @@ export function startDiscordSurface(deps: DiscordSurfaceDeps): void {
 // Helpers reused by the ask-button resume path.
 function threadChannelRef(thread: ThreadChannel): ChannelRef {
   const isPrivate = thread.type === ChannelType.PrivateThread;
-  return {
+  return withContentNote({
     id: thread.id,
     name: thread.name,
     type: isPrivate ? "thread (private)" : "thread (public)",
     isPrivate,
     parentChannelId: thread.parentId ?? undefined,
     parentChannelName: thread.parent?.name ?? undefined,
-  };
+  });
 }
 
 async function memberAuthor(thread: ThreadChannel, userId: string, allowedRoles: string[]): Promise<AuthorRef> {
