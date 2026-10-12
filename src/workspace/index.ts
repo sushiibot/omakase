@@ -85,6 +85,7 @@ async function main(): Promise<void> {
   };
   const toolStubs = new ToolStubs({
     principalId: config.principalId,
+    ownerName: () => config.ownerName,
     request: (method, params, timeoutMs) => (client ? client.request(method, params, { timeoutMs }) : Promise.reject(new NotConnectedError())),
   });
   // Late-bound: the subagent watch leases a pre-push hook install, and subagents take these credentials.
@@ -163,6 +164,7 @@ async function main(): Promise<void> {
   const connectors = new ConnectorManager(config.agentDir);
   await connectors.start();
   const personalOptions = {
+    ownerName: () => config.ownerName,
     boundaryReport: { home: config.home, context: loadedContextFiles },
     principalId: config.principalId,
     model: config.model,

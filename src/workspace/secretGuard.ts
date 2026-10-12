@@ -1,4 +1,5 @@
 import { realpathSync } from "node:fs";
+import { ownerLabel } from "../orchestration/ownerLabel.ts";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import type { ExtensionFactory, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
@@ -166,7 +167,7 @@ export function checkToolCall(toolName: string, input: Record<string, unknown>, 
   return null;
 }
 
-export function createSecretGuardExtension(opts: SecretGuardOptions & { log: Log }): ExtensionFactory {
+export function createSecretGuardExtension(opts: SecretGuardOptions & { log: Log; ownerName?: () => string | undefined }): ExtensionFactory {
   const paths = guardedPaths(opts);
   return (pi) => {
     pi.on("tool_call", (event): ToolCallEventResult | undefined => {
@@ -177,7 +178,7 @@ export function createSecretGuardExtension(opts: SecretGuardOptions & { log: Log
         block: true,
         reason:
           `Blocked by the secret guard (${rule}): this ${event.toolName} call would touch Pi's config/auth files ` +
-          "or a process environment, which hold credentials. Don't retry it another way; tell drk if you need something from there.",
+          `or a process environment, which hold credentials. Don't retry it another way; tell ${ownerLabel(opts.ownerName?.())} if you need something from there.`,
       };
     });
   };

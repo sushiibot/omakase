@@ -954,7 +954,7 @@ describe("workspace e2e: delegate, scheduled jobs, auto-mode asks", () => {
     await waitFor(() => h.surface.replies.some((r) => r.text.includes("passport renewal")), "proactive message");
     expect(h.surface.replies.find((r) => r.text.includes("passport renewal"))!.kind).toBe("proactive");
     expect(h.ws.pi().prompts).toEqual([]);
-    expect(JSON.stringify(h.ws.pi().customs)).toContain("You sent drk this proactive message: Your passport renewal is due Friday.");
+    expect(JSON.stringify(h.ws.pi().customs)).toContain("You sent the user this proactive message: Your passport renewal is due Friday.");
     await waitFor(() => h.ws.unacked().length === 0, "proactive delivery acked");
 
     const before = h.surface.posted;

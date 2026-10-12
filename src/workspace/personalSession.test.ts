@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentSessionEvent, ExtensionUIContext, PromptOptions } from "@earendil-works/pi-coding-agent";
 import type { ChatDeliverParams, ChatEventParams, ChatMessageParams } from "../orchestration/contracts.ts";
-import { PersonalSession, formatUserText, isContractRefusal, messageHeader, type ChatSession, type ChatSessionFactory, type ChatTransport, type ContextHooks, type MemoryHooks, type SessionSummaryRecord, STOP_NOTE } from "./personalSession.ts";
+import { PersonalSession, formatUserText, isContractRefusal, messageHeader, type ChatSession, type ChatSessionFactory, type ChatTransport, type ContextHooks, type MemoryHooks, type SessionSummaryRecord, stopNote } from "./personalSession.ts";
 import { HistoryWriter } from "./history.ts";
 import { RpcErrorResponse } from "../orchestration/transport/client.ts";
 import { FLUSH_MARKER } from "./memoryFlush.ts";
@@ -2446,7 +2446,7 @@ describe("PersonalSession context economy", () => {
     await host.handleMessage(msg("m1", "book the hotel"));
     expect(await host.handleAbort()).toEqual({ aborted: true });
     await until(() => sessions[0].customs.length === 1);
-    expect(sessions[0].customs[0].content).toBe(STOP_NOTE);
+    expect(sessions[0].customs[0].content).toBe(stopNote());
     expect(await host.handleAbort()).toEqual({ aborted: false });
     await sleep(10);
     expect(sessions[0].customs).toHaveLength(1);

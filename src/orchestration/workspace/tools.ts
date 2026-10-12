@@ -9,6 +9,7 @@ import { Check } from "typebox/schema";
 import type { AuthorRef, ConversationRef, ConversationStore, SpaceMemoryStore, SurfaceId, SurfaceSession, ToolContext, ToolEntry, ToolHosts, ToolRegistry } from "../../core/contracts.ts";
 import { buildToolContextBase, createToolRegistry } from "../../core/tools/registry.ts";
 import { toolCallParams, toolCancelParams, type ToolCallParams, type ToolCallResult, type ToolCancelResult, type ToolManifestEntry } from "../contracts.ts";
+import { ownerLabel } from "../ownerLabel.ts";
 import type { ConnectionInfo } from "../transport/server.ts";
 import { getLogger } from "../../logger.ts";
 import { realTimers, type Timers } from "./progress.ts";
@@ -92,6 +93,8 @@ export interface WorkspaceToolsOptions {
   timers?: Timers;
   now?: () => number;
   log?: AuditLog;
+  /** The owner's display name, for the text the agent reads. */
+  ownerName?: () => string | null;
 }
 
 interface PendingApproval {
@@ -127,7 +130,9 @@ const DENIED: ToolCallResult = { ok: false, error: "denied by owner", denied: tr
 const CANCELLED: ToolCallResult = { ok: false, error: "cancelled" };
 const HELD_DENIED: ToolCallResult = { ok: false, error: "denied: the owner's approval surface is unavailable, so they were never asked", denied: true };
 const HELD_OVER_CAP: ToolCallResult = { ok: false, error: `denied: ${MAX_HELD_APPROVALS} approvals are already waiting for the owner's approval surface`, denied: true };
-const APPROVAL_TIMED_OUT: ToolCallResult = { ok: false, error: "approval timed out (owner didn't respond within 30 min); do not retry it unless drk asks in chat" };
+function approvalTimedOut(name: string | null): ToolCallResult {
+  return { ok: false, error: `approval timed out (owner didn't respond within 30 min); do not retry it unless ${ownerLabel(name)} asks in chat` };
+}
 
 // Default-ignorable and format characters render as nothing or reorder text, so an approved prompt could
 // hide part of what executes. Tag characters are listed explicitly: most are unassigned, so not \p{Cf}.
@@ -372,7 +377,7 @@ export class WorkspaceTools {
       await resolve(decision);
       // Copies: a caller that mutates its result must not change the next one.
       if (decision === "cancelled") return { ...CANCELLED };
-      return decision === "timeout" ? { ...APPROVAL_TIMED_OUT } : { ...DENIED };
+      return decision === "timeout" ? approvalTimedOut(this.opts.ownerName?.() ?? null) : { ...DENIED };
     }
     // Disable the buttons while the tool runs, so a second click doesn't read as "expired".
     const running = resolve("approve");

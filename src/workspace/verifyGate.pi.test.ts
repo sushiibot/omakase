@@ -6,7 +6,7 @@ import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-
 import type { WorkspaceConfig } from "./config.ts";
 import { createPiChatSessionFactory } from "./piChatSession.ts";
 import { verifyFollowUp } from "./verifyGate.ts";
-import { LOOP_NUDGE, repeatReason } from "./loopGuard.ts";
+import { loopNudge, repeatReason } from "./loopGuard.ts";
 
 // A real Pi 0.99.1 session from the workspace factory; the only fake is fetch.
 const OPENROUTER_BASE = "http://openrouter.test/v1";
@@ -128,7 +128,7 @@ describe("guard order on a real Pi session", () => {
 
     await run(session as AgentSession, "add a.ts");
 
-    expect(JSON.stringify(bodies.at(-1)!.messages)).toContain(LOOP_NUDGE);
+    expect(JSON.stringify(bodies.at(-1)!.messages)).toContain(loopNudge());
     expect(bodies).toHaveLength(6);
     session.dispose();
   });

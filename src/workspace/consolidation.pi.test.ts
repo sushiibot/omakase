@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { WorkspaceConfig } from "./config.ts";
 import { BackendSelector } from "./chatgptFallback.ts";
-import { CONSOLIDATION_AGENT, MARKERS, SYSTEM_PROMPT, createConsolidationJob } from "./consolidation.ts";
+import { CONSOLIDATION_AGENT, MARKERS, systemPrompt, createConsolidationJob } from "./consolidation.ts";
 import { commitHome, scaffoldHome } from "./home.ts";
 import { runToolFreeJob } from "./jobSession.ts";
 import { RunLog } from "./runLog.ts";
@@ -131,7 +131,7 @@ describe("consolidation job on a real Pi session", () => {
     const body = bodies[0]!;
     expect(body.tools ?? []).toEqual([]);
     const system = JSON.stringify(body.messages.filter((m) => m.role === "system"));
-    expect(system).toContain(SYSTEM_PROMPT.slice(0, 60));
+    expect(system).toContain(systemPrompt().slice(0, 60));
     expect(JSON.stringify(body)).not.toContain(AGENTS_MARKER);
     expect(JSON.stringify(body.messages.at(-1))).toContain("<daily-note file=\\\"memory/2026-09-28.md\\\"");
 
@@ -140,7 +140,7 @@ describe("consolidation job on a real Pi session", () => {
 
     const [run] = runs.listRuns({ agentName: CONSOLIDATION_AGENT });
     expect(run).toMatchObject({ agentName: "job:consolidation", status: "done" });
-    expect(run!.task).toContain("Consolidate drk's memory files.");
+    expect(run!.task).toContain("Consolidate the user's memory files.");
     expect(run!.sessionFile.startsWith(`${jobSessionDir(config().agentDir)}/`)).toBe(true);
     expect(existsSync(run!.sessionFile)).toBe(true);
   });

@@ -1,4 +1,5 @@
 import { OwnerRequests, ownerRequestAsks } from "./ownerRequests.ts";
+import { ownerNameLine } from "../orchestration/ownerLabel.ts";
 import { taskAwareness } from "./taskAwareness.ts";
 import type { TaskStore } from "./taskStore.ts";
 import type { WakeupManager } from "./wakeups.ts";
@@ -78,7 +79,7 @@ export function currentRunId(session: ChatSession): string | null {
 }
 
 /** In-memory settings overrides per live session, re-applied after a reload drops them. */
-const sessionOverrides = new WeakMap<object, { session: AgentSession; overrides: Settings; context: () => readonly { path: string; content: string }[] }>();
+const sessionOverrides = new WeakMap<object, { session: AgentSession; overrides: Settings; context: () => readonly { path: string; content: string }[]; ownerName: () => string | undefined }>();
 
 /** Re-reads the home context files (and Pi's settings/resources) into `session`'s system prompt. */
 export async function reloadContext(session: ChatSession): Promise<void> {
@@ -140,7 +141,7 @@ function latestSummary(session: AgentSession): string | undefined {
 /** A recap of `session` in the anchored-summary layout, generated as a cached continuation of its context. */
 export async function recapSession(session: ChatSession, signal?: AbortSignal): Promise<ContinuationResult | null> {
   const s = piSession(session, "recapSession");
-  return continueWithInstruction(s, anchoredInstruction("recap", latestSummary(s)), signal);
+  return continueWithInstruction(s, anchoredInstruction("recap", latestSummary(s), sessionOverrides.get(session)?.ownerName()), signal);
 }
 
 /** Compacts `session` now (our anchored summary via session_before_compact); tokens before and after. */
@@ -284,11 +285,17 @@ export function createPiChatSessionFactory(
     const connectorTools = opts.connectors ? CONNECTOR_TOOLS : [];
     const delegate = opts.subagents?.offersDelegate(0) ? ["delegate"] : [];
     const loopState: LoopGuardState = { nudged: false };
+    const ownerName = () => config.ownerName;
     const hygieneState: HygieneState = { armed: true };
     const loader = new DefaultResourceLoader({
       cwd,
       agentDir: config.agentDir,
       agentsFilesOverride: homeAgentsFilesOverride(cwd, { tasks: taskRulesOf(config) }),
+      // Read on every reload, so a name changed in the app reaches the next session.
+      appendSystemPromptOverride: (base) => {
+        const line = ownerNameLine(config.ownerName);
+        return line ? [...base, line] : base;
+      },
       // Only the factories below: the agent can write ~/.pi and <cwd>/.pi, so discovered extensions would run its code in-process.
       noExtensions: true,
       extensionFactories: [
@@ -298,8 +305,8 @@ export function createPiChatSessionFactory(
         ...(checkpoint || opts.wakeups ? [{ name: "sushii-durable-input", factory: createInputCheckpointExtension(async () => { await checkpoint?.(); await opts.wakeups?.flush(); }) }] : []),
         ...(!opts.origin || opts.origin.conversationId === "main" ? [{ name: "sushii-thread-awareness", factory: threadAwareness(config.stateDir) }] : []),
         // First: tool_call stops at the first block, so a guard ahead of it would hide repeats from it.
-        { name: "sushii-loop-guard", factory: createLoopGuardExtension({ log, state: loopState }) },
-        { name: "sushii-secret-guard", factory: createSecretGuardExtension({ agentDir: config.agentDir, cwd, home: config.home, stateDir: config.stateDir, log: guardLog }) },
+        { name: "sushii-loop-guard", factory: createLoopGuardExtension({ log, state: loopState, ownerName }) },
+        { name: "sushii-secret-guard", factory: createSecretGuardExtension({ agentDir: config.agentDir, cwd, home: config.home, stateDir: config.stateDir, log: guardLog, ownerName }) },
         { name: "sushii-model-fallback", factory: fallbackExtension },
         ...(opts.connectors ? [{ name: "sushii-connectors", factory: opts.connectors.extensionFor(() => observerRef.current?.currentRunId() ?? null) }] : []),
         ...(stubs ? [{ name: "sushii-tool-stubs", factory: stubs.factory }] : []),
@@ -334,7 +341,7 @@ export function createPiChatSessionFactory(
             summarize: ({ previous, signal }) => {
               const session = sessionRef.current;
               if (!session) throw new Error("pi chat session not ready");
-              return continueWithInstruction(session, anchoredInstruction("compaction", previous), signal);
+              return continueWithInstruction(session, anchoredInstruction("compaction", previous, config.ownerName), signal);
             },
             log: economyLog,
           }),
@@ -373,7 +380,7 @@ export function createPiChatSessionFactory(
 
     const rawBashTool = await createWorkspaceBashTool(cwd, () => observerRef.current?.currentRunId() ?? null, opts.github, browser, config.stateDir);
     const bashTool = browser ? browser.wrapBash(rawBashTool) : rawBashTool;
-    const sendFileTool = createSendFileTool({ cwd, home: config.home, agentDir: config.agentDir, stateDir: config.stateDir }, () => sessionRef.current);
+    const sendFileTool = createSendFileTool({ cwd, home: config.home, agentDir: config.agentDir, stateDir: config.stateDir }, () => sessionRef.current, undefined, ownerName);
     let session: Awaited<ReturnType<typeof createAgentSession>>["session"];
     try {
       ({ session } = await createAgentSession({
@@ -422,7 +429,7 @@ export function createPiChatSessionFactory(
 
     const file = sessionManager.getSessionFile();
     if (!file) throw new Error("pi chat session has no persisted file");
-    sessionOverrides.set(session, { session, overrides, context: () => loader.getAgentsFiles().agentsFiles.map(f => ({ ...f, path: relative(config.home, f.path) })).filter(f => f.path && !f.path.startsWith("..") && !f.path.startsWith("/")) });
+    sessionOverrides.set(session, { session, overrides, context: () => loader.getAgentsFiles().agentsFiles.map(f => ({ ...f, path: relative(config.home, f.path) })).filter(f => f.path && !f.path.startsWith("..") && !f.path.startsWith("/")), ownerName: () => config.ownerName });
     const observer = observeRuns(session, { recorder: runs, sessionFile: file, agentName: opts.agentName ?? "main", defaultModel: config.model, turnId: opts.mainTurnId, conversationId: opts.origin?.conversationId ?? "main" });
     observerRef.current = observer;
     runObservers.set(session, observer);

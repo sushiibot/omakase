@@ -8,5 +8,5 @@ when: daily 08:00
 active: 07:00-10:00
 enabled: false
 
-Give drk a short brief for the day. Cover anything due today or overdue in MEMORY.md and the recent
+Give the user a short brief for the day. Cover anything due today or overdue in MEMORY.md and the recent
 daily notes, and follow-ups you promised. If there is nothing worth mentioning, reply NO_REPLY.

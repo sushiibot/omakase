@@ -4,6 +4,7 @@ import { getLogger } from "../logger.ts";
 import type { DeliverJob } from "../orchestration/contracts.ts";
 import type { WorkspaceConfig } from "./config.ts";
 import { isNoReply, NO_REPLY } from "./events.ts";
+import { ownerLabel, ownerNameLine, ownerPossessive } from "../orchestration/ownerLabel.ts";
 import { readJson, writeFileAtomic } from "./files.ts";
 import { runToolFreeJob } from "./jobSession.ts";
 import type { BackendSelector } from "./chatgptFallback.ts";
@@ -17,10 +18,13 @@ export { isNoReply, NO_REPLY };
 const log = getLogger("workspace.proactive");
 
 export const HEARTBEAT_JOB = "heartbeat";
-export const HEARTBEAT_PROMPT =
-  "Check whether anything needs drk's attention right now: something due or overdue, a follow-up you promised, " +
-  "an open TASKS.md item that needs a nudge, or a change worth flagging. Look in TASKS.md (and tasks/<slug>.md for a " +
-  "project), MEMORY.md and the recent daily notes when it helps. If nothing does, reply NO_REPLY.";
+export function heartbeatPrompt(ownerName?: string): string {
+  return (
+    `Check whether anything needs ${ownerPossessive(ownerName)} attention right now: something due or overdue, a follow-up you promised, ` +
+    "an open TASKS.md item that needs a nudge, or a change worth flagging. Look in TASKS.md (and tasks/<slug>.md for a " +
+    "project), MEMORY.md and the recent daily notes when it helps. If nothing does, reply NO_REPLY."
+  );
+}
 /** Names schedule.md can't use: the built-in jobs. */
 export const RESERVED_JOB_NAMES = [HEARTBEAT_JOB, "consolidation"] as const;
 /** A daily job's window for the one-message-per-window limit; under 24 h so a DST day's 23 h gap still sends. */
@@ -115,18 +119,22 @@ function localTime(now: Date, tz: string): string {
   }).format(now);
 }
 
-export function jobPreamble(name: string, now: Date, tz: string): string {
+export function jobPreamble(name: string, now: Date, tz: string, ownerName?: string): string {
+  const owner = ownerLabel(ownerName);
+  const possessive = ownerPossessive(ownerName);
+  const nameLine = ownerNameLine(ownerName);
   return [
-    `You are drk's personal agent, running the scheduled job "${name}" on your own, outside the chat with drk.`,
+    `You are ${possessive} personal agent, running the scheduled job "${name}" on your own, outside the chat with ${owner}.`,
+    ...(nameLine ? [nameLine] : []),
     `It is ${localTime(now, tz)} (${tz}).`,
     "",
-    "- This run is read-only: you can read files in your home (MEMORY.md, memory/, schedule.md, ...) and use the bot tools offered,",
+    "- This run is read-only: you can read files in your home (MEMORY.md, memory/, schedule.md, ...) and use the gateway tools offered,",
     "  but you can't run commands, edit files or write memory, whatever the operating manual below says.",
-    "- Don't call tools that need drk's approval.",
-    `- When nothing is worth drk's attention right now, reply with exactly ${NO_REPLY} and nothing else.`,
-    "- Otherwise your reply is sent to drk as-is, as an unprompted chat message: short, the point first, and why it matters now.",
+    `- Don't call tools that need ${possessive} approval.`,
+    `- When nothing is worth ${possessive} attention right now, reply with exactly ${NO_REPLY} and nothing else.`,
+    `- Otherwise your reply is sent to ${owner} as-is, as an unprompted chat message: short, the point first, and why it matters now.`,
     "",
-    "Your operating manual and drk's profile follow.",
+    `Your operating manual and ${possessive} profile follow.`,
   ].join("\n");
 }
 
@@ -180,7 +188,7 @@ export function createPromptJob(spec: PromptJobSpec, deps: PromptJobDeps): Sched
       const prompt = [spec.prompt, deps.scheduledChecks?.(), notes].filter(Boolean).join("\n\n");
       const { text, runId } = await (deps.runner ?? runToolFreeJob)(deps.config, {
         agentName,
-        systemPrompt: jobPreamble(spec.name, now, deps.config.tz),
+        systemPrompt: jobPreamble(spec.name, now, deps.config.tz, deps.config.ownerName),
         prompt,
         runs: deps.runs,
         selector: deps.selector,
@@ -198,7 +206,7 @@ export function createPromptJob(spec: PromptJobSpec, deps: PromptJobDeps): Sched
       deps.limiter.record(spec.name, now);
       deps.deliver(text, { name: spec.name, ...ran });
       try {
-        await deps.note(spec.name, `[scheduled job ${spec.name}] You sent drk this proactive message: ${oneLine(text, CONTEXT_NOTE_MAX)}`);
+        await deps.note(spec.name, `[scheduled job ${spec.name}] You sent ${ownerLabel(deps.config.ownerName)} this proactive message: ${oneLine(text, CONTEXT_NOTE_MAX)}`);
       } catch (err) {
         log.warn({ err, job: spec.name }, "failed to note a proactive message in the chat");
       }
@@ -208,14 +216,14 @@ export function createPromptJob(spec: PromptJobSpec, deps: PromptJobDeps): Sched
 }
 
 export function createHeartbeatJob(schedule: JobSchedule, deps: PromptJobDeps): ScheduledJob {
-  const job = createPromptJob({ name: HEARTBEAT_JOB, prompt: HEARTBEAT_PROMPT, schedule }, deps);
-  if (!deps.review) return job;
+  // Built per run, so a name changed in the app reaches the next heartbeat.
+  const job = () => createPromptJob({ name: HEARTBEAT_JOB, prompt: heartbeatPrompt(deps.config.ownerName), schedule }, deps);
   const review = deps.review;
   return {
-    ...job,
+    ...job(),
     run: async (ctx) => {
-      await review().catch((err) => log.warn({ err }, "the TASKS.md stale review failed"));
-      return job.run(ctx);
+      if (review) await review().catch((err) => log.warn({ err }, "the TASKS.md stale review failed"));
+      return job().run(ctx);
     },
   };
 }

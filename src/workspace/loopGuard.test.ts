@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { callKey, createLoopGuardExtension, LOOP_GUARD_CUSTOM_TYPE, LOOP_NUDGE, repeatReason } from "./loopGuard.ts";
+import { callKey, createLoopGuardExtension, LOOP_GUARD_CUSTOM_TYPE, loopNudge, repeatReason } from "./loopGuard.ts";
 
 type Handler = (event: unknown) => unknown;
 type CallResult = { block: boolean; reason: string } | undefined;
@@ -57,7 +57,7 @@ describe("loop guard", () => {
     for (let i = 0; i < 3; i++) h.call("read", { path: "a.ts" });
     expect(h.sent).toHaveLength(0);
     h.call("read", { path: "a.ts" });
-    expect(h.sent).toEqual([{ message: { customType: LOOP_GUARD_CUSTOM_TYPE, content: LOOP_NUDGE, display: false } as never, options: { deliverAs: "steer" } }]);
+    expect(h.sent).toEqual([{ message: { customType: LOOP_GUARD_CUSTOM_TYPE, content: loopNudge(), display: false } as never, options: { deliverAs: "steer" } }]);
     h.call("read", { path: "a.ts" });
     expect(h.sent).toHaveLength(1);
   });

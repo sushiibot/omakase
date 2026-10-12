@@ -85,4 +85,4 @@ The Pi session files themselves sit in the agent dir, which the secret guard blo
 to open them directly.
 
 History and `ws-runs` output are redacted (tokens, keys and long secret-looking blobs become
-`[REDACTED]`). If a redaction hides something you need, ask drk; don't try to recover it another way.
+`[REDACTED]`). If a redaction hides something you need, ask the user; don't try to recover it another way.

@@ -1,4 +1,5 @@
 import { PendingOwnerAsks } from "./pendingOwnerAsks.ts";
+import { ownerLabel, ownerLabelStart } from "../orchestration/ownerLabel.ts";
 import type { OwnerRequests, RequestEnd } from "./ownerRequests.ts";
 import { SessionBoundaryRecorder } from "./sessionBoundary.ts";
 import { SESSION_TEXT_MAX, type SessionBoundary } from "../orchestration/sessionContracts.ts";
@@ -73,8 +74,9 @@ export const NEW_RECAP_TIMEOUT_MS = 120_000;
 const OWNER_ASK_TIMEOUT_MS = 24 * 60 * 60_000;
 /** How long `!compact` waits for a running turn to end before compacting anyway. */
 const COMPACT_WAIT_MS = 5 * 60_000;
-export const STOP_NOTE =
-  "[note] drk stopped the previous turn with !stop. If it concerned an item in TASKS.md, reconcile that item now (mark it [-] with a one-line reason, or update it).";
+export function stopNote(ownerName?: string): string {
+  return `[note] ${ownerLabelStart(ownerName)} stopped the previous turn with !stop. If it concerned an item in TASKS.md, reconcile that item now (mark it [-] with a one-line reason, or update it).`;
+}
 /** How long a pre-compaction flush's abort may take before the chain moves on. */
 const FLUSH_ABORT_MS = 10_000;
 
@@ -188,6 +190,8 @@ interface HiddenPrompt {
 }
 
 export interface PersonalSessionOptions {
+  /** The owner's display name, for the notes and errors the agent reads. */
+  ownerName?: () => string | undefined;
   /** Enables inspectable context boundaries with shared-memory snapshots. */
   boundaryReport?: { home: string; context(session: ChatSession): readonly { path: string; content: string }[] };
   principalId: string;
@@ -605,7 +609,7 @@ export class PersonalSession {
       this.dropQueued(session);
       if (this.run) this.run.abortRequested = true;
       // Lands before the next prompt, like context that arrives mid-run.
-      if (aborted && this.run && !this.run.hidden) this.pendingContext.push({ messageId: `stop:${this.newId()}`, text: STOP_NOTE });
+      if (aborted && this.run && !this.run.hidden) this.pendingContext.push({ messageId: `stop:${this.newId()}`, text: stopNote(this.opts.ownerName?.()) });
       await session.abort();
       await this.inbox.flush();
       return { aborted };
@@ -1484,7 +1488,7 @@ export class PersonalSession {
 
   private fileRun(): OpenRun {
     const run = this.run;
-    if (!run || run.hidden) throw new Error("send_file only works during a reply to drk");
+    if (!run || run.hidden) throw new Error(`send_file only works during a reply to ${ownerLabel(this.opts.ownerName?.())}`);
     if (!run.origin || !this.fileSurfaces.get(run.origin.surface)) {
       throw new Error("the chat this turn replies to can't carry file attachments; share the file's contents or a link instead");
     }

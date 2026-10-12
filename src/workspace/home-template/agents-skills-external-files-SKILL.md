@@ -17,5 +17,5 @@ Use those IDs for subsequent commands; paths are relative to the selected allowe
   If the ETag is weak, read again after a short delay. A conflict needs another read and review.
   Never retry a timed-out write blindly. Read back a successful write to verify it.
 
-Text reads and writes are capped at 256 KiB; downloads at 2 MiB. Credentials stay in the bot.
+Text reads and writes are capped at 256 KiB; downloads at 2 MiB. Credentials stay in the gateway.
 The owner manages connections and folder grants in Workspace → File stores.

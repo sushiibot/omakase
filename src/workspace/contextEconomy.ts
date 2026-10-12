@@ -1,4 +1,5 @@
 import type { AgentSession, ContextEditEntryDraft, ExtensionFactory, ProjectedSessionEntry } from "@earendil-works/pi-coding-agent";
+import { ownerLabel, ownerPossessive } from "../orchestration/ownerLabel.ts";
 import { summarizeToolArgs } from "../agentRuntime/piShared.ts";
 
 type Log = { info: (obj: object, msg: string) => void; warn: (obj: object, msg: string) => void };
@@ -144,7 +145,7 @@ export function createHygieneExtension(opts: { thresholdTokens: number; state: H
 export const ANCHORED_SECTIONS = [
   "## Goals",
   "## Decisions (and why)",
-  "## drk's preferences learned this session",
+  "## User preferences learned this session",
   "## Open threads / next steps",
   "## Artifacts (files, repos, PRs, branches touched)",
   "## Pending asks / approvals",
@@ -153,20 +154,20 @@ export const ANCHORED_SECTIONS = [
 export type SummaryKind = "compaction" | "recap";
 
 /** The final user message of the summary/recap request, appended to the live context. */
-export function anchoredInstruction(kind: SummaryKind, previous?: string): string {
+export function anchoredInstruction(kind: SummaryKind, previous?: string, ownerName?: string): string {
   const purpose =
     kind === "compaction"
       ? "The conversation is about to be compacted: older messages will be replaced by the summary you write now."
       : "This session is about to end; a fresh session starts from the recap you write now.";
   const lines = [
-    "[context summary request — not from drk]",
-    `${purpose} Do not call tools and do not reply to drk. Write only the summary, in markdown, with exactly these sections:`,
+    "[context summary request — not from the user]",
+    `${purpose} Do not call tools and do not reply to ${ownerLabel(ownerName)}. Write only the summary, in markdown, with exactly these sections:`,
     "",
     ...ANCHORED_SECTIONS,
     "",
     "Rules:",
     "- Merge, don't regenerate: keep every still-valid item from the previous summary, update what changed, and move resolved items out (a line under Decisions is enough).",
-    "- Keep exact values: paths, ids, numbers, names, URLs, message links. Quote drk's own words for preferences and constraints, with their exceptions.",
+    `- Keep exact values: paths, ids, numbers, names, URLs, message links. Quote ${ownerPossessive(ownerName)} own words for preferences and constraints, with their exceptions.`,
     "- Open threads: don't duplicate TASKS.md; name the task or project and add only what TASKS.md doesn't say.",
     "- Write \"(none)\" under an empty section. Aim for 500–1500 words; never more than 4000.",
   ];

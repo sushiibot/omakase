@@ -1,4 +1,5 @@
 import type { TaskStore } from "../taskStore.ts";
+import { ownerLabel, ownerNameLine, ownerPossessive } from "../../orchestration/ownerLabel.ts";
 import type { BrowserManager, BrowserBinding } from "../browser.ts";
 import { autoCompactionSettings } from "../contextEconomy.ts";
 import { existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
@@ -295,8 +296,8 @@ export class SubagentHost {
         "Write a complete brief in `task`: goal, what you already know, what to return. With mode \"fresh\" (default) " +
         "the child sees nothing else; mode \"fork\" starts it from a copy of this conversation. `continue` with a " +
         "finished child's runId sends it a follow-up in its own session. `background: true` returns at once; the " +
-        "result arrives later as a message. Children can't ask questions, message drk, or write memory, persona or " +
-        "agent files; read-only agents have no shell (they read files and use the bot tools such as web_search and " +
+        `result arrives later as a message. Children can't ask questions, message ${ownerLabel(this.opts.config.ownerName)}, or write memory, persona or ` +
+        "agent files; read-only agents have no shell (they read files and use the gateway tools such as web_search and " +
         "fetch_url_content). A child that changes a protected file is stopped and the change is undone. " +
         `At most ${this.limits.maxReaders} read-only children and ${this.limits.maxWriters} writer run at once; ` +
         "writers need `repo` (a git repo under projects/) and work in their own worktree on a new branch.",
@@ -420,7 +421,7 @@ export class SubagentHost {
       status: "running",
       text:
         `Started ${def.name} in the background (runId ${spawn.runId}${queued ? ", queued for a free slot" : ""}). ` +
-        "Its result will arrive as a message; tell drk it's running and carry on.",
+        `Its result will arrive as a message; tell ${ownerLabel(this.opts.config.ownerName)} it's running and carry on.`,
     };
   }
 
@@ -725,11 +726,11 @@ export class SubagentHost {
       noPromptTemplates: true,
       noThemes: true,
       noContextFiles: true,
-      systemPromptOverride: () => childSystemPrompt(spawn, cwd, config.home, this.limits.resultChars),
+      systemPromptOverride: () => childSystemPrompt(spawn, cwd, config.home, this.limits.resultChars, config.ownerName),
       appendSystemPromptOverride: () => [],
       extensionFactories: [
         { name: "sushii-protected-watch", factory: this.watchExtension(spawn) },
-        { name: "sushii-secret-guard", factory: createSecretGuardExtension({ agentDir: config.agentDir, cwd, home: config.home, log: guardLog }) },
+        { name: "sushii-secret-guard", factory: createSecretGuardExtension({ agentDir: config.agentDir, cwd, home: config.home, log: guardLog, ownerName: () => config.ownerName }) },
         ...fallback,
         ...(stubs ? [{ name: "sushii-tool-stubs", factory: stubs.factory }] : []),
         {
@@ -958,14 +959,16 @@ export function forkSource(sm: Pick<ExtensionContext["sessionManager"], "getBran
   throw new Error("delegate: the calling message is not in the parent session yet");
 }
 
-function childSystemPrompt(spawn: Spawn, cwd: string, home: string, cap: number): string {
+function childSystemPrompt(spawn: Spawn, cwd: string, home: string, cap: number, ownerName?: string): string {
   const where = relative(home, cwd) || ".";
+  const nameLine = ownerNameLine(ownerName);
   return [
     spawn.def.prompt,
     "",
     "## Subagent rules",
     ...(spawn.taskId ? [`Persistent task: ${spawn.taskId}. Use task_manage to update the checklist and task status when appropriate. TASKS.md is generated; do not edit it.`] : []),
-    `You are the \`${spawn.def.name}\` subagent (runId ${spawn.runId}), working for drk's personal agent, not for drk directly.`,
+    `You are the \`${spawn.def.name}\` subagent (runId ${spawn.runId}), working for ${ownerPossessive(ownerName)} personal agent, not for ${ownerLabel(ownerName)} directly.`,
+    ...(nameLine ? [nameLine] : []),
     `Your final message is your result: the main agent sees only it, cut at ${cap} chars. Make it a self-contained summary with concrete findings (paths, commands, links).`,
     "You can't ask questions or message anyone; if something is ambiguous, state your assumption and carry on.",
     "You can't write USER.md, MEMORY.md or memory/; put anything worth remembering in your result.",

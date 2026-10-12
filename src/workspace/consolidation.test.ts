@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { runnerGit } from "../agentRuntime/runnerGit.ts";
 import {
   MARKERS,
-  SYSTEM_PROMPT,
+  systemPrompt,
   buildPrompt,
   contentTokens,
   grounding,
@@ -101,7 +101,7 @@ function deps(text: string | ((prompt: string) => string)): ConsolidationDeps {
     stateDir,
     now: () => new Date("2026-09-29T04:00:00Z"),
     propose: async (system, prompt) => {
-      expect(system).toBe(SYSTEM_PROMPT);
+      expect(system).toBe(systemPrompt());
       prompts.push(prompt);
       return { text: typeof text === "string" ? text : text(prompt), model: "test/model" };
     },

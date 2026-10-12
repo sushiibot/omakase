@@ -38,6 +38,9 @@ export interface WorkspaceConfig {
   models?: ModelEntry[];
   /** TASKS.md staleness and cap rules; DEFAULT_TASK_RULES when absent. */
   tasks?: TaskRules;
+  /** The owner's display name from the bot (register result, owner/update). Set at runtime, like the
+   *  `!model` fields; prompts built after a change use it. Absent: none set, or not heard yet. */
+  ownerName?: string;
 }
 
 export interface EconomyConfig {

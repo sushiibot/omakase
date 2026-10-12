@@ -15,7 +15,7 @@ import { ConnectionClosedError, NotConnectedError, RequestTimeoutError } from ".
 import { PROXIED_TOOLS } from "../orchestration/workspace/tools.ts";
 import type { WorkspaceConfig } from "./config.ts";
 import { createPiChatSessionFactory, reloadContext } from "./piChatSession.ts";
-import { ASK_TOOL_TIMEOUT_MS, DENIED_TEXT, KNOWN_PROXIED_TOOLS, LINK_CLOSED_TEXT, TOOL_CANCEL_TIMEOUT_MS, TOOL_TIMEOUT_MS, ToolStubs } from "./toolStubs.ts";
+import { ASK_TOOL_TIMEOUT_MS, deniedText, KNOWN_PROXIED_TOOLS, LINK_CLOSED_TEXT, TOOL_CANCEL_TIMEOUT_MS, TOOL_TIMEOUT_MS, ToolStubs } from "./toolStubs.ts";
 
 const SEARCH_SCHEMA = { type: "object", properties: { query: { type: "string" } }, required: ["query"], additionalProperties: false };
 const LINEAR_SCHEMA = {
@@ -148,7 +148,7 @@ describe("stub execute", () => {
   test("a denied call tells the model not to retry", async () => {
     const { s } = stubs(async () => ({ ok: false, error: "denied by owner", denied: true }));
     s.update([LINEAR]);
-    await expect(run(byName(s, "file_linear_issue"), { title: "t", description: "d", repo_label: "r" })).rejects.toThrow(DENIED_TEXT);
+    await expect(run(byName(s, "file_linear_issue"), { title: "t", description: "d", repo_label: "r" })).rejects.toThrow(deniedText());
   });
 
   test("a bot error surfaces its text", async () => {

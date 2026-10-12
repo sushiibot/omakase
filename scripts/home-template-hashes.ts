@@ -1,11 +1,13 @@
 #!/usr/bin/env bun
 // Regenerates src/workspace/homeTemplateHashes.ts: the sha256 of every version of each upgradable home
-// template file ever committed on any local branch, minus the current one. Run after changing a template
-// (or merging a branch that did): `bun scripts/home-template-hashes.ts`.
+// template file ever committed on any local branch, plus every hash the file already lists, minus the
+// current one. Listed hashes are kept because a home may hold a version from history this clone lacks.
+// Run after changing a template (or merging a branch that did): `bun scripts/home-template-hashes.ts`.
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { UPGRADABLE_TEMPLATES } from "../src/workspace/homeUpgrade.ts";
+import { SHIPPED_TEMPLATE_HASHES } from "../src/workspace/homeTemplateHashes.ts";
 
 const root = join(import.meta.dir, "..");
 const templateDir = "src/workspace/home-template";
@@ -23,7 +25,7 @@ for (const file of Object.values(UPGRADABLE_TEMPLATES)) {
   const path = `${templateDir}/${file}`;
   const current = sha(readFileSync(join(root, path), "utf8"));
   const revs = git(["log", "--all", "--full-history", "--format=%H", "--", path]).split("\n").filter(Boolean);
-  const hashes = new Set<string>();
+  const hashes = new Set<string>(SHIPPED_TEMPLATE_HASHES[file] ?? []);
   for (const rev of revs) {
     let text: string;
     try {
@@ -34,6 +36,7 @@ for (const file of Object.values(UPGRADABLE_TEMPLATES)) {
     const h = sha(text);
     if (h !== current) hashes.add(h);
   }
+  hashes.delete(current);
   out[file] = [...hashes].sort();
 }
 

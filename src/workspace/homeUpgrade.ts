@@ -40,7 +40,7 @@ type Log = { info: (obj: object, msg: string) => void; warn: (obj: object, msg: 
 
 /**
  * Replaces each upgradable home file that is byte-identical to an earlier shipped template with the current
- * template, committing each one; a file drk edited (no hash match) is left alone. Returns the upgraded paths.
+ * template, committing each one; a file the user edited (no hash match) is left alone. Returns the upgraded paths.
  */
 export async function upgradeHomeTemplates(
   home: string,

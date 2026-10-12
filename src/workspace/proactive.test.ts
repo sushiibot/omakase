@@ -8,7 +8,7 @@ import type { ToolFreeJobInput, ToolFreeJobResult } from "./jobSession.ts";
 import type { DeliverJob } from "../orchestration/contracts.ts";
 import {
   DAILY_JOB_WINDOW_MS,
-  HEARTBEAT_PROMPT,
+  heartbeatPrompt,
   ProactiveLimiter,
   createHeartbeatJob,
   createPromptJob,
@@ -106,7 +106,7 @@ describe("heartbeat", () => {
     expect(input!.agentName).toBe("job:heartbeat");
     expect(input!.contextFiles).toEqual(["AGENTS.md", "USER.md"]);
     expect(input!.readOnlyTools).toEqual({});
-    expect(input!.prompt.startsWith(HEARTBEAT_PROMPT)).toBe(true);
+    expect(input!.prompt.startsWith(heartbeatPrompt())).toBe(true);
     expect(input!.prompt).toContain("memory/2026-09-29.md, last 15 lines");
     expect(input!.prompt).toContain("- note 19");
     expect(input!.prompt).not.toContain("- note 4\n");
@@ -147,7 +147,7 @@ describe("heartbeat", () => {
     expect(outcome.status).toBe("sent");
     expect(delivered).toEqual([reply]);
     expect(deliveredJobs).toEqual([{ name: "heartbeat", runId: RUN }]);
-    expect(notes).toEqual([{ name: "heartbeat", text: `[scheduled job heartbeat] You sent drk this proactive message: ${reply}` }]);
+    expect(notes).toEqual([{ name: "heartbeat", text: `[scheduled job heartbeat] You sent the user this proactive message: ${reply}` }]);
   });
 
   test("a failed chat note doesn't fail the job or unsend the message", async () => {

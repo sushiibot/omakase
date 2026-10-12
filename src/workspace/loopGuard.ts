@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { ownerLabel } from "../orchestration/ownerLabel.ts";
 import type { ExtensionFactory, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
 import { bashChangedRepo } from "./verifyGate.ts";
 
@@ -8,8 +9,9 @@ export const REPEAT_LIMIT = 3;
 /** Blocks in one run before the agent is told to stop and summarize. */
 export const NUDGE_AFTER_BLOCKS = 2;
 
-export const LOOP_NUDGE =
-  "Several repeated calls have been blocked this run. Stop retrying: summarize for drk what you tried, what's failing, and what you need.";
+export function loopNudge(ownerName?: string): string {
+  return `Several repeated calls have been blocked this run. Stop retrying: summarize for ${ownerLabel(ownerName)} what you tried, what's failing, and what you need.`;
+}
 
 type Log = { warn: (obj: object, msg: string) => void };
 
@@ -44,7 +46,7 @@ export function repeatReason(times: number): string {
  * Blocks the third identical tool call in a run. Counts reset when code changes, so an
  * edit-then-rerun-the-tests cycle is never blocked.
  */
-export function createLoopGuardExtension(opts: { log?: Log; state?: LoopGuardState } = {}): ExtensionFactory {
+export function createLoopGuardExtension(opts: { log?: Log; state?: LoopGuardState; ownerName?: () => string | undefined } = {}): ExtensionFactory {
   return (pi) => {
     let counts = new Map<string, number>();
     let blocks = 0;
@@ -68,7 +70,7 @@ export function createLoopGuardExtension(opts: { log?: Log; state?: LoopGuardSta
       opts.log?.warn({ tool: event.toolName, times: prior, blocks }, "loop guard blocked a repeated call");
       if (blocks >= NUDGE_AFTER_BLOCKS && !state.nudged) {
         state.nudged = true;
-        pi.sendMessage({ customType: LOOP_GUARD_CUSTOM_TYPE, content: LOOP_NUDGE, display: false }, { deliverAs: "steer" });
+        pi.sendMessage({ customType: LOOP_GUARD_CUSTOM_TYPE, content: loopNudge(opts.ownerName?.()), display: false }, { deliverAs: "steer" });
       }
       return { block: true, reason: repeatReason(prior) };
     });
