@@ -48,6 +48,7 @@ export const SHIPPED_TEMPLATE_HASHES: Record<string, readonly string[]> = {
     "7eca8d497f561e3191aaedfafdad316334e9116c18056fb4a63eaaec7b6560a7",
     "e791de5521f3e7a6239dd677d34111c2a0b4d73c3fc1372a8b1ea611c786d4b2",
   ],
+  "agents-skills-external-files-SKILL.md": [],
   "agents-agents-explore.md": [],
   "agents-agents-researcher.md": [
     "a2ddf63c1e756f7c2e2dcedc95cc2a3957c19af9f64c8fdcd56782afe1a9dbb6",

@@ -61,6 +61,7 @@ describe("scaffoldHome", () => {
       ".agents/agents/reviewer.md",
       ".agents/skills/README.md",
       ".agents/skills/documents/SKILL.md",
+      ".agents/skills/external-files/SKILL.md",
       ".agents/skills/session-history/SKILL.md",
       ".gitignore",
       "AGENTS.md",

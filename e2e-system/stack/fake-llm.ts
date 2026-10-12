@@ -1,6 +1,7 @@
 // OpenAI-compatible chat-completions stand-in for OpenRouter. Replies are scripted by keywords in the
 // last user message (see the README). A `#<tag>` in that message makes every reply start with
 // `re-<tag>`, so a flow can find its own reply. GET /__log returns every request it has seen.
+import { resolve } from "node:path";
 import { stackConfig } from "./config.ts";
 
 const { ports, addrs, model } = stackConfig();
@@ -87,6 +88,10 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
     if (userText.includes("E2E-LIST-CHECKS") || userText.includes("E2E-OWNER-DECISION") || userText.includes("E2E-CHANNEL-REQUESTS")) return stream([textOf(last.content)], 10, tag);
     if (userText.includes("E2E-BROWSER")) return stream(["Browser is open. ", "Browser task finished."], 50, tag, 0, false, 1);
     return stream([`Tool finished. Result: ${textOf(last.content).slice(0, 160).replace(/\n/g, " ")}`], 50, tag);
+  }
+  if (userText.includes("E2E-EXTERNAL-FILES")) {
+    const cli = resolve(import.meta.dir, "../../bin/external-files.ts");
+    return toolCall("bash", { command: "bun '" + cli.replace(/'/g, "'\\''") + "' stores" });
   }
   if (userText.includes("E2E-CHANNEL-REQUESTS")) return toolCall("list_channel_requests", {});
   if (userText.includes("E2E-OWNER-DECISION")) {

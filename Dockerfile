@@ -75,6 +75,9 @@ RUN printf '%s\n' '#!/bin/sh' 'exec bun /app/bin/ws-consolidate.ts "$@"' > /usr/
 # `ws-schedule`: lists the scheduled jobs, or queues a run of one for the workspace's scheduler.
 RUN printf '%s\n' '#!/bin/sh' 'exec bun /app/bin/ws-schedule.ts "$@"' > /usr/local/bin/ws-schedule \
     && chmod 755 /usr/local/bin/ws-schedule
+# External file access uses the workspace's private RPC bridge; no NAS credentials in the CLI.
+RUN printf '%s\n' '#!/bin/sh' 'exec bun /app/bin/external-files.ts "$@"' > /usr/local/bin/external-files \
+    && chmod 755 /usr/local/bin/external-files
 # Document extraction for the documents skill (PDF is poppler-utils, in base). pandoc: docx/odt/pptx/epub
 # → markdown; upstream static build because Debian's is larger and can't read pptx. xlsx2csv: pandoc's
 # xlsx reader fails or drops text cells on common files (e.g. openpyxl output).

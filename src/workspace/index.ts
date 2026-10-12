@@ -23,7 +23,8 @@ import { scanMemoryForSecrets } from "./memoryGuard.ts";
 import { RunLog, recordRotation } from "./runLog.ts";
 import { HistoryWriter, recordHistory } from "./history.ts";
 import { createConsolidationJob, waitIdle } from "./consolidation.ts";
-import { ToolStubs } from "./toolStubs.ts";
+import { ToolStubs, TOOL_TIMEOUT_MS } from "./toolStubs.ts";
+import { startExternalFilesBridge } from "./externalFiles.ts";
 import { GitHubCredentials } from "./githubCredentials.ts";
 import { AuthLogin, ReauthNotifier, piChatGptLogin } from "./authLogin.ts";
 import { BackendSelector } from "./chatgptFallback.ts";
@@ -343,8 +344,27 @@ async function main(): Promise<void> {
     },
   });
 
+  const externalFiles = await startExternalFilesBridge(config.stateDir, async (args, runId) => {
+    const run = runId ? runs.getRun(runId) : null;
+    if (runId && (!run || run.status !== "running")) throw new Error("The requesting run is no longer active.");
+    if (!client?.connected) throw new Error("The workspace is disconnected from the bot. Try again after it reconnects.");
+    let raw: unknown;
+    try {
+      raw = await client.request(RPC_METHODS.toolCall, {
+        principalId: config.principalId, callId: ulid(), name: "external_files", args,
+        agentId: run?.parentRunId ? run.runId : "main", agentName: run?.agentName ?? "external-files-cli",
+        ...(run?.parentRunId ? {parentRunId: run.parentRunId} : {}),
+      }, {timeoutMs: TOOL_TIMEOUT_MS});
+    } catch { throw new Error("External file connection interrupted. Inspect a write before retrying."); }
+    const result = raw as import("../orchestration/contracts.ts").ToolCallResult;
+    if (result?.ok === false) throw new Error(result.error);
+    if (result?.ok !== true || typeof result.result !== "string") throw new Error("External file request failed.");
+    return JSON.parse(result.result);
+  });
+
   const shutdown = async (signal: string) => {
     log.info({ signal }, "workspace shutting down");
+    await externalFiles.close();
     client?.close();
     await wakeups.stop();
     // Children first: they record their runs and persist background results while main can still take them.
