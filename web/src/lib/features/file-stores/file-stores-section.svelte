@@ -14,7 +14,10 @@
 	let busy = $state('');
 	let baseline = $state('');
 	const dirty = $derived(form !== null && JSON.stringify(form) !== baseline);
-	let { ondirty }: { ondirty?: (value: boolean) => void } = $props();
+	let {
+		ondirty,
+		heading = 'External file stores'
+	}: { ondirty?: (value: boolean) => void; heading?: string } = $props();
 	$effect(() => {
 		ondirty?.(dirty);
 	});
@@ -121,15 +124,14 @@
 <section aria-labelledby="external-files" class="flex flex-col gap-3">
 	<div class="flex flex-wrap items-center justify-between gap-3">
 		<h2 id="external-files" class="text-sm font-medium text-muted-foreground">
-			External file stores
+			{heading}
 		</h2>
 		{#if !form}<Button variant="outline" disabled={!!busy || loading} onclick={() => edit()}
 				>Add file store</Button
 			>{/if}
 	</div>
 	<p class="text-sm text-muted-foreground">
-		Let the assistant access a folder on your file server through WebDAV. Files are read directly
-		from the server.
+		Connect folders on your file server for the assistant to use.
 	</p>
 	{#if loading}
 		<p role="status" class="flex items-center gap-2 text-sm text-muted-foreground">
@@ -152,14 +154,14 @@
 	{/if}
 	{#if form}
 		<form
-			class="flex flex-col gap-4 rounded-xl border bg-card p-4"
+			class="flex flex-col gap-3"
 			onsubmit={(event) => {
 				event.preventDefault();
 				void save();
 			}}
 		>
 			<h3 class="font-medium">{form.id ? 'Edit file store' : 'Add file store'}</h3>
-			<label class="flex flex-col gap-2 text-sm font-medium" for="store-name"
+			<label class="flex flex-col gap-1.5 text-sm font-medium" for="store-name"
 				>Name<Input
 					disabled={!!busy}
 					id="store-name"
@@ -173,7 +175,7 @@
 				/></label
 			>
 			{@render issue('name')}
-			<label class="flex flex-col gap-2 text-sm font-medium" for="store-address"
+			<label class="flex flex-col gap-1.5 text-sm font-medium" for="store-address"
 				>Server address<Input
 					disabled={!!busy}
 					id="store-address"
@@ -191,17 +193,16 @@
 			<p id="store-address-help" class="text-sm text-muted-foreground">
 				Use the server’s Tailscale address and HTTPS port.
 			</p>
-			<fieldset class="flex min-w-0 flex-col gap-3">
-				<legend class="mb-3 text-sm font-medium">Allowed folders</legend>
+			<fieldset class="flex min-w-0 flex-col gap-2">
+				<legend class="mb-2 text-sm font-medium">Allowed folders</legend>
 				<p id="store-folder-help" class="text-sm text-muted-foreground">
-					Choose each folder the assistant can access. Writes are off by default. Also restrict the
-					NAS account’s folder permissions.
+					Writes are off by default. Restrict the NAS account to these folders too.
 				</p>
 				{@render issue('folders')}
 				<div class="flex flex-col divide-y">
 					{#each form.folders as folder, index}
 						<div class="flex min-w-0 flex-col gap-2 py-3">
-							<label for={`store-folder-${index}`} class="flex flex-col gap-2 text-sm font-medium"
+							<label for={`store-folder-${index}`} class="flex flex-col gap-1.5 text-sm font-medium"
 								>Folder {index + 1}<Input
 									disabled={!!busy}
 									id={`store-folder-${index}`}
@@ -218,11 +219,8 @@
 								checked={folder.writable}
 								disabled={!!busy}
 								onchange={(value) => (folder.writable = value)}
-								class="rounded-lg px-0"
-								><span class="font-medium">Allow writes for folder {index + 1}</span><span
-									class="text-sm text-muted-foreground"
-									>Create and replace text files with version checks.</span
-								></SwitchRow
+								class="min-h-12 rounded-lg px-0 py-1.5"
+								><span class="font-medium">Allow writes for folder {index + 1}</span></SwitchRow
 							>
 							{#if form.folders.length > 1}<Button
 									type="button"
@@ -246,40 +244,46 @@
 					}}>Add folder</Button
 				>
 			</fieldset>
-			<label class="flex flex-col gap-2 text-sm font-medium" for="store-account"
-				>NAS account<Input
-					disabled={!!busy}
-					id="store-account"
-					aria-invalid={!!fieldErrors.username}
-					aria-errormessage={fieldErrors.username ? 'store-username-error' : undefined}
-					class="min-h-12"
-					required
-					autocomplete="username"
-					bind:value={form.username}
-				/></label
-			>
-			{@render issue('username')}
-			<label class="flex flex-col gap-2 text-sm font-medium" for="store-password"
-				>Password<Input
-					disabled={!!busy}
-					id="store-password"
-					aria-invalid={!!fieldErrors.password}
-					aria-errormessage={fieldErrors.password ? 'store-password-error' : undefined}
-					class="min-h-12"
-					type="password"
-					required={!form.id}
-					autocomplete="new-password"
-					bind:value={form.password}
-					aria-describedby="store-password-help"
-				/></label
-			>
-			{@render issue('password')}
+			<div class="grid gap-3 sm:grid-cols-2">
+				<div class="flex flex-col gap-1">
+					<label class="flex flex-col gap-1.5 text-sm font-medium" for="store-account"
+						>NAS account<Input
+							disabled={!!busy}
+							id="store-account"
+							aria-invalid={!!fieldErrors.username}
+							aria-errormessage={fieldErrors.username ? 'store-username-error' : undefined}
+							class="min-h-12"
+							required
+							autocomplete="username"
+							bind:value={form.username}
+						/></label
+					>
+					{@render issue('username')}
+				</div>
+				<div class="flex flex-col gap-1">
+					<label class="flex flex-col gap-1.5 text-sm font-medium" for="store-password"
+						>Password<Input
+							disabled={!!busy}
+							id="store-password"
+							aria-invalid={!!fieldErrors.password}
+							aria-errormessage={fieldErrors.password ? 'store-password-error' : undefined}
+							class="min-h-12"
+							type="password"
+							required={!form.id}
+							autocomplete="new-password"
+							bind:value={form.password}
+							aria-describedby="store-password-help"
+						/></label
+					>
+					{@render issue('password')}
+				</div>
+			</div>
 			<p id="store-password-help" class="text-sm text-muted-foreground">
-				{form.id ? 'Leave blank to keep the saved password. ' : ''}The agent backend stores the
-				password; it is not returned to the assistant or browser.
+				{form.id ? 'Leave blank to keep the saved password. ' : ''}Saved on the server; never sent
+				to the assistant.
 			</p>
 			<details class="text-sm" open={!!fieldErrors.certificateSha256}>
-				<summary class="min-h-12 cursor-pointer py-3 font-medium">Private certificate</summary>
+				<summary class="min-h-12 cursor-pointer py-2.5 font-medium">Private certificate</summary>
 				<div class="flex flex-col gap-2 pt-2">
 					<label class="font-medium" for="store-certificate">Verified SHA-256 fingerprint</label>
 					<Input
@@ -308,7 +312,7 @@
 				onchange={(v) => {
 					if (form) form.enabled = v;
 				}}
-				class="rounded-lg px-0"
+				class="min-h-12 rounded-lg px-0 py-1.5"
 				><span class="font-medium">Available to the assistant</span></SwitchRow
 			>
 			<div class="flex flex-wrap gap-2">
@@ -329,13 +333,9 @@
 			</div>
 		</form>
 	{:else}
-		<ul
-			class="flex flex-col divide-y rounded-xl border bg-card"
-			aria-label="File stores"
-			class:hidden={stores.length === 0}
-		>
+		<ul class="flex flex-col divide-y" aria-label="File stores" class:hidden={stores.length === 0}>
 			{#each stores as store (store.id)}
-				<li class="flex flex-col gap-3 px-4 py-4">
+				<li class="flex flex-col gap-2 py-3">
 					<div class="flex flex-wrap items-baseline justify-between gap-2">
 						<h3 class="font-medium [overflow-wrap:anywhere]">{store.name}</h3>
 						<span class="text-sm text-muted-foreground"

@@ -14,7 +14,8 @@ describe('workspace navigation', () => {
 		expect(workspaceFor(liveOnly).map((entry) => entry.href)).toEqual([
 			'/memory',
 			'/history',
-			'/connectors'
+			'/connectors',
+			'/file-stores'
 		]);
 		expect(
 			workspaceFor(allOn)
@@ -31,6 +32,7 @@ describe('workspace navigation', () => {
 			'/memory/[file]/diff',
 			'/history/[day]',
 			'/connectors/[name]',
+			'/file-stores',
 			'/skills/[name]/versions',
 			'/more',
 			'/workspace',

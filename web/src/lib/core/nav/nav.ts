@@ -6,6 +6,7 @@ import CalendarClock from '@lucide/svelte/icons/calendar-clock';
 import Globe from '@lucide/svelte/icons/globe';
 import History from '@lucide/svelte/icons/history';
 import MessagesSquare from '@lucide/svelte/icons/messages-square';
+import FolderOpen from '@lucide/svelte/icons/folder-open';
 import Plug from '@lucide/svelte/icons/plug';
 import Settings from '@lucide/svelte/icons/settings';
 import Sparkles from '@lucide/svelte/icons/sparkles';
@@ -91,6 +92,13 @@ const moreEntries: NavEntry[] = [
 		description: 'MCP servers and the tools they give the agent'
 	},
 	{
+		id: 'file-stores',
+		href: '/file-stores',
+		label: 'File stores',
+		icon: FolderOpen,
+		description: 'File servers, allowed folders and access permissions'
+	},
+	{
 		id: 'browser',
 		href: '/browser',
 		label: 'Browser',
@@ -117,15 +125,22 @@ const workspace: NavEntry = {
 	href: '/workspace',
 	label: 'Workspace',
 	icon: PanelsTopLeft,
-	description: 'Memory, history, connectors and workspace tools'
+	description: 'Memory, history, file stores, connectors and workspace tools'
 };
 
 /** Information and capabilities, rather than frequently used work destinations. */
 export function workspaceFor(on: FeatureCheck): NavEntry[] {
 	const entries = moreFor(on);
-	return ['memory', 'history', 'connectors', 'briefing', 'skills', 'schedules', 'browser'].flatMap(
-		(id) => entries.filter((entry) => entry.id === id)
-	);
+	return [
+		'memory',
+		'history',
+		'connectors',
+		'file-stores',
+		'briefing',
+		'skills',
+		'schedules',
+		'browser'
+	].flatMap((id) => entries.filter((entry) => entry.id === id));
 }
 
 /** Stable primary destinations. Optional previews live inside Workspace. */

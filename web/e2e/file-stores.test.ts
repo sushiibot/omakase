@@ -43,10 +43,10 @@ async function fill(page: Page) {
 }
 test('save, connection failure, edit and remove work on mobile', async ({ page, context }) => {
 	await api(context);
-	await page.goto('/settings');
+	await page.goto('/file-stores');
 	await fill(page);
-	await horizontalOverflow(page);
-	await smallTargets(page);
+	expect(await horizontalOverflow(page)).toEqual([]);
+	expect(await smallTargets(page)).toEqual([]);
 	await axe(page);
 	await page.getByRole('button', { name: 'Save connection' }).click();
 	await expect(page.getByRole('heading', { name: 'Property documents' })).toBeVisible();
@@ -80,7 +80,7 @@ test('failed saves preserve fields and dirty forms confirm dismissal', async ({
 				})
 			: route.fulfill({ json: { stores: [] } })
 	);
-	await page.goto('/settings');
+	await page.goto('/file-stores');
 	await fill(page);
 	await page.getByRole('button', { name: 'Save connection' }).click();
 	await expect(page.getByRole('alert')).toContainText('folder permissions');
@@ -104,30 +104,30 @@ test('narrow dark form supports accessibility and reflow', async ({ page, contex
 	await api(context);
 	await page.setViewportSize({ width: 320, height: 640 });
 	await page.emulateMedia({ colorScheme: 'dark' });
-	await page.goto('/settings');
+	await page.goto('/file-stores');
 	await fill(page);
 	await page.getByText('Private certificate', { exact: true }).click();
-	await horizontalOverflow(page);
-	await smallTargets(page);
+	expect(await horizontalOverflow(page)).toEqual([]);
+	expect(await smallTargets(page)).toEqual([]);
 	await axe(page);
 });
-test('capture mobile and desktop settings extension', async ({ page, context }) => {
+test('capture file-store screen at mobile and desktop sizes', async ({ page, context }) => {
 	await api(context);
-	await page.goto('/settings');
+	await page.goto('/file-stores');
 	await fill(page);
-	await page.getByRole('heading', { name: 'External file stores' }).scrollIntoViewIfNeeded();
+	await page.getByRole('heading', { name: 'Connections' }).scrollIntoViewIfNeeded();
 	await page.screenshot({ path: '/tmp/file-stores-mobile.png', fullPage: true });
 	await page.getByRole('button', { name: 'Save connection' }).scrollIntoViewIfNeeded();
 	await page.screenshot({ path: '/tmp/file-stores-mobile-bottom.png', fullPage: true });
 	await page.setViewportSize({ width: 1280, height: 1000 });
-	await page.getByRole('heading', { name: 'External file stores' }).scrollIntoViewIfNeeded();
+	await page.getByRole('heading', { name: 'Connections' }).scrollIntoViewIfNeeded();
 	await page.screenshot({ path: '/tmp/file-stores-desktop.png', fullPage: true });
 	await page.getByRole('button', { name: 'Save connection' }).scrollIntoViewIfNeeded();
 	await page.screenshot({ path: '/tmp/file-stores-desktop-bottom.png', fullPage: true });
 	await page.getByRole('button', { name: 'Save connection' }).click();
 	await page.getByRole('button', { name: 'Test connection' }).click();
 	await expect(page.getByRole('alert')).toContainText('Tailscale access rules');
-	await page.getByRole('heading', { name: 'External file stores' }).scrollIntoViewIfNeeded();
+	await page.getByRole('heading', { name: 'Connections' }).scrollIntoViewIfNeeded();
 	await page.screenshot({ path: '/tmp/file-stores-connection-error.png', fullPage: true });
 });
 
@@ -136,7 +136,7 @@ test('a NAS connection saves several folders with separate write permissions', a
 	context
 }) => {
 	await api(context);
-	await page.goto('/settings');
+	await page.goto('/file-stores');
 	await fill(page);
 	await page.getByRole('button', { name: 'Add folder', exact: true }).click();
 	await page.getByLabel('Folder 2', { exact: true }).fill('/public/Reference');
@@ -152,4 +152,24 @@ test('a NAS connection saves several folders with separate write permissions', a
 	await page.getByRole('button', { name: 'Remove folder 2', exact: true }).click();
 	await page.getByRole('button', { name: 'Save connection' }).click();
 	await expect(folderList.getByText('/public/Reference', { exact: true })).not.toBeVisible();
+});
+
+test('file stores opens from Workspace and stays out of Settings', async ({ page, context }) => {
+	await api(context);
+	await page.goto('/workspace');
+	await expect(page.getByRole('link', { name: /^File stores/ })).toBeVisible();
+	await page.screenshot({ path: '/tmp/file-store-workspace.png', fullPage: true });
+	await page.getByRole('link', { name: /^File stores/ }).click();
+	await expect(page).toHaveURL(/\/file-stores$/);
+	await expect(page.getByRole('heading', { name: 'File stores', level: 1 })).toBeVisible();
+	await page.getByRole('button', { name: 'Add file store' }).click();
+	await page.getByLabel('Name', { exact: true }).fill('Unsaved store');
+	page.once('dialog', (dialog) => dialog.dismiss());
+	await page.getByRole('link', { name: 'Back', exact: true }).click();
+	await expect(page).toHaveURL(/\/file-stores$/);
+	page.once('dialog', (dialog) => dialog.accept());
+	await page.getByRole('link', { name: 'Back', exact: true }).click();
+	await expect(page).toHaveURL(/\/workspace$/);
+	await page.goto('/settings');
+	await expect(page.getByRole('button', { name: 'Add file store' })).toHaveCount(0);
 });
