@@ -37,3 +37,13 @@ export function buildTriggerText(input: TriggerTextInput): string {
   }
   return `${input.replyContext}[Message from ${input.authorUsername} (<@${input.authorId}>)]\n${body}`;
 }
+
+/** Whether a message mentions the bot. Without MessageContent, Discord blanks role and @everyone/@here
+ *  pings, so only a direct user mention carries text to answer. */
+export function mentionsBot(
+  mentions: { has(id: string): boolean; users: { has(id: string): boolean } },
+  botId: string,
+  messageContent: boolean,
+): boolean {
+  return messageContent ? mentions.has(botId) : mentions.users.has(botId);
+}

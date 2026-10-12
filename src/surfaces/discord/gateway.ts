@@ -37,7 +37,7 @@ import { ToolProgressTracker, buildTextDisplayContainer } from "./delivery.ts";
 import { renderDiscordText } from "./render.ts";
 import { handleFeedbackButton, handleFeedbackModal } from "./feedback.ts";
 import { SCAN_QUERY, applyAutomodDecision } from "./approvals.ts";
-import { buildTriggerText } from "./inbound.ts";
+import { buildTriggerText, mentionsBot } from "./inbound.ts";
 import { STOP_BTN_PREFIX, ASK_BTN_PREFIX, FEEDBACK_BTN_PREFIX, FEEDBACK_MODAL_PREFIX, AUTOMOD_BTN_PREFIX, AUTOMOD_DEL_BTN_PREFIX } from "./buttonIds.ts";
 import { SCREENING_IGNORE_PREFIX, handleScreeningAuditEntry, handleScreeningAutomod, handleScreeningDeletes, handleScreeningIgnore, screenDiscordMessage } from "./screening.ts";
 
@@ -52,7 +52,7 @@ const SURFACE = "discord" as const;
 const DEFAULT_THREAD_NAME = "sushii-agent investigation";
 const INTERSTITIAL_MAX_CHARS = 8000;
 const NO_MESSAGE_CONTENT_NOTE =
-  'Message text is unavailable right now for messages that don\'t mention you, so their "[empty message]" lines are blank text, not empty messages.';
+  `Message text is unavailable right now for messages that don't mention you, so their "[empty message]" lines are blank text, not empty messages. Don't take moderation actions (timeout, ban, kick, delete) based on those messages; the moderator must state the reason. Don't update the server context until message text is available again.`;
 
 function withContentNote(ref: ChannelRef): ChannelRef {
   return config.discordMessageContent ? ref : { ...ref, contextNote: NO_MESSAGE_CONTENT_NOTE };
@@ -339,7 +339,7 @@ export function startDiscordSurface(deps: DiscordSurfaceDeps): void {
 
     // Conversational entry gate: guild configured (checked above) + mention/reply + sender holds an
     // allowedRoles role. Independent of enabledModules — moderation only gates moderation features.
-    const isMention = message.mentions.has(client.user.id);
+    const isMention = mentionsBot(message.mentions, client.user.id, config.discordMessageContent);
     // A reply without a ping arrives blank when MessageContent is off, so it isn't a trigger then.
     const isReply = !isMention && config.discordMessageContent && (await isReplyToBot(message, client.user.id));
     if (!chatEntryGateOpen(guildConfig, { isMention, isReply, memberRoleIds: message.member ? [...message.member.roles.cache.keys()] : null })) return;
@@ -355,7 +355,8 @@ export function startDiscordSurface(deps: DiscordSurfaceDeps): void {
     }
 
     let replyContext = "";
-    if (isMention && message.reference?.messageId) {
+    // Without MessageContent, a referenced message from anyone but the bot is blank, so it adds no context.
+    if (isMention && config.discordMessageContent && message.reference?.messageId) {
       try {
         const refMsg = message.channel.messages.cache.get(message.reference.messageId) ?? (await message.channel.messages.fetch(message.reference.messageId));
         if (refMsg.author.id !== client.user.id) {
