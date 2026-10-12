@@ -18,6 +18,11 @@ import { FileStores } from "./orchestration/workspace/fileStores/service.ts";
 import { FileStoreRoutes } from "./surfaces/web/fileStoreRoutes.ts";
 import { MachineHub, machineGrants } from "./orchestration/machines/hub.ts";
 import { MachineControl } from "./orchestration/machines/control.ts";
+import { AgentEvents } from "./orchestration/machines/events.ts";
+import { CodingAgentStore, CodingAgents } from "./orchestration/machines/agents.ts";
+import { KvJsonState } from "./db/jsonState.ts";
+import { pushFor } from "./surfaces/web/pushRules.ts";
+import { sendPush } from "./surfaces/web/push.ts";
 import { MachineRoutes } from "./surfaces/web/machineRoutes.ts";
 import { createBrowserRoutes } from "./surfaces/web/browserRoutes.ts";
 import { createDictationRoutes } from "./surfaces/web/dictationRoutes.ts";
@@ -69,14 +74,32 @@ async function main() {
   });
   const machines = new MachineHub(machineGrants.parse(JSON.parse(process.env.SUSHII_MACHINES_JSON ?? "[]")));
   workspace.server.setMachineHub(machines);
-  const machineControl = new MachineControl(machines, workspace.link);
-  const machineRoutes = new MachineRoutes(machineControl, workspace.link);
+  const agentState = new KvJsonState(db);
+  const machineControl = new MachineControl(machines, new CodingAgentStore(agentState));
+  const codingAgents = new CodingAgents(machineControl);
+  const machineRoutes = new MachineRoutes(machineControl, codingAgents);
   const fileStores = new FileStores(db);
   workspace.tools.setExternalFiles(raw => fileStores.action(raw));
   workspace.tools.setMachineFiles(async raw => (raw as { action?: string })?.action === "list_machines" ? { machines: machineControl.list() } : machineControl.files(raw));
-  const taskRoutes = new TaskRoutes(workspace.link, webChat.threads, machineControl);
+  workspace.tools.setCodingAgents((args, conversationId) => codingAgents.action(args, conversationId, "agent"));
+  const taskRoutes = new TaskRoutes(workspace.link, webChat.threads);
   workspace.tools.setChannelRequests(() => webChat.threads.pendingRequests());
   workspace.tools.setTaskControl((args, actor, conversationId) => taskRoutes.action(args, actor, conversationId));
+  const agentEvents = new AgentEvents({
+    control: machineControl,
+    link: workspace.link,
+    state: agentState,
+    push: (event) => sendPush(pushFor(event)),
+    lastOwnerMessageAt: (id) => {
+      try {
+        return webChat.threads.channel(id).log.page(["user"], { limit: 1 })[0]?.createdAt;
+      } catch {
+        return undefined;
+      }
+    },
+  });
+  machineControl.observer = agentEvents;
+  machines.setSessionListener(agentEvents.onSession);
   const webVoice = createVoiceRoutes(process.env, createVoiceAgent(webChat.threads));
   const webServer = await startWebGateway(process.env, db, {
     chat: webChat.routes,

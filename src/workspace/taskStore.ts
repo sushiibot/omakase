@@ -12,6 +12,13 @@ import { writeFileAtomic } from "./files.ts";
 import { parseTasksIndex, readTasks, TASKS_FILE } from "./tasks.ts";
 import { RpcHandlerError } from "../orchestration/transport/client.ts";
 
+/** Tasks once carried a remote-session link; coding agents are separate now, so the field is dropped on load. */
+function withoutExecution(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || !("execution" in raw)) return raw;
+  const { execution: _, ...rest } = raw as Record<string, unknown>;
+  return rest;
+}
+
 export class TaskStore {
   private records: TaskRecord[];
   private readonly path: string;
@@ -44,7 +51,10 @@ export class TaskStore {
     this.records =
       saved === null
         ? this.importLegacy()
-        : z.array(taskRecord).max(2000).parse(saved);
+        : z
+            .array(taskRecord)
+            .max(2000)
+            .parse(Array.isArray(saved) ? saved.map(withoutExecution) : saved);
     this.persist();
   }
   list(conversationId?: string): TaskRecord[] {
@@ -95,13 +105,7 @@ export class TaskStore {
       return { tasks: [structuredClone(task)] };
     }
     const task = this.get(request.id);
-    if (request.action === "execution") {
-      if (task.revision !== request.revision) throw new RpcHandlerError("This task changed. Reload it before saving.", -32041);
-      task.execution = request.execution;
-      task.agent = `${request.execution.provider} · ${request.execution.machineId}`;
-      task.status = request.status;
-      if (request.result !== undefined) task.result = request.result;
-    } else if (request.action === "update") {
+    if (request.action === "update") {
       if (task.revision !== request.revision)
         throw new RpcHandlerError(
           "This task changed. Reload it before saving.",

@@ -87,9 +87,21 @@ export class JsonProcess {
       this.send({ id, method, params });
     });
   }
+  get exited() {
+    return this.child.exitCode !== null || this.child.signalCode !== null;
+  }
   kill() {
+    if (this.exited) return;
     this.child.kill("SIGTERM");
     const timer = setTimeout(() => this.child.kill("SIGKILL"), 5000);
+    timer.unref();
+    this.child.once("close", () => clearTimeout(timer));
+  }
+  /** SIGINT lets Claude Code end its turn cleanly; SIGTERM leaves the turn unfinished. */
+  interrupt(graceMs = 5000) {
+    if (this.exited) return;
+    this.child.kill("SIGINT");
+    const timer = setTimeout(() => this.kill(), graceMs);
     timer.unref();
     this.child.once("close", () => clearTimeout(timer));
   }

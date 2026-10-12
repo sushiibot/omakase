@@ -149,3 +149,30 @@ for (const status of ["done", "cancelled"] as const) {
     expect(restarted.get(task.id).status).toBe("in-progress");
   });
 }
+test("a stored task from before agents were separate keeps loading without its remote-session link", () => {
+  const { home, state } = env();
+  const at = "2026-10-01T00:00:00.000Z";
+  writeFileSync(
+    join(state, "tasks-v2.json"),
+    JSON.stringify([
+      {
+        id: "t-old",
+        title: "Old remote task",
+        brief: "",
+        status: "needs-you",
+        checklist: [],
+        sourceConversationId: "main",
+        execution: { machineId: "pc", rootId: "code", provider: "codex", sessionId: "s-1" },
+        runIds: [],
+        createdAt: at,
+        updatedAt: at,
+        revision: 2,
+      },
+    ]),
+  );
+  const store = new TaskStore(state, home);
+  const task = store.get("t-old");
+  expect(task.title).toBe("Old remote task");
+  expect("execution" in task).toBe(false);
+  expect(JSON.parse(readFileSync(join(state, "tasks-v2.json"), "utf8"))[0].execution).toBeUndefined();
+});

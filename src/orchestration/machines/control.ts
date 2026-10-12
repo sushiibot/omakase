@@ -1,11 +1,32 @@
-import { fileRequest, sessionRecord, type Execution } from "./contracts.ts";
+import {
+  fileRequest,
+  sessionRecord,
+  type AnswerDecision,
+  type Provider,
+  type SessionRecord,
+} from "./contracts.ts";
 import type { MachineHub } from "./hub.ts";
-import type { WorkspaceLink } from "../workspace/link.ts";
-import type { TaskRecord } from "../taskContracts.ts";
+import type { CodingAgentRecord, CodingAgentStore } from "./agents.ts";
+/** Who asked the gateway to act on a coding agent. */
+export type ActionOrigin = "owner" | "agent";
+export interface SessionObserver {
+  /** Reconciles a record the gateway just read, without waiting for routing. */
+  observe(machineId: string, record: SessionRecord): void;
+  noteAction(agentId: string, origin: ActionOrigin, followUp: boolean): void;
+}
+export interface AgentStart {
+  machineId: string;
+  rootId: string;
+  provider: Provider;
+  prompt: string;
+  title: string;
+  conversationId: string;
+}
 export class MachineControl {
+  observer?: SessionObserver;
   constructor(
     readonly hub: MachineHub,
-    private link: Pick<WorkspaceLink, "tasksManage">,
+    readonly agents: CodingAgentStore,
   ) {}
   list() {
     return this.hub.list();
@@ -14,150 +35,89 @@ export class MachineControl {
     const p = fileRequest.parse(raw);
     return this.hub.request(p.machineId, "machine/files", p);
   }
-  async session(task: TaskRecord) {
-    if (!task.execution) throw new Error("This task has no remote session.");
+  private async session(machineId: string, params: Record<string, unknown>) {
     const record = sessionRecord.parse(
-      await this.hub.request(task.execution.machineId, "machine/session", {
-        action: "get",
-        sessionId: task.execution.sessionId,
-      }),
+      await this.hub.request(machineId, "machine/session", params),
     );
-    if (record.taskId !== task.id)
-      throw new Error("Remote session belongs to another task.");
+    if (record.id !== params.sessionId)
+      throw new Error("The machine answered for another agent.");
+    this.agents.observe(record);
+    this.observer?.observe(machineId, record);
     return record;
   }
-  async start(
-    task: TaskRecord,
-    target: Omit<Execution, "sessionId"> | undefined,
-    text?: string,
-  ) {
-    const current = task.execution;
-    if (!current && task.status === "in-progress")
-      throw new Error(
-        "Stop this task’s active work before moving it to another machine.",
-      );
-    if (
-      current &&
-      target &&
-      (target.machineId !== current.machineId ||
-        target.rootId !== current.rootId ||
-        target.provider !== current.provider)
-    )
-      throw new Error("Continue this task on its original machine and folder.");
-    const selected =
-      current ??
-      (target && { ...target, sessionId: `s-${crypto.randomUUID()}` });
-    if (!selected) throw new Error("Choose a machine, folder and provider.");
-    const machine = this.hub.list().find((m) => m.id === selected.machineId);
+  sessionById(machineId: string, id: string) {
+    return this.session(machineId, { action: "get", sessionId: id });
+  }
+  async startAgent(
+    input: AgentStart,
+    origin: ActionOrigin,
+  ): Promise<CodingAgentRecord> {
+    const machine = this.hub.list().find((m) => m.id === input.machineId);
     if (
       !machine?.connected ||
-      !machine.providers.includes(selected.provider) ||
-      !machine.roots.some((r) => r.id === selected.rootId && r.coding)
+      !machine.providers.includes(input.provider) ||
+      !machine.roots.some((r) => r.id === input.rootId && r.coding)
     )
       throw new Error(
         "This machine, provider or coding folder is unavailable.",
       );
-    // Persist the execution ID before launching, so a timeout retains a handle to any accepted work.
-    if (!current)
-      task = (
-        await this.link.tasksManage({
-          action: "execution",
-          id: task.id,
-          revision: task.revision,
-          execution: selected,
-          status: task.status,
-        })
-      ).tasks[0]!;
-    let existing;
-    if (current) {
-      try {
-        existing = await this.session(task);
-      } catch (err) {
-        if (
-          !(err instanceof Error) ||
-          err.message !== "Remote session not found."
-        )
-          throw err;
-      }
-    }
-    const record = sessionRecord.parse(
-      await this.hub.request(
-        selected.machineId,
-        "machine/session",
-        existing
-          ? {
-              action: "prompt",
-              sessionId: selected.sessionId,
-              requestId: `p-${crypto.randomUUID()}`,
-              text: text ?? (task.brief || task.title),
-            }
-          : {
-              action: "start",
-              sessionId: selected.sessionId,
-              taskId: task.id,
-              rootId: selected.rootId,
-              provider: selected.provider,
-              text:
-                text ??
-                `${task.title}\n${task.brief}\nChecklist: ${JSON.stringify(task.checklist)}`,
-            },
-      ),
-    );
-    return this.sync(task, record);
+    const at = new Date().toISOString();
+    const agent: CodingAgentRecord = {
+      id: `a-${crypto.randomUUID()}`,
+      machineId: input.machineId,
+      rootId: input.rootId,
+      provider: input.provider,
+      title: input.title.slice(0, 200),
+      prompt: input.prompt.slice(0, 4000),
+      conversationId: input.conversationId,
+      createdAt: at,
+      updatedAt: at,
+    };
+    // Recorded before launch, so a timed-out start still has a handle on any accepted work.
+    this.agents.put(agent);
+    this.observer?.noteAction(agent.id, origin, false);
+    await this.session(agent.machineId, {
+      action: "start",
+      sessionId: agent.id,
+      taskId: "",
+      rootId: agent.rootId,
+      provider: agent.provider,
+      text: input.prompt,
+    });
+    return this.agents.get(agent.id) ?? agent;
   }
-  async sync(task: TaskRecord, record: ReturnType<typeof sessionRecord.parse>) {
-    if (
-      !task.execution ||
-      task.status === "done" ||
-      task.status === "cancelled"
-    )
-      return task;
-    const status =
-      record.status === "running"
-        ? "in-progress"
-        : ["completed", "needs-you", "failed", "interrupted"].includes(
-              record.status,
-            )
-          ? "needs-you"
-          : "todo";
-    const result = (record.error ?? record.output).slice(-4000);
-    if (task.status === status && task.result === result) return task;
-    try {
-      return (
-        await this.link.tasksManage({
-          action: "execution",
-          id: task.id,
-          revision: task.revision,
-          execution: task.execution,
-          status,
-          result,
-        })
-      ).tasks[0]!;
-    } catch {
-      return task; /* A simultaneous owner edit wins. */
-    }
-  }
-  async stop(task: TaskRecord) {
-    if (task.execution)
-      await this.hub.request(task.execution.machineId, "machine/session", {
-        action: "stop",
-        sessionId: task.execution.sessionId,
-      });
-  }
-  async answer(
-    task: TaskRecord,
-    requestId: string | number,
-    decision: "accept" | "decline",
+  /** Reaches the agent in any state; a daemon without the message action gets a plain follow-up. */
+  async messageSession(
+    machineId: string,
+    id: string,
+    text: string,
+    origin: ActionOrigin,
   ) {
-    if (!task.execution) throw new Error("No remote session.");
-    return sessionRecord.parse(
-      await this.hub.request(task.execution.machineId, "machine/session", {
-        action: "answer",
-        sessionId: task.execution.sessionId,
-        requestId,
-        decision,
-      }),
+    const requestId = `p-${crypto.randomUUID()}`;
+    this.observer?.noteAction(id, origin, true);
+    return this.session(
+      machineId,
+      this.hub.supportsEvents(machineId)
+        ? { action: "message", sessionId: id, requestId, text, origin }
+        : { action: "prompt", sessionId: id, requestId, text },
     );
+  }
+  stopSession(machineId: string, id: string) {
+    return this.session(machineId, { action: "stop", sessionId: id });
+  }
+  answer(
+    machineId: string,
+    id: string,
+    requestId: string | number,
+    decision: AnswerDecision,
+  ) {
+    this.observer?.noteAction(id, "owner", false);
+    return this.session(machineId, {
+      action: "answer",
+      sessionId: id,
+      requestId,
+      decision,
+    });
   }
 }
 export const machineFileManifest = {

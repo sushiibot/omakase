@@ -1,8 +1,15 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
-import { machineId, provider } from "../../orchestration/machines/contracts.ts";
+import {
+  machineId,
+  provider,
+  MACHINE_SESSIONS,
+  MACHINE_SESSION_CHANGED,
+  SESSION_EVENTS_FEATURE,
+  type SessionRecord,
+} from "../../orchestration/machines/contracts.ts";
 import { SharedFiles } from "./files.ts";
-import { MachineSessions } from "./sessions.ts";
+import { MachineSessions, wireRecord } from "./sessions.ts";
 const config = z
   .object({
     id: machineId,
@@ -25,6 +32,7 @@ const config = z
     providers: z
       .record(provider, z.array(z.string().min(1)).min(1).max(10))
       .default({}),
+    stallMinutes: z.number().positive().max(1440).default(10),
   })
   .strict()
   .parse(
@@ -48,8 +56,22 @@ if (
   throw new Error("Use wss:// for a remote machine connection.");
 url.pathname = "/machines";
 const files = new SharedFiles(config.roots);
-const sessions = new MachineSessions(files, config.stateDir, config.providers);
+const sessions = new MachineSessions(files, config.stateDir, config.providers, {
+  stallMs: config.stallMinutes * 60_000,
+});
 let socket: WebSocket | undefined;
+// Set once the gateway asks for session events; an older gateway parses records strictly and sends no such request.
+let events = false;
+sessions.onChange = (summary) => {
+  if (events && socket?.readyState === WebSocket.OPEN)
+    socket.send(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        method: MACHINE_SESSION_CHANGED,
+        params: summary,
+      }),
+    );
+};
 let stopping = false;
 let attempt = 0;
 // Bun supports handshake headers; the DOM constructor type omits this overload.
@@ -65,6 +87,7 @@ function connect() {
     },
   });
   socket = ws;
+  events = false;
   const heartbeat = setInterval(() => {
     if (ws.readyState === WebSocket.OPEN)
       ws.send(JSON.stringify({ jsonrpc: "2.0", method: "machine/heartbeat" }));
@@ -81,7 +104,12 @@ function connect() {
       id = message.id;
       if (message.jsonrpc !== "2.0" || typeof id !== "number") return;
       let result: unknown;
-      if (message.method === "machine/info")
+      if (message.method === "machine/info") {
+        if (
+          Array.isArray(message.params?.features) &&
+          message.params.features.includes(SESSION_EVENTS_FEATURE)
+        )
+          events = true;
         result = {
           name: config.name,
           roots: config.roots.map(({ id, name, coding }) => ({
@@ -91,10 +119,16 @@ function connect() {
           })),
           providers: Object.keys(config.providers),
         };
-      else if (message.method === "machine/files")
+      } else if (message.method === MACHINE_SESSIONS) {
+        events = true;
+        result = sessions.summaries();
+      } else if (message.method === "machine/files")
         result = await files.request(message.params);
       else if (message.method === "machine/session")
-        result = await sessions.request(message.params);
+        result = wireRecord(
+          (await sessions.request(message.params)) as SessionRecord,
+          events,
+        );
       else throw new Error("Unknown machine operation.");
       if (ws.readyState === WebSocket.OPEN)
         ws.send(JSON.stringify({ jsonrpc: "2.0", id, result }));

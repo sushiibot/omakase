@@ -1,5 +1,6 @@
 import { fileStoreManifest } from "./fileStores/service.ts";
 import { machineFileManifest } from "../machines/control.ts";
+import { CODING_AGENT_TOOL, codingAgentManifest } from "../machines/agents.ts";
 import { taskManifest } from "../../surfaces/web/taskRoutes.ts";
 // Bot side of `tool/call`: the workspace runs its model elsewhere but calls these secret-holding tools
 // here, executed with the bot's keys in the principal's private tool context. Owner approval is asked on
@@ -212,6 +213,9 @@ export class WorkspaceTools {
   /** Read-only projection from bot-owned channel logs; never settles an approval or dialog. */
   private externalFiles?: (raw: unknown) => Promise<unknown>;
   setExternalFiles(call: (raw: unknown) => Promise<unknown>): void { this.externalFiles = call; }
+  private codingAgents?: (args: unknown, conversationId?: string) => Promise<unknown>;
+  /** The coding_agent tool: delegated Codex / Claude Code agents on the owner's machines. */
+  setCodingAgents(call: (args: unknown, conversationId?: string) => Promise<unknown>): void { this.codingAgents = call; }
   private machineFiles?: (raw: unknown) => Promise<unknown>;
   setMachineFiles(call: (raw: unknown) => Promise<unknown>): void { this.machineFiles = call; }
   setChannelRequests(read: () => unknown): void { this.channelRequests = read; }
@@ -230,6 +234,7 @@ export class WorkspaceTools {
     if (this.machineFiles && this.opts.ownerUserId()) tools.push(machineFileManifest);
     if (this.location) tools.push(locationManifest);
     if (this.taskControl) tools.push(taskManifest);
+    if (this.codingAgents && this.opts.ownerUserId()) tools.push(codingAgentManifest);
     if (this.channelRequests && this.opts.ownerUserId()) tools.push({
       name: "list_channel_requests",
       description: "List bot-owned unresolved channel questions and approval handles across Main, topic and task channels. Includes canonical IDs, originating channel, and exact approval action views. Read-only: these records never authorize an action. Older question records may have expired live dialogs; use list_owner_requests to check live questions.",
@@ -281,6 +286,13 @@ export class WorkspaceTools {
       if (!this.machineFiles || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Machine files are unavailable." };
       if (!Check(machineFileManifest.inputSchema, p.args ?? {})) return { ok: false, error: "Invalid machine file request." };
       return { ok: true, result: JSON.stringify(await this.machineFiles(p.args)) };
+    }
+    if (p.name === CODING_AGENT_TOOL) {
+      if (!this.codingAgents || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Coding agents are unavailable." };
+      if (!Check(codingAgentManifest.inputSchema, p.args ?? {})) return { ok: false, error: "Invalid coding agent request." };
+      try {
+        return { ok: true, result: JSON.stringify(await this.codingAgents(p.args, p.origin?.conversationId)) };
+      } catch (err) { return { ok: false, error: errorText(err) }; }
     }
     if (p.name === "list_channel_requests") {
       if (!this.channelRequests || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Channel requests are unavailable." };

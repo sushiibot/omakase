@@ -75,3 +75,42 @@ test("a replaced machine socket cannot settle requests or disconnect the new soc
   expect(hub.list()[0]!.connected).toBe(true);
   hub.stop();
 });
+test("session changes arrive as notifications and as a snapshot; an older daemon without one stays connected", async () => {
+  const hub = new MachineHub([{ id: "pc", name: "PC", token }]);
+  const seen: unknown[] = [];
+  hub.setSessionListener((machineId, s) => seen.push([machineId, s]));
+  const sent: any[] = [];
+  let closed = false;
+  const socket = { send: (s: string) => sent.push(JSON.parse(s)), close: () => void (closed = true) };
+  hub.open("pc", socket);
+  expect(sent[0]).toMatchObject({ method: "machine/info", params: { features: ["sessionEvents"] } });
+  const summary = { sessionId: "a-1", taskId: "", stateVersion: 3, status: "completed" };
+  // Before machine/info answers, a notification is not trusted.
+  hub.message("pc", socket, JSON.stringify({ jsonrpc: "2.0", method: "machine/sessionChanged", params: summary }));
+  hub.message("pc", socket, JSON.stringify({ jsonrpc: "2.0", id: sent[0].id, result: { name: "PC", roots: [], providers: [] } }));
+  await Bun.sleep(0);
+  expect(sent[1]).toMatchObject({ method: "machine/sessions" });
+  hub.message("pc", socket, JSON.stringify({ jsonrpc: "2.0", id: sent[1].id, result: [summary, { bad: true }] }));
+  await Bun.sleep(0);
+  expect(hub.supportsEvents("pc")).toBe(true);
+  hub.message("pc", socket, JSON.stringify({ jsonrpc: "2.0", method: "machine/sessionChanged", params: { ...summary, stateVersion: 4 } }));
+  hub.message("pc", socket, JSON.stringify({ jsonrpc: "2.0", method: "machine/heartbeat" }));
+  expect(seen).toEqual([
+    ["pc", summary],
+    ["pc", { ...summary, stateVersion: 4 }],
+  ]);
+
+  const old = { send: (s: string) => sent.push(JSON.parse(s)), close: () => void (closed = true) };
+  hub.open("pc", old);
+  const info = sent.at(-1);
+  hub.message("pc", old, JSON.stringify({ jsonrpc: "2.0", id: info.id, result: { name: "PC", roots: [], providers: [] } }));
+  await Bun.sleep(0);
+  const probe = sent.at(-1);
+  closed = false;
+  hub.message("pc", old, JSON.stringify({ jsonrpc: "2.0", id: probe.id, error: { code: -32000, message: "Unknown machine operation." } }));
+  await Bun.sleep(0);
+  expect(closed).toBe(false);
+  expect(hub.list()[0]!.connected).toBe(true);
+  expect(hub.supportsEvents("pc")).toBe(false);
+  hub.stop();
+});

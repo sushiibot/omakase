@@ -2,6 +2,7 @@ import { TASKS_MANAGE, tasksParams, tasksResult, type TaskRequest } from "../tas
 import { BROWSER_READ, browserReadParams, browserReadResult, type BrowserReadResult } from "../browserContracts.ts";
 import { memoryParams, memoryOverview, memoryDetail } from "../memoryContracts.ts";
 import { ownerUpdateParams, runsStopParams, runsStopResult } from "../contracts.ts";
+import { AGENT_RESULT, agentResultParams, agentResultReply, type AgentResultParams } from "../machines/contracts.ts";
 import { connectorsParams, connectorsResult, type ConnectorRequest, type ConnectorsResult } from "../contracts.ts";
 import type { z } from "zod";
 import {
@@ -416,6 +417,20 @@ export class WorkspaceLink {
       await this.request(RPC_METHODS.ownerUpdate, ownerUpdateParams.parse({ principalId: this.opts.principalId, name }), CONTROL_TIMEOUT_MS);
     } catch (err) {
       if (err instanceof WorkspaceNotConnectedError || (err instanceof RpcErrorReply && err.code === -32601)) return;
+      throw err;
+    }
+  }
+
+  /** Wakes a conversation with a coding agent's result. "unsupported" and "offline" mean the workspace
+   *  cannot take it (older version, or disconnected), so the caller tells the owner instead. */
+  async agentResult(q: Omit<AgentResultParams, "principalId">): Promise<"delivered" | "unsupported" | "offline"> {
+    if (!this.isConnected()) return "offline";
+    try {
+      await this.read(AGENT_RESULT, agentResultParams, agentResultReply, q, CONTROL_TIMEOUT_MS);
+      return "delivered";
+    } catch (err) {
+      if (err instanceof WorkspaceNotConnectedError) return "offline";
+      if (err instanceof RpcErrorReply && err.code === -32601) return "unsupported";
       throw err;
     }
   }

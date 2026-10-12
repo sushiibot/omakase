@@ -1,6 +1,14 @@
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { machineId, machineInfo } from "./contracts.ts";
+import {
+  machineId,
+  machineInfo,
+  sessionSummary,
+  MACHINE_SESSIONS,
+  MACHINE_SESSION_CHANGED,
+  SESSION_EVENTS_FEATURE,
+  type SessionSummary,
+} from "./contracts.ts";
 export const machineGrants = z
   .array(
     z
@@ -20,6 +28,8 @@ export interface MachineSocket {
 interface Peer {
   socket: MachineSocket;
   info?: z.infer<typeof machineInfo>;
+  /** The daemon answered the session snapshot, so it reports changes and accepts newer session actions. */
+  events?: boolean;
   pending: Map<
     number,
     {
@@ -29,9 +39,18 @@ interface Peer {
     }
   >;
 }
+export type SessionListener = (
+  machineId: string,
+  summary: SessionSummary,
+) => void;
 export class MachineHub {
   private peers = new Map<string, Peer>();
   private nextId = 1;
+  private onSession: SessionListener = () => {};
+  /** Receives every session change a daemon reports, live or from its snapshot on connect. */
+  setSessionListener(listener: SessionListener) {
+    this.onSession = listener;
+  }
   constructor(readonly grants: MachineGrant[]) {
     if (
       new Set(grants.map((g) => g.id)).size !== grants.length ||
@@ -58,11 +77,41 @@ export class MachineHub {
       this.reject(previous);
       previous.socket.close(4003, "Machine reconnected");
     }
-    void this.request(id, "machine/info", {})
+    void this.request(id, "machine/info", {
+      features: [SESSION_EVENTS_FEATURE],
+    })
       .then((info) => {
-        if (this.peers.get(id) === peer) peer.info = machineInfo.parse(info);
+        if (this.peers.get(id) !== peer) return false;
+        peer.info = machineInfo.parse(info);
+        return true;
       })
-      .catch(() => socket.close(1008, "Invalid machine information"));
+      .catch(() => {
+        socket.close(1008, "Invalid machine information");
+        return false;
+      })
+      .then((ok) => (ok ? this.snapshot(id, peer) : undefined));
+  }
+  /** Events between connections were missed, so every session is reconciled against its latest state. */
+  private async snapshot(id: string, peer: Peer) {
+    let raw: unknown;
+    try {
+      raw = await this.request(id, MACHINE_SESSIONS, {});
+    } catch {
+      return; // An older daemon has no snapshot; tasks still sync when read.
+    }
+    if (this.peers.get(id) !== peer || !Array.isArray(raw)) return;
+    peer.events = true;
+    for (const item of raw.slice(0, 1000)) {
+      const summary = sessionSummary.safeParse(item);
+      if (summary.success) this.emit(id, summary.data);
+    }
+  }
+  private emit(id: string, summary: SessionSummary) {
+    try {
+      this.onSession(id, summary);
+    } catch {
+      /* A listener failure must not drop the machine connection. */
+    }
   }
   close(id: string, socket: MachineSocket) {
     const peer = this.peers.get(id);
@@ -88,7 +137,15 @@ export class MachineHub {
     }
     try {
       const p = JSON.parse(raw);
-      if (p.jsonrpc !== "2.0" || typeof p.id !== "number") return;
+      if (p.jsonrpc !== "2.0") return;
+      if (p.id === undefined) {
+        if (p.method === MACHINE_SESSION_CHANGED && peer.info) {
+          const summary = sessionSummary.safeParse(p.params);
+          if (summary.success) this.emit(id, summary.data);
+        }
+        return;
+      }
+      if (typeof p.id !== "number") return;
       const call = peer.pending.get(p.id);
       if (!call) return;
       peer.pending.delete(p.id);
@@ -132,6 +189,9 @@ export class MachineHub {
         reject(new Error("Machine disconnected."));
       }
     });
+  }
+  supportsEvents(id: string): boolean {
+    return this.peers.get(id)?.events === true;
   }
   list() {
     return this.grants.map((g) => ({

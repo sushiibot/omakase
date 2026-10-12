@@ -27,6 +27,7 @@ export const SHIPPED_TEMPLATE_HASHES: Record<string, readonly string[]> = {
     "c1b17650b71bb83b6ad760a44412470e78c563248ceacea67beaf91d1123d3d8",
     "c41c34fe2f5379ece4cd91c91df4ef3fb65945ae3f0da246d0a0a0d9907f0e97",
     "cccc5be6dc05b42276e8941be5d8d5cfcb60eb61397ce4a863c21a08ba420566",
+    "cd7e5c2a97ae58d49e9564c5454cdd3b0b05410164c4968ef815af8d2c635ada",
     "d072f081416c002dd7ecf69618532bc8dabe30e3b7c7ed43d4abc2a33ba32e30",
     "d30e515307a7a52c59bddb70aa818872c4fac77f5e7424092e48ecae7fb93f29",
     "dab01dda5f099daeb561d429dad4ecba0fe39c1cfa68b378a7e0f50796661b8c",

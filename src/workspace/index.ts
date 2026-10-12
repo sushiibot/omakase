@@ -43,6 +43,7 @@ import { DurableState } from "../agentRuntime/durableState.ts";
 import { WakeupManager, deliverScheduledCheck } from "./wakeups.ts";
 import { readJson } from "./files.ts";
 import { applyRegisteredOwnerName, loadOwnerName, ownerHandlers } from "./owner.ts";
+import { AgentResults } from "./agentResults.ts";
 
 const log = getLogger("workspace");
 
@@ -264,6 +265,14 @@ async function main(): Promise<void> {
   topicsRef = topics;
   await topics.restore();
   subagents.redeliverPending();
+  const agentResults = new AgentResults({
+    stateDir: config.stateDir,
+    principalId: config.principalId,
+    conversationExists: id => id === "main" || !!readJson<Record<string, unknown>>(join(config.stateDir, "topics.json"))?.[id],
+    wake: async (conversationId, wake) => (await topics.session({ surface: "web", conversationId })).wake(wake),
+    warn: (err, message) => log.warn({ err }, message),
+  });
+  agentResults.resume();
   const scheduler = new Scheduler({
     stateDir: config.stateDir,
     at: config.consolidateAt,
@@ -338,6 +347,7 @@ async function main(): Promise<void> {
       ...commands,
       ...topics.handlers(),
       ...ownerHandlers(config, ownerChanged),
+      ...agentResults.handlers(),
       [RPC_METHODS.runsStop]: async (p: unknown) => {
         const q = runsStopParams.parse(p);
         if (q.principalId !== config.principalId) throw new Error("principal mismatch");
@@ -373,6 +383,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     log.info({ signal }, "workspace shutting down");
     await externalFiles.close();
+    agentResults.close();
     client?.close();
     await wakeups.stop();
     // Children first: they record their runs and persist background results while main can still take them.

@@ -1,213 +1,152 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { MachineHub } from "./hub.ts";
 import { OrchestrationServer } from "../transport/server.ts";
 import { MachineControl } from "./control.ts";
-import { TaskStore } from "../../workspace/taskStore.ts";
+import { AgentEvents } from "./events.ts";
+import { CodingAgents, CodingAgentStore } from "./agents.ts";
 import { MachineRoutes } from "../../surfaces/web/machineRoutes.ts";
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-async function eventually<T>(
-  get: () => Promise<T> | T,
-  predicate: (v: T) => boolean,
-) {
-  for (let i = 0; i < 100; i++) {
+import { FAKE_PROVIDER } from "../../workspace/machine/fakeProvider.ts";
+import type { JsonState } from "../../db/jsonState.ts";
+import type { PushEvent } from "../../surfaces/web/pushRules.ts";
+import type { AgentResultParams } from "./contracts.ts";
+
+class MemoryState implements JsonState {
+  map = new Map<string, string>();
+  get<T>(key: string) {
+    const v = this.map.get(key);
+    return v === undefined ? undefined : (JSON.parse(v) as T);
+  }
+  set(key: string, value: unknown) {
+    this.map.set(key, JSON.stringify(value));
+  }
+  list<T>(prefix: string) {
+    return [...this.map].filter(([k]) => k.startsWith(prefix)).map(([, v]) => JSON.parse(v) as T);
+  }
+}
+
+async function eventually<T>(get: () => Promise<T> | T, predicate: (v: T) => boolean) {
+  for (let i = 0; i < 200; i++) {
     const v = await get();
     if (predicate(v)) return v;
-    await sleep(50);
+    await Bun.sleep(50);
   }
   throw new Error("Machine did not reach the expected state.");
 }
-test("outbound daemon shares files and manages durable task sessions alongside the workspace", async () => {
+
+test("a machine daemon reports agents' changes: results wake their conversation once, approvals push the owner", async () => {
   const dir = await mkdtemp(join(tmpdir(), "sushii-machine-e2e-"));
   const root = join(dir, "project");
   await mkdir(root);
   await writeFile(join(root, "README.md"), "Hello from the file server");
-  const fake = join(dir, "fake-codex.ts");
-  await writeFile(
-    fake,
-    `import { createInterface } from 'node:readline';
-if(process.argv.includes('-p')) {
- let prompt='';process.stdin.on('data',s=>prompt+=s);process.stdin.on('end',()=>{process.stdout.write(JSON.stringify({type:'assistant',session_id:'claude-one',message:{content:[{type:'text',text:'Claude reply: '+prompt}]}})+'\\n');process.stdout.write(JSON.stringify({type:'result',session_id:'claude-one',is_error:false,result:'Done'})+'\\n');});
-} else {
-let thread='thread-one'; let turn=0;
-const send=(m)=>process.stdout.write(JSON.stringify(m)+'\\n');
-createInterface({input:process.stdin}).on('line',line=>{
- const m=JSON.parse(line); if(!m.method) {if(m.result?.decision==='accept') { send({method:'item/agentMessage/delta',params:{delta:'Approved output'}}); send({method:'turn/completed',params:{turn:{id:'turn-'+turn,status:'completed'}}});} return;}
- if(m.method==='initialize') return send({id:m.id,result:{}});
- if(m.method==='initialized') return;
- if(m.method==='thread/start'||m.method==='thread/resume') return send({id:m.id,result:{thread:{id:thread}}});
- if(m.method==='turn/interrupt') {send({id:m.id,result:{}});return send({method:'turn/completed',params:{turn:{status:'interrupted'}}});}
- if(m.method==='turn/start') {
-  if(m.params.sandboxPolicy.type!=='workspaceWrite'||m.params.sandboxPolicy.networkAccess!==false||!Array.isArray(m.params.input[0].text_elements)) return send({id:m.id,error:{message:'Incorrect Codex protocol'}});
-  turn++;send({id:m.id,result:{turn:{id:'turn-'+turn}}});
-  if(m.params.input[0].text.includes('approval')) return send({id:'permission-'+turn,method:'item/commandExecution/requestApproval',params:{command:'run tests',threadId:thread}});
-  if(m.params.input[0].text.includes('wait')) return;
-  send({method:'item/agentMessage/delta',params:{delta:'Reply: '+m.params.input[0].text}});send({method:'turn/completed',params:{turn:{status:'completed'}}});
- }
-});}`,
-  );
+  const fake = join(dir, "fake.ts");
+  await writeFile(fake, FAKE_PROVIDER);
   const token = "a".repeat(40);
-  const hub = new MachineHub([{ id: "pc", name: "My PC", token }]);
-  const server = new OrchestrationServer({
-    secretGrants: { workspace: { principalId: "owner" } },
-  });
+  const hub = new MachineHub([{ id: "pc", name: "Desktop", token }]);
+  const server = new OrchestrationServer({ secretGrants: { workspace: { principalId: "owner" } } });
   server.setMachineHub(hub);
   server.listen();
+  const state = new MemoryState();
+  const control = new MachineControl(hub, new CodingAgentStore(state));
+  const agents = new CodingAgents(control);
+  const routes = new MachineRoutes(control, agents);
+  const wakes: Omit<AgentResultParams, "principalId">[] = [];
+  const pushes: PushEvent[] = [];
+  const events = new AgentEvents({
+    control,
+    link: { isConnected: () => true, agentResult: async (q) => (wakes.push(q), "delivered") },
+    state,
+    push: async (e) => void pushes.push(e),
+    lastOwnerMessageAt: () => undefined,
+  });
+  control.observer = events;
+  hub.setSessionListener(events.onSession);
   const cfg = join(dir, "machine.json");
   await writeFile(
     cfg,
     JSON.stringify({
       id: "pc",
-      name: "My PC",
+      name: "Desktop",
       url: server.url,
       token,
       stateDir: join(dir, "state"),
       roots: [{ id: "code", name: "Code", path: root, coding: true }],
-      providers: {
-        codex: [process.execPath, fake],
-        claude: [process.execPath, fake],
-      },
+      providers: { codex: [process.execPath, fake], claude: [process.execPath, fake] },
     }),
   );
-  let daemon = Bun.spawn(
-    [process.execPath, "src/workspace/machine/index.ts", cfg],
-    { stdout: "ignore", stderr: "pipe" },
-  );
-  const workspace = new WebSocket(server.url);
+  const spawnDaemon = () => Bun.spawn([process.execPath, "src/workspace/machine/index.ts", cfg], { stdout: "ignore", stderr: "ignore" });
+  let daemon = spawnDaemon();
   try {
-    await new Promise<void>((resolve) => (workspace.onopen = () => resolve()));
-    workspace.send(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "runner/register",
-        params: {
-          runnerId: "workspace",
-          kind: "pi-workspace",
-          role: "workspace",
-          principalId: "owner",
-          protocolVersion: 1,
-          secret: "workspace",
-        },
-      }),
+    await eventually(() => hub.list(), (list) => list[0]!.connected);
+    await eventually(() => hub.supportsEvents("pc"), (v) => v);
+    expect(await fetch(server.url.replace("ws:", "http:") + "/machines").then((r) => r.status)).toBe(401);
+    expect(((await control.files({ action: "read", machineId: "pc", rootId: "code", path: "README.md" })) as { text: string }).text).toBe(
+      "Hello from the file server",
     );
-    await eventually(
-      () => hub.list(),
-      (list) => list[0]!.connected,
-    );
-    expect(server.getWorkspaceConnection("owner")?.runnerId).toBe("workspace");
-    expect(
-      await fetch(server.url.replace("ws:", "http:") + "/machines").then(
-        (r) => r.status,
-      ),
-    ).toBe(401);
-    const tasks = new TaskStore(join(dir, "tasks-state"), root);
-    const link = { tasksManage: async (p: any) => tasks.manage(p) };
-    const control = new MachineControl(hub, link);
-    const routes = new MachineRoutes(control, link);
-    expect(
-      (
-        (await control.files({
-          action: "read",
-          machineId: "pc",
-          rootId: "code",
-          path: "README.md",
-        })) as any
-      ).text,
-    ).toBe("Hello from the file server");
-    let task = tasks.manage({
-      action: "create",
-      title: "Fix login",
-      brief: "approval",
-    }).tasks[0]!;
-    task = await control.start(task, {
-      machineId: "pc",
-      rootId: "code",
-      provider: "codex",
-    });
-    const pending = await eventually(
-      () => control.session(task),
-      (s) => s.status === "needs-you",
-    );
-    expect(pending.requests).toHaveLength(1);
-    const answer = await routes.handle(
-      new Request("http://local/api/machines/tasks/" + task.id + "/answer", {
+
+    // Finished: one wake into the conversation that started it, from the live event alone.
+    const started = (await agents.action({ action: "start", machineId: "pc", rootId: "code", provider: "codex", prompt: "hello" }, "topic-1")) as {
+      agent: { id: string };
+    };
+    const id = started.agent.id;
+    await eventually(() => wakes.length, (n) => n === 1);
+    expect(wakes[0]).toMatchObject({ conversationId: "topic-1", agentId: id, status: "completed", final: "Final: hello", machineName: "Desktop" });
+    expect(control.agents.get(id)).toMatchObject({ remoteStatus: "completed", conversationId: "topic-1" });
+    // A duplicate notification and a read of the agent act on nothing new.
+    const summary = { sessionId: id, taskId: "", stateVersion: control.agents.get(id)!.stateVersion!, status: "completed" as const };
+    events.onSession("pc", summary);
+    await agents.action({ action: "get", id });
+    await Bun.sleep(200);
+    expect(wakes).toHaveLength(1);
+
+    // Needs-you: the owner is pushed, the agent is not woken; answering resolves the push and the result wakes.
+    const approval = ((await agents.action({ action: "start", machineId: "pc", rootId: "code", provider: "codex", prompt: "approval" }, "main")) as {
+      agent: { id: string };
+    }).agent.id;
+    await eventually(() => pushes.length, (n) => n === 1);
+    expect(pushes[0]).toMatchObject({ kind: "agentNeedsYou", agentId: approval, label: "Codex agent on Desktop" });
+    expect(wakes).toHaveLength(1);
+    const view = (await (await routes.handle(new Request(`http://local/api/agents/${approval}`), `/api/agents/${approval}`))!.json()) as {
+      session: { requests: { id: string; decisions: string[] }[] };
+    };
+    expect(view.session.requests[0]!.decisions).toContain("acceptForSession");
+    const answered = await routes.handle(
+      new Request(`http://local/api/agents/${approval}/answer`, {
         method: "POST",
-        body: JSON.stringify({
-          requestId: pending.requests[0]!.id,
-          decision: "accept",
-        }),
+        body: JSON.stringify({ requestId: view.session.requests[0]!.id, decision: "accept" }),
       }),
-      "/api/machines/tasks/" + task.id + "/answer",
+      `/api/agents/${approval}/answer`,
     );
-    expect(answer?.status).toBe(200);
-    const completed = await eventually(
-      () => control.session(task),
-      (s) => s.status === "completed",
-    );
-    expect(completed.output).toContain("Approved output");
-    task = await control.sync(task, completed);
-    expect(task.status).toBe("needs-you");
+    expect(answered!.status).toBe(200);
+    await eventually(() => wakes.length, (n) => n === 2);
+    expect(wakes[1]).toMatchObject({ agentId: approval, status: "completed", conversationId: "main" });
+    expect(pushes.some((p) => p.kind === "agentResolved")).toBe(true);
+    expect(((await (await routes.handle(new Request("http://local/api/agents?conversationId=main"), "/api/agents"))!.json()) as { agents: unknown[] }).agents).toHaveLength(1);
+
+    // Missed events: the daemon restarts mid-turn, so the gateway hears nothing until the reconnect snapshot.
+    const waiting = ((await agents.action({ action: "start", machineId: "pc", rootId: "code", provider: "claude", prompt: "wait" }, "main")) as {
+      agent: { id: string };
+    }).agent.id;
+    await eventually(async () => (await control.sessionById("pc", waiting)).threadId, (t) => t === "claude-one");
     daemon.kill();
     await daemon.exited;
-    daemon = Bun.spawn(
-      [process.execPath, "src/workspace/machine/index.ts", cfg],
-      { stdout: "ignore", stderr: "pipe" },
-    );
-    await eventually(
-      () => hub.list(),
-      (list) => list[0]!.connected,
-    );
-    expect((await control.session(task)).threadId).toBe("thread-one");
-    task = await control.start(task, undefined, "Follow up");
-    const followup = await eventually(
-      () => control.session(task),
-      (s) => s.status === "completed",
-    );
-    expect(followup.attempts).toBe(2);
-    expect(followup.output).toContain("Reply: Follow up");
-    task = await control.start(task, undefined, "wait");
-    await eventually(
-      () => control.session(task),
-      (s) => s.status === "running",
-    );
-    await control.stop(task);
-    expect((await control.session(task)).status).toBe("stopped");
-    let claude = tasks.manage({
-      action: "create",
-      title: "Claude task",
-      brief: "Review this code",
-    }).tasks[0]!;
-    claude = await control.start(claude, {
-      machineId: "pc",
-      rootId: "code",
-      provider: "claude",
-    });
-    const claudeDone = await eventually(
-      () => control.session(claude),
-      (s) => s.status === "completed",
-    );
-    expect(claudeDone.threadId).toBe("claude-one");
-    expect(claudeDone.output).toContain("Claude reply:");
-    await control.start(claude, undefined, "Review again");
-    expect(
-      (
-        await eventually(
-          () => control.session(claude),
-          (s) => s.status === "completed",
-        )
-      ).attempts,
-    ).toBe(2);
-    expect(
-      JSON.parse(await readFile(join(dir, "state", "sessions.json"), "utf8")),
-    ).toHaveLength(2);
+    daemon = spawnDaemon();
+    await eventually(() => wakes.length, (n) => n === 3);
+    expect(wakes[2]).toMatchObject({ agentId: waiting, status: "interrupted" });
+    // The reconnect snapshot also listed the earlier agents, which were already acted on.
+    await Bun.sleep(300);
+    expect(wakes).toHaveLength(3);
+
+    // A message resumes the interrupted agent, and its result wakes again.
+    await agents.action({ action: "message", id: waiting, text: "carry on" }, "main");
+    await eventually(() => wakes.length, (n) => n === 4);
+    expect(wakes[3]).toMatchObject({ agentId: waiting, status: "completed", final: "Done: carry on" });
   } finally {
-    workspace.close();
     daemon.kill();
     await daemon.exited;
     server.stop();
     await rm(dir, { recursive: true, force: true });
   }
-}, 20000);
+}, 30000);

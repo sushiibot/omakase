@@ -1,4 +1,3 @@
-import type { MachineControl } from "../../orchestration/machines/control.ts";
 import { ulid } from "../../workspace/ulid.ts";
 import { taskAction } from "../../orchestration/taskContracts.ts";
 import type { WorkspaceLink } from "../../orchestration/workspace/link.ts";
@@ -12,30 +11,12 @@ export class TaskRoutes {
   constructor(
     private readonly link: Pick<WorkspaceLink, "tasksManage" | "runsStop">,
     private readonly threads: WebThreads,
-    private readonly machines?: MachineControl,
   ) {}
   private mutation: Promise<unknown> = Promise.resolve();
   async action(raw: unknown, actor: SurfaceActor, conversationId = "main") {
     const request = taskAction.parse(raw);
     if (request.action === "list" || request.action === "get") {
       const result = await this.link.tasksManage(request);
-      if (this.machines)
-        for (const task of result.tasks) {
-          if (
-            !task.execution ||
-            !this.machines
-              .list()
-              .some((m) => m.id === task.execution!.machineId && m.connected)
-          )
-            continue;
-          try {
-            const session = await this.machines.session(task);
-            const fresh = await this.machines.sync(task, session);
-            Object.assign(task, fresh);
-          } catch {
-            /* Keep tasks available while a machine is unavailable. */
-          }
-        }
       return {
         tasks: result.tasks.map((task) =>
           task.workConversationId &&
@@ -65,14 +46,6 @@ export class TaskRoutes {
       let task = (
         await this.link.tasksManage({ action: "get", id: request.id })
       ).tasks[0]!;
-      if (request.action === "start" && (task.execution || request.target)) {
-        if (!this.machines) throw new Error("Remote machines are unavailable.");
-        return {
-          tasks: [
-            await this.machines.start(task, request.target, request.text),
-          ],
-        };
-      }
       if (
         request.action === "prepare" &&
         (task.status === "done" || task.status === "cancelled")
@@ -90,8 +63,6 @@ export class TaskRoutes {
         const runIds = new Set(
           all.filter((t) => included.has(t.id)).flatMap((t) => t.runIds),
         );
-        for (const child of all.filter((t) => included.has(t.id)))
-          await this.machines?.stop(child);
         for (const id of runIds) await this.link.runsStop(id);
         for (const child of all.filter((t) => included.has(t.id))) {
           if (child.workConversationId) {
@@ -231,7 +202,7 @@ export class TaskRoutes {
 export const taskManifest = {
   name: "task_manage",
   description:
-    "Manage the owner's persistent tasks and checklists. Actions: list, get, create, update, prepare, start, stop. create saves a to-do without executing it. prepare opens the task's work conversation without starting a run. start with target {machineId,rootId,provider:codex|claude} delegates to a connected machine; use machine_files action=list_machines to discover targets. Omit target to continue an existing remote session or start the task's own Sushii conversation; it can delegate coding or research. update requires the latest revision from get/list. Use patch.checklist items {id,title,done}. Mark done only when the outcome is verified. Never treat a stopped run as a cancelled task. Tasks and their runs are separate; use run IDs for delegate continue.",
+    "Manage the owner's persistent tasks and checklists. Actions: list, get, create, update, prepare, start, stop. create saves a to-do without executing it. prepare opens the task's work conversation without starting a run. start opens the task's own conversation and starts work there; it can delegate coding or research, including to coding agents on the owner's machines with coding_agent. update requires the latest revision from get/list. Use patch.checklist items {id,title,done}. Mark done only when the outcome is verified. Never treat a stopped run as a cancelled task. Tasks and their runs are separate; use run IDs for delegate continue.",
   approval: "none" as const,
   inputSchema: {
     type: "object",
@@ -246,16 +217,6 @@ export const taskManifest = {
       title: { type: "string" },
       brief: { type: "string" },
       text: { type: "string" },
-      target: {
-        type: "object",
-        additionalProperties: false,
-        required: ["machineId", "rootId", "provider"],
-        properties: {
-          machineId: { type: "string" },
-          rootId: { type: "string" },
-          provider: { type: "string", enum: ["codex", "claude"] },
-        },
-      },
       conversationId: { type: "string" },
       parentTaskId: { type: "string" },
       revision: { type: "integer" },

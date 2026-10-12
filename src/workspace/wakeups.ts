@@ -417,7 +417,7 @@ export class WakeupManager {
         name: "schedule_check",
         label: "Schedule a check",
         description:
-          "Schedule a one-time follow-up that wakes Sushii in an existing conversation at a specific date/time. Use a stable key for the item's purpose, such as deployment-status. An existing pending check for the same task/conversation and key is returned unchanged; use reschedule_check to move it. Supply taskId for a persistent assignment. The prompt must say what to check and when to notify the owner. Check current status and existing unanswered requests before asking again. Recurring jobs and heartbeat remain separate.",
+          "Schedule a one-time follow-up that wakes the agent in an existing conversation at a specific date/time. Use a stable key for the item's purpose, such as deployment-status. An existing pending check for the same task/conversation and key is returned unchanged; use reschedule_check to move it. Supply taskId for a persistent assignment. The prompt must say what to check and when to notify the owner. Check current status and existing unanswered requests before asking again. Recurring jobs and heartbeat remain separate.",
         parameters: Type.Object({
           key: Type.String({
             description:
