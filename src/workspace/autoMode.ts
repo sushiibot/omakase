@@ -55,7 +55,7 @@ export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "grep",
   "find",
   "ls",
-  // Exposure equals reading the file and quoting it; the only recipient is drk.
+  // Exposure equals reading the file and quoting it; the only recipient is the owner.
   "send_file",
   "web_search",
   "fetch_url_content",
@@ -63,7 +63,7 @@ export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "get_trace",
   "get_issue_status",
   "list_triaged_issues",
-  // The bot already asks drk before running this one; judging it too would prompt twice.
+  // The bot already asks the owner before running this one; judging it too would prompt twice.
   "file_linear_issue",
 ]);
 

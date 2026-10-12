@@ -157,7 +157,7 @@ export async function runToolFreeJob(config: WorkspaceConfig, input: ToolFreeJob
       },
     ],
   });
-  // drk's default thinking level from settings.json, which an in-memory manager would not read.
+  // The owner's default thinking level from settings.json, which an in-memory manager would not read.
   const defaultThinkingLevel = SettingsManager.create(cwd, config.agentDir).getDefaultThinkingLevel();
   const settingsManager = SettingsManager.inMemory({
     compaction: autoCompactionSettings([

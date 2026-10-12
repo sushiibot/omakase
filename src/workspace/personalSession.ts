@@ -1232,7 +1232,7 @@ export class PersonalSession {
     const entry = this.unconsumed[i];
     this.inbox.consume(this.unconsumed.splice(0, i + 1).map((p) => p.messageId));
     if (entry.wakeId) {
-      // A wake isn't drk speaking: the reply threading keeps following drk's last message.
+      // A wake isn't the owner speaking: the reply threading keeps following the owner's last message.
       const w = this.wakes.get(entry.wakeId);
       this.wakes.delete(entry.wakeId);
       this.wakesDone.add(entry.wakeId);
@@ -1492,7 +1492,7 @@ export class PersonalSession {
     return run;
   }
 
-  /** Persisted, so a wake or proactive run after a restart can send files before drk's next message. */
+  /** Persisted, so a wake or proactive run after a restart can send files before the owner's next message. */
   private recordFileUploads(surface: string, uploads: boolean): void {
     if (this.fileSurfaces.get(surface) === uploads) return;
     this.fileSurfaces.set(surface, uploads);
@@ -1563,7 +1563,7 @@ export class PersonalSession {
     return text;
   }
 
-  /** Asks drk something outside any turn; resolves to the parsed answer, or undefined when it expires. */
+  /** Asks the owner something outside any turn; resolves to the parsed answer, or undefined when it expires. */
   askOwner<T>(question: string, choices: string[], parse: (text: string) => { value: T } | null): Promise<T | undefined> {
     return this.ownerAsks.ask<T | undefined>(question, choices, parse, undefined);
   }

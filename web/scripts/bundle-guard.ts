@@ -1,5 +1,5 @@
 // Fails the app build when fixture data or a fake backend reaches the bundle. They are for /proto,
-// the e2e fake backend and `bun dev` with ?fake; in production drk would see made-up runs and alerts.
+// the e2e fake backend and `bun dev` with ?fake; in production the owner would see made-up runs and alerts.
 import type { Plugin } from 'vite';
 
 const FORBIDDEN = [

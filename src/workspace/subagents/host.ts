@@ -736,7 +736,7 @@ export class SubagentHost {
           name: "sushii-memory-guard",
           factory: createMemoryGuardExtension({ home: config.home, cwd, readOnly: true, ...(spawn.def.writer ? { writableRoots: [cwd, scratch] } : {}), log: memoryLog }),
         },
-        // Rooted in the child's scratch dir, so its compaction handoff never lands in drk's daily notes.
+        // Rooted in the child's scratch dir, so its compaction handoff never lands in the owner's daily notes.
         { name: "sushii-compaction-handoff", factory: createCompactionHandoffExtension({ home: scratch, log: memoryLog }) },
         ...(nested ? [{ name: "sushii-delegate", factory: this.extension({ depth: spawn.depth, currentRunId: () => spawn.runId, currentTurn: () => spawn.turn }) }] : []),
       ],

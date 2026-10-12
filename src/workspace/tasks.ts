@@ -442,7 +442,7 @@ export interface TaskReviewDeps {
   allow(now: Date): boolean;
   /** Counts the review against the proactive limits. */
   record(now: Date): void;
-  /** Sends the ask to drk; resolves to the answer, or undefined when it expired. */
+  /** Sends the ask to the owner; resolves to the answer, or undefined when it expired. */
   ask(question: string, choices: string[], parse: (text: string) => { value: ReviewDecision[] } | null): Promise<ReviewDecision[] | undefined>;
   /** Wraps the file edits (e.g. the subagents' protected-file lease) and commits them. */
   write(fn: () => void, message: string): Promise<void>;

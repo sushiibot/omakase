@@ -204,7 +204,7 @@ jobs:
             type=registry,ref=ghcr.io/sushiibot/omakase:buildcache-workspace
           cache-to: type=registry,ref=ghcr.io/sushiibot/omakase:buildcache-workspace,mode=max
 
-  # Serial gateway → workspace: each deploy pushes a tag bump to sushii-ansible, and parallel deploys
+  # Serial gateway → workspace: each deploy pushes a tag bump to the deploy config repo, and parallel deploys
   # would race those pushes.
   deploy:
     needs: [docker-build, typecheck, test, web, web-e2e, browser-smoke, e2e-system]

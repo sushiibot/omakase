@@ -149,7 +149,7 @@ export interface PromptJobDeps {
   /** Shared follow-ups prevent broad reviews from repeating item-specific checks. */
   scheduledChecks?: () => string;
   limiter: ProactiveLimiter;
-  /** Sends `text` to drk as a proactive message from `job`. */
+  /** Sends `text` to the owner as a proactive message from `job`. */
   deliver: (text: string, job: DeliverJob) => void;
   /** Appends a one-line note to the main chat session. */
   note: (name: string, text: string) => Promise<void>;
@@ -162,7 +162,7 @@ export interface PromptJobDeps {
 
 /**
  * A scheduled prompt in a light, read-only session (AGENTS.md, USER.md, the prompt and recent daily notes;
- * never the chat history). A reply other than NO_REPLY goes to drk within the rate limits, with a note in the chat.
+ * never the chat history). A reply other than NO_REPLY goes to the owner within the rate limits, with a note in the chat.
  */
 export function createPromptJob(spec: PromptJobSpec, deps: PromptJobDeps): ScheduledJob {
   const agentName = `job:${spec.name}`;
