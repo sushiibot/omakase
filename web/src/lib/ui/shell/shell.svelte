@@ -144,6 +144,7 @@
 		x: number;
 		y: number;
 		base: number;
+		startedFrom: Pane;
 		lastX: number;
 		at: number;
 		velocity: number;
@@ -155,7 +156,9 @@
 	}
 	const excluded =
 		'a,button,input,textarea,select,summary,pre,code,[contenteditable],[role="slider"],[role="tab"],[data-tab-pager]';
+	let suppressClick = false;
 	function down(e: PointerEvent) {
+		suppressClick = false;
 		if (
 			wide ||
 			!e.isPrimary ||
@@ -165,9 +168,18 @@
 		)
 			return;
 		const target = e.target;
+		const paneSurface =
+			target instanceof Element &&
+			(target.closest('[data-workspace-return]') ||
+				(pane === 'navigation' && target.closest('[data-channel-navigation]')) ||
+				(pane === 'inspector' && target.closest('[data-workspace-inspector]')));
 		if (
-			!(target instanceof HTMLElement) ||
-			target.closest(excluded) ||
+			!(target instanceof Element) ||
+			target.closest(
+				paneSurface
+					? 'input,textarea,select,pre,code,[contenteditable],[role="slider"],[role="checkbox"],[data-tab-pager]'
+					: excluded
+			) ||
 			document.getSelection()?.isCollapsed === false
 		)
 			return;
@@ -179,7 +191,7 @@
 			return;
 		const rect = root.getBoundingClientRect();
 		if (e.clientX - rect.left < motion.edge || rect.right - e.clientX < motion.edge) return;
-		for (let el: HTMLElement | null = target; el && el !== root; el = el.parentElement) {
+		for (let el: Element | null = target; el && el !== root; el = el.parentElement) {
 			if (el.scrollWidth > el.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(el).overflowX))
 				return;
 		}
@@ -188,6 +200,7 @@
 			x: e.clientX,
 			y: e.clientY,
 			base: offset,
+			startedFrom: pane,
 			lastX: e.clientX,
 			at: performance.now(),
 			velocity: 0,
@@ -220,9 +233,11 @@
 						drag,
 						performance.now() - gesture.at > 80 ? 0 : gesture.velocity,
 						navWidth,
-						inspectorWidth
+						inspectorWidth,
+						gesture.startedFrom
 					)
 				: pane;
+		suppressClick = gesture.horizontal;
 		if (root.hasPointerCapture(e.pointerId)) root.releasePointerCapture(e.pointerId);
 		gesture = null;
 		drag = null;
@@ -384,6 +399,12 @@
 		style:--inspector-width={`${inspectorWidth}px`}
 		style:--chat-offset={`${offset}px`}
 		style:--inspector-column={inspectorActive ? '320px' : '0px'}
+		onclickcapture={(e) => {
+			if (!suppressClick || e.detail === 0) return;
+			suppressClick = false;
+			e.preventDefault();
+			e.stopPropagation();
+		}}
 		onpointerdown={down}
 		onpointermove={move}
 		onpointerup={up}
@@ -426,6 +447,7 @@
 				{@render children()}
 			</div>
 			{#if !wide && pane !== 'chat'}<button
+					data-workspace-return
 					class="return-to-chat"
 					class:inspector-return={pane === 'inspector'}
 					aria-label="Return to conversation"
@@ -499,7 +521,9 @@
 		transform: rotate(180deg);
 	}
 	.workspace :global(main),
-	.navigation {
+	.navigation,
+	.navigation :global(.overflow-y-auto),
+	.inspector :global(.overflow-y-auto) {
 		touch-action: pan-y pinch-zoom;
 	}
 	.wide {

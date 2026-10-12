@@ -92,6 +92,8 @@ These values are Sushii prototype choices, not Discord specifications.
 
 The prototype gesture starts after 10px of movement and a horizontal-to-vertical ratio of at least 1.5.
 The release projection uses recent horizontal velocity and a 160ms projection horizon.
+Opening requires half the panel width after projection. Closing requires a 64px inward drag, or an inward flick of at least 32px that projects past that threshold. Closing returns to chat rather than opening the opposite panel.
+Sidebar links, buttons, and the exposed chat return strip accept horizontal dismissal gestures. A claimed drag cancels its synthetic click; normal taps, vertical scrolling, and editing controls retain their behavior.
 Settlement uses a fixed 200ms ease-out transition.
 Reduced motion uses immediate settlement.
 The initial settle budget is 240ms in an idle browser, including frame scheduling.

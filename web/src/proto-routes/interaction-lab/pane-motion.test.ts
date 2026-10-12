@@ -29,3 +29,21 @@ test('pane offsets stop at their boundaries', () => {
 	expect(offsetFor('navigation', 320, 360)).toBe(320);
 	expect(offsetFor('inspector', 320, 360)).toBe(-360);
 });
+
+test('open panes close with a short deliberate drag or shorter inward flick', () => {
+	expect(releasePane(256, 0, 320, 360, 'navigation')).toBe('chat');
+	expect(releasePane(-296, 0, 320, 360, 'inspector')).toBe('chat');
+	expect(releasePane(288, -0.4, 320, 360, 'navigation')).toBe('chat');
+	expect(releasePane(-328, 0.4, 320, 360, 'inspector')).toBe('chat');
+});
+
+test('closing ignores tiny flicks and outward reversals, and cannot switch to the opposite pane', () => {
+	expect(releasePane(310, -2, 320, 360, 'navigation')).toBe('navigation');
+	expect(releasePane(-350, 2, 320, 360, 'inspector')).toBe('inspector');
+	expect(releasePane(288, 0, 320, 360, 'navigation')).toBe('navigation');
+	expect(releasePane(-328, 0, 320, 360, 'inspector')).toBe('inspector');
+	expect(releasePane(280, 1, 320, 360, 'navigation')).toBe('navigation');
+	expect(releasePane(-320, -1, 320, 360, 'inspector')).toBe('inspector');
+	expect(releasePane(-200, -1, 320, 360, 'navigation')).toBe('chat');
+	expect(releasePane(200, 1, 320, 360, 'inspector')).toBe('chat');
+});

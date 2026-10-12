@@ -188,7 +188,8 @@
 						drag,
 						performance.now() - gesture.at > 80 ? 0 : gesture.velocity,
 						navigationWidth,
-						inspectorWidth
+						inspectorWidth,
+						pane
 					)
 				: pane;
 		if (workspace.hasPointerCapture(e.pointerId)) workspace.releasePointerCapture(e.pointerId);

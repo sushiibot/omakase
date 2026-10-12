@@ -164,3 +164,100 @@ test('open sheets and desktop widths keep their gestures', async ({ page, contex
 	await expect(page.getByRole('dialog', { name: 'Menu', exact: true })).toHaveCount(0);
 	await expect(page.locator('[data-channel-navigation]')).toBeVisible();
 });
+
+for (const pane of ['navigation', 'inspector'] as const) {
+	test(`${pane} closes with a short paused swipe over controls or the chat peek`, async ({
+		page,
+		context
+	}) => {
+		await fixtureApp(context);
+		await page.goto('/chat');
+		const composer = page.getByRole('textbox', { name: 'Message', exact: true });
+		await composer.fill('Keep my draft after dismissing a pane');
+		const region =
+			pane === 'navigation'
+				? page.getByRole('dialog', { name: 'Menu', exact: true })
+				: page.getByRole('complementary', { name: 'Conversation tasks', exact: true });
+		const trigger =
+			pane === 'navigation'
+				? page.getByRole('button', { name: /^Menu/ })
+				: page.getByRole('button', { name: 'Tasks, 3 open', exact: true });
+		const control =
+			pane === 'navigation'
+				? region.getByRole('link', { name: 'Main', exact: true })
+				: region.getByRole('button', { name: /Fix login redirect/ });
+		for (const surface of pane === 'navigation'
+			? ['control', 'icon', 'peek']
+			: ['control', 'peek']) {
+			await trigger.click();
+			await expect(region).toBeVisible();
+			await expect
+				.poll(() =>
+					page
+						.locator('[data-chat-surface]')
+						.evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).m41)
+				)
+				.toBeCloseTo(pane === 'navigation' ? 320 : -360, 0);
+			const box = await (
+				surface === 'icon'
+					? control.locator('svg').first()
+					: surface === 'control'
+						? control
+						: page.getByRole('button', { name: 'Return to conversation', exact: true })
+			).boundingBox();
+			const visibleLeft = Math.max(0, box!.x);
+			const visibleRight = Math.min(412, box!.x + box!.width);
+			const x = (visibleLeft + visibleRight) / 2;
+			const y = box!.y + box!.height / 2;
+			await swipe(page, [x, y], [x + (pane === 'navigation' ? -72 : 72), y], true);
+			await expect(region).toBeHidden();
+			await expect(composer).toHaveValue('Keep my draft after dismissing a pane');
+			await expect(page).toHaveURL(/\/chat$/);
+		}
+	});
+}
+
+test('dragging a channel link does not activate it, and a later tap still navigates', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await page.goto('/chat');
+	await page.getByRole('button', { name: /^Menu/ }).click();
+	const menu = page.getByRole('dialog', { name: 'Menu', exact: true });
+	const channel = menu.getByRole('link', { name: 'Lease renewal', exact: true });
+	const box = await channel.boundingBox();
+	const x = box!.x + box!.width / 2,
+		y = box!.y + box!.height / 2;
+	await swipe(page, [x, y], [x - 20, y], true);
+	await expect(menu).toBeVisible();
+	await expect(page).toHaveURL(/\/chat$/);
+	await channel.click();
+	await expect(page).toHaveURL(/\/chats\/lease$/);
+	await expect(page.getByRole('heading', { name: 'Lease renewal', exact: true })).toBeVisible();
+});
+
+test('the inspector retains native vertical scrolling while horizontal swipes dismiss it', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await page.setViewportSize({ width: 412, height: 400 });
+	await page.goto('/chat');
+	await page.getByRole('button', { name: 'Tasks, 3 open', exact: true }).click();
+	const inspector = page.getByRole('complementary', { name: 'Conversation tasks', exact: true });
+	const scroller = inspector.locator('.overflow-y-auto').first();
+	await expect
+		.poll(() => scroller.evaluate((el) => el.scrollHeight - el.clientHeight))
+		.toBeGreaterThan(0);
+	const row = inspector.getByRole('button', { name: /Fix login redirect/ });
+	const box = await row.boundingBox();
+	await swipe(
+		page,
+		[box!.x + box!.width / 2, box!.y + box!.height / 2],
+		[box!.x + box!.width / 2, 90]
+	);
+	await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+	await expect(inspector).toBeVisible();
+	await expect(inspector.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible();
+});
