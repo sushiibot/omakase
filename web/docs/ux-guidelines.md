@@ -22,6 +22,8 @@ A session holds the model context and transcript. A session change does not crea
 
 Existing `/runs` URLs, API fields and run identifiers remain compatible. The UI vocabulary does not change the execution log format.
 
+Channel options first show actions: Open conversation, Rename, and Archive or Restore when available. Show the name field only after Rename is selected. Main supports a saved display name and cannot be archived. Keep Archived in its own collapsed section, outside search controls. Sidebar search opens matching archived results; the owner can still collapse them. Check: `pw` (`e2e/channel-workspace.test.ts`, `e2e/threads.test.ts`).
+
 ## Check key
 
 | Tag      | Meaning                                                                                |
@@ -44,9 +46,9 @@ The primary device is an Android phone running the installed PWA (Chrome WebAPK,
 - **Separate action controls have at least 8px between their hit areas.** Why: Material spacing guidance; mis-taps on approve/deny rows are costly. Repeated channel navigation is a deliberate exception: contiguous full-width rows retain 48px touch targets, with shallow highlights inset inside them. Separate project groups with space; do not separate every channel like an action button. WCAG does not require a gap when targets meet its size minimum. Check: `shot`, `pw`.
 - **Inline text links inside prose are exempt from the 48px rule, but nothing important is reachable only through one.** Why: WCAG 2.5.8 exempts inline links because they are small and easy to miss. Check: `review`.
 - **Primary actions sit in the bottom third of the screen: composer, approve/deny, the main button of a sheet.** Why: about half of observed phone grips are one-handed, and the top corners are the hardest reach for that thumb ([Hoober, How do users really hold mobile devices](https://www.uxmatters.com/mt/archives/2013/02/how-do-users-really-hold-mobile-devices.php)). Check: `shot` at 412x915; the primary action's top edge is below y=610.
-- **The top bar holds title, back and secondary actions only. The general chat is titled Sushii, with no static subtitle; activity belongs beside the conversation.** Why: nothing there should need reaching for mid-task. Check: `review`.
+- **The top bar holds title, back and secondary actions only. The general chat defaults to Sushii until the owner renames it, with no static subtitle; activity belongs beside the conversation.** Why: nothing there should need reaching for mid-task. Check: `review`.
 - **Destructive or outward actions (Deny, Delete, Send now) are never the largest target and never sit where a mis-tap from the primary lands.** Why: Fitts's law works against you for dangerous actions. Check: `shot`.
-- **Section swipes follow the visible tab order and stop at each end.** On touch screens, Runs filters, run details, History days, Memory and MCP details support left/right swipes in the content area. Vertical scrolling, text controls, selection and horizontal code/table scrolling keep their normal behavior. The left edge stays available to the drawer and the outer edges stay available to system navigation. Panels follow the finger continuously and snap on release; tapping a tab animates the same pager. The underline tracks the panel position. Keep headers fixed and preserve each panel’s scroll and expanded content. Tabs remain the tap and keyboard alternatives. Check: `pw` (`e2e/tab-swipe.test.ts`).
+- **Section swipes follow the visible tab order and stop at each end.** On touch screens, Runs filters, run details, History days, Memory and MCP details support left/right swipes in the content area. Vertical scrolling, text controls, selection and horizontal code/table scrolling keep their normal behavior. The left edge stays available to the drawer and the outer edges stay available to system navigation. Panels follow the finger continuously and snap on release; tapping a tab on phones animates the same pager, with its selected label and underline updating immediately. Desktop tabs switch panels instantly. During a held swipe the underline tracks the panel position, then marks the destination on release. Keep headers fixed and preserve each panel’s scroll and expanded content. Tabs remain the tap and keyboard alternatives. Check: `pw` (`e2e/tab-swipe.test.ts`).
 - **No gesture-only actions. Every swipe or long-press has a visible button alternative.** Why: WCAG 2.5.7 Dragging Movements; gestures are undiscoverable. Check: `review`.
   - Per-message actions are visible icon buttons in a row under the message (Copy, and Share where the browser has `navigator.share`), never a gesture or a hijacked menu: the app does not intercept `contextmenu`, long-press or middle-click, so the browser's own menu, text selection and autoscroll work in the chat. The row is always shown under the newest reply and on touch screens; on hover-capable devices older rows are transparent until hover or `:focus-within`, keeping their height so nothing moves. Icons are 16px inside 48px buttons, each with an `aria-label` and a `title`. The row never holds anything approval-like. Check: `pw` (`e2e/message-actions.test.ts`).
 
@@ -321,10 +323,16 @@ The push payload is `{ title, body, url, tag? }`; the service worker shows it, a
 - **Motion explains a change (a sheet rising, a message arriving), never decorates.** Why: decorative motion delays the user. Check: `review`.
 - **The spinner icon (`LoaderCircle`) always comes with text.** Why: a spinner says nothing about what it waits on. Check: `review`.
 
+### Management actions and page navigation
+
+- **Size management actions for their input method.** Use `Button size="action"` for connector and file-store actions. It keeps a 48px target on phones and touch devices, with 36px height and tighter padding on desktop fine pointers that support hover and have no coarse input. Mixed touch and pointer devices keep the touch target. Use intrinsic button widths; reserve full-width actions for narrow forms that benefit from them.
+- **Keep list actions near their content.** Add actions belong above a management list. Form footers can remain at the bottom, with intrinsic action widths on desktop.
+- **Use back navigation for nested pages.** Workspace destinations such as Connectors and File stores use the menu or persistent navigation. Their detail and add pages link back to the parent list, with a label that names the destination.
+
 ### Tabs, swipes, and scroll ownership
 
 - **Reuse the shared tabbed screen.** Use `ui/screen/TabbedScreen` for tabs with swipe navigation. It owns the screen shell, full-width pager, gutters, and panel scrolling. The import boundary check blocks direct feature imports of the pager engine.
-- **Move panels with the finger.** Snap to the destination after release. Move the underline with the physical panel position. Use the same transition for a tab tap.
+- **Move panels with the finger.** Snap to the destination after release. Move the underline with the finger during a held swipe, then mark the destination on release. A phone tab tap updates the selected label and underline immediately while the panel moves. Desktop and fine-pointer tab changes switch panels instantly.
 - **Keep labels readable.** When labels do not fit, allow horizontal scrolling within the tab bar. Keep the full label instead of an ellipsis. Keep the document width within the viewport.
 - **Keep one vertical scroll owner per panel.** `TabbedScreen` disables outer scrolling and keeps the screen header and tab bar fixed. Supply content without an enclosing screen or extra vertical scroll container.
 - **Preserve panel state.** Retain each panel's scroll offset, expanded rows, search input, and loaded older pages across tab changes.

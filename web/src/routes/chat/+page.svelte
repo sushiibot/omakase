@@ -270,7 +270,7 @@
 		<ChatScreen
 			headerActions={taskActions}
 			contextBoundaryId={sheets['context-boundary'].arg}
-			title="Sushii"
+			title={threads.list.data?.main.title ?? 'Sushii'}
 			approvalSubmitting={s.trayPhase === 'submitting'}
 			messages={voice.project(s.messages)}
 			dictationTranscript={dictation.state === 'recording' || dictation.state === 'transcribing'

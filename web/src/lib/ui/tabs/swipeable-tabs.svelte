@@ -34,7 +34,7 @@
 	let api = $state.raw<EmblaCarouselType>();
 	let tablist: HTMLDivElement;
 	let indicator: HTMLSpanElement;
-	let reducedMotion = false;
+	let instantMotion = false;
 	let rtl = false;
 	let dragging = false;
 	let userTransition = false;
@@ -64,8 +64,8 @@
 
 	function settle() {
 		paintIndicator();
-		// A jump can emit settle before Embla updates its selected index. Also leave data/state
-		// changes until the visible track has finished moving, rather than its release-time select.
+		// A jump can emit settle before Embla updates its selected index. Also leave filter
+		// requests until the visible track has finished moving, rather than its release-time select.
 		queueMicrotask(() => {
 			if (disposed || dragging || !api || !userTransition || !aligned(api)) return;
 			const tab = tabs[api.selectedScrollSnap()];
@@ -104,7 +104,10 @@
 		if (!indicator || !tabGeometry.length) return;
 		const position = Math.max(
 			0,
-			Math.min(tabs.length - 1, (api?.scrollProgress() ?? 0) * (tabs.length - 1))
+			Math.min(
+				tabs.length - 1,
+				dragging ? (api?.scrollProgress() ?? 0) * (tabs.length - 1) : active
+			)
 		);
 		const low = Math.floor(position);
 		const high = Math.min(low + 1, tabGeometry.length - 1);
@@ -121,7 +124,7 @@
 		if (!tab) return;
 		userTransition = true;
 		choose(tab.value);
-		api?.scrollTo(index, reducedMotion);
+		api?.scrollTo(index, instantMotion);
 		if (api && aligned(api)) settle();
 	}
 
@@ -172,21 +175,31 @@
 
 	function carousel(viewport: HTMLElement) {
 		const view = viewport.ownerDocument.defaultView!;
-		const media = view.matchMedia('(prefers-reduced-motion: reduce)');
+		const media = view.matchMedia(
+			'(prefers-reduced-motion: reduce), (min-width: 48rem), (hover: hover) and (pointer: fine)'
+		);
 		const motionChange = () => {
-			reducedMotion = media.matches;
-			if (reducedMotion && api) api.scrollTo(api.selectedScrollSnap(), true);
+			instantMotion = media.matches;
+			if (instantMotion && api) api.scrollTo(api.selectedScrollSnap(), true);
 		};
 		motionChange();
 		media.addEventListener('change', motionChange);
 		rtl = view.getComputedStyle(viewport).direction === 'rtl';
+		const select = (carousel: EmblaCarouselType) => {
+			if (!dragging && userTransition) {
+				const tab = tabs[carousel.selectedScrollSnap()];
+				if (tab) choose(tab.value);
+			}
+			paintIndicator();
+		};
 		const pointerDown = () => {
 			dragging = true;
 			userTransition = true;
 		};
 		const pointerUp = (carousel: EmblaCarouselType) => {
 			dragging = false;
-			if (reducedMotion) carousel.scrollTo(carousel.selectedScrollSnap(), true);
+			select(carousel);
+			if (instantMotion) carousel.scrollTo(carousel.selectedScrollSnap(), true);
 			if (aligned(carousel)) settle();
 		};
 		const cancelSelectionDrag = () => {
@@ -225,8 +238,8 @@
 		view.addEventListener('pagehide', recoverInterruptedGesture);
 		viewport.ownerDocument.addEventListener('visibilitychange', visibilityChange);
 		const reInit = (carousel: EmblaCarouselType) => {
-			// A tap updates accessible selection immediately but publishes only on arrival.
-			// Preserve that pending tap across rotation; unfinished drags retain the old value.
+			// Selection updates on a tap or swipe release, but publishes only on arrival.
+			// Preserve that destination across rotation; held drags retain the old value.
 			const pendingTap = userTransition && value !== publishedValue;
 			dragging = false;
 			userTransition = pendingTap;
@@ -241,6 +254,7 @@
 			api = (event as CustomEvent<EmblaCarouselType>).detail;
 			api
 				.on('scroll', paintIndicator)
+				.on('select', select)
 				.on('settle', settle)
 				.on('reInit', reInit)
 				.on('pointerDown', pointerDown)
@@ -296,7 +310,7 @@
 		if (api && index >= 0 && api.selectedScrollSnap() !== index) {
 			userTransition = false;
 			publishedValue = value;
-			api.scrollTo(index, reducedMotion);
+			api.scrollTo(index, instantMotion);
 		} else if (!userTransition) publishedValue = value;
 	});
 	$effect(() => {

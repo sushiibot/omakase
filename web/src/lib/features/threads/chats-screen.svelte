@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import Archive from '@lucide/svelte/icons/archive';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Plus from '@lucide/svelte/icons/plus';
 	import { Button } from '$lib/ui/button';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
@@ -60,10 +60,7 @@
 			);
 			return [{ label: `${hits.length} matching`, items: hits }];
 		}
-		return [
-			{ label: 'Channels', count: true, items: active },
-			{ label: 'Archived', icon: Archive, count: true, items: archived }
-		];
+		return [{ label: 'Channels', count: true, items: active }];
 	});
 </script>
 
@@ -104,6 +101,17 @@
 				preview: 'Your general-purpose conversation',
 				lastActivity: new Date(now).toISOString()
 			}}
+			onoptions={onoptions
+				? () =>
+						onoptions?.({
+							id: 'main',
+							title: data?.main.title ?? 'Main',
+							state: data?.main.state ?? 'idle',
+							preview: data?.main.preview ?? '',
+							lastActivity: data?.main.lastActivity ?? new Date(now).toISOString(),
+							writes: 0
+						})
+				: undefined}
 			showActivity={!!data?.main}
 			href={mainHref}
 			{now}
@@ -121,6 +129,21 @@
 {/snippet}
 
 {#snippet after()}
+	{#if !q && archived.length}
+		<section aria-label="Archived conversations">
+			<details class="group">
+				<summary
+					class="flex min-h-12 cursor-pointer list-none items-center gap-2 px-1 text-sm font-medium text-muted-foreground"
+				>
+					<ChevronDown class="size-4 -rotate-90 group-open:rotate-0" aria-hidden="true" />Archived
+					<span class="tabular-nums">{archived.length}</span>
+				</summary>
+				<ul>
+					{#each archived as t (t.id)}<li>{@render row(t)}</li>{/each}
+				</ul>
+			</details>
+		</section>
+	{/if}
 	{#if data && !q}
 		<p class="px-1 text-meta text-muted-foreground">
 			Inactive conversations move below into Archived after {data.archiveAfterDays} days. Send a message

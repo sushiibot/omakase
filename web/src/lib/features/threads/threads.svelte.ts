@@ -99,7 +99,7 @@ export class ThreadsStore {
 	async rename(id: string, title: string): Promise<boolean> {
 		const t = await this.#act(() => this.#api.rename(id, title));
 		if (!t) return false;
-		await Promise.all([this.list.refetch(), this.thread(id).refetch()]);
+		await Promise.all([this.list.refetch(), ...(id === 'main' ? [] : [this.thread(id).refetch()])]);
 		return true;
 	}
 

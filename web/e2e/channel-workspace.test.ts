@@ -100,3 +100,68 @@ test('workspace visual review covers both pane layouts and themes', async ({
 		await expect(page.getByRole('dialog', { name: 'Menu' })).toBeHidden();
 	}
 });
+
+for (const desktop of [false, true]) {
+	test(`channel options and archived disclosure stay independent of search on ${desktop ? 'desktop' : 'mobile'}`, async ({
+		page,
+		context
+	}) => {
+		await fixtureApp(context);
+		if (desktop) await page.setViewportSize({ width: 1440, height: 1000 });
+		await page.goto('/chat');
+		if (!desktop) await page.getByRole('button', { name: /^Menu/ }).click();
+		const nav = desktop
+			? page.locator('[data-channel-navigation]')
+			: page.getByRole('dialog', { name: 'Menu' });
+		await expect(nav).toBeVisible();
+		const archived = nav.getByRole('button', { name: /^Archived/ });
+		await expect(archived).toBeVisible();
+		await expect(archived).toHaveAttribute('aria-expanded', 'false');
+		await expect(nav.getByRole('link', { name: /Couch delivery/ })).toBeHidden();
+		await archived.click();
+		await expect(nav.getByRole('link', { name: /Couch delivery/ })).toBeVisible();
+		await archived.click();
+
+		await nav.getByRole('button', { name: 'Options for Main', exact: true }).click();
+		const options = page.getByRole('dialog', { name: 'Conversation settings' });
+		await expect(options.getByRole('textbox')).toHaveCount(0);
+		await expect(options.getByRole('link', { name: 'Open conversation' })).toHaveAttribute(
+			'href',
+			'/chat'
+		);
+		await expect(options.getByRole('button', { name: 'Archive conversation' })).toHaveCount(0);
+		await options.getByRole('button', { name: 'Rename conversation' }).click();
+		await expect(options.getByRole('textbox', { name: 'Conversation name' })).toBeFocused();
+		await page.goBack();
+		await expect(options).toBeHidden();
+		if (!desktop) await page.getByRole('button', { name: /^Menu/ }).click();
+
+		await nav.getByRole('button', { name: 'Find and filter channels' }).click();
+		await expect(nav.getByRole('checkbox', { name: /archived/i })).toHaveCount(0);
+		await nav.getByRole('textbox', { name: 'Find channels by name or preview' }).fill('Couch');
+		await expect(archived).toHaveAttribute('aria-expanded', 'true');
+		await expect(nav.getByRole('link', { name: /Couch delivery/ })).toBeVisible();
+		await archived.click();
+		await expect(archived).toHaveAttribute('aria-expanded', 'false');
+		await expect(nav.getByRole('link', { name: /Couch delivery/ })).toBeHidden();
+	});
+}
+
+test('opening a sidebar conversation removes the options history entry', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await page.setViewportSize({ width: 1440, height: 1000 });
+	await page.goto('/chat');
+	await page
+		.locator('[data-channel-navigation]')
+		.getByRole('button', { name: 'Options for October trip' })
+		.click();
+	const options = page.getByRole('dialog', { name: 'Conversation settings' });
+	await options.getByRole('link', { name: 'Open conversation' }).click();
+	await expect(page).toHaveURL(/\/chats\/oct-trip$/);
+	await page.goBack();
+	await expect(page).toHaveURL(/\/chat$/);
+	await expect(options).toBeHidden();
+});

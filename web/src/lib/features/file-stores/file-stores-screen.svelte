@@ -15,7 +15,7 @@
 
 {#snippet banner()}{#if !online}<ConnectionBanner state={{ kind: 'app-offline' }} />{/if}{/snippet}
 <DetailScreen title="File stores" {back} {banner}>
-	<div class="mx-auto flex max-w-xl flex-col gap-5 px-4 pt-5 pb-10">
+	<div class="mx-auto flex max-w-2xl flex-col gap-5 px-4 pt-4 pb-10">
 		<FileStoresSection heading="Connections" {ondirty} />
 	</div>
 </DetailScreen>

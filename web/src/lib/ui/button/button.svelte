@@ -19,6 +19,9 @@
 				link: 'text-primary underline-offset-4 hover:underline'
 			},
 			size: {
+				// Management actions stay touch-friendly and become denser for desktop pointers.
+				action:
+					'h-12 min-w-12 gap-2 px-4 text-sm font-medium desktop-pointer:h-9 desktop-pointer:min-w-9 desktop-pointer:px-3',
 				default:
 					'h-12 gap-2 px-6 text-body font-semibold has-data-[icon=inline-end]:pr-5 has-data-[icon=inline-start]:pl-5',
 				xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",

@@ -245,6 +245,7 @@
 
 <ThreadSettingsSheet
 	open={sheet === 'thread-settings'}
+	initialRename
 	{thread}
 	{busy}
 	{error}

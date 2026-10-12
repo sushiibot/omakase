@@ -1,7 +1,8 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import Hash from '@lucide/svelte/icons/hash';
 	import ListChecks from '@lucide/svelte/icons/list-checks';
-	import ChecklistCheckbox from '$lib/ui/checklist-checkbox.svelte';
+	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Search from '@lucide/svelte/icons/search';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -13,27 +14,33 @@
 		selected,
 		view = $bindable('all'),
 		query = $bindable(''),
-		includeArchived = $bindable(false),
 		loading = false,
 		error,
 		replacing = false,
 		onnew,
 		onretry,
-		onvisit
+		onvisit,
+		onoptions
 	}: {
 		channels: Channel[];
 		selected?: string;
 		view?: ChannelView;
 		query?: string;
-		includeArchived?: boolean;
 		loading?: boolean;
 		error?: string | null;
 		replacing?: boolean;
 		onnew: () => void;
 		onretry: () => void;
 		onvisit: (id: string) => void;
+		onoptions?: (channel: Channel) => void;
 	} = $props();
-	let closed = $state<Record<string, boolean>>({});
+	let closed = $state<Record<string, boolean>>({ archived: true });
+	const active = $derived(channels.filter((c) => c.state !== 'archived'));
+	const archived = $derived(channels.filter((c) => c.state === 'archived'));
+	$effect(() => {
+		const searching = !!query.trim();
+		untrack(() => (closed = { ...closed, archived: !searching }));
+	});
 	let filtersOpen = $state(false);
 	const main = $derived(channels.find((c) => c.kind === 'main'));
 	const groups = $derived(
@@ -42,16 +49,16 @@
 					{
 						id: view,
 						title: view === 'recent' ? 'Recent' : 'Needs you',
-						items: channels.filter((c) => c.kind !== 'main')
+						items: active.filter((c) => c.kind !== 'main')
 					}
 				]
 			: [
 					{
 						id: 'channels',
 						title: 'Channels',
-						items: channels.filter((c) => c.kind === 'channel')
+						items: active.filter((c) => c.kind === 'channel')
 					},
-					{ id: 'work', title: 'Task channels', items: channels.filter((c) => c.kind === 'task') }
+					{ id: 'work', title: 'Task channels', items: active.filter((c) => c.kind === 'task') }
 				]
 	);
 	function destination(channel: Channel): string {
@@ -64,32 +71,41 @@
 </script>
 
 {#snippet row(channel: Channel)}
-	<a
-		href={destination(channel)}
-		data-sveltekit-replacestate={replacing ? '' : undefined}
-		aria-current={selected === channel.id ? 'page' : undefined}
-		title={channel.title}
-		class="channel"
-		class:pending={channel.pending.total > 0}
-		onclick={(e) => {
-			if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey)
-				onvisit(channel.id);
-		}}
-	>
-		{#if channel.kind === 'task'}<ListChecks aria-hidden="true" />{:else}<Hash
-				aria-hidden="true"
-			/>{/if}
-		<span class="truncate"
-			>{channel.title}<span class="sr-only">{channel.state === 'archived' ? ', archived' : ''}</span
-			></span
+	<div class="flex min-w-0 items-center">
+		<a
+			href={destination(channel)}
+			data-sveltekit-replacestate={replacing ? '' : undefined}
+			aria-current={selected === channel.id ? 'page' : undefined}
+			title={channel.title}
+			class="channel min-w-0 flex-1"
+			class:pending={channel.pending.total > 0}
+			onclick={(e) => {
+				if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey)
+					onvisit(channel.id);
+			}}
 		>
-		{#if channel.pending.total > 0}<span class="ping"
-				>{channel.pending.total}<span class="sr-only"> requests need you</span></span
-			>{:else if channel.activity.running}<LoaderCircle
-				class="animate-spin motion-reduce:animate-none"
-				aria-label="Agent working"
-			/>{/if}</a
-	>
+			{#if channel.kind === 'task'}<ListChecks aria-hidden="true" />{:else}<Hash
+					aria-hidden="true"
+				/>{/if}
+			<span class="truncate"
+				>{channel.title}<span class="sr-only"
+					>{channel.state === 'archived' ? ', archived' : ''}</span
+				></span
+			>
+			{#if channel.pending.total > 0}<span class="ping"
+					>{channel.pending.total}<span class="sr-only"> requests need you</span></span
+				>{:else if channel.activity.running}<LoaderCircle
+					class="animate-spin motion-reduce:animate-none"
+					aria-label="Agent working"
+				/>{/if}</a
+		>
+		{#if onoptions}<button
+				class="channel-options grid shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-sidebar-accent"
+				aria-label="Options for {channel.title}"
+				aria-haspopup="dialog"
+				onclick={() => onoptions?.(channel)}><Ellipsis class="size-4" /></button
+			>{/if}
+	</div>
 {/snippet}
 <div class="flex min-h-0 flex-1 flex-col" data-channel-list>
 	<div class="flex shrink-0 items-center justify-between px-2">
@@ -123,18 +139,10 @@
 					><option value="all">All</option><option value="recent">Recent</option><option
 						value="needs-you">Needs you</option
 					></select
-				><label class="flex min-h-12 items-center gap-2 px-2 text-meta"
-					><ChecklistCheckbox
-						checked={includeArchived}
-						label="Include archived channels"
-						onchange={() => (includeArchived = !includeArchived)}
-					/>Archived</label
 				>
 			</div>
 		</div>{/if}
-	{#if query || includeArchived}<p class="px-4 pb-2 text-meta text-muted-foreground">
-			{query ? `Matching “${query}”` : ''}{includeArchived ? ' · Includes archived' : ''}
-		</p>{/if}
+	{#if query}<p class="px-4 pb-2 text-meta text-muted-foreground">Matching “{query}”</p>{/if}
 	<div class="channels min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
 		{#if main}{@render row(main)}{:else if !query && view !== 'needs-you'}<a
 				href="/chat"
@@ -155,6 +163,20 @@
 				<div id="channel-group-{group.id}" hidden={!!closed[group.id]}>
 					{#each group.items as channel (channel.id)}{@render row(channel)}{/each}
 				</div>{/if}{/each}
+		{#if archived.length}
+			<button
+				class="project"
+				aria-expanded={!closed.archived}
+				aria-controls="channel-group-archived"
+				onclick={() => (closed = { ...closed, archived: !closed.archived })}
+			>
+				<ChevronDown class={closed.archived ? '-rotate-90' : ''} aria-hidden="true" />
+				<span>Archived</span><span class="text-meta tabular-nums">{archived.length}</span>
+			</button>
+			<div id="channel-group-archived" hidden={closed.archived}>
+				{#each archived as channel (channel.id)}{@render row(channel)}{/each}
+			</div>
+		{/if}
 		{#if loading && !channels.length}<p
 				role="status"
 				class="px-2 py-3 text-ui text-muted-foreground"
@@ -183,6 +205,10 @@
 		--channel-icon: 20px;
 		--channel-text: 1rem;
 		--channel-inset: 4px;
+	}
+	.channel-options {
+		width: var(--channel-height);
+		height: var(--channel-height);
 	}
 	.channel,
 	.project {

@@ -279,7 +279,7 @@ export class WebThreads {
     const taskId = id.startsWith("task-t-") ? id.slice("task-".length) : undefined;
     return {
       id,
-      title: row?.title ?? "Main",
+      title: row?.title ?? this.mainTitle() ?? "Main",
       kind: id === "main" ? "main" : taskId ? "task" : "channel",
       ...(taskId ? { taskId } : {}),
       state: row?.archived_at ? "archived" : asks + approvals ? "needs-you" : turnCount ? "running" : "idle",
@@ -353,6 +353,12 @@ export class WebThreads {
       return this.exclusive(() => this.handleRequest(req, path, actor, server));
     return this.handleRequest(req, path, actor, server);
   }
+  private mainTitle(): string | undefined {
+    const row = this.deps.db.query("SELECT value FROM kv WHERE key = ?").get("web:main-title") as
+      | { value: string }
+      | null;
+    return row?.value;
+  }
   private async handleRequest(
     req: Request,
     path: string,
@@ -375,6 +381,7 @@ export class WebThreads {
       })[0];
       return json({
         main: {
+          title: this.mainTitle(),
           state:
             pending.asks.length || pending.approvals.length
               ? "needs-you"
@@ -438,6 +445,19 @@ export class WebThreads {
       path,
     );
     if (!match) return null;
+    if (match[1] === "main" && match[2] === "rename") {
+      if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
+      const raw = await readJson(req, 16000);
+      if (raw instanceof Response) return raw;
+      const body = z.object({ title: z.string().trim().min(1).max(120) }).strict().safeParse(raw);
+      if (!body.success) return json({ error: "invalid body" }, 400);
+      this.deps.db
+        .query("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+        .run("web:main-title", body.data.title);
+      this.changed("main");
+      const channel = this.catalogEntry("main");
+      return json({ ...channel, writes: 0, lastActivity: channel.lastActivity ?? new Date().toISOString() });
+    }
     const row = this.row(match[1]!);
     if (!row) return json({ error: "not found" }, 404);
     const sub = match[2];

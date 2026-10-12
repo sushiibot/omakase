@@ -81,7 +81,13 @@
 {#snippet trackingSnapshot()}
 	{#if server?.changed}
 		<div class="mt-6 flex flex-col gap-2 border-t pt-4">
-			<Button class="self-start" variant="outline" disabled={busy || !online} onclick={onaccept}>
+			<Button
+				size="action"
+				class="self-start"
+				variant="outline"
+				disabled={busy || !online}
+				onclick={onaccept}
+			>
 				{#if operation === 'snapshot'}<LoaderCircle
 						class="animate-spin motion-reduce:animate-none"
 						aria-hidden="true"
@@ -99,6 +105,7 @@
 		<ActionMenu label="Connection actions">
 			{#snippet children(close)}
 				<Button
+					size="action"
 					variant="ghost"
 					class="w-full justify-start"
 					disabled={busy || !online}
@@ -108,6 +115,7 @@
 					}}>Reconnect</Button
 				>
 				{#if server.enabled !== false}<Button
+						size="action"
 						variant="ghost"
 						class="w-full justify-start"
 						disabled={busy || !online}
@@ -117,6 +125,7 @@
 						}}>Disconnect</Button
 					>{/if}
 				{#if signInHref}<Button
+						size="action"
 						variant="ghost"
 						class="w-full justify-start"
 						href={signInHref}
@@ -124,6 +133,7 @@
 						onclick={() => close()}>Sign in / replace token</Button
 					>{/if}
 				<Button
+					size="action"
 					variant="ghost"
 					class="w-full justify-start"
 					disabled={busy || !online}
@@ -174,7 +184,7 @@
 						provider.
 					</p>
 					<div class="flex flex-wrap gap-2">
-						<Button variant="outline" disabled={busy || !online} onclick={onremove}>
+						<Button size="action" variant="outline" disabled={busy || !online} onclick={onremove}>
 							<span class="grid"
 								><span aria-hidden="true" class="invisible col-start-1 row-start-1"
 									>Removing connection…</span
@@ -182,7 +192,9 @@
 									>{operation === 'remove' ? 'Removing connection…' : 'Remove connection'}</span
 								></span
 							>
-						</Button><Button variant="ghost" onclick={() => (removing = false)}>Cancel</Button>
+						</Button><Button size="action" variant="ghost" onclick={() => (removing = false)}
+							>Cancel</Button
+						>
 					</div>
 				{/if}
 				{#if operation}<p role="status" class="sr-only">

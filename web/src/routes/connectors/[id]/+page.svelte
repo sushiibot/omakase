@@ -28,7 +28,7 @@
 	{remote}
 	server={remote.data}
 	{now}
-	back={{ href: resolve('/connectors'), label: 'Back', onclick: goBack }}
+	back={{ href: resolve('/connectors'), label: 'Back to Connectors', onclick: goBack }}
 	online={pwa.online}
 	{justConnected}
 	busy={connectors.busy}

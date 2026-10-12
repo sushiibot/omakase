@@ -17,6 +17,7 @@ declare global {
 			| 'tasks'
 			| 'channels'
 			| 'channel-create'
+			| 'channel-settings'
 			| 'agent-activity'
 			| 'voice'
 			| 'browser-preview';

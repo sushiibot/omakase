@@ -26,7 +26,7 @@
 	} = $props();
 
 	const row = $derived(main ?? thread!);
-	const title = $derived(main ? 'Main chat' : thread!.title);
+	const title = $derived(main ? (main.title ?? 'Main chat') : thread!.title);
 	const archived = $derived(!main && thread?.state === 'archived');
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let origin = { x: 0, y: 0 };

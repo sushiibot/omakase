@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Plus from '@lucide/svelte/icons/plus';
+	import { Button } from '$lib/ui/button';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import ListScreen from '$lib/ui/screen/list-screen.svelte';
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
@@ -78,13 +79,11 @@
 	</a>
 {/snippet}
 
-{#snippet footer()}
-	<div class="border-t px-4 py-3">
-		<a
-			href={addHref}
-			class="flex h-12 items-center justify-center gap-2 rounded-lg bg-primary text-body font-semibold text-primary-foreground hover:bg-primary/90"
-			><Plus class="size-4" aria-hidden="true" />Add a server by URL</a
-		>
+{#snippet lead()}
+	<div class="flex justify-end">
+		<Button href={addHref} size="action">
+			<Plus class="size-4" aria-hidden="true" />Add a server by URL
+		</Button>
 	</div>
 {/snippet}
 
@@ -92,7 +91,7 @@
 	title="Connectors"
 	{back}
 	{banner}
-	{footer}
+	{lead}
 	state={{
 		remote,
 		offline: !online,

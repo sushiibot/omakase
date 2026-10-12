@@ -9,8 +9,18 @@
 	import { markBooted } from '$lib/core/pwa/boot-recovery';
 	import { hub } from '$lib/core/realtime/hub.svelte';
 	import { send } from '$lib/core/http';
-	import { BranchSheet, threadsStore } from '$lib/features/threads';
-	import { ChannelNavigation, channelsStore, type ChannelView } from '$lib/features/channels';
+	import {
+		BranchSheet,
+		ThreadSettingsSheet,
+		threadsStore,
+		type ThreadSummary
+	} from '$lib/features/threads';
+	import {
+		ChannelNavigation,
+		channelsStore,
+		type Channel,
+		type ChannelView
+	} from '$lib/features/channels';
 	import { routedSheet, leaveSheet } from '$lib/core/nav/sheet';
 	import { goto } from '$app/navigation';
 	import { needsYou } from '$lib/features/home';
@@ -27,7 +37,24 @@
 	let channelTitle = $state('');
 	let query = $state('');
 	let view = $state<ChannelView>('all');
-	let includeArchived = $state(false);
+	const channelSettings = routedSheet('channel-settings');
+	let selectedChannel = $state<Channel>();
+	const currentSelected = $derived(
+		catalog.list.data?.channels.find((channel) => channel.id === selectedChannel?.id) ??
+			selectedChannel
+	);
+	const selectedSummary = $derived(
+		currentSelected
+			? ({
+					id: currentSelected.id,
+					title: currentSelected.title,
+					state: currentSelected.state,
+					preview: currentSelected.preview,
+					writes: 0,
+					lastActivity: currentSelected.lastActivity ?? new Date().toISOString()
+				} as ThreadSummary)
+			: undefined
+	);
 	let pendingNavigation = $state<string | null>(null);
 	async function navigateFromSidebar(href: string) {
 		pendingNavigation = href;
@@ -117,14 +144,18 @@
 
 {#snippet channelNavigation()}
 	<ChannelNavigation
-		channels={catalog.visible(view, { search: query, includeArchived })}
+		channels={catalog.visible(view, { search: query, includeArchived: true })}
 		selected={currentId}
 		bind:query
 		bind:view
-		bind:includeArchived
 		loading={catalog.list.status === 'loading'}
 		error={catalog.list.error}
 		replacing={navigation.open}
+		onoptions={(channel) => {
+			selectedChannel = channel;
+			threadsStore().clearError();
+			channelSettings.openWith(channel.id);
+		}}
 		onvisit={(id) => catalog.visit(id)}
 		onretry={() => void catalog.list.refetch()}
 		onnew={() => {
@@ -141,4 +172,41 @@
 	error={threadsStore().error}
 	onstart={(name) => void startChannel(name)}
 	onclose={() => createChannel.close()}
+/>
+
+<ThreadSettingsSheet
+	onopen={async (href) => {
+		await leaveSheet(channelSettings);
+		await goto(href);
+	}}
+	open={channelSettings.open}
+	thread={selectedSummary}
+	href={currentSelected?.kind === 'main'
+		? '/chat'
+		: currentSelected?.kind === 'task'
+			? `/tasks/${currentSelected.taskId}?view=conversation`
+			: currentSelected
+				? `/chats/${currentSelected.id}`
+				: undefined}
+	busy={threadsStore().busy}
+	error={threadsStore().error}
+	onrename={async (title) => {
+		if (currentSelected && (await threadsStore().rename(currentSelected.id, title))) {
+			await catalog.list.refetch();
+			await leaveSheet(channelSettings);
+		}
+	}}
+	onarchive={async () => {
+		if (currentSelected && (await threadsStore().close(currentSelected.id))) {
+			await catalog.list.refetch();
+			await leaveSheet(channelSettings);
+		}
+	}}
+	onreopen={async () => {
+		if (currentSelected && (await threadsStore().reopen(currentSelected.id))) {
+			await catalog.list.refetch();
+			await leaveSheet(channelSettings);
+		}
+	}}
+	onclose={() => channelSettings.close()}
 />

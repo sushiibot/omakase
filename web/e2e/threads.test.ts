@@ -25,9 +25,11 @@ test('Channels keeps Main first, a shared inbox and working channel search', asy
 	);
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('region', { name: 'Main chat' })).not.toContainText('Pinned');
-	for (const h of ['Channels', 'Archived']) {
-		await expect(page.getByRole('heading', { name: new RegExp(`^${h}`), level: 2 })).toBeVisible();
-	}
+	await expect(page.getByRole('heading', { name: 'Channels', level: 2 })).toBeVisible();
+	const archive = page.getByRole('region', { name: /^Archived/ });
+	await expect(archive.locator('details')).not.toHaveAttribute('open', '');
+	await expect(archive.getByRole('link', { name: /Couch delivery/ })).toBeHidden();
+	await archive.locator('summary').click();
 	await expect(page.getByRole('region', { name: /^Archived/ })).toContainText('Couch delivery');
 	await openSharedInbox(page);
 	await expect(page.locator('details[data-inbox="shared"]')).toContainText('nightly-sync failed');
@@ -247,13 +249,21 @@ test('row options rename archived threads and Back cancels unsaved changes', asy
 }) => {
 	await fixtureApp(context);
 	await page.goto('/chats');
+	await page
+		.getByRole('region', { name: /^Archived/ })
+		.locator('summary')
+		.click();
 	await page.getByRole('button', { name: 'Options for Couch delivery' }).click();
 	const sheet = page.getByRole('dialog', { name: 'Conversation settings' });
 	await expect(sheet.getByRole('button', { name: 'Archive conversation' })).toHaveCount(0);
+	await expect(sheet.getByRole('textbox')).toHaveCount(0);
+	await expect(sheet.getByRole('button', { name: 'Restore conversation' })).toBeVisible();
+	await sheet.getByRole('button', { name: 'Rename conversation' }).click();
 	await sheet.getByRole('textbox', { name: 'Conversation name' }).fill('Unsaved');
 	await page.goBack();
 	await expect(sheet).toBeHidden();
 	await page.getByRole('button', { name: 'Options for Couch delivery' }).click();
+	await sheet.getByRole('button', { name: 'Rename conversation' }).click();
 	await expect(sheet.getByRole('textbox', { name: 'Conversation name' })).toHaveValue(
 		'Couch delivery'
 	);
@@ -337,6 +347,7 @@ test('refreshing thread metadata preserves an open name draft and archive confir
 	await page.goto('/chats');
 	await page.getByRole('button', { name: 'Options for October trip' }).click();
 	const sheet = page.getByRole('dialog', { name: 'Conversation settings' });
+	await sheet.getByRole('button', { name: 'Rename conversation' }).click();
 	await sheet.getByRole('textbox', { name: 'Conversation name' }).fill('My unsaved name');
 	async function remoteRename(title: string) {
 		await page.evaluate(async (title) => {
@@ -357,11 +368,13 @@ test('refreshing thread metadata preserves an open name draft and archive confir
 	await expect(sheet.getByRole('textbox', { name: 'Conversation name' })).toHaveValue(
 		'My unsaved name'
 	);
+	await sheet.getByRole('button', { name: 'Back to options' }).click();
 	await sheet.getByRole('button', { name: 'Archive conversation', exact: true }).click();
 	await expect(sheet.getByText('Archive Changed elsewhere?', { exact: true })).toBeVisible();
 	await remoteRename('Changed again');
 	await expect(sheet.getByText('Archive Changed again?', { exact: true })).toBeVisible();
 	await sheet.getByRole('button', { name: 'Keep current' }).click();
+	await sheet.getByRole('button', { name: 'Rename conversation' }).click();
 	await expect(sheet.getByRole('textbox', { name: 'Conversation name' })).toHaveValue(
 		'My unsaved name'
 	);
@@ -511,4 +524,44 @@ test('Discuss can return to the item and recover from a conversation load failur
 	await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue(
 		/^> From heartbeat:/
 	);
+});
+
+test('Main has an options menu and its renamed title survives reload', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await page.goto('/chats');
+	await page.getByRole('button', { name: 'Options for Main chat' }).click();
+	const sheet = page.getByRole('dialog', { name: 'Conversation settings' });
+	await expect(sheet.getByRole('textbox')).toHaveCount(0);
+	await expect(sheet.getByRole('link', { name: 'Open conversation' })).toHaveAttribute(
+		'href',
+		'/chat'
+	);
+	await expect(sheet.getByRole('button', { name: 'Archive conversation' })).toHaveCount(0);
+	await sheet.getByRole('button', { name: 'Rename conversation' }).click();
+	await sheet.getByRole('textbox', { name: 'Conversation name' }).fill('Home base');
+	await sheet.getByRole('button', { name: 'Save name' }).click();
+	await expect(sheet).toBeHidden();
+	await page.reload();
+	await expect(page.getByRole('button', { name: 'Options for Home base' })).toBeVisible();
+	await page.getByRole('link', { name: /Home base/ }).click();
+	await expect(page.getByRole('heading', { name: 'Home base', level: 1 })).toBeVisible();
+});
+
+test('opening a conversation from row options removes the sheet history entry', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await page.goto('/chats');
+	await page.getByRole('button', { name: 'Options for October trip' }).click();
+	const options = page.getByRole('dialog', { name: 'Conversation settings' });
+	await options.getByRole('link', { name: 'Open conversation' }).click();
+	await expect(page).toHaveURL(/\/chats\/oct-trip$/);
+	await page.goBack();
+	await expect(page).toHaveURL(/\/chats$/);
+	await expect(options).toBeHidden();
+	await expect(page.getByRole('button', { name: 'Options for October trip' })).toBeVisible();
 });

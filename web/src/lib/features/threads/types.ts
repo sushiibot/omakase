@@ -26,6 +26,7 @@ export interface ThreadSummary {
 
 /** Main's row on the Chats list. */
 export interface MainSummary {
+	title?: string;
 	lastActivity: string;
 	preview: string;
 	unread?: number;

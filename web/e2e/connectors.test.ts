@@ -50,7 +50,7 @@ test('adding a server by URL walks address, sign-in and paste-back', async ({ pa
 	await page.getByRole('button', { name: 'Connect' }).click();
 	await expect(page).toHaveURL(/\/connectors\/tracker$/, { timeout: 8000 });
 	await expect(page.getByText('Connected. The agent can use these tools')).toBeVisible();
-	await page.getByRole('link', { name: 'Back', exact: true }).click();
+	await page.getByRole('link', { name: 'Back to Connectors', exact: true }).click();
 	await expect(page).toHaveURL(/\/connectors$/);
 	await expect(page.getByRole('link', { name: /Tracker/ })).toBeVisible();
 });
@@ -243,7 +243,7 @@ test('leaving server setup preserves its address but clears tokens and allows st
 	await page.getByRole('link', { name: 'Add a server by URL' }).click();
 	await page.getByRole('textbox', { name: 'Server address' }).fill('https://api.fastmail.com/mcp');
 	await page.getByLabel('API token (optional)').fill('unsaved-secret-token');
-	await page.getByRole('link', { name: 'Back', exact: true }).click();
+	await page.getByRole('link', { name: 'Back to Connectors', exact: true }).click();
 	await page.getByRole('link', { name: 'Add a server by URL' }).click();
 	await expect(page.getByRole('textbox', { name: 'Server address' })).toHaveValue(
 		'https://api.fastmail.com/mcp'
@@ -271,7 +271,7 @@ test('OAuth setup resumes its stage with a cleared callback and resets after a s
 	await page
 		.getByRole('textbox', { name: 'Address from the browser' })
 		.fill('http://localhost:7461/callback?code=secret&state=q');
-	await page.getByRole('link', { name: 'Back', exact: true }).click();
+	await page.getByRole('link', { name: 'Back to Connectors', exact: true }).click();
 	await page.getByRole('link', { name: 'Add a server by URL' }).click();
 	await expect(page.getByRole('textbox', { name: 'Address from the browser' })).toHaveValue('');
 	await expect(page.getByRole('button', { name: 'Connect', exact: true })).toBeDisabled();
@@ -287,7 +287,7 @@ test('OAuth setup resumes its stage with a cleared callback and resets after a s
 		.fill('http://localhost:7461/callback?code=abc&state=q');
 	await page.getByRole('button', { name: 'Connect', exact: true }).click();
 	await expect(page).toHaveURL(/\/connectors\/tracker$/);
-	await page.getByRole('link', { name: 'Back', exact: true }).click();
+	await page.getByRole('link', { name: 'Back to Connectors', exact: true }).click();
 	await page.getByRole('link', { name: 'Add a server by URL' }).click();
 	await expect(page.getByRole('textbox', { name: 'Server address' })).toHaveValue('');
 	await expect(page.getByLabel('API token (optional)')).toHaveValue('');
@@ -305,7 +305,7 @@ test('a different server sign-in intent replaces unrelated saved setup', async (
 		.getByRole('textbox', { name: 'Server address' })
 		.fill('https://mcp.tracker.example/sse');
 	await page.getByRole('button', { name: 'Continue', exact: true }).click();
-	await page.getByRole('link', { name: 'Back', exact: true }).click();
+	await page.getByRole('link', { name: 'Back to Connectors', exact: true }).click();
 	await page.getByRole('link', { name: /Code host/ }).click();
 	await page.getByRole('button', { name: 'Connection actions', exact: true }).click();
 	await page.getByRole('link', { name: 'Sign in / replace token', exact: true }).click();
@@ -315,3 +315,34 @@ test('a different server sign-in intent replaces unrelated saved setup', async (
 	await expect(page.getByRole('button', { name: 'Start over', exact: true })).toHaveCount(0);
 	await expect(page.getByRole('link', { name: 'Open sign-in link' })).toHaveCount(0);
 });
+
+for (const hasTouch of [false, true]) {
+	test(`management actions adapt to ${hasTouch ? 'touch' : 'desktop pointer'} input`, async ({
+		browser,
+		baseURL
+	}) => {
+		const context = await browser.newContext({
+			baseURL,
+			viewport: { width: 1280, height: 800 },
+			hasTouch,
+			isMobile: false
+		});
+		try {
+			await fixtureApp(context);
+			const page = await context.newPage();
+			await page.goto('/connectors');
+			const add = page.getByRole('link', { name: 'Add a server by URL' });
+			await expect(add).toBeVisible();
+			const bounds = await add.boundingBox();
+			expect(bounds!.width).toBeLessThan(260);
+			expect(bounds!.height).toBe(hasTouch ? 48 : 36);
+			await add.click();
+			await expect(page.getByRole('link', { name: 'Back to Connectors' })).toBeVisible();
+			const next = await page.getByRole('button', { name: 'Continue', exact: true }).boundingBox();
+			expect(next!.width).toBeLessThan(200);
+			expect(next!.height).toBe(hasTouch ? 48 : 36);
+		} finally {
+			await context.close();
+		}
+	});
+}

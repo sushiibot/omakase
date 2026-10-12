@@ -112,6 +112,10 @@ export function createFixtureThreadsApi(
 			await ready();
 			const name = title.trim();
 			if (!name || name.length > 120) throw new Error('Use a name between 1 and 120 characters.');
+			if (id === 'main') {
+				data = { ...data!, main: { ...data!.main, title: name } };
+				return { ...data.main, id: 'main', title: name, writes: 0 };
+			}
 			return update(id, { title: name });
 		},
 		async reopen(id) {

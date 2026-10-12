@@ -162,13 +162,15 @@ test('file stores opens from Workspace and stays out of Settings', async ({ page
 	await page.getByRole('link', { name: /^File stores/ }).click();
 	await expect(page).toHaveURL(/\/file-stores$/);
 	await expect(page.getByRole('heading', { name: 'File stores', level: 1 })).toBeVisible();
+	await expect(page.getByRole('button', { name: /^Menu/ })).toBeVisible();
+	await expect(page.locator('header').getByRole('link', { name: /^Back/ })).toHaveCount(0);
 	await page.getByRole('button', { name: 'Add file store' }).click();
 	await page.getByLabel('Name', { exact: true }).fill('Unsaved store');
 	page.once('dialog', (dialog) => dialog.dismiss());
-	await page.getByRole('link', { name: 'Back', exact: true }).click();
+	await page.goBack();
 	await expect(page).toHaveURL(/\/file-stores$/);
 	page.once('dialog', (dialog) => dialog.accept());
-	await page.getByRole('link', { name: 'Back', exact: true }).click();
+	await page.goBack();
 	await expect(page).toHaveURL(/\/workspace$/);
 	await page.goto('/settings');
 	await expect(page.getByRole('button', { name: 'Add file store' })).toHaveCount(0);

@@ -45,7 +45,7 @@
 
 <AddServerScreen
 	add={connectors.add}
-	back={{ href: resolve('/connectors'), label: 'Back', onclick: goBack }}
+	back={{ href: resolve('/connectors'), label: 'Back to Connectors', onclick: goBack }}
 	online={pwa.online}
 	{copied}
 	{copyError}

@@ -74,7 +74,7 @@ export function createFixtureChannelsApi({
 			]);
 			const mainChannel = base(
 				'main',
-				'Main',
+				chats.main.title ?? 'Main',
 				chats.main.state,
 				chats.main.lastActivity,
 				chats.main.preview

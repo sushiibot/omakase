@@ -307,6 +307,31 @@ test('held touch tracks the finger, reveals the adjacent pane and moves the unde
 	await expectSettled(page, 'Results');
 });
 
+test('a swipe selects its destination on release before the panel settles', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await page.goto(EXPENSES);
+	await expectSettled(page, 'Activity');
+	const drag = await heldDrag(page, 250);
+	await page.evaluate(() => {
+		window.addEventListener(
+			'touchend',
+			() => {
+				requestAnimationFrame(() => {
+					const selected = document.querySelector('[role="tab"][aria-selected="true"]');
+					document.documentElement.dataset.releaseSelection = selected?.textContent?.trim();
+				});
+			},
+			{ once: true }
+		);
+	});
+	await drag.finish();
+	await expect(page.locator('html')).toHaveAttribute('data-release-selection', 'Results');
+	await expectSettled(page, 'Results');
+});
+
 test('short slow drags settle back without changing the selected tab', async ({
 	page,
 	context
@@ -321,7 +346,7 @@ test('short slow drags settle back without changing the selected tab', async ({
 	await expectSettled(page, 'Activity');
 });
 
-test('tapping a tab animates both content and underline to the same destination', async ({
+test('tapping a mobile tab selects its label and underline before the panel arrives', async ({
 	page,
 	context
 }) => {
@@ -329,7 +354,6 @@ test('tapping a tab animates both content and underline to the same destination'
 	await page.emulateMedia({ reducedMotion: 'no-preference' });
 	await page.goto(EXPENSES);
 	await expectSettled(page, 'Activity');
-	const initial = await indicatorBox(page);
 	const target = await page.getByRole('tab', { name: 'Results', exact: true }).boundingBox();
 	// Observe inside the page so round trips cannot miss a short animation.
 	const midway = await page
@@ -342,10 +366,16 @@ test('tapping a tab animates both content and underline to the same destination'
 			const indicator = document.querySelector('[data-tab-indicator]')!.getBoundingClientRect();
 			const pane = document.querySelector('[data-tab-panel="timeline"]')!.getBoundingClientRect();
 			const viewport = document.querySelector('[data-tab-pager]')!.getBoundingClientRect();
-			return { x: indicator.x, paneX: pane.x, viewportX: viewport.x, width: viewport.width };
+			return {
+				x: indicator.x,
+				selected: tab.getAttribute('aria-selected'),
+				paneX: pane.x,
+				viewportX: viewport.x,
+				width: viewport.width
+			};
 		});
-	expect(midway.x).toBeGreaterThan(initial.x);
-	expect(midway.x).toBeLessThan(target!.x);
+	expect(midway.selected).toBe('true');
+	expect(Math.abs(midway.x - target!.x)).toBeLessThan(1);
 	expect(midway.paneX).toBeLessThan(midway.viewportX);
 	expect(midway.paneX).toBeGreaterThan(midway.viewportX - midway.width);
 	await expectSettled(page, 'Results');
@@ -656,3 +686,38 @@ for (const [path, first] of [
 		});
 	}
 }
+
+test.describe('desktop tabs', () => {
+	test.use({ viewport: { width: 1280, height: 915 }, isMobile: false, hasTouch: false });
+	test('mouse and keyboard switch panels immediately without a carousel animation', async ({
+		page,
+		context
+	}) => {
+		await fixtureApp(context);
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
+		await page.goto(EXPENSES);
+		await expectSettled(page, 'Activity');
+		const results = page.getByRole('tab', { name: 'Results', exact: true });
+		const firstFrame = await results.evaluate(async (tab) => {
+			(tab as HTMLButtonElement).click();
+			await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+			const pane = document
+				.querySelector('[role="tabpanel"][aria-hidden="false"]')!
+				.getBoundingClientRect();
+			const viewport = document.querySelector('[data-tab-pager]')!.getBoundingClientRect();
+			const indicator = document.querySelector('[data-tab-indicator]')!.getBoundingClientRect();
+			return {
+				selected: tab.getAttribute('aria-selected'),
+				panelOffset: pane.x - viewport.x,
+				indicatorOffset: indicator.x - tab.getBoundingClientRect().x
+			};
+		});
+		expect(firstFrame.selected).toBe('true');
+		expect(Math.abs(firstFrame.panelOffset)).toBeLessThan(1);
+		expect(Math.abs(firstFrame.indicatorOffset)).toBeLessThan(1);
+		await results.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(page.getByRole('tab', { name: 'Details', exact: true })).toBeFocused();
+		await expectSettled(page, 'Details');
+	});
+});

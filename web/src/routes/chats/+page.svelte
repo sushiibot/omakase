@@ -20,7 +20,16 @@
 	const sheet = routedSheet('branch');
 	const settings = routedSheet('thread-settings');
 	let selected = $state<ThreadSummary>();
-	const picked = $derived(list.data?.threads.find((t) => t.id === settings.arg) ?? selected);
+	const picked = $derived(
+		settings.arg === 'main' && list.data
+			? {
+					...list.data.main,
+					id: 'main',
+					title: list.data.main.title ?? 'Main',
+					writes: 0
+				}
+			: (list.data?.threads.find((t) => t.id === settings.arg) ?? selected)
+	);
 	let query = $state('');
 	let title = $state('');
 	let now = $state(Date.now());
@@ -85,8 +94,16 @@
 />
 
 <ThreadSettingsSheet
+	onopen={async (href) => {
+		await leaveSheet(settings);
+		await goto(href);
+	}}
 	open={settings.open}
 	thread={picked}
+	href={picked?.id === 'main' ? '/chat' : picked ? `/chats/${picked.id}` : undefined}
+	onreopen={async () => {
+		if (picked && (await threads.reopen(picked.id))) await leaveSheet(settings);
+	}}
 	busy={threads.busy}
 	error={threads.error}
 	onrename={async (title) => {

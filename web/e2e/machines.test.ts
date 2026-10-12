@@ -87,11 +87,13 @@ for (const width of [320, 1280]) {
 		await page.getByLabel('Machine and folder').selectOption('pc/code/codex');
 		expect(actions).toEqual([]);
 		await page.getByRole('button', { name: 'Start on selected machine' }).click();
-		expect(actions[0]).toEqual({
-			action: 'start',
-			id: 't-login',
-			target: { machineId: 'pc', rootId: 'code', provider: 'codex' }
-		});
+		await expect
+			.poll(() => actions[0])
+			.toEqual({
+				action: 'start',
+				id: 't-login',
+				target: { machineId: 'pc', rootId: 'code', provider: 'codex' }
+			});
 		await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
 		await expect(page.getByRole('region', { name: 'Remote work' })).toContainText('$ bun test');
 		if (width === 320)
@@ -112,7 +114,7 @@ for (const width of [320, 1280]) {
 			id: 't-login',
 			text: 'Also check expired sessions'
 		});
-		expect(actions).toContainEqual({ action: 'stop', id: 't-login' });
+		await expect.poll(() => actions).toContainEqual({ action: 'stop', id: 't-login' });
 		await expect.poll(() => horizontalOverflow(page)).toEqual([]);
 		await expect.poll(() => smallTargets(page)).toEqual([]);
 		expect(await axe(page)).toEqual([]);

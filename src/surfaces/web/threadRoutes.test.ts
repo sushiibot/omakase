@@ -470,3 +470,17 @@ test("durable question resolution is routed to its channel and immediately clear
   expect(topic.find("ask_resolved", "question")?.data.answer).toBeNull();
   expect(h.log.list(["ask_resolved"])).toHaveLength(0);
 });
+
+test("Main rename persists in the catalog and list without creating a topic", async () => {
+  const { call, db, managed } = setup();
+  const renamed = await call("/api/threads/main/rename", { title: "  Home base  " });
+  expect(renamed!.status).toBe(200);
+  expect(await renamed!.json()).toMatchObject({ id: "main", title: "Home base" });
+  expect((await (await call("/api/chats"))!.json()).main.title).toBe("Home base");
+  expect((await (await call("/api/channels"))!.json()).channels[0].title).toBe("Home base");
+  expect(db.query("SELECT value FROM kv WHERE key = 'web:main-title'").get()).toEqual({ value: "Home base" });
+  expect(db.query("SELECT * FROM web_threads WHERE id = 'main'").get()).toBeNull();
+  expect(managed).toEqual([]);
+  expect((await call("/api/threads/main/rename", { title: " " }))!.status).toBe(400);
+  expect((await call("/api/threads/main/close", {}))!.status).toBe(404);
+});
