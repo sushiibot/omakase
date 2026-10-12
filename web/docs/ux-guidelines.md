@@ -498,3 +498,9 @@ Reserve screen edges for system gestures and ignore swipes that start on interac
 Manual task creation saves a to-do without starting work.
 Keep checklist completion separate from execution status.
 See [Tasks](tasks.md) for lifecycle and storage behavior.
+
+### Activity and conversation links
+
+Activity rows represent execution attempts. Use Assignments for agent and scheduled runs, Replies for conversation turns, and All for the complete log. Saved assignments remain in Tasks. Keep rows to a title and a metadata line; the full brief belongs in Details.
+
+Use “Jump to conversation” for links from execution records or task inspectors to chat. The shared conversation URL helper handles Main, topic, and task conversations and preserves the originating turn. Parent and delegated execution links belong in Details. Keep one conversation jump in the execution header; avoid competing parent-navigation actions there.

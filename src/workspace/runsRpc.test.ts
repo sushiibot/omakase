@@ -83,6 +83,25 @@ describe("runs/list", () => {
     expect((await list({ kinds: ["subagent", "agent"] })).runs.map((x) => x.kind)).toEqual(["agent", "subagent"]);
   });
 
+  test("nested delegation inherits the originating topic and turn in list and detail", async () => {
+    record({ runId: id(1), agentName: "topic:planning", conversationId: "planning", turnId: id(0) });
+    record({ runId: id(2), agentName: "coder", parentRunId: id(1) });
+    record({ runId: id(3), agentName: "reviewer", parentRunId: id(2) });
+    const filtered = await list({ conversationId: "planning" });
+    expect(filtered.runs).toHaveLength(3);
+    for (const run of filtered.runs) expect(run).toMatchObject({ conversationId: "planning", turnId: id(0) });
+    const detail = await get(id(3));
+    expect(detail.run).toMatchObject({ conversationId: "planning", turnId: id(0) });
+    expect(detail.parent).toMatchObject({ conversationId: "planning", turnId: id(0) });
+  });
+
+  test("orphaned and cyclic delegation do not invent a conversation", async () => {
+    record({ runId: id(1), agentName: "coder", parentRunId: id(2) });
+    record({ runId: id(2), agentName: "reviewer", parentRunId: id(1) });
+    record({ runId: id(3), agentName: "coder", parentRunId: id(4) });
+    for (const run of (await list()).runs) expect(run.conversationId).toBeUndefined();
+  });
+
   test("filters by status and start time, and pages with `before`", async () => {
     for (let i = 1; i <= 7; i++) record({ runId: id(i * 60), startedAt: iso(i * 60), status: i % 2 ? "done" : "failed" });
     expect((await list({ statuses: ["failed"] })).runs).toHaveLength(3);

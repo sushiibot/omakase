@@ -1,4 +1,6 @@
 <script lang="ts">
+	import CornerUpRight from '@lucide/svelte/icons/corner-up-right';
+	import { runConversationHref } from './format';
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import FileText from '@lucide/svelte/icons/file-text';
@@ -48,7 +50,7 @@
 		openSteps?: string[];
 		runHref?: (runId: string) => string;
 		historyHref?: (date: string) => string;
-		conversationHref?: (conversationId: string) => string | undefined;
+		conversationHref?: (conversationId: string, turnId?: string) => string | undefined;
 		onretry?: () => void;
 		onloadmore?: () => void;
 	} = $props();
@@ -71,7 +73,13 @@
 			detail?.parent?.conversationId ??
 			(run?.kind === 'chat' || detail?.parent?.kind === 'chat' ? 'main' : undefined)
 	);
-	const chatHref = $derived(conversationId ? conversationHref?.(conversationId) : undefined);
+	const chatHref = $derived(
+		run
+			? conversationHref && conversationId
+				? conversationHref(conversationId, run.turnId ?? detail?.parent?.turnId)
+				: runConversationHref(run, detail?.parent)
+			: undefined
+	);
 	const outcome = $derived.by(() => {
 		if (!run) return '';
 		switch (run.status) {
@@ -146,7 +154,7 @@
 		? 'Reply activity'
 		: run?.kind === 'flush' || run?.kind === 'rotate'
 			? 'System activity'
-			: 'Task'}
+			: 'Activity'}
 	{back}
 	{banner}
 	state={{
@@ -186,25 +194,9 @@
 						{activeChildren} delegated {activeChildren === 1 ? 'task is' : 'tasks are'} still running.
 					</p>
 				{/if}
-				{#if chatHref || detail.parent || detail.children.length}
-					<div class="flex flex-wrap gap-x-3">
-						{#if chatHref}<Button variant="link" href={chatHref} class="px-0"
-								>Open conversation<ArrowUpRight /></Button
-							>{/if}
-						{#if detail.children.length}<Button
-								variant="link"
-								class="px-0"
-								onclick={() => (section = 'overview')}
-								>Delegated tasks · {detail.children.length}<ChevronDown /></Button
-							>
-						{:else if detail.parent}<Button
-								variant="link"
-								class="px-0"
-								href={runHref(detail.parent.runId)}
-								>Parent {detail.parent.kind === 'chat' ? 'reply' : 'task'}<ArrowUpRight /></Button
-							>{/if}
-					</div>
-				{/if}
+				{#if chatHref}<Button variant="link" href={chatHref} class="self-start px-0"
+						><CornerUpRight />Jump to conversation</Button
+					>{/if}
 			</div>
 		{/if}
 	{/snippet}
@@ -293,16 +285,16 @@
 							<h2 id="{uid}-agents" class="text-base font-semibold">Agents and delegation</h2>
 							<ul class="flex flex-col">
 								{#if detail.parent}<li class="flex flex-col">
-										<span class="px-2 text-meta text-muted-foreground"
-											>Parent {detail.parent.kind === 'chat' ? 'reply' : 'task'}</span
-										><RunRow run={detail.parent} {now} href={runHref(detail.parent.runId)} />
+										<span class="px-2 text-meta text-muted-foreground">Started by</span><RunRow
+											run={detail.parent}
+											{now}
+											href={runHref(detail.parent.runId)}
+											jump={false}
+										/>
 									</li>{/if}
 								{#each detail.children as child (child.runId)}<li class="flex flex-col">
-										<span class="px-2 text-meta text-muted-foreground">Delegated task</span><RunRow
-											run={child}
-											{now}
-											href={runHref(child.runId)}
-										/>
+										<span class="px-2 text-meta text-muted-foreground">Delegated execution</span
+										><RunRow run={child} {now} href={runHref(child.runId)} jump={false} />
 									</li>{/each}
 							</ul>
 						</section>

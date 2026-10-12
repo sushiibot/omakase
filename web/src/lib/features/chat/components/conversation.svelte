@@ -170,8 +170,10 @@
 				: []}
 		<li
 			data-message-id={message.id}
+			data-turn-id={message.turnId}
+			tabindex="-1"
 			data-voice-message={message.voice || undefined}
-			class="min-w-0"
+			class="min-w-0 rounded-lg focus:bg-muted/60 focus:outline-2 focus:outline-ring"
 		>
 			<div
 				class={cn(

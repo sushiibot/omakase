@@ -60,7 +60,7 @@ test('the list groups runs by day, each with its status and what started it', as
 test('older runs load under the first page, then point to History', async ({ page, context }) => {
 	await server(context);
 	await page.goto('/runs');
-	await page.getByRole('tab', { name: 'Activity', exact: true }).click();
+	await page.getByRole('tab', { name: 'All', exact: true }).click();
 	await expect(rows(page)).toHaveCount(10);
 	await page.getByRole('button', { name: 'Show older activity' }).click();
 	await expect(rows(page)).toHaveCount(13);
@@ -74,32 +74,31 @@ test('the type filter asks the bot for one kind and shows only those runs', asyn
 }) => {
 	await server(context);
 	await page.goto('/runs');
-	await page.getByRole('tab', { name: 'Activity', exact: true }).click();
+	await page.getByRole('tab', { name: 'All', exact: true }).click();
 	await expect(rows(page)).toHaveCount(10);
-	const asked = page.waitForRequest(
-		(r) => new URL(r.url()).searchParams.get('kind') === 'subagent'
-	);
-	await page.getByRole('tab', { name: 'Delegated' }).click();
+	const asked = page.waitForRequest((r) => new URL(r.url()).searchParams.get('kind') === 'job');
+	await page.getByRole('tab', { name: 'Scheduled' }).click();
 	await asked;
-	await expect(rows(page)).toHaveCount(2);
-	await expect(rows(page).filter({ hasText: 'Compare flight prices' })).toBeVisible();
+	await expect(rows(page)).toHaveCount(5);
+	await expect(rows(page).filter({ hasText: 'Back up projects' })).toHaveCount(2);
 	await expect(rows(page).filter({ hasText: 'Book the car service' })).toBeHidden();
-	await expect(page.getByText('Assignments from another agent.')).toBeVisible();
+	await expect(page.getByText('Tasks started by a schedule,', { exact: false })).toBeVisible();
 	await page.getByRole('tab', { name: 'Replies', exact: true }).click();
 	await expect(
-		page.getByText('Continue the conversation in chat.', { exact: false })
+		page.getByText('Jump to the conversation to follow up.', { exact: false })
 	).toBeVisible();
 	await expect(rows(page).first()).toContainText('Reply');
-	await expect(rows(page).first()).toContainText('Main conversation');
-	await page.getByRole('tab', { name: 'Activity' }).click();
+	await page.getByRole('tab', { name: 'All' }).click();
 	await expect(rows(page)).toHaveCount(10);
 });
 
 test('no runs yet says what will appear', async ({ page, context }) => {
 	await server(context, 'empty');
 	await page.goto('/runs');
-	await expect(page.getByText('No tasks yet')).toBeVisible();
-	await expect(page.getByText('Delegated and scheduled tasks appear here.')).toBeVisible();
+	await expect(page.getByText('No assignments yet')).toBeVisible();
+	await expect(
+		page.getByText('Agent and scheduled execution attempts appear here.', { exact: false })
+	).toBeVisible();
 });
 
 test('a slow list shows a labelled skeleton', async ({ page, context }) => {
@@ -142,7 +141,7 @@ test('an out-of-date page cursor asks for a reload instead of showing nothing', 
 }) => {
 	const backend = await server(context);
 	await page.goto('/runs');
-	await page.getByRole('tab', { name: 'Activity', exact: true }).click();
+	await page.getByRole('tab', { name: 'All', exact: true }).click();
 	await expect(rows(page)).toHaveCount(10);
 	backend.set('runs', 'stale');
 	await page.getByRole('button', { name: 'Show older activity' }).click();
@@ -194,7 +193,7 @@ test('a finished run shows the host status, evidence and a collapsed timeline', 
 	await expect(
 		page.getByText('Execution finished. Review the result and recorded checks below.')
 	).toBeVisible();
-	await expect(page.getByRole('heading', { name: 'Activity', exact: true })).toBeHidden();
+	await expect(page.getByRole('heading', { name: 'Activity', exact: true, level: 2 })).toBeHidden();
 	await page.getByRole('tab', { name: 'Results', exact: true }).click();
 	const evidence = page.getByRole('tabpanel', { name: 'Results', exact: true });
 	await expect(
@@ -312,7 +311,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 			if (path === '/runs') await expect(rows(page).first()).toBeVisible();
 			else {
 				await page.getByRole('tab', { name: 'Activity', exact: true }).click();
-				await expect(page.getByRole('heading', { name: /Activity/ })).toBeVisible();
+				await expect(page.getByRole('heading', { name: /Activity/, level: 2 })).toBeVisible();
 				await page
 					.getByRole('button', { name: /^(Succeeded|Failed) / })
 					.first()
@@ -427,7 +426,7 @@ test('Work defaults to tasks while reply cycles and maintenance stay in Activity
 }) => {
 	const backend = await server(context);
 	await page.goto('/runs');
-	await expect(page.getByRole('tab', { name: 'Tasks', exact: true })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: 'Assignments', exact: true })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
@@ -439,11 +438,11 @@ test('Work defaults to tasks while reply cycles and maintenance stay in Activity
 	await expect(rows(page).filter({ hasText: 'Memory save' })).toHaveCount(0);
 	await page.getByRole('tab', { name: 'Replies', exact: true }).click();
 	await expect(rows(page)).toHaveCount(3);
-	await rows(page).first().getByRole('link').click();
+	await rows(page).first().getByRole('link').first().click();
 	await expect(page.getByRole('heading', { name: 'Reply activity', level: 1 })).toBeVisible();
-	await expect(page.getByRole('link', { name: 'Open conversation' })).toHaveAttribute(
+	await expect(page.getByRole('link', { name: 'Jump to conversation' })).toHaveAttribute(
 		'href',
-		'/chat'
+		'/chat?turn=turn-41'
 	);
 	await page.getByRole('tab', { name: 'Details', exact: true }).click();
 	await expect(page.getByRole('heading', { name: 'Request', exact: true })).toBeVisible();
@@ -487,7 +486,8 @@ test('a finished reply keeps ongoing delegation visible', async ({ page, context
 	await expect(
 		page.getByRole('status').filter({ hasText: '1 delegated task is still running.' })
 	).toBeVisible();
-	await page.getByRole('button', { name: 'Delegated tasks · 1' }).click();
+	await expect(page.getByRole('link', { name: 'Jump to conversation' })).toHaveCount(1);
+	await page.getByRole('tab', { name: 'Details', exact: true }).click();
 	await expect(page.getByRole('tab', { name: 'Details', exact: true })).toHaveAttribute(
 		'aria-selected',
 		'true'
@@ -515,4 +515,26 @@ test('refreshing a long activity preserves loaded pages and expanded tools', asy
 	await refreshed;
 	await expect(activity.locator('li')).toHaveCount(162);
 	await expect(step).toHaveAttribute('aria-expanded', 'true');
+});
+
+test('task execution jumps use the task conversation route and preserve the turn', async ({
+	page,
+	context
+}) => {
+	await server(context);
+	const detail = runDetailPage(Date.now(), RUN.expenses)!;
+	await context.route(`**/api/runs/${RUN.expenses}`, (route) =>
+		route.fulfill({
+			json: {
+				...detail,
+				run: { ...detail.run, conversationId: 'task-t-login', turnId: 'task-turn' }
+			}
+		})
+	);
+	await page.goto(`/runs/${RUN.expenses}`);
+	await expect(page.getByRole('link', { name: 'Jump to conversation' })).toHaveAttribute(
+		'href',
+		'/tasks/t-login?view=conversation&turn=task-turn'
+	);
+	await expect(page.getByRole('link', { name: /Parent/ })).toHaveCount(0);
 });

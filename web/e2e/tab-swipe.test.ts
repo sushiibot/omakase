@@ -77,7 +77,7 @@ test('history day swipes between recaps and runs', async ({ page, context }) => 
 test('Runs filters swipe on link rows without opening the row', async ({ page, context }) => {
 	await fixtureApp(context);
 	await page.goto('/runs');
-	await expect(page.getByRole('tab', { name: 'Tasks', exact: true })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: 'Assignments', exact: true })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
@@ -86,6 +86,7 @@ test('Runs filters swipe on link rows without opening the row', async ({ page, c
 		.getByRole('listitem')
 		.first()
 		.getByRole('link')
+		.first()
 		.boundingBox();
 	expect(box).not.toBeNull();
 	await swipe(
@@ -99,7 +100,7 @@ test('Runs filters swipe on link rows without opening the row', async ({ page, c
 	);
 	await expect(page).toHaveURL(/\/runs(?:\?|$)/);
 	await change(page, 'previous');
-	await expect(page.getByRole('tab', { name: 'Tasks', exact: true })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: 'Assignments', exact: true })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
@@ -437,9 +438,9 @@ test('returning to Runs keeps cached rows stationary during a delayed refresh', 
 	});
 	try {
 		await page.goto('/runs');
-		await expectSettled(page, 'Tasks');
+		await expectSettled(page, 'Assignments');
 		const all = page.locator('[data-tab-panel="work"]');
-		const first = all.getByRole('listitem').first().getByRole('link');
+		const first = all.getByRole('listitem').first().getByRole('link').first();
 		await expect(first).toBeVisible();
 		const before = await first.boundingBox();
 		const chatReady = page.waitForResponse((response) => {
@@ -450,8 +451,8 @@ test('returning to Runs keeps cached rows stationary during a delayed refresh', 
 		await chatReady;
 		await expectSettled(page, 'Scheduled');
 		delayAll = true;
-		await page.getByRole('tab', { name: 'Tasks', exact: true }).click();
-		await expectSettled(page, 'Tasks');
+		await page.getByRole('tab', { name: 'Assignments', exact: true }).click();
+		await expectSettled(page, 'Assignments');
 		await expect
 			.poll(async () => Math.abs((await first.boundingBox())!.y - before!.y))
 			.toBeLessThan(1);
@@ -480,7 +481,7 @@ test('a swipe does not fetch a Runs filter before its pane has arrived', async (
 		if (url.pathname === '/api/runs') filters.push(url.searchParams.get('kind') ?? 'all');
 	});
 	await page.goto('/runs');
-	await expectSettled(page, 'Tasks');
+	await expectSettled(page, 'Assignments');
 	await expect(page.getByRole('tabpanel').getByRole('link').first()).toBeVisible();
 	const drag = await heldDrag(page, 230);
 	await page.waitForTimeout(150);
@@ -575,17 +576,17 @@ test('narrow Runs tabs keep full labels and keyboard selection reveals the last 
 	await page.setViewportSize({ width: 320, height: 915 });
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await page.goto('/runs');
-	await expectSettled(page, 'Tasks');
+	await expectSettled(page, 'Assignments');
 	const tabs = page.getByRole('tablist', { name: 'Work filters' });
 	expect(
 		await tabs
 			.getByRole('tab')
 			.evaluateAll((buttons) => buttons.every((button) => button.scrollWidth <= button.clientWidth))
 	).toBe(true);
-	await tabs.getByRole('tab', { name: 'Tasks', exact: true }).focus();
+	await tabs.getByRole('tab', { name: 'Assignments', exact: true }).focus();
 	await page.keyboard.press('End');
-	await expectSettled(page, 'Activity');
-	const last = await tabs.getByRole('tab', { name: 'Activity', exact: true }).boundingBox();
+	await expectSettled(page, 'All');
+	const last = await tabs.getByRole('tab', { name: 'All', exact: true }).boundingBox();
 	expect(last!.x).toBeGreaterThanOrEqual(0);
 	expect(last!.x + last!.width).toBeLessThanOrEqual(320.5);
 	expect(
@@ -596,7 +597,7 @@ test('narrow Runs tabs keep full labels and keyboard selection reveals the last 
 });
 
 for (const [path, first] of [
-	['/runs', 'Tasks'],
+	['/runs', 'Assignments'],
 	[EXPENSES, 'Activity'],
 	['/history', 'Recaps'],
 	['/memory', 'Long-term'],

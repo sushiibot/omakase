@@ -235,6 +235,7 @@
 			chat={store
 				? {
 						headerActions: taskActions,
+						focusTurn: page.url.searchParams.get('turn') ?? undefined,
 						focusAsk: page.url.searchParams.get('ask') ?? undefined,
 						focusApproval: page.url.searchParams.get('approve') ?? undefined,
 						approvals: store.approvals,

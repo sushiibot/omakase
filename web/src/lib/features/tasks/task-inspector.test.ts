@@ -22,7 +22,7 @@ describe('task inspector', () => {
 		}).body;
 		expect(html).toContain('data-task-inspector');
 		expect(html).toContain('href="/tasks/t-login"');
-		expect(html).toContain('Open task conversation');
+		expect(html).toContain('Jump to conversation');
 		expect(html).toContain('Close task details');
 		expect(html).toContain('New checklist step');
 		expect(html).toContain('Test expired sessions');

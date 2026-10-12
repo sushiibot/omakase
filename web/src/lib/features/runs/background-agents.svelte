@@ -182,7 +182,7 @@
 			{#if error}<p role="alert" class="text-sm text-failed">{error}</p>{/if}
 			{#if detail}
 				<p class="text-meta text-muted-foreground">
-					Recent activity · oldest first. Open task for the full history.
+					Recent activity · oldest first. View activity for the full history.
 				</p>
 				<div class="flex max-h-80 flex-col overflow-y-auto">
 					{#each detail.steps.filter((step) => !(step.type === 'user' && step.text === detail?.taskBrief)) as step (step.id)}<StepRow
@@ -197,7 +197,7 @@
 				<Button
 					variant="outline"
 					href="/runs/{selected.runId}"
-					onclick={(event) => void openFullRun(event)}>Open task</Button
+					onclick={(event) => void openFullRun(event)}>View activity</Button
 				>
 				{#if (detail?.run.status ?? selected.status) === 'running'}<Button
 						variant="ghost"

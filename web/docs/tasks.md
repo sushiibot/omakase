@@ -34,7 +34,9 @@ Creating a task does not execute it.
 Completing an execution attempt does not automatically complete a task.
 Stopping work stops its recorded runs and conversation turn, then returns the task to To do.
 The checklist and conversation remain available.
-Age does not remove a task.
+Age does not remove or archive a task.
+Done and cancelled tasks remain saved; they leave the generated active index.
+The old Markdown stale-review and upkeep code skips the generated index.
 
 ## Storage and migration
 
@@ -51,6 +53,16 @@ Legacy upkeep does not drop or archive these tasks.
 The authenticated gateway exposes `GET /api/tasks` and `POST /api/tasks`.
 Task conversations use `/api/tasks/:id/chat/*` and separate persisted topic sessions.
 Internal task conversations stay out of the general conversation list.
+Records retain `sourceConversationId`, optional `workConversationId`, optional `parentTaskId`,
+and up to 100 run IDs. The current store holds at most 2,000 tasks; it has no archive state.
+The workspace already uses SQLite for other durable state, but this task store is a separate JSON file.
+
+Activity lists execution attempts separately from saved tasks. Assignments is the default filter;
+Scheduled, Replies, and All show the other views. Rows open execution details.
+“Jump to conversation” goes to Main, the topic, or the task conversation and focuses the
+originating turn when recorded. Older history is loaded in bounded batches; missing messages
+show a recovery notice. Parent and delegated execution links live in Details.
+
 Delegated agents attach their run IDs to task records and retain task identity when resumed.
 
 ## References and scope

@@ -40,7 +40,7 @@ test('tasks live beside chat; mobile back restores the main draft', async ({ pag
 	await expect(panel.getByRole('checkbox', { name: 'Review session recovery' })).not.toBeChecked();
 	await expect(panel.getByRole('textbox', { name: 'Message', exact: true })).toHaveCount(0);
 	await expect(panel.getByRole('button', { name: 'Send message', exact: true })).toHaveCount(0);
-	await expect(panel.getByRole('link', { name: 'Open task conversation' })).toHaveAttribute(
+	await expect(panel.getByRole('link', { name: 'Jump to conversation' })).toHaveAttribute(
 		'href',
 		'/tasks/t-login?view=conversation'
 	);
@@ -110,7 +110,7 @@ test('task prompts use their task channel and preserve the main composer draft',
 	const panel = page.getByRole('complementary', { name: 'Conversation tasks' });
 	await panel.getByRole('button', { name: /Fix login redirect/ }).click();
 	await expect(panel.getByRole('textbox', { name: 'Message', exact: true })).toHaveCount(0);
-	await panel.getByRole('link', { name: 'Open task conversation' }).click();
+	await panel.getByRole('link', { name: 'Jump to conversation' }).click();
 	await expect(page).toHaveURL(/\/tasks\/t-login\?view=conversation$/);
 	await page
 		.getByRole('textbox', { name: 'Message', exact: true })

@@ -63,6 +63,27 @@ function checkPrincipal(expected: string, got: string): void {
   if (got !== expected) throw new Error(`principal mismatch: this workspace serves ${expected}, got ${got}`);
 }
 
+/** Resolve nested delegation to its originating conversation without assuming every run is Main. */
+function conversationContext(index: RunIndex, record: RunRecord): { conversationId?: string; turnId?: string } {
+  let current: RunRecord | undefined = record;
+  const seen = new Set<string>();
+  for (let depth = 0; current && depth < 32 && !seen.has(current.runId); depth++) {
+    seen.add(current.runId);
+    const conversationId = runConversationOf(current) ?? (runKindOf(current) === "chat" ? "main" : undefined);
+    if (conversationId) return { conversationId, turnId: record.turnId ?? current.turnId };
+    current = current.parentRunId ? index.runs.get(current.parentRunId) : undefined;
+  }
+  return {};
+}
+
+function summaryInContext(index: RunIndex, record: RunRecord): RunSummary | null {
+  const summary = toRunSummary(record);
+  if (!summary) return null;
+  const context = conversationContext(index, record);
+  // Shape inherited fields through the same validation and redaction as original records.
+  return toRunSummary({ ...record, ...context });
+}
+
 // --- runs/list ---------------------------------------------------------------------------------------
 
 export async function runsList(opts: RunsRpcOptions, p: unknown): Promise<RunsListResult> {
@@ -77,8 +98,7 @@ export async function runsList(opts: RunsRpcOptions, p: unknown): Promise<RunsLi
       if (!RUN_ID_RE.test(r.runId) || (params.before && r.runId >= params.before)) return false;
       // The fields toRunSummary rejects on, so a page of bad records can't push every candidate through redaction.
       if (!isStamp(r.startedAt) || !str(r.agentName) || !(RUN_STATUSES as readonly string[]).includes(r.status)) return false;
-      const parent = r.parentRunId ? index.runs.get(r.parentRunId) : undefined;
-      const conversationId = runConversationOf(r) ?? (parent ? runConversationOf(parent) : undefined) ?? "main";
+      const conversationId = conversationContext(index, r).conversationId ?? "main";
       if (params.conversationId && conversationId !== params.conversationId) return false;
       if (params.statuses && !(params.statuses as string[]).includes(r.status)) return false;
       if (params.kinds && !params.kinds.includes(runKindOf(r))) return false;
@@ -92,7 +112,7 @@ export async function runsList(opts: RunsRpcOptions, p: unknown): Promise<RunsLi
   let i = 0;
   for (; i < candidates.length && runs.length < params.limit; i++) {
     if (i > 0 && i % LIST_SLICE === 0) await new Promise<void>((r) => setImmediate(r));
-    const s = toRunSummary(candidates[i]!);
+    const s = summaryInContext(index, candidates[i]!);
     if (s) runs.push(s);
   }
   return runsListResult.parse({ runs, before: i < candidates.length && runs.length ? runs.at(-1)!.runId : null, truncated: index.truncated });
@@ -339,7 +359,7 @@ function childrenOf(index: RunIndex, runId: string): RunSummary[] {
   const out: RunSummary[] = [];
   const ids = [...index.runs.values()].filter((r) => r.parentRunId === runId).sort((a, b) => (a.runId < b.runId ? -1 : 1));
   for (const r of ids) {
-    const s = toRunSummary(r);
+    const s = summaryInContext(index, r);
     if (s) out.push(s);
     if (out.length >= RUN_CHILDREN_MAX) break;
   }
@@ -403,10 +423,10 @@ export async function runsGet(opts: RunsRpcOptions, p: unknown): Promise<RunsGet
       historyFile: found.rel,
     });
   }
-  const run = toRunSummary(rec);
+  const run = summaryInContext(index, rec);
   if (!run) return { found: false };
   const parentRec = run.parentRunId ? index.runs.get(run.parentRunId) : undefined;
-  const parent = parentRec ? toRunSummary(parentRec) : null;
+  const parent = parentRec ? summaryInContext(index, parentRec) : null;
 
   const session = await openSession(rec.sessionFile, realRoots(opts.agentDirs));
   let built: BuiltSteps = { steps: [], uses: [], verifyNudged: false, capped: false };

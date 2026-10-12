@@ -60,7 +60,10 @@
 		if (remote.status === 'ready') snapshots[filter] = { runs, hasOlder, truncated, olderError };
 	});
 	const tabs = $derived(
-		(onfilter ? RUN_FILTERS : [RUN_FILTERS[0]]).map((f) => ({ value: f.value, label: f.label }))
+		(onfilter
+			? RUN_FILTERS.filter((f) => ['work', 'job', 'chat', 'all'].includes(f.value))
+			: [RUN_FILTERS[0]]
+		).map((f) => ({ value: f.value, label: f.label }))
 	);
 	function panelRuns(value: string) {
 		const kinds = RUN_FILTERS.find((f) => f.value === value)?.kinds;
@@ -84,13 +87,6 @@
 
 {#snippet banner()}
 	{#if !online}<ConnectionBanner state={{ kind: 'app-offline' }} />{/if}
-{/snippet}
-
-{#snippet lead()}
-	<p class="text-sm text-muted-foreground">
-		Follow tasks here. Replies stay in their conversations; Activity holds the complete execution
-		log.
-	</p>
 {/snippet}
 
 {#snippet skeleton()}
@@ -145,7 +141,6 @@
 	value={filter}
 	onchange={(value) => onfilter?.(value as RunFilter)}
 	label="Work filters"
-	{lead}
 >
 	{#snippet children(value)}
 		{@const shown = RUN_FILTERS.find((f) => f.value === value) ?? RUN_FILTERS[0]}
@@ -167,8 +162,8 @@
 				isEmpty={!sections.length}
 				empty={value === 'work'
 					? {
-							title: 'No tasks yet',
-							body: 'Delegated and scheduled tasks appear here. Your conversations stay in chat.'
+							title: 'No assignments yet',
+							body: 'Agent and scheduled execution attempts appear here. Saved tasks are in Tasks.'
 						}
 					: {
 							title: value === 'all' ? 'No activity yet' : `No ${shown.noun} yet`,

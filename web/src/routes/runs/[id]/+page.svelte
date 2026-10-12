@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { conversationHref } from '$lib/core/nav/conversation';
 	import { onMount, untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -43,8 +44,7 @@
 	online={pwa.online}
 	runHref={(runId) => resolve('/runs/[id]', { id: runId })}
 	historyHref={(date) => resolve('/history/[date]', { date })}
-	conversationHref={(conversationId) =>
-		conversationId === 'main' ? resolve('/chat') : resolve('/chats/[id]', { id: conversationId })}
+	{conversationHref}
 	onretry={() => void view.remote.refetch()}
 	onloadmore={() => void view.loadMore()}
 />

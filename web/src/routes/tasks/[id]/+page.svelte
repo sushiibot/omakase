@@ -40,6 +40,7 @@
 				<TaskChat
 					{task}
 					headerActions={actions}
+					focusTurn={page.url.searchParams.get('turn') ?? undefined}
 					focusAsk={page.url.searchParams.get('ask') ?? undefined}
 					focusApproval={page.url.searchParams.get('approve') ?? undefined}
 				/>

@@ -1,3 +1,4 @@
+import { conversationHref } from '$lib/core/nav/conversation';
 import type { RunKind, RunStatus, RunSummary } from './types';
 
 export function executionLabel(status: RunStatus): string {
@@ -54,9 +55,9 @@ export const RUN_FILTERS: readonly {
 }[] = [
 	{
 		value: 'work',
-		label: 'Tasks',
-		noun: 'tasks',
-		description: 'Delegated tasks, separate agent assignments and scheduled work.',
+		label: 'Assignments',
+		noun: 'assignments',
+		description: 'Agent and scheduled execution attempts. Saved tasks are in Tasks.',
 		kinds: ['job', 'subagent', 'agent']
 	},
 	{
@@ -85,12 +86,12 @@ export const RUN_FILTERS: readonly {
 		value: 'chat',
 		label: 'Replies',
 		noun: 'replies',
-		description: 'Execution details for individual replies. Continue the conversation in chat.',
+		description: 'One execution per reply. Jump to the conversation to follow up.',
 		kinds: ['chat']
 	},
 	{
 		value: 'all',
-		label: 'Activity',
+		label: 'All',
 		noun: 'activity',
 		description: 'The execution log: replies, tasks, memory saves and context refreshes.'
 	}
@@ -98,4 +99,13 @@ export const RUN_FILTERS: readonly {
 
 export function filterKinds(filter: RunFilter): RunKind[] | undefined {
 	return RUN_FILTERS.find((f) => f.value === filter)?.kinds;
+}
+
+/** Runs are execution records; their conversation is the place to continue the work. */
+export function runConversationHref(run: RunSummary, parent?: RunSummary): string | undefined {
+	const id =
+		run.conversationId ??
+		parent?.conversationId ??
+		(run.kind === 'chat' || parent?.kind === 'chat' ? 'main' : undefined);
+	return id ? conversationHref(id, run.turnId ?? parent?.turnId) : undefined;
 }

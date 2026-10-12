@@ -10,12 +10,14 @@
 		task,
 		viewing = true,
 		headerActions,
+		focusTurn,
 		focusAsk,
 		focusApproval
 	}: {
 		task: TaskRecord;
 		viewing?: boolean;
 		headerActions?: Snippet;
+		focusTurn?: string;
 		focusAsk?: string;
 		focusApproval?: string;
 	} = $props();
@@ -43,6 +45,7 @@
 <ChatScreen
 	title={task.title}
 	{headerActions}
+	{focusTurn}
 	{focusAsk}
 	{focusApproval}
 	messages={store.messages}

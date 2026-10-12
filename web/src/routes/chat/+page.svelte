@@ -318,6 +318,7 @@
 			canInstall={pwa.canInstall}
 			announce={s.announce}
 			{focusAsk}
+			focusTurn={page.url.searchParams.get('turn') ?? undefined}
 			focusApproval={page.url.searchParams.get('approve') ?? undefined}
 			{sheet}
 			{viewer}

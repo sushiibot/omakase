@@ -124,7 +124,7 @@
 		<div class="flex flex-col gap-6">
 			<div class="flex flex-col gap-2">
 				<h3 class="text-body font-semibold [overflow-wrap:anywhere]">{task.title}</h3>
-				<Button variant="outline" href={fullHref}>Open task conversation</Button>
+				<Button variant="outline" href={fullHref}>Jump to conversation</Button>
 			</div>
 			{#if !editing}
 				<section class="flex flex-col gap-2" aria-label="Task brief">
@@ -268,6 +268,6 @@
 			</p>{:else}<p class="text-sm text-muted-foreground">
 				No result yet. Completed work will appear here.
 			</p>{/if}
-		<Button variant="outline" class="mt-4 w-full" href={fullHref}>Open task conversation</Button>
+		<Button variant="outline" class="mt-4 w-full" href={fullHref}>Jump to conversation</Button>
 	</div>
 </div>

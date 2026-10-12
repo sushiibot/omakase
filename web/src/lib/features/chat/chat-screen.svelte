@@ -78,6 +78,7 @@
 		updateReady = false,
 		canInstall = false,
 		announce = '',
+		focusTurn,
 		focusAsk,
 		focusApproval,
 		sheet,
@@ -172,6 +173,7 @@
 		canInstall?: boolean;
 		/** Screen-reader text, set once per completed reply. */
 		announce?: string;
+		focusTurn?: string;
 		focusAsk?: string;
 		focusApproval?: string;
 		sheet?: ChatSheet;
@@ -215,18 +217,23 @@
 
 	let scroller = $state<HTMLElement | null>(null);
 	const activity = $derived(channelActivity(messages, running, stopping, approvals));
-	function focusRequest(request: { kind: 'ask' | 'approval'; id: string }): boolean {
+	type FocusTarget = { kind: 'ask' | 'approval' | 'turn'; id: string };
+	function focusRequest(request: FocusTarget): boolean {
 		if (!scroller) return false;
 		const selector =
-			request.kind === 'ask'
-				? `[data-ask-id="${CSS.escape(request.id)}"]`
-				: `[data-approval-id="${CSS.escape(request.id)}"]`;
+			request.kind === 'turn'
+				? `[data-turn-id="${CSS.escape(request.id)}"]`
+				: request.kind === 'ask'
+					? `[data-ask-id="${CSS.escape(request.id)}"]`
+					: `[data-approval-id="${CSS.escape(request.id)}"]`;
 		const target = scroller.querySelector<HTMLElement>(selector);
 		if (!target) return false;
 		target.scrollIntoView({ block: 'center', behavior: 'instant' });
-		target
-			.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)')
-			?.focus({ preventScroll: true });
+		if (request.kind === 'turn') target.focus({ preventScroll: true });
+		else
+			target
+				.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)')
+				?.focus({ preventScroll: true });
 		return true;
 	}
 	function reviewRequest() {
@@ -238,16 +245,18 @@
 			? { kind: 'ask' as const, id: focusAsk }
 			: focusApproval
 				? { kind: 'approval' as const, id: focusApproval }
-				: null
+				: focusTurn
+					? { kind: 'turn' as const, id: focusTurn }
+					: null
 	);
+	const linkedItem = $derived(requestedFocus?.kind === 'turn' ? 'reply' : 'request');
 	let requestSearchKey = $state<string | null>(null);
 	let requestSearch = $state<'idle' | 'loading' | 'missing' | 'error' | 'limited'>('idle');
 	let mounted = true;
 	onDestroy(() => (mounted = false));
 	const MAX_REQUEST_PAGES = 8;
-	const requestKey = (request: { kind: 'ask' | 'approval'; id: string }) =>
-		`${request.kind}:${request.id}`;
-	async function findRequest(request: { kind: 'ask' | 'approval'; id: string }, retry = false) {
+	const requestKey = (request: FocusTarget) => `${request.kind}:${request.id}`;
+	async function findRequest(request: FocusTarget, retry = false) {
 		const key = requestKey(request);
 		const current = () => mounted && requestedFocus && requestKey(requestedFocus) === key;
 		requestSearchKey = key;
@@ -657,12 +666,12 @@
 		>
 			<p class="min-w-0 flex-1">
 				{requestSearch === 'loading'
-					? 'Finding the linked request in earlier messages…'
+					? `Finding the linked ${linkedItem} in earlier messages…`
 					: requestSearch === 'error'
-						? "Couldn't load the linked request. Try again."
+						? `Couldn't load the linked ${linkedItem}. Try again.`
 						: requestSearch === 'limited'
-							? 'The linked request is farther back, or is no longer available.'
-							: 'The linked request is no longer in this conversation.'}
+							? `The linked ${linkedItem} is farther back, or is no longer available.`
+							: `The linked ${linkedItem} is no longer in this conversation.`}
 			</p>
 			{#if requestSearch === 'error' || requestSearch === 'limited'}<Button
 					variant="outline"

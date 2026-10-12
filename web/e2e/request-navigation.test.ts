@@ -140,3 +140,85 @@ test('a linked question focuses when the live stream hydrates it after empty his
 	await expect(page.locator('[data-request-search]')).toHaveCount(0);
 	expect(olderRequests).toBe(0);
 });
+
+test('a conversation jump loads an older reply and focuses it without sending a prompt', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	let olderRequests = 0;
+	await context.route('**/api/chat/history?*', (route) => {
+		if (new URL(route.request().url()).searchParams.has('before')) {
+			olderRequests++;
+			return route.fulfill({
+				json: {
+					items: [
+						{
+							...latest[0],
+							id: 'old-reply',
+							turnId: 'origin-turn',
+							text: 'The linked execution started here.'
+						}
+					],
+					before: null
+				}
+			});
+		}
+		return route.fulfill({ json: { items: latest, before: 'older-page' } });
+	});
+	await page.goto('/chat?turn=origin-turn');
+	const reply = page.locator('[data-turn-id="origin-turn"]');
+	await expect(reply).toBeFocused();
+	await expect(reply).toBeInViewport();
+	await expect(page.locator('[data-request-search]')).toHaveCount(0);
+	expect(olderRequests).toBe(1);
+	await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Continue this work');
+	await expect(reply).toBeInViewport();
+	await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue(
+		'Continue this work'
+	);
+});
+
+test('a missing linked turn leaves the conversation usable and says what happened', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await context.route('**/api/chat/history?*', (route) =>
+		route.fulfill({ json: { items: latest, before: null } })
+	);
+	await page.goto('/chat?turn=missing-turn');
+	await expect(page.locator('[data-request-search]')).toContainText(
+		'The linked reply is no longer in this conversation.'
+	);
+	await page.getByRole('textbox', { name: 'Message', exact: true }).fill('My draft');
+	await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('My draft');
+});
+
+for (const [path, history] of [
+	['/chats/oct-trip', '/api/threads/oct-trip/chat/history'],
+	['/tasks/t-login?view=conversation', '/api/tasks/t-login/chat/history']
+]) {
+	test(`conversation jumps focus the originating turn in ${path}`, async ({ page, context }) => {
+		await fixtureApp(context);
+		await context.route(`**${history}*`, (route) =>
+			route.fulfill({
+				json: {
+					items: [
+						{
+							...latest[0],
+							id: 'origin-reply',
+							turnId: 'origin-turn',
+							text: 'The linked work happened here.'
+						}
+					],
+					before: null
+				}
+			})
+		);
+		await page.goto(`${path}${path.includes('?') ? '&' : '?'}turn=origin-turn`);
+		const reply = page.locator('[data-turn-id="origin-turn"]');
+		await expect(reply).toBeFocused();
+		await expect(reply).toBeInViewport();
+	});
+}
