@@ -296,7 +296,7 @@ export class SubagentHost {
         "Write a complete brief in `task`: goal, what you already know, what to return. With mode \"fresh\" (default) " +
         "the child sees nothing else; mode \"fork\" starts it from a copy of this conversation. `continue` with a " +
         "finished child's runId sends it a follow-up in its own session. `background: true` returns at once; the " +
-        `result arrives later as a message. Children can't ask questions, message ${ownerLabel(this.opts.config.ownerName)}, or write memory, persona or ` +
+        "result arrives later as a message. Children can't ask questions, message the user, or write memory, persona or " +
         "agent files; read-only agents have no shell (they read files and use the gateway tools such as web_search and " +
         "fetch_url_content). A child that changes a protected file is stopped and the change is undone. " +
         `At most ${this.limits.maxReaders} read-only children and ${this.limits.maxWriters} writer run at once; ` +

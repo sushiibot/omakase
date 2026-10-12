@@ -38,7 +38,9 @@ describe("ownerName contract", () => {
     ["a carriage return", "Sam\rLee"],
     ["a tab", "Sam\tLee"],
     ["a NUL", "Sam\u0000Lee"],
-    ["a line separator", "Sam Lee"],
+    ["a line separator", "Sam\u2028Lee"],
+    ["a bidi override", "Sam\u202Eeel"],
+    ["a zero-width space", "Sam\u200BLee"],
   ])("rejects %s", (_, value) => {
     expect(ownerName.safeParse(value).success).toBe(false);
   });
@@ -65,6 +67,7 @@ describe("owner labels", () => {
     expect(ownerLabelStart("Sam")).toBe("Sam");
     expect(ownerPossessive("Sam")).toBe("Sam's");
     expect(ownerNameLine("Sam")).toBe("The user's name is Sam.");
+    expect(ownerNameLine("Sam Jr.")).toBe("The user's name is Sam Jr.");
   });
 
   test.each([undefined, null, ""])("fall back to the user for %p", (name) => {

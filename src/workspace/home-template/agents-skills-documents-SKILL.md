@@ -11,7 +11,8 @@ description: Read PDF, Word (docx), PowerPoint (pptx), Excel (xlsx), OpenDocumen
 | docx, odt, pptx, epub, rtf, html | `pandoc -t gfm-raw_html file.docx` |
 | xlsx | `xlsx2csv -a file.xlsx` (all sheets as CSV) |
 
-An attachment from the user is a URL in the message; `curl -fsSL -o ~/scratch/<name> '<url>'` first.
+An attachment from the user is an `[attachment: …]` line in the message. Use its `~/uploads/` copy when
+the line names one; otherwise `curl -fsSL -o ~/scratch/<name> '<url>'` an `https://` link first.
 `send_file` can send a converted file back.
 
 ## PDF

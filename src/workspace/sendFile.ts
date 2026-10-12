@@ -212,19 +212,19 @@ export function createSendFileTool(
   maxBytes = DELIVER_FILE_MAX_BYTES,
   ownerName: () => string | undefined = () => undefined,
 ): ToolDefinition {
-  const owner = ownerLabel(ownerName());
+  // The description is fixed for the session, so it says "the user"; the system prompt names them.
   return {
     name: SEND_FILE_TOOL,
     label: "send_file",
-    promptSnippet: `send_file: attach a workspace file (screenshot, PDF, chart) to your reply to ${owner}`,
+    promptSnippet: "send_file: attach a workspace file (screenshot, PDF, chart) to your reply to the user",
     description:
-      `Attach a file from the workspace to your reply to ${owner} (a screenshot, PDF, chart, export). The file is ` +
+      "Attach a file from the workspace to your reply to the user (a screenshot, PDF, chart, export). The file is " +
       "copied when you call this and goes out with the reply that ends this turn. Limits: 8 MB per file, 10 files " +
       "and 11 MB in total per turn. Files under Pi's config/auth dirs or the workspace state dir can't be sent, " +
-      `and a text file the secret detector flags (tokens, keys, long hex hashes) goes out only if ${owner} approves it.`,
+      "and a text file the secret detector flags (tokens, keys, long hex hashes) goes out only if the user approves it.",
     parameters: Type.Object({
       path: Type.String({ description: "Path of the file, absolute or relative to the working directory." }),
-      name: Type.Optional(Type.String({ description: `File name ${owner} sees; defaults to the file's own name.` })),
+      name: Type.Optional(Type.String({ description: "File name the user sees; defaults to the file's own name." })),
     }) as ToolDefinition["parameters"],
     execute: async (_toolCallId: string, params: unknown, signal?: AbortSignal) => {
       const { path, name } = params as { path: string; name?: string };

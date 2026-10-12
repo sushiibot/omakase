@@ -499,6 +499,18 @@ test('a refused name keeps what you typed and says why', async ({ page, context 
 	await expect(page.getByRole('button', { name: 'Save name' })).toBeEnabled();
 });
 
+test('a failed clear keeps the saved name in the field', async ({ page, context }) => {
+	await mockApi(context, { nameStatus: 500 });
+	await stubPush(page);
+	await page.goto('/settings');
+	const field = page.getByLabel('Your name');
+	await expect(field).toHaveValue('Sam');
+	await page.getByRole('button', { name: 'Clear name' }).click();
+	await expect(page.getByRole('alert')).toContainText("Couldn't save your name.");
+	await expect(field).toHaveValue('Sam');
+	await expect(page.getByRole('button', { name: 'Clear name' })).toBeVisible();
+});
+
 test('the theme choices move with the arrow keys', async ({ page, context }) => {
 	await mockApi(context);
 	await stubPush(page);

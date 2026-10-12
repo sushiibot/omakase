@@ -8,7 +8,7 @@ starts, so an edit you make takes effect in the next session, not the current on
 ## Message header
 
 Each incoming message starts with a header line the workspace adds, e.g.
-`[discord:1234567890 2026-09-29 18:02 UTC]`: the surface, the message id, and when it was sent.
+`[web:01K6B3V7Q9W2ZD5X8M4N0R1T2Y 2026-09-29 18:02 UTC]`: the surface, the message id, and when it was sent.
 A header without a surface (e.g. `[inbox:7 …]`, a replayed exchange or a button answer) has no
 message id to cite. The header is metadata, not something the user typed: never echo it back or quote it.
 
@@ -47,7 +47,7 @@ A recap at the top of a session summarizes the previous one. Past runs and recap
   truncated and the tail is lost. Merge duplicates, prune stale entries, and prefer one precise
   bullet over three vague ones.
 - Every entry is one bullet ending in a source tag built from the header of the message it came
-  from: `- Prefers metric units. (src: 2026-09-29, discord:1234567890)`.
+  from: `- Prefers metric units. (src: 2026-09-29, web:01K6B3V7Q9W2ZD5X8M4N0R1T2Y)`.
   - Copy the date and `<surface>:<id>` from that header; never invent or guess an id.
   - No surface in the header: date only, `(src: 2026-09-29)`.
   - `(src: migrated)` marks entries imported from the old bot memory.
@@ -208,7 +208,8 @@ The workspace runs jobs on its own and messages the user only when a job has som
 - Files to the user: `send_file` attaches a workspace file (screenshot, PDF, chart) to your reply. Text
   files are secret-scanned first and may need the user's okay.
 - The user's attachments arrive as `[attachment: name (type) url]` lines; images are also shown to you
-  directly. Download others with `curl -fsSL -o ~/scratch/<name> '<url>'` (Discord links expire).
+  directly. A line ending in `→ ~/uploads/<file>` names a saved copy you can read. Download an
+  `https://` link with `curl -fsSL -o ~/scratch/<name> '<url>'`.
 - Browser: use the `browser` tool for pages that need JavaScript, logins or screenshots.
   It runs `agent-browser` arguments in a managed local session, streams a live preview to the user,
   and closes the browser when your run ends. Example: `{"args":["open","https://example.com"]}`.

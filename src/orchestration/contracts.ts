@@ -50,14 +50,15 @@ export const RPC_METHODS = {
 
 // ── Owner display name. It lands verbatim in agent prompts, so both ends validate it. ──
 export const OWNER_NAME_MAX = 40;
-// Control characters and line/paragraph separators: a name must stay on one prompt line.
-const OWNER_NAME_FORBIDDEN = /[\p{Cc}\u2028\u2029]/u;
+// Control and format characters (bidi overrides, zero-width) and line/paragraph separators: a name must
+// stay on one prompt line and read as it renders.
+const OWNER_NAME_FORBIDDEN = /[\p{Cc}\p{Cf}\u2028\u2029]/u;
 export const ownerName = z
   .string()
   .trim()
   .min(1)
   .max(OWNER_NAME_MAX)
-  .refine((s) => !OWNER_NAME_FORBIDDEN.test(s), "must not contain line breaks or control characters");
+  .refine((s) => !OWNER_NAME_FORBIDDEN.test(s), "must not contain line breaks, control or invisible characters");
 /** `name: null` clears it. */
 export const ownerUpdateParams = z.object({ principalId: z.string(), name: ownerName.nullable() });
 export type OwnerUpdateParams = z.infer<typeof ownerUpdateParams>;

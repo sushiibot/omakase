@@ -23,13 +23,16 @@
 
 	let draft = $state('');
 	let synced: string | null | undefined;
+	let clearing = false;
 	// A newly loaded or saved name fills the field, unless you have typed something else meanwhile.
 	$effect(() => {
 		const saved = remote.data?.name;
 		untrack(() => {
 			if (saved === synced) return;
 			const typed = draft.trim();
-			if (typed === (synced ?? '') || typed === (saved ?? '')) draft = saved ?? '';
+			if (typed === (synced ?? '') || typed === (saved ?? '') || (clearing && saved === null))
+				draft = saved ?? '';
+			clearing = false;
 			synced = saved;
 		});
 	});
@@ -90,7 +93,8 @@
 						class="sm:flex-1"
 						disabled={saving}
 						onclick={() => {
-							draft = '';
+							// The field empties once the clear is saved; a failed clear keeps it.
+							clearing = true;
 							onsave?.(null);
 						}}
 					>

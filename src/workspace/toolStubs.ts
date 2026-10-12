@@ -1,4 +1,4 @@
-import { ownerLabel, ownerPossessive } from "../orchestration/ownerLabel.ts";
+import { ownerLabel, ownerLabelStart } from "../orchestration/ownerLabel.ts";
 import type { AgentSession, AgentToolResult, ExtensionAPI, ExtensionFactory, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { RPC_METHODS, type ToolCallParams, type ToolCallResult, type ToolCancelParams, type ToolManifestEntry, type ChatOrigin } from "../orchestration/contracts.ts";
 import { ConnectionClosedError, NotConnectedError, RequestTimeoutError } from "../orchestration/transport/client.ts";
@@ -47,7 +47,7 @@ export interface StubAgentContext {
 export const MAIN_AGENT: StubAgentContext = { agentId: "main", agentName: "main" };
 
 export function deniedText(ownerName?: string): string {
-  return `The owner denied this call. Do not retry it; ask ${ownerLabel(ownerName)} in chat if it still seems needed.`;
+  return `${ownerLabelStart(ownerName)} denied this call. Do not retry it; ask ${ownerLabel(ownerName)} in chat if it still seems needed.`;
 }
 export const LINK_CLOSED_TEXT = "workspace link closed; the call may or may not have completed — check before retrying";
 
@@ -125,7 +125,8 @@ export class ToolStubs {
       name: entry.name,
       label: entry.name,
       description: entry.description,
-      promptSnippet: `${entry.name}: runs through the gateway${entry.approval === "ask" ? ` and needs ${ownerPossessive(this.opts.ownerName?.())} approval in chat` : ""}`,
+      // Fixed text: a session keeps its tool list, and the system prompt names the user.
+      promptSnippet: `${entry.name}: runs through the gateway${entry.approval === "ask" ? " and needs the user's approval in chat" : ""}`,
       parameters: entry.inputSchema as ToolDefinition["parameters"],
       execute: (_toolCallId, params, signal) => this.call(entry.name, params, ctx, signal),
     };

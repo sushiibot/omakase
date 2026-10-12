@@ -9,7 +9,7 @@ import { Check } from "typebox/schema";
 import type { AuthorRef, ConversationRef, ConversationStore, SpaceMemoryStore, SurfaceId, SurfaceSession, ToolContext, ToolEntry, ToolHosts, ToolRegistry } from "../../core/contracts.ts";
 import { buildToolContextBase, createToolRegistry } from "../../core/tools/registry.ts";
 import { toolCallParams, toolCancelParams, type ToolCallParams, type ToolCallResult, type ToolCancelResult, type ToolManifestEntry } from "../contracts.ts";
-import { ownerLabel } from "../ownerLabel.ts";
+import { ownerLabel, ownerPossessive } from "../ownerLabel.ts";
 import type { ConnectionInfo } from "../transport/server.ts";
 import { getLogger } from "../../logger.ts";
 import { realTimers, type Timers } from "./progress.ts";
@@ -128,10 +128,14 @@ function newNonce(): string {
 
 const DENIED: ToolCallResult = { ok: false, error: "denied by owner", denied: true };
 const CANCELLED: ToolCallResult = { ok: false, error: "cancelled" };
-const HELD_DENIED: ToolCallResult = { ok: false, error: "denied: the owner's approval surface is unavailable, so they were never asked", denied: true };
-const HELD_OVER_CAP: ToolCallResult = { ok: false, error: `denied: ${MAX_HELD_APPROVALS} approvals are already waiting for the owner's approval surface`, denied: true };
+function heldDenied(name: string | null): ToolCallResult {
+  return { ok: false, error: `denied: ${ownerPossessive(name)} approval surface is unavailable, so they were never asked`, denied: true };
+}
+function heldOverCap(name: string | null): ToolCallResult {
+  return { ok: false, error: `denied: ${MAX_HELD_APPROVALS} approvals are already waiting for ${ownerPossessive(name)} approval surface`, denied: true };
+}
 function approvalTimedOut(name: string | null): ToolCallResult {
-  return { ok: false, error: `approval timed out (owner didn't respond within 30 min); do not retry it unless ${ownerLabel(name)} asks in chat` };
+  return { ok: false, error: `approval timed out (${ownerLabel(name)} didn't respond within 30 min); do not retry it unless ${ownerLabel(name)} asks in chat` };
 }
 
 // Default-ignorable and format characters render as nothing or reorder text, so an approved prompt could
@@ -402,7 +406,7 @@ export class WorkspaceTools {
         if (this.heldCount() >= MAX_HELD_APPROVALS) {
           this.settle(nonce, "expired");
           log.warn({ tool: p.name, callId: p.callId }, "approval denied: too many held approvals");
-          return { result: { ...HELD_OVER_CAP } };
+          return { result: heldOverCap(this.opts.ownerName?.() ?? null) };
         }
         log.error({ err, tool: p.name, callId: p.callId }, "approval held: the preferred surface has no adapter");
       }
@@ -435,7 +439,7 @@ export class WorkspaceTools {
   /** The result for an approval that settled before any prompt was posted: never an approval. */
   private settledBeforePosting(decision: ApprovalDecision, p: ToolCallParams): ToolCallResult {
     log.warn({ tool: p.name, callId: p.callId, decision }, "held approval settled without asking");
-    return decision === "cancelled" ? { ...CANCELLED } : { ...HELD_DENIED };
+    return decision === "cancelled" ? { ...CANCELLED } : heldDenied(this.opts.ownerName?.() ?? null);
   }
 
   private heldCount(): number {

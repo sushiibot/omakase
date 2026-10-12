@@ -57,21 +57,23 @@ describe("prompts without a name", () => {
 });
 
 describe("tool texts", () => {
-  test("send_file names the user when set", () => {
+  test("send_file's description stays owner-neutral, since a session keeps it", () => {
     const paths = { cwd: "/h", home: "/h", agentDir: "/a", stateDir: "/s" };
-    expect(createSendFileTool(paths, () => null, undefined, () => "Sam").description).toContain("your reply to Sam");
-    const neutral = createSendFileTool(paths, () => null);
-    expect(neutral.promptSnippet).toContain("your reply to the user");
-    expect(neutral.description).toContain("only if the user approves it");
+    const tool = createSendFileTool(paths, () => null, undefined, () => "Sam");
+    expect(tool.promptSnippet).toContain("your reply to the user");
+    expect(tool.description).toContain("only if the user approves it");
+    expect(tool.description).not.toContain("Sam");
   });
 
-  test("proxied tools run through the gateway and need the named user's approval", () => {
-    let name: string | undefined = "Sam";
-    const stubs = new ToolStubs({ principalId: "p", request: async () => ({}), ownerName: () => name });
+  test("proxied tools run through the gateway and need the user's approval", () => {
+    const stubs = new ToolStubs({ principalId: "p", request: async () => ({}), ownerName: () => "Sam" });
     const entry = { name: "file_linear_issue", description: "d", inputSchema: {}, approval: "ask" as const };
-    expect(stubs.definition(entry, { agentId: "main", agentName: "main" }).promptSnippet).toBe("file_linear_issue: runs through the gateway and needs Sam's approval in chat");
-    name = undefined;
     expect(stubs.definition(entry, { agentId: "main", agentName: "main" }).promptSnippet).toBe("file_linear_issue: runs through the gateway and needs the user's approval in chat");
+  });
+
+  test("a denial names one person", () => {
+    expect(deniedText("Sam")).toStartWith("Sam denied this call.");
+    expect(deniedText()).toStartWith("The user denied this call. Do not retry it; ask the user in chat");
   });
 });
 

@@ -366,7 +366,7 @@ describe("tool/call — approval ask", () => {
     await until(() => surface.prompts.length > 0 && timers.handles.size > 0);
     timers.fire(APPROVAL_TIMEOUT_MS);
     const res = await pending;
-    expect(res).toMatchObject({ ok: false, error: expect.stringContaining("approval timed out (owner didn't respond") });
+    expect(res).toMatchObject({ ok: false, error: expect.stringContaining("approval timed out (the user didn't respond") });
     expect(res).not.toHaveProperty("denied");
     expect(linear.calls).toHaveLength(0);
     expect(surface.resolutions[0]!.decision).toBe("timeout");

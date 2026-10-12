@@ -27,7 +27,7 @@ export function parseOwnerNameInput(raw: unknown): { ok: true; name: string | nu
   if (!value) return { ok: true, name: null };
   if (value.length > OWNER_NAME_MAX) return { ok: false, error: `Use ${OWNER_NAME_MAX} characters or fewer.` };
   const name = ownerName.safeParse(value);
-  return name.success ? { ok: true, name: name.data } : { ok: false, error: "Use one line, without control characters." };
+  return name.success ? { ok: true, name: name.data } : { ok: false, error: "Use one line, without control or invisible characters." };
 }
 
 /** GET and POST /api/settings/owner-name → {name}. A saved change goes to the workspace through `onChange`. */

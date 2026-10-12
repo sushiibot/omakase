@@ -17,5 +17,6 @@ export function ownerPossessive(name: Name): string {
 
 /** The system-prompt line that names the user; undefined when no name is set. */
 export function ownerNameLine(name: Name): string | undefined {
-  return name ? `The user's name is ${name}.` : undefined;
+  if (!name) return undefined;
+  return `The user's name is ${name}${name.endsWith(".") ? "" : "."}`;
 }
