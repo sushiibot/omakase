@@ -1,43 +1,28 @@
-# The personal web app (SvelteKit static build); only the bot image serves it.
+# The web app (SvelteKit static build); only the gateway image serves it.
 # Static assets are architecture-independent; build once natively, including for arm64 images.
 FROM --platform=$BUILDPLATFORM oven/bun:1 AS web-build
 WORKDIR /web
 COPY web/package.json web/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY web/ ./
-# No commit SHA here: it would change the web version (and re-prompt "Update ready") on bot-only deploys.
+# No commit SHA here: it would change the web version (and re-prompt "Update ready") on server-only deploys.
 # Without APP_VERSION the build versions itself from a hash of web/'s inputs.
 ARG APP_VERSION
 RUN APP_VERSION="${APP_VERSION}" bun run build
 
 FROM oven/bun:1 AS tools
 
-# openssh-client: ssh-agent/ssh-add/ssh for wiki-sync's git push auth (docker-entrypoint.sh) and
-# git itself, for simple-git's clone/fetch/push. Neither ships in the base image.
-# poppler-utils: pdftotext/pdftoppm for wiki-sync PDF attachment handling.
-# ripgrep: targeted search over the synced wiki for the search_wiki agent tool (src/modules/wiki-sync/search.ts).
+# git + openssh-client: simple-git's clone/fetch/push and the agent's own git use. Neither ships in the base image.
+# poppler-utils: pdftotext/pdftoppm for the workspace documents skill.
+# ripgrep: the workspace's history and session search.
 # ffmpeg: bounded local decoding and silence-aware chunks for speech transcription.
 RUN apt-get update && apt-get install -y --no-install-recommends openssh-client git curl poppler-utils ripgrep ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# lychee: link checker wiki-sync's commit_and_push tool runs before every commit to catch dead
-# relative wiki links (see src/modules/wiki-sync/linkCheck.ts) -- a static binary, not an npm
-# package, so it's fetched here rather than through bun install. TARGETARCH is set automatically
-# by Docker buildx; mapped to lychee's own arch-naming since they don't match Docker's.
-ARG LYCHEE_VERSION=0.24.2
-ARG TARGETARCH
-RUN set -eu; \
-    case "${TARGETARCH}" in \
-      amd64) LYCHEE_ARCH=x86_64-unknown-linux-gnu ;; \
-      arm64) LYCHEE_ARCH=aarch64-unknown-linux-gnu ;; \
-      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac; \
-    curl -fsSL "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/lychee-${LYCHEE_ARCH}.tar.gz" \
-      | tar -xz -C /usr/local/bin --strip-components=1 "lychee-${LYCHEE_ARCH}/lychee"
-
 # gh: the GitHub CLI, so a coding agent can open PRs itself (git push + gh pr create), authenticated
-# by a GH_TOKEN in its shell. Static binary, same TARGETARCH fetch pattern as lychee.
+# by a GH_TOKEN in its shell. Static binary; TARGETARCH is set by Docker buildx.
 ARG GH_VERSION=2.63.2
+ARG TARGETARCH
 RUN set -eu; \
     curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH}.tar.gz" \
       | tar -xz -C /usr/local/bin --strip-components=2 "gh_${GH_VERSION}_linux_${TARGETARCH}/bin/gh"
@@ -66,24 +51,8 @@ ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium \
 
 WORKDIR /app
 
-FROM tools AS base
-
-COPY package.json bun.lock* ./
-RUN bun install --production --frozen-lockfile
-
-COPY . .
-
-RUN mkdir -p /data
-RUN chmod +x docker-entrypoint.sh
-
-# Documentation only — mirrors the MCP_BRIDGE_PORT default; override that env var and this drifts.
-EXPOSE 8787
-
-ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["bun", "src/index.ts"]
-
-# Personal-agent workspace: same toolchain, run as uid 1000 with user-space installs under HOME
-# (apt stays root-only). Deployed as its own compose project, independent of the bot.
+# Workspace: same toolchain, run as uid 1000 with user-space installs under HOME
+# (apt stays root-only). Deployed as its own compose project, independent of the gateway.
 # Tools and user setup come before the source copy, so a code-only change rebuilds just the app layers.
 FROM tools AS workspace
 RUN usermod -l agent -d /data/home bun && groupmod -n agent bun \
@@ -133,8 +102,15 @@ USER agent
 ENTRYPOINT ["./scripts/workspace-entrypoint.sh"]
 CMD ["bun", "run", "workspace"]
 
-# Default target: the bot.
-FROM base AS bot
+# Default target: the gateway (web app server and workspace control plane).
+FROM tools AS gateway
+COPY package.json bun.lock* ./
+RUN bun install --production --frozen-lockfile
+COPY . .
+RUN mkdir -p /data
 # WEB_DEV_LOGIN is honoured only outside production, so the image must never default to dev.
 ENV NODE_ENV=production
 COPY --from=web-build /web/build /app/web/build
+# Documentation only: the ORCH_PORT and WEB_PORT defaults.
+EXPOSE 8788 8790
+CMD ["bun", "src/personal.ts"]
