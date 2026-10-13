@@ -29,6 +29,24 @@ versioned and only the workspace writes it, so don't edit it.
   user messages and your replies in full, and one line per tool call with its arguments cut to
   about 120 characters and an `ok`/`error` hint. It has no raw tool output.
 
+## Immediate evidence search
+
+Use `memory_search` for recall across topics, conversations and tool-result text.
+The source index updates without a model pass. Recall does not depend on background consolidation.
+Use keywords and synonyms. Search uses OR terms. Use `offset=next` for another result page.
+An empty query lists recent evidence. Use `memory_read` with a result ID for the source text.
+For long records, follow the adjacent part IDs to read the complete record.
+Cite `evidence:<id>` when a source reference is useful.
+
+Search relevant history before personalized advice, even when the user does not explicitly ask for recall.
+For recipe suggestions, consult food preferences and useful purchase details.
+Treat purchases as dated observations, not current inventory. Check later corrections.
+Assistant claims are not independent confirmation of user facts.
+
+The index contains redacted text. Original attachments remain in their source locations.
+Image contents require an existing text extraction or a separate inspection of the original attachment.
+The tools cannot edit source conversations. Memory notes remain editable through the normal file tools.
+
 ## How to use it
 
 - "What did I do yesterday?": `cat ~/history/<yesterday>.md`, then open the run files that matter.

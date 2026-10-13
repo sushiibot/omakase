@@ -9,6 +9,8 @@ import { ProactiveLimiter, createHeartbeatJob } from "./proactive.ts";
 import { RunLog } from "./runLog.ts";
 import { jobSessionDir } from "./sessionPaths.ts";
 import { ToolStubs } from "./toolStubs.ts";
+import { runToolFreeJob } from "./jobSession.ts";
+import { MemoryEvidence } from "./memoryEvidence.ts";
 
 // Real Pi 0.99.1 job sessions; the only fake is fetch.
 const BASE = "http://openrouter.test/v1";
@@ -100,6 +102,41 @@ afterEach(() => {
 });
 
 describe("heartbeat on a real Pi session", () => {
+  test("dreaming searches full source evidence through read-only tools and cannot rewrite conversations", async () => {
+    const cfg = config();
+    mkdirSync(join(cfg.agentDir, "chat"), { recursive: true });
+    const source = join(cfg.agentDir, "chat/grocery.jsonl");
+    const original = [
+      { type: "session" },
+      { type: "message", timestamp: "2026-10-12T10:00:00Z", message: { role: "toolResult", toolName: "browser", content: "Whole Foods: butter beans 2 cans, cannellini beans 1 can." } },
+    ].map(e => JSON.stringify(e)).join("\n") + "\n";
+    writeFileSync(source, original);
+    const evidence = new MemoryEvidence(cfg.home, cfg.agentDir);
+    try {
+      await evidence.refresh();
+      const id = evidence.search("cannellini").results[0]!.id;
+      const reads = new Map();
+      script = [
+        { tool: { name: "write", args: { path: source, content: "overwritten" } } },
+        { tool: { name: "bash", args: { command: `rm '${source}'` } } },
+        { tool: { name: "read", args: { path: join(cfg.agentDir, "auth.json") } } },
+        { tool: { name: "memory_search", args: { query: "cannellini" } } },
+        { tool: { name: "memory_read", args: { id } } },
+        { text: "Investigated the historical order." },
+      ];
+      await runToolFreeJob(cfg, { agentName: "job:consolidation", systemPrompt: "Investigate memory with read-only tools.", prompt: "Check the order.",
+        runs: new RunLog(cfg.stateDir), selector: new BackendSelector({ primaryEnabled: false }), readOnlyTools: {}, evidenceTools: evidence.tools(reads),
+      });
+      for (const body of bodies) expect(toolNames(body)).toEqual(["find", "grep", "ls", "memory_read", "memory_search", "read"]);
+      expect(readFileSync(source, "utf8")).toBe(original);
+      expect(reads.get(id)?.text).toContain("cannellini beans 1 can");
+      const result = JSON.stringify(bodies.at(-1)!.messages);
+      expect(result).toContain("Tool write not found");
+      expect(result).toContain("Tool bash not found");
+      expect(result).toContain("Blocked by the secret guard");
+      expect(result).not.toContain(AUTH_SECRET);
+    } finally { evidence.close(); }
+  });
   test("read-only tools only: no bash, no memory writes, no credential reads; stubs run as job:heartbeat; logged and delivered", async () => {
     const cfg = config();
     const runs = new RunLog(cfg.stateDir);

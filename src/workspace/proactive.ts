@@ -26,7 +26,7 @@ export function heartbeatPrompt(ownerName?: string): string {
   );
 }
 /** Names schedule.md can't use: the built-in jobs. */
-export const RESERVED_JOB_NAMES = [HEARTBEAT_JOB, "consolidation"] as const;
+export const RESERVED_JOB_NAMES = [HEARTBEAT_JOB, "consolidation", "memory-capture"] as const;
 /** A daily job's window for the one-message-per-window limit; under 24 h so a DST day's 23 h gap still sends. */
 export const DAILY_JOB_WINDOW_MS = 20 * 60 * 60_000;
 const DAY_MS = 24 * 60 * 60_000;

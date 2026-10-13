@@ -2,6 +2,7 @@
 /** sha256 of every earlier shipped version of each upgradable home template file (not the current one). */
 export const SHIPPED_TEMPLATE_HASHES: Record<string, readonly string[]> = {
   "AGENTS.md": [
+    "074a83b814cca879a56f5ad5ad676c7c8dff6bab1cd9810c9e5810957f1da9cd",
     "1c7f4c2a2c4d6486a40c15763787b41a67a653d233ef12811530317f007a3ca0",
     "200998d25e337b4b1210c77ae72ebee4e56a5eadd436c363e19fe23de26a90e5",
     "25fea718271e53a647999eb771c51e2f6606d8ed33184095dc3d54eff0cff2b8",
@@ -51,6 +52,7 @@ export const SHIPPED_TEMPLATE_HASHES: Record<string, readonly string[]> = {
     "22b564392c2806df78ee94354d5eb275389ecda442eafbc16316db64383b773c",
     "4e9bdc983365c8f6061d444b30773a5fee6e3ec1448e6dbe9d2c18ed9ac5beb0",
     "82acfdd5715d77766e9a130da9ba1c41d7c42624487e0e3e6f92f4711403fbf2",
+    "99ddc614bd36f008602c8d0fd7eda9980668ae2bb9d00590256d7bb52615fd17",
     "aa19e94557e5c3dc454d6bc2772f4d217ea87c0e2a29bc66bf7e9cd22ae1b5c6",
     "b7000898cf1bed4d187adbd10193a9765a26b7be47b042c67a10e259f059546d",
     "e4e3b694b2c481b7bc0f4211da6dbbe5ac3c286adde31a7a5fcb984ab2435f52",

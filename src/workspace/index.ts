@@ -22,6 +22,7 @@ import { memoryCatalogSignature, memoryFilesSignature, sessionFlushRanThisCycle,
 import { scanMemoryForSecrets } from "./memoryGuard.ts";
 import { RunLog, recordRotation } from "./runLog.ts";
 import { HistoryWriter, recordHistory } from "./history.ts";
+import { memoryEvidence } from "./memoryEvidence.ts";
 import { createConsolidationJob, waitIdle } from "./consolidation.ts";
 import { ToolStubs, TOOL_TIMEOUT_MS } from "./toolStubs.ts";
 import { startExternalFilesBridge } from "./externalFiles.ts";
@@ -73,7 +74,10 @@ async function main(): Promise<void> {
   const orphans = runLog.reconcileOrphans();
   if (orphans) log.warn({ orphans }, "closed runs left open by a previous process");
   const historyLog = getLogger("workspace.history");
-  const history = new HistoryWriter({ home: config.home, agentDir: config.agentDir, tz: config.tz });
+  const evidence = memoryEvidence(config.home, config.agentDir);
+  const history = new HistoryWriter({ home: config.home, agentDir: config.agentDir, tz: config.tz,
+    onWritten: () => { void evidence.refresh().catch(err => historyLog.warn({ err }, "memory evidence indexing failed; retrieval will retry")); },
+  });
   let client: OrchestrationClient | null = null;
   const taskStore = new TaskStore(config.stateDir, config.home);
   const recordedRuns = notifyRunChanges(recordHistory(runLog, history, historyLog), (method, params) => client?.notify(method, params), config.principalId, log);
@@ -283,7 +287,16 @@ async function main(): Promise<void> {
   const consolidation = createConsolidationJob(config, { runs, selector, live: topics });
   // Its memory and task writes are main-side: the subagents' protected watch must not undo them.
   // Two idle waits and a model call can each take 10 min, so the default max runtime would flag a normal slow run.
-  scheduler.register({ ...consolidation, maxRunMs: 60 * 60_000, run: (ctx) => subagents.whileMainWrites(() => consolidation.run(ctx), ["USER.md", "MEMORY.md", "DREAMS.md", "TASKS.md", "tasks"]) });
+  let memoryRun: ReturnType<typeof consolidation.run> | undefined;
+  const runMemory: typeof consolidation.run = (ctx) => {
+    if (memoryRun) return memoryRun;
+    memoryRun = subagents.whileMainWrites(() => consolidation.run(ctx), ["USER.md", "MEMORY.md", "DREAMS.md", "memory", "TASKS.md", "tasks"])
+      .finally(() => { memoryRun = undefined; });
+    return memoryRun;
+  };
+  scheduler.register({ ...consolidation, maxRunMs: 60 * 60_000, run: runMemory });
+  // Coalesce extraction after chat activity; immediate recall uses the source index and never waits for this.
+  scheduler.register({ name: "memory-capture", schedule: { when: { kind: "every", minutes: 5 } }, maxRunMs: 60 * 60_000, run: runMemory });
   wireProactiveJobs(scheduler, {
     scheduledChecks: () => `Pending one-time checks: ${JSON.stringify(wakeups.list().map(({ key, title, at, conversationId, taskId }) => ({ key, title, at, conversationId, taskId })))}. These items already have follow-ups. Do not repeat them unless something urgent changed. Reuse existing unanswered requests.`,
     config,

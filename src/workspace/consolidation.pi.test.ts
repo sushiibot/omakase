@@ -118,7 +118,7 @@ afterEach(() => {
 });
 
 describe("consolidation job on a real Pi session", () => {
-  test("ChatGPT limit → OpenRouter retry; no tools on the wire; applied; logged as job:consolidation", async () => {
+  test("ChatGPT limit → OpenRouter retry; read-only evidence tools on the wire; applied; logged as job:consolidation", async () => {
     signInChatGpt();
     stubFetch((url) => (isChatGpt(url) ? jsonResponse(429, USAGE_LIMIT_BODY) : isOpenRouter(url) ? openRouterReply(PROPOSAL) : undefined));
     const runs = new RunLog(config().stateDir);
@@ -129,7 +129,7 @@ describe("consolidation job on a real Pi session", () => {
     expect(requests.filter(isChatGpt)).toHaveLength(1);
     expect(requests.filter(isOpenRouter)).toHaveLength(1);
     const body = bodies[0]!;
-    expect(body.tools ?? []).toEqual([]);
+    expect((body.tools ?? []).map(t => (t as { function: { name: string } }).function.name).sort()).toEqual(["find", "grep", "ls", "memory_read", "memory_search", "read"]);
     const system = JSON.stringify(body.messages.filter((m) => m.role === "system"));
     expect(system).toContain(systemPrompt().slice(0, 60));
     expect(JSON.stringify(body)).not.toContain(AGENTS_MARKER);

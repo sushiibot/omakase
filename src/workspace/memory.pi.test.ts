@@ -6,6 +6,7 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_ECONOMY, type WorkspaceConfig } from "./config.ts";
 import { MEMORY_PATHS, commitHome, scaffoldHome } from "./home.ts";
 import { FLUSH_MARKER, memoryCatalogSignature, memoryFilesSignature, sessionFlushRanThisCycle, writeResetHandoff } from "./memoryFlush.ts";
+import { memoryEvidence } from "./memoryEvidence.ts";
 import { PersonalSession, type ChatTransport } from "./personalSession.ts";
 import { compactSession, compactionTrigger, createPiChatSessionFactory, idleRotateMs, loadedContextFiles, recapSession, reloadContext } from "./piChatSession.ts";
 import { runnerGit } from "../agentRuntime/runnerGit.ts";
@@ -153,6 +154,32 @@ describe.each(["main", "long-lived-topic"])("memory upkeep on a real Pi %s sessi
     kind: "user" as const,
     author: { id: "1", name: "drk" },
   });
+
+  test("a fresh session can retrieve exact purchases without a dream or a saved topic", async () => {
+    const { personal, delivered } = await host(conversationId);
+    try {
+      script({ text: "I can use those purchases for recipe suggestions." });
+      await personal.handleMessage(user("groceries", "My Whole Foods order: butter beans 2 cans, cannellini beans 1 can."));
+      await until(() => delivered.length === 1 && personal.isIdle());
+      const cfg = config();
+      const evidence = memoryEvidence(cfg.home, cfg.agentDir);
+      await evidence.refresh();
+      const exact = evidence.search("cannellini").results.find(r => r.role === "user")!;
+      expect(exact).toBeDefined();
+      script({ text: "NO_REPLY" });
+      await personal.handleNew();
+      script(
+        { tool: { name: "memory_search", args: { query: "Whole Foods beans" } } },
+        { tool: { name: "memory_read", args: { id: exact.id } } },
+        { text: "Your order included butter beans and cannellini beans. Those could guide dinner ideas, although the order does not establish what remains on hand." },
+      );
+      await personal.handleMessage(user("dinner", "What should I cook?"));
+      await until(() => delivered.length === 2 && personal.isIdle());
+      const live = (personal as unknown as { session: AgentSession }).session;
+      expect(live.systemPrompt).toContain("Use memory_search and memory_read proactively");
+      expect(JSON.stringify(live.messages.filter(m => m.role === "toolResult"))).toContain("butter beans 2 cans");
+    } finally { await personal.dispose(); }
+  }, 20_000);
 
   test("a topic and catalog survive reset; catalog changes refresh the live orientation", async () => {
     const { personal, delivered, home, log } = await host(conversationId);

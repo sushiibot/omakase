@@ -35,6 +35,7 @@ export interface HistoryOptions {
   agentDir: string;
   tz: string;
   now?: () => Date;
+  onWritten?: () => void;
 }
 
 export type SessionEndReason = "rotate" | "new" | "compaction";
@@ -286,6 +287,7 @@ export class HistoryWriter {
     const tools = transcript?.toolCount ?? 0;
     const agent = (run.agentName === "main" || run.agentName.startsWith("topic:")) ? kind : `${kind}/${run.agentName}`;
     this.appendDaily(run.startedAt, RUNS_HEADING, `- ${start.time} ${agent} — ${topic} (${tools} tool${tools === 1 ? "" : "s"}, ${run.status}) [${run.runId}](${rel})`);
+    this.opts.onWritten?.();
     return file;
   }
 

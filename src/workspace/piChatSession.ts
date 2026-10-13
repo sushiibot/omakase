@@ -1,4 +1,5 @@
 import { OwnerRequests, ownerRequestAsks } from "./ownerRequests.ts";
+import { memoryEvidence, MEMORY_TOOL_NAMES, RECALL_INSTRUCTIONS } from "./memoryEvidence.ts";
 import { ownerNameLine } from "../orchestration/ownerLabel.ts";
 import { taskAwareness } from "./taskAwareness.ts";
 import type { TaskStore } from "./taskStore.ts";
@@ -58,7 +59,7 @@ const memoryLog = getLogger("workspace.memory");
 const autoModeLog = getLogger("workspace.automode");
 
 const PROVIDER_ID = "sushii-workspace-openrouter";
-const WORKSPACE_TOOLS = ["read", "edit", "write", "grep", "find", "ls", "bash", SEND_FILE_TOOL];
+const WORKSPACE_TOOLS = ["read", "edit", "write", "grep", "find", "ls", "bash", SEND_FILE_TOOL, ...MEMORY_TOOL_NAMES];
 
 /** Pi's bash under the agent env allowlist, minus PI_* (PI_CODING_AGENT_DIR and PI_SESSION_FILE point at the agent dir).
  *  `WS_RUN_ID` is the run in progress at spawn time, so `ws-runs` can default to it. */
@@ -294,7 +295,7 @@ export function createPiChatSessionFactory(
       // Read on every reload, so a name changed in the app reaches the next session.
       appendSystemPromptOverride: (base) => {
         const line = ownerNameLine(config.ownerName);
-        return line ? [...base, line] : base;
+        return [...base, ...(line ? [line] : []), RECALL_INSTRUCTIONS];
       },
       // Only the factories below: the agent can write ~/.pi and <cwd>/.pi, so discovered extensions would run its code in-process.
       noExtensions: true,
@@ -393,7 +394,7 @@ export function createPiChatSessionFactory(
         // Pi filters customTools by this allowlist: "bash" here is the env-allowlisted override.
         // Pi freezes this at creation, so it names every tool the bot may offer later, registered or not.
         tools: [...WORKSPACE_TOOLS, ...wakeupToolNames, ...ownerRequestToolNames, ...browserTools, ...topicToolNames, ...pushTools, ...connectorTools, ...delegate, ...(stubs ? KNOWN_PROXIED_TOOLS : [])],
-        customTools: [bashTool, sendFileTool, ...wakeupTools, ...ownerRequestTools, ...(browser ? [browser.tool()] : []), ...topicTools, ...(opts.github ? [createGitHubPushTool(cwd, opts.github, config.agentDir)] : [])],
+        customTools: [bashTool, sendFileTool, ...memoryEvidence(config.home, config.agentDir).tools(), ...wakeupTools, ...ownerRequestTools, ...(browser ? [browser.tool()] : []), ...topicTools, ...(opts.github ? [createGitHubPushTool(cwd, opts.github, config.agentDir)] : [])],
         excludeTools: ["ask_question"],
         sessionManager,
       }));

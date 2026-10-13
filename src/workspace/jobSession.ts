@@ -1,7 +1,7 @@
 import { autoCompactionSettings } from "./contextEconomy.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgentSession, AgentSessionEvent, ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, AgentSessionEvent, ExtensionFactory, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { assertExactTools, createOpenRouterModel } from "../agentRuntime/piShared.ts";
 import { getLogger } from "../logger.ts";
 import type { WorkspaceConfig } from "./config.ts";
@@ -50,6 +50,8 @@ export interface ToolFreeJobInput {
   contextFiles?: Array<"AGENTS.md" | "USER.md">;
   /** Read-only tools (read/grep/find/ls, plus the bot-proxied stubs when given) instead of none. */
   readOnlyTools?: { toolStubs?: ToolStubs };
+  /** Host-supplied read-only tools, never discovered from the workspace. */
+  evidenceTools?: ToolDefinition[];
 }
 
 export interface ToolFreeJobResult {
@@ -116,6 +118,8 @@ export async function runToolFreeJob(config: WorkspaceConfig, input: ToolFreeJob
   const sessionRef: { current: AgentSession | null } = { current: null };
   const systemPrompt = jobSystemPrompt(config.home, input.systemPrompt, input.contextFiles);
   const withTools = input.readOnlyTools !== undefined;
+  const evidenceTools = input.evidenceTools ?? [];
+  const evidenceNames = evidenceTools.map(t => t.name);
   // Approval-gated tools would park a job past its own timeout; jobs only get tools that run without asking.
   // A job never launches coding agents: their results report to a conversation, which a job has none of.
   const jobStubTools = (input.readOnlyTools?.toolStubs
@@ -182,12 +186,12 @@ export async function runToolFreeJob(config: WorkspaceConfig, input: ToolFreeJob
       settingsManager,
       sessionManager,
       ...(withTools
-        ? { tools: [...JOB_READ_TOOLS, ...(stubs ? jobStubTools : [])], excludeTools: ["ask_question"] }
+        ? { tools: [...JOB_READ_TOOLS, ...evidenceNames, ...(stubs ? jobStubTools : [])], customTools: evidenceTools, excludeTools: ["ask_question"] }
         : { tools: [], noTools: "all" as const }),
     }));
     sessionRef.current = session;
     if (model.provider === CHATGPT_PROVIDER) restoreChatGptThinking(session);
-    const builtins = withTools ? [...JOB_READ_TOOLS] : [];
+    const builtins = withTools ? [...JOB_READ_TOOLS, ...evidenceNames] : [];
     // The tools allowlist keeps approval-gated stubs out of the session even though the binding registers them.
     const allowed = (names: string[]) => names.filter((n) => jobStubTools.includes(n));
     assertExactTools(session, [...builtins, ...allowed(stubs?.registeredNames() ?? [])], input.agentName, [...builtins, ...allowed(stubs?.offered() ?? [])]);
