@@ -540,7 +540,7 @@ Capture each screen that changed in every state that applies, at 412x915 unless 
 
 A UX bug blocks when any of these is true:
 
-- A check in this doc fails (axe violation, a target under 24px anywhere, a coarse-pointer hit area under 44px other than the exceptions documented above (line-variant tabs at 40px, the row axis of stock-gap rows at face plus 8px, `sm`/`xs` buttons at face plus 16px wide, stock `SidebarMenuAction`, and full-width Input and Textarea), overflow at 320px, the scroll-jank test).
+- A check in this doc fails (axe violation, a target under 24px anywhere, a coarse-pointer hit area under 44px other than the exceptions documented above (line-variant tabs at 40px, the row axis of stock-gap rows at face plus 8px, `sm`/`xs` buttons at face plus 16px wide, stock `SidebarMenuAction`, a header subtitle control at 28px, and full-width Input and Textarea), overflow at 320px, the scroll-jank test).
 - Data loss: a typed message, a draft edit, or a pending approval can disappear without the user choosing it.
 - A blocking wait, failure, or required action has no visible feedback. Cached background refreshes can remain quiet.
 - Back does the wrong thing (exits the app, skips a screen, leaves an overlay open).
