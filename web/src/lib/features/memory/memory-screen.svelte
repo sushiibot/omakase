@@ -179,7 +179,7 @@
 				}}
 			>
 				<Section title={heading(value)} tone="list">
-					<Item.Group class="gap-0">
+					<Item.Group>
 						{#each items as item (item.kind === 'write' ? `w:${item.w.id}` : `f:${item.f.id}`)}
 							<div role="listitem">{@render row(item)}</div>
 						{/each}

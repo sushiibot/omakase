@@ -27,6 +27,7 @@
 		online = true,
 		busy = false,
 		result = null,
+		memoryHref = '/memory',
 		runHref = (id) => `/runs/${id}`,
 		threadHref = (id) => `/chats/${id}`,
 		fileHref = (id) => `/memory/files/${id}`,
@@ -43,6 +44,7 @@
 		busy?: boolean;
 		/** What the last revert or restore did, for the toast. */
 		result?: { kind: 'reverted' | 'restored' | 'failed'; text: string } | null;
+		memoryHref?: string;
 		runHref?: (id: string) => string;
 		threadHref?: (id: string) => string;
 		fileHref?: (id: string) => string;
@@ -117,12 +119,12 @@
 
 {#snippet breadcrumb()}
 	<Breadcrumb.Root>
-		<Breadcrumb.List>
-			<Breadcrumb.Item><Breadcrumb.Link href={back.href}>Memory</Breadcrumb.Link></Breadcrumb.Item>
+		<Breadcrumb.List class="flex-nowrap">
+			<Breadcrumb.Item><Breadcrumb.Link href={memoryHref}>Memory</Breadcrumb.Link></Breadcrumb.Item>
 			<Breadcrumb.Separator />
 			{#if write}
-				<Breadcrumb.Item>
-					<Breadcrumb.Link href={fileHref(write.fileId)} class="font-mono"
+				<Breadcrumb.Item class="min-w-0">
+					<Breadcrumb.Link href={fileHref(write.fileId)} class="truncate font-mono"
 						>{write.path}</Breadcrumb.Link
 					>
 				</Breadcrumb.Item>
@@ -159,7 +161,7 @@
 				<Button
 					variant="link"
 					href={fileHref(write.fileId)}
-					class="h-auto min-h-8 self-start px-0 text-left font-mono text-xs font-normal [overflow-wrap:anywhere] whitespace-normal text-muted-foreground hover:text-foreground"
+					class="h-auto min-h-8 self-start px-0 text-left font-mono text-xs font-normal [overflow-wrap:anywhere] whitespace-normal text-muted-foreground hover:text-foreground md:hidden"
 					>{write.path}</Button
 				>
 				<PageIntro title={write.summary}>

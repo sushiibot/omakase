@@ -19,8 +19,9 @@
 				<Item.Description>{skill.description}</Item.Description>
 				<p class="text-xs text-muted-foreground tabular-nums">
 					v{skill.version} · {skill.uses}
-					{skill.uses === 1 ? 'run' : 'runs'}{#if skill.lastUsed}
-						· last {ago(skill.lastUsed, now)}{/if}
+					{skill.uses === 1
+						? 'run'
+						: 'runs'}{#if skill.lastUsed}{` · last ${ago(skill.lastUsed, now)}`}{/if}
 				</p>
 			</Item.Content>
 			<Item.Actions>

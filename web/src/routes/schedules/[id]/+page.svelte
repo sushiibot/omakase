@@ -30,6 +30,7 @@
 	{now}
 	back={{ href: resolve('/schedules'), label: 'Back', onclick: goBack }}
 	online={pwa.online}
+	schedulesHref={resolve('/schedules')}
 	busy={schedules.busy}
 	error={schedules.error}
 	test={schedules.tests[id]}

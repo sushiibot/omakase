@@ -83,6 +83,30 @@ test('live preview opens automatically, hide stops streaming, expand and Android
 	await expect.poll(() => stream.sockets.at(-1)?.url()).toContain('fps=5');
 });
 
+test('the expanded viewer fills the screen, closes on Escape and returns focus to Expand', async ({
+	page
+}) => {
+	await preview(page);
+	await page.goto('/chat');
+	const region = page.getByRole('region', { name: 'Browser preview' });
+	await expect(region.getByRole('img')).toBeVisible();
+	const expand = region.getByRole('button', { name: 'Expand browser preview' });
+	await expand.click();
+	const viewer = page.getByRole('dialog', { name: /example\.com/ });
+	await expect(viewer).toBeVisible();
+	await expect(viewer.getByRole('img')).toBeVisible();
+	const size = page.viewportSize()!;
+	await expect
+		.poll(async () => {
+			const box = (await viewer.boundingBox())!;
+			return [box.x, box.y, box.width, box.height].map(Math.round);
+		})
+		.toEqual([0, 0, size.width, size.height]);
+	await page.keyboard.press('Escape');
+	await expect(viewer).toBeHidden();
+	await expect(expand).toBeFocused();
+});
+
 test('hide survives navigation and reconnection, but a different task opens its preview', async ({
 	page
 }) => {

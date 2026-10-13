@@ -89,7 +89,7 @@
 									aria-hidden="true"
 								/>{/if}
 						{/snippet}
-						<!-- gap-0 keeps rows that are not an Item contiguous; Item rows set their own gap. -->
+						<!-- gap-0 keeps rows that are not an Item contiguous; Item size="sm" rows get the group's stock has-data gap. -->
 						<ItemGroup class="gap-0">
 							{#each section.items as item (key(item))}
 								<div role="listitem">{@render row(item)}</div>

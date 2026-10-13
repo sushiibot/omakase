@@ -30,6 +30,7 @@
 	{now}
 	back={{ href: resolve('/memory'), label: 'Back', onclick: goBack }}
 	online={pwa.online}
+	memoryHref={resolve('/memory')}
 	writeHref={(w) => resolve('/memory/writes/[id]', { id: w })}
 	onretry={() => void remote.refetch()}
 />

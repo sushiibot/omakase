@@ -96,11 +96,11 @@
 
 {#snippet breadcrumb()}
 	<Breadcrumb.Root>
-		<Breadcrumb.List>
+		<Breadcrumb.List class="flex-nowrap">
 			<Breadcrumb.Item><Breadcrumb.Link href={skillsHref}>Skills</Breadcrumb.Link></Breadcrumb.Item>
 			<Breadcrumb.Separator />
-			<Breadcrumb.Item>
-				<Breadcrumb.Page class="font-mono">{skill?.name}</Breadcrumb.Page>
+			<Breadcrumb.Item class="min-w-0">
+				<Breadcrumb.Page class="truncate font-mono">{skill?.name}</Breadcrumb.Page>
 			</Breadcrumb.Item>
 		</Breadcrumb.List>
 	</Breadcrumb.Root>
@@ -178,10 +178,11 @@
 
 			{#if skill.runs.length}
 				<Section title="Runs that loaded it">
-					<Item.Group class="gap-0">
-						{#each skill.runs as r (r.id)}
+					<Item.Group class="overflow-hidden rounded-xl border has-data-[size=sm]:gap-0">
+						{#each skill.runs as r, i (r.id)}
 							<div role="listitem">
-								<Item.Root size="sm" class="any-pointer-coarse:min-h-12">
+								{#if i}<Item.Separator class="my-0" />{/if}
+								<Item.Root size="sm" class="rounded-none any-pointer-coarse:min-h-12">
 									{#snippet child({ props })}
 										<a href={runHref(r.id)} {...props}>
 											<Item.Media variant="icon">

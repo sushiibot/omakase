@@ -39,6 +39,7 @@
 	{now}
 	back={{ href: resolve('/memory'), label: 'Back', onclick: goBack }}
 	online={pwa.online}
+	memoryHref={resolve('/memory')}
 	busy={memory.busy}
 	result={memory.result?.id === id ? memory.result : null}
 	runHref={(run) => resolve('/runs/[id]', { id: run })}

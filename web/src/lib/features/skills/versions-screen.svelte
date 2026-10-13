@@ -5,6 +5,7 @@
 	import * as Breadcrumb from '$lib/ui/breadcrumb';
 	import { Button } from '$lib/ui/button';
 	import * as Card from '$lib/ui/card';
+	import * as Collapsible from '$lib/ui/collapsible';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import DiffView from '$lib/ui/diff/diff-view.svelte';
 	import { ago } from '$lib/ui/format/time';
@@ -53,11 +54,11 @@
 
 {#snippet breadcrumb()}
 	<Breadcrumb.Root>
-		<Breadcrumb.List>
+		<Breadcrumb.List class="flex-nowrap">
 			<Breadcrumb.Item><Breadcrumb.Link href={skillsHref}>Skills</Breadcrumb.Link></Breadcrumb.Item>
 			<Breadcrumb.Separator />
-			<Breadcrumb.Item>
-				<Breadcrumb.Link href={back.href} class="font-mono">{skill?.name}</Breadcrumb.Link>
+			<Breadcrumb.Item class="min-w-0">
+				<Breadcrumb.Link href={back.href} class="truncate font-mono">{skill?.name}</Breadcrumb.Link>
 			</Breadcrumb.Item>
 			<Breadcrumb.Separator />
 			<Breadcrumb.Item><Breadcrumb.Page>Versions</Breadcrumb.Page></Breadcrumb.Item>
@@ -92,36 +93,35 @@
 					<ol class="flex flex-col gap-2">
 						{#each skill.versions as v, i (v.version)}
 							<li>
-								<details
-									class="group rounded-xl border"
-									open={open.length ? open.includes(v.version) : i === 0}
-								>
-									<summary
-										class="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2.5 [&::-webkit-details-marker]:hidden"
-									>
-										<span class="flex min-w-0 flex-1 flex-col gap-1">
-											<span class="text-sm font-medium">Version {v.version}</span>
-											<span class="text-sm text-muted-foreground"
-												>{ago(v.at, now)} · {v.reason}</span
-											>
-										</span>
-										<ChevronDown
-											class="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none"
-											aria-hidden="true"
-										/>
-									</summary>
-									<div class="flex flex-col gap-2 px-3 pb-3">
-										<DiffView lines={v.diff} file="SKILL.md" />
-										{#if v.run}
-											<Button
-												variant="link"
-												href={runHref(v.run.id)}
-												class="h-auto min-h-8 self-start px-0 text-left [overflow-wrap:anywhere] whitespace-normal"
-												>Written during {v.run.title}<ArrowUpRight aria-hidden="true" /></Button
-											>
-										{/if}
-									</div>
-								</details>
+								<Collapsible.Root open={open.length ? open.includes(v.version) : i === 0}>
+									<Card.Root size="sm" class="gap-0 py-0">
+										<Collapsible.Trigger
+											class="group/version flex w-full cursor-pointer items-center gap-2.5 px-3 py-2.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+										>
+											<span class="flex min-w-0 flex-1 flex-col gap-1">
+												<span class="text-sm font-medium">Version {v.version}</span>
+												<span class="text-sm text-muted-foreground"
+													>{ago(v.at, now)} · {v.reason}</span
+												>
+											</span>
+											<ChevronDown
+												class="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/version:rotate-180 motion-reduce:transition-none"
+												aria-hidden="true"
+											/>
+										</Collapsible.Trigger>
+										<Collapsible.Content class="flex flex-col gap-2 px-3 pb-3">
+											<DiffView lines={v.diff} file="SKILL.md" />
+											{#if v.run}
+												<Button
+													variant="link"
+													href={runHref(v.run.id)}
+													class="h-auto min-h-8 self-start px-0 text-left [overflow-wrap:anywhere] whitespace-normal"
+													>Written during {v.run.title}<ArrowUpRight aria-hidden="true" /></Button
+												>
+											{/if}
+										</Collapsible.Content>
+									</Card.Root>
+								</Collapsible.Root>
 							</li>
 						{/each}
 					</ol>

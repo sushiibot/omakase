@@ -23,6 +23,7 @@
 		now,
 		back,
 		online = true,
+		historyHref = '/history',
 		runHref = (id) => `/runs/${id}`,
 		onretry
 	}: {
@@ -32,6 +33,7 @@
 		now: number;
 		back: { href: string; label: string; onclick?: (e: MouseEvent) => void };
 		online?: boolean;
+		historyHref?: string;
 		runHref?: (runId: string) => string;
 		onretry?: () => void;
 	} = $props();
@@ -89,7 +91,9 @@
 {#snippet breadcrumb()}
 	<Breadcrumb.Root>
 		<Breadcrumb.List>
-			<Breadcrumb.Item><Breadcrumb.Link href={back.href}>History</Breadcrumb.Link></Breadcrumb.Item>
+			<Breadcrumb.Item
+				><Breadcrumb.Link href={historyHref}>History</Breadcrumb.Link></Breadcrumb.Item
+			>
 			<Breadcrumb.Separator />
 			<Breadcrumb.Item><Breadcrumb.Page>{title}</Breadcrumb.Page></Breadcrumb.Item>
 		</Breadcrumb.List>
@@ -128,7 +132,6 @@
 				<Section
 					title="Work recaps"
 					description="The agent’s written summaries of its work that day."
-					class="gap-3"
 				>
 					{#if day.sessions.length}
 						{#each day.sessions as session, i (i)}
@@ -136,7 +139,7 @@
 								<Card.Header>
 									<h3
 										id="{uid}-h{i}"
-										class="text-sm leading-snug font-medium [overflow-wrap:anywhere]"
+										class="text-base leading-snug font-medium [overflow-wrap:anywhere]"
 									>
 										{session.heading}
 									</h3>

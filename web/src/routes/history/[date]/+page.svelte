@@ -32,6 +32,7 @@
 	{now}
 	back={{ href: resolve('/history'), label: 'Back', onclick: goBack }}
 	online={pwa.online}
+	historyHref={resolve('/history')}
 	runHref={(id) => resolve('/runs/[id]', { id })}
 	onretry={() => void remote?.refetch()}
 />

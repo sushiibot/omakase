@@ -20,6 +20,7 @@
 		now,
 		back,
 		online = true,
+		memoryHref = '/memory',
 		writeHref = (id) => `/memory/writes/${id}`,
 		onretry
 	}: {
@@ -29,6 +30,7 @@
 		now: number;
 		back: { href: string; label: string; onclick?: (e: MouseEvent) => void };
 		online?: boolean;
+		memoryHref?: string;
 		writeHref?: (id: string) => string;
 		onretry?: () => void;
 	} = $props();
@@ -48,11 +50,11 @@
 
 {#snippet breadcrumb()}
 	<Breadcrumb.Root>
-		<Breadcrumb.List>
-			<Breadcrumb.Item><Breadcrumb.Link href={back.href}>Memory</Breadcrumb.Link></Breadcrumb.Item>
+		<Breadcrumb.List class="flex-nowrap">
+			<Breadcrumb.Item><Breadcrumb.Link href={memoryHref}>Memory</Breadcrumb.Link></Breadcrumb.Item>
 			<Breadcrumb.Separator />
-			<Breadcrumb.Item>
-				<Breadcrumb.Page class="font-mono">{detail?.file.path}</Breadcrumb.Page>
+			<Breadcrumb.Item class="min-w-0">
+				<Breadcrumb.Page class="truncate font-mono">{detail?.file.path}</Breadcrumb.Page>
 			</Breadcrumb.Item>
 		</Breadcrumb.List>
 	</Breadcrumb.Root>
@@ -86,7 +88,7 @@
 			</section>
 			{#if detail.writes.length}
 				<Section title="Changes to this file" tone="list">
-					<Item.Group class="gap-0">
+					<Item.Group>
 						{#each detail.writes as w (w.id)}
 							<div role="listitem"><WriteRow write={w} {now} href={writeHref(w.id)} /></div>
 						{/each}

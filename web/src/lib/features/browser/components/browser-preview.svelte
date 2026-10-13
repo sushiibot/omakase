@@ -61,7 +61,7 @@
 
 {#if status}
 	<section aria-label="Browser preview" class="shrink-0 border-b bg-muted/30">
-		<div class="flex min-h-12 items-center gap-2 px-3">
+		<div class="flex items-center gap-2 px-3 py-2">
 			<Monitor class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
 			<div class="min-w-0 flex-1">
 				<p class="truncate text-sm font-medium">{hostname}</p>
@@ -110,10 +110,9 @@
 	<Sheet.Content
 		side="bottom"
 		showCloseButton={false}
-		aria-label="Browser screen"
 		class="gap-0 bg-background pt-(--safe-top) pb-(--safe-bottom) text-foreground outline-none data-[side=bottom]:top-0 data-[side=bottom]:bottom-(--kb) data-[side=bottom]:border-t-0"
 	>
-		<div class="flex shrink-0 items-center gap-2 border-b px-3">
+		<div class="flex h-(--header-height) shrink-0 items-center gap-2 border-b px-3">
 			<Sheet.Title class="min-w-0 flex-1 truncate text-sm">{hostname} · {label}</Sheet.Title>
 			<Button
 				size="icon"
@@ -144,7 +143,7 @@
 				</p>{/if}
 		</div>
 		<div class="shrink-0 border-t px-3">
-			<div class="flex items-center justify-between gap-2">
+			<div class="flex h-(--header-height) items-center justify-between gap-2">
 				<p class="truncate text-sm">{status?.action ?? 'Browser finished'}</p>
 				<Button variant="ghost" aria-expanded={details} onclick={() => (details = !details)}
 					>Details</Button

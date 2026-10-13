@@ -29,6 +29,7 @@
 		busy = false,
 		error = null,
 		test,
+		schedulesHref = '/schedules',
 		runHref = (id) => `/runs/${id}`,
 		ontoggle,
 		ontest,
@@ -43,6 +44,7 @@
 		busy?: boolean;
 		error?: string | null;
 		test?: TestRun;
+		schedulesHref?: string;
 		runHref?: (id: string) => string;
 		ontoggle?: (enabled: boolean) => void;
 		ontest?: () => void;
@@ -68,20 +70,22 @@
 	{#if job}
 		<ScreenFooter>
 			{#if test}
-				<div role="status" class="flex flex-col gap-1.5 rounded-xl border px-3 py-2.5 text-sm">
-					{#if test.state === 'running'}
-						<p class="flex items-center gap-2 text-running">
-							<Spinner class="motion-reduce:animate-none" aria-hidden="true" />{test.step}…
-						</p>
-					{:else if test.state === 'done'}
-						<span class="flex flex-wrap items-center gap-2"
-							><span class="font-medium">Test run</span><StatePill of={test.result} /></span
-						>
-						<p class="text-muted-foreground">{test.note}</p>
-					{:else}
-						<p class="text-failed">The test run didn't start. {test.note}</p>
-					{/if}
-				</div>
+				<Item.Root variant="outline" size="sm" role="status">
+					<Item.Content>
+						{#if test.state === 'running'}
+							<p class="flex items-center gap-2 text-running">
+								<Spinner class="motion-reduce:animate-none" aria-hidden="true" />{test.step}…
+							</p>
+						{:else if test.state === 'done'}
+							<span class="flex flex-wrap items-center gap-2"
+								><span class="font-medium">Test run</span><StatePill of={test.result} /></span
+							>
+							<p class="text-muted-foreground">{test.note}</p>
+						{:else}
+							<p class="text-failed">The test run didn't start. {test.note}</p>
+						{/if}
+					</Item.Content>
+				</Item.Root>
 			{/if}
 			<div class="flex flex-col gap-2 md:flex-row-reverse md:items-center">
 				<Button variant="outline" disabled={test?.state === 'running' || !online} onclick={ontest}>
@@ -99,12 +103,14 @@
 
 {#snippet breadcrumb()}
 	<Breadcrumb.Root>
-		<Breadcrumb.List>
+		<Breadcrumb.List class="flex-nowrap">
 			<Breadcrumb.Item
-				><Breadcrumb.Link href={back.href}>Schedules</Breadcrumb.Link></Breadcrumb.Item
+				><Breadcrumb.Link href={schedulesHref}>Schedules</Breadcrumb.Link></Breadcrumb.Item
 			>
 			<Breadcrumb.Separator />
-			<Breadcrumb.Item><Breadcrumb.Page>{job?.name}</Breadcrumb.Page></Breadcrumb.Item>
+			<Breadcrumb.Item class="min-w-0"
+				><Breadcrumb.Page class="truncate">{job?.name}</Breadcrumb.Page></Breadcrumb.Item
+			>
 		</Breadcrumb.List>
 	</Breadcrumb.Root>
 {/snippet}
@@ -127,7 +133,12 @@
 >
 	{#if job}
 		<ScreenContent>
-			<PageIntro title={job.schedule} description={nextRunLine(job, now)} />
+			<PageIntro>
+				{#snippet description()}
+					<p class="font-medium text-foreground">{job.schedule}</p>
+					<p class="tabular-nums">{nextRunLine(job, now)}</p>
+				{/snippet}
+			</PageIntro>
 			<Field.Label for="{uid}-enabled">
 				<Field.Field orientation="horizontal">
 					<Field.Content>
@@ -154,11 +165,12 @@
 			</Section>
 			<Section title="Recent runs">
 				{#if job.runs.length}
-					<Item.Group class="gap-0">
-						{#each job.runs as r (r.at)}
+					<Item.Group class="overflow-hidden rounded-xl border has-data-[size=sm]:gap-0">
+						{#each job.runs as r, i (r.at)}
 							<div role="listitem">
+								{#if i}<Item.Separator class="my-0" />{/if}
 								{#if r.runId}
-									<Item.Root size="sm" class="any-pointer-coarse:min-h-12">
+									<Item.Root size="sm" class="rounded-none any-pointer-coarse:min-h-12">
 										{#snippet child({ props })}
 											<a href={runHref(r.runId!)} {...props}>
 												{@render runLine(r)}
@@ -169,7 +181,7 @@
 										{/snippet}
 									</Item.Root>
 								{:else}
-									<Item.Root size="sm" class="any-pointer-coarse:min-h-12"
+									<Item.Root size="sm" class="rounded-none any-pointer-coarse:min-h-12"
 										>{@render runLine(r)}</Item.Root
 									>
 								{/if}

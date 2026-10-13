@@ -6,6 +6,7 @@
 	import Lock from '@lucide/svelte/icons/lock';
 	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import { Button } from '$lib/ui/button';
+	import * as Card from '$lib/ui/card';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import { ago } from '$lib/ui/format/time';
 	import DetailScreen from '$lib/ui/screen/detail-screen.svelte';
@@ -151,18 +152,21 @@
 				{/if}
 			</p>
 
-			<figure class="flex flex-col overflow-hidden rounded-xl border bg-card">
-				<figcaption class="flex items-center gap-2 border-b bg-muted/50 px-3 py-2">
-					<Globe class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-					<span class="sr-only">Address:</span>
-					<code class="min-w-0 font-mono text-xs [overflow-wrap:anywhere]">{status.url}</code>
-				</figcaption>
-				<div
-					class="grid aspect-[3/4] max-h-96 w-full place-items-center bg-muted/40 px-6 text-center text-sm text-muted-foreground"
-				>
-					The live view of the page goes here. It isn't built yet: this screen shows the steps only.
-				</div>
-			</figure>
+			<Card.Root class="gap-0 py-0">
+				<figure class="flex flex-col">
+					<figcaption class="flex items-center gap-2 border-b bg-muted/50 px-(--card-spacing) py-2">
+						<Globe class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+						<span class="sr-only">Address:</span>
+						<code class="min-w-0 font-mono text-xs [overflow-wrap:anywhere]">{status.url}</code>
+					</figcaption>
+					<div
+						class="grid aspect-[3/4] max-h-96 w-full place-items-center bg-muted/40 px-6 text-center text-sm text-muted-foreground"
+					>
+						The live view of the page goes here. It isn't built yet: this screen shows the steps
+						only.
+					</div>
+				</figure>
+			</Card.Root>
 
 			{#if status.task}
 				<Button
