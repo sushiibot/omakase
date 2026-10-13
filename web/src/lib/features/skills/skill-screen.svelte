@@ -128,14 +128,16 @@
 				{#snippet actions()}<StatePill of={skill.stage} />{/snippet}
 			</PageIntro>
 
-			<dl class="grid grid-cols-3 gap-2">
-				{#each [['Loaded', `${skill.uses} runs`], ['Verified', pct(skill.successRate)], ['Last used', skill.lastUsed ? ago(skill.lastUsed, now) : 'Never']] as [k, v] (k)}
-					<Card.Root size="sm" class="min-w-0 gap-1 px-(--card-spacing)">
-						<dt class="text-xs text-muted-foreground">{k}</dt>
-						<dd class="font-medium [overflow-wrap:anywhere] tabular-nums">{v}</dd>
-					</Card.Root>
-				{/each}
-			</dl>
+			<Card.Root size="sm">
+				<dl class="grid grid-cols-3 divide-x">
+					{#each [['Loaded', `${skill.uses} runs`], ['Verified', pct(skill.successRate)], ['Last used', skill.lastUsed ? ago(skill.lastUsed, now) : 'Never']] as [k, v] (k)}
+						<div class="flex min-w-0 flex-col gap-1 px-(--card-spacing)">
+							<dt class="text-xs text-muted-foreground">{k}</dt>
+							<dd class="font-medium [overflow-wrap:break-word] tabular-nums">{v}</dd>
+						</div>
+					{/each}
+				</dl>
+			</Card.Root>
 
 			<Section title="Why it's {skill.stage === 'active' ? 'in use' : skill.stage}">
 				<p class="text-sm">{skill.why}</p>
