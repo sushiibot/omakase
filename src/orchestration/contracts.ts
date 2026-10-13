@@ -645,10 +645,14 @@ export const chatDeliverParams = z
   .refine((p) => p.job === undefined || p.kind === "proactive", { message: 'only kind "proactive" may carry job', path: ["job"] });
 export type ChatDeliverParams = z.infer<typeof chatDeliverParams>;
 
+export const TOOL_DIFF_MAX_CHARS = 16_384;
+export const toolDiff = z.object({ patch: z.string().max(TOOL_DIFF_MAX_CHARS), truncated: z.boolean().optional() });
+export type ToolDiff = z.infer<typeof toolDiff>;
+
 export const chatEventPayload = z.discriminatedUnion("type", [
   z.object({ type: z.literal("turn_start") }),
   z.object({ type: z.literal("tool_start"), name: z.string(), summary: z.string(), toolCallId: z.string().min(1).max(256).optional() }),
-  z.object({ type: z.literal("tool_end"), name: z.string(), ok: z.boolean(), toolCallId: z.string().min(1).max(256).optional() }),
+  z.object({ type: z.literal("tool_end"), name: z.string(), ok: z.boolean(), toolCallId: z.string().min(1).max(256).optional(), diff: toolDiff.optional() }),
   z.object({ type: z.literal("text_delta"), text: z.string() }),
   z.object({ type: z.literal("speech_delta"), replyTo: z.string(), text: z.string(), boundary: z.boolean().optional() }),
   z.object({ type: z.literal("model_activity"), activity: z.enum(["waiting", "thinking"]) }),

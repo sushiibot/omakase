@@ -3,7 +3,7 @@ import type { ChatEventPayload, ChatUsage } from "../orchestration/contracts.ts"
 import { summarizeToolArgs } from "../agentRuntime/piShared.ts";
 import { CHATGPT_PROVIDER, modelLabel, publicAuthError } from "./chatgptFallback.ts";
 
-import { isNoReply } from "../orchestration/contracts.ts";
+import { isNoReply, TOOL_DIFF_MAX_CHARS } from "../orchestration/contracts.ts";
 
 export { NO_REPLY, isNoReply } from "../orchestration/contracts.ts";
 
@@ -70,8 +70,15 @@ export function mapSessionEvent(event: AgentSessionEvent, acc: RunAccumulator): 
       const summary = summarizeToolArgs(event.args).replace(/\s+/g, " ").trim().slice(0, TOOL_SUMMARY_MAX);
       return [{ type: "tool_start", name: event.toolName, summary, toolCallId: event.toolCallId }];
     }
-    case "tool_execution_end":
-      return [{ type: "tool_end", name: event.toolName, ok: event.isError !== true, toolCallId: event.toolCallId }];
+    case "tool_execution_end": {
+      // Use the patch returned after the edit succeeded, not a preview of its requested arguments.
+      const result = event.result as { details?: { patch?: unknown } } | null;
+      const patch = event.toolName === "edit" && !event.isError ? result?.details?.patch : undefined;
+      const diff = typeof patch === "string" && patch.length
+        ? { patch: patch.slice(0, TOOL_DIFF_MAX_CHARS), ...(patch.length > TOOL_DIFF_MAX_CHARS ? { truncated: true } : {}) }
+        : undefined;
+      return [{ type: "tool_end", name: event.toolName, ok: event.isError !== true, toolCallId: event.toolCallId, ...(diff ? { diff } : {}) }];
+    }
     case "message_update": {
       const m = event.assistantMessageEvent;
       if (m.type === "text_delta" && m.delta) { acc.outputStarted = true; acc.modelActivity = undefined; }

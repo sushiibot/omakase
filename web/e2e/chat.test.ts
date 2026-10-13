@@ -2331,3 +2331,56 @@ test('typing dots disappear as soon as text streams', async ({ page, context }) 
 	await expect(page.locator('.activity-dots')).toHaveCount(0);
 	await expect(page.locator('[data-typing]')).toHaveCount(0);
 });
+
+for (const width of [412, 1280]) {
+	for (const theme of ['light', 'dark'] as const) {
+		test(`edit calls show file changes live and after reload at ${width}px in ${theme}`, async ({
+			page,
+			context
+		}) => {
+			const { opts } = await chatServer(context);
+			await page.setViewportSize({ width, height: 915 });
+			await page.emulateMedia({ colorScheme: theme });
+			await open(page);
+			const diff = {
+				patch:
+					'--- /data/home/USER.md\n+++ /data/home/USER.md\n@@ -1,3 +1,3 @@\n # Preferences\n-Use long explanations.\n+Keep replies concise.\n Use metric units.\n'
+			};
+			await push(page, 'tool', {
+				turnId: 'edit-diff',
+				id: 'edit-file',
+				name: 'edit',
+				summary: '/data/home/USER.md'
+			});
+			await push(page, 'tool', {
+				turnId: 'edit-diff',
+				id: 'edit-file',
+				name: 'edit',
+				summary: '/data/home/USER.md',
+				ok: true,
+				diff
+			});
+			await page.locator('[data-tool-call="edit-file"] summary').click();
+			const changes = page.getByRole('region', { name: 'File changes' });
+			await expect(changes).toContainText('-Use long explanations.');
+			await expect(changes).toContainText('+Keep replies concise.');
+			await expect(page.locator('[data-tool-diff]')).toContainText('+1');
+			await expect(page.locator('[data-tool-diff]')).toContainText('−1');
+			await page.screenshot({ path: `/tmp/chat-edit-diff-${width}-${theme}.png` });
+			expect(await horizontalOverflow(page)).toEqual([]);
+			opts.history = [
+				{
+					type: 'assistant',
+					id: 'edit-history',
+					at: '2026-10-13T00:00:00Z',
+					text: 'Updated your preferences.',
+					tools: [{ id: 'edit-file', name: 'edit', summary: '/data/home/USER.md', ok: true, diff }],
+					files: []
+				}
+			];
+			await page.reload();
+			await page.locator('[data-tool-call="edit-file"] summary').click();
+			await expect(changes).toContainText('+Keep replies concise.');
+		});
+	}
+}

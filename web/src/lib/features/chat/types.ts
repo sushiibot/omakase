@@ -1,4 +1,4 @@
-import type { SessionBoundary, UploadRef } from '$lib/core/realtime/events';
+import type { SessionBoundary, UploadRef, ToolDiff } from '$lib/core/realtime/events';
 
 // Mirrors AI SDK UIMessage parts so the real app can render SDK messages with the same components.
 export type ToolPartState =
@@ -132,6 +132,7 @@ export interface AskView {
 }
 
 export interface TurnStep {
+	diff?: ToolDiff;
 	id: string;
 	tool: string;
 	/** Plain words: "Searching mail for 'invoice'". */

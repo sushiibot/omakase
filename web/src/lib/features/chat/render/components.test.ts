@@ -443,3 +443,19 @@ describe('tool confirmations', () => {
 		expect(text).not.toContain('Finished');
 	});
 });
+
+test('file diffs render escaped additions and deletions, including truncation', async () => {
+	const { default: ToolDiff } = await import('../components/tool-diff.svelte');
+	const { html, text } = await dom(ToolDiff, {
+		diff: {
+			patch: '--- USER.md\n+++ USER.md\n@@ -1 +1 @@\n-old\n+<script>alert(1)</script>\n',
+			truncated: true
+		}
+	});
+	expect(text).toContain('-old');
+	expect(text).toContain('+<script>alert(1)</script>');
+	expect(html).not.toContain('<script>');
+	expect(text).toContain('This diff is truncated');
+	expect(html).toContain('bg-add');
+	expect(html).toContain('bg-del');
+});

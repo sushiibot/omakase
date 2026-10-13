@@ -680,3 +680,37 @@ describe("durable ask resolution deliveries", () => {
     expect(h.log.list(["ask_resolved"])).toHaveLength(1);
   });
 });
+
+test("edit patches reach live events, final records and reloaded history by call ID", async () => {
+  const h = setup();
+  const diff = { patch: "--- USER.md\n+++ USER.md\n@@ -1 +1 @@\n-old\n+new\n" };
+  h.event("edit-turn", { type: "tool_start", name: "edit", summary: "USER.md", toolCallId: "first" });
+  h.event("edit-turn", { type: "tool_start", name: "edit", summary: "OTHER.md", toolCallId: "second" });
+  await h.link.settled();
+  h.event("edit-turn", { type: "tool_end", name: "edit", ok: true, toolCallId: "first", diff });
+  h.timers.flush();
+  await h.link.settled();
+  expect(h.events.filter((e) => e.type === "tool").map((e) => e.data)).toContainEqual(expect.objectContaining({ id: "first", diff, ok: true }));
+  h.event("edit-turn", { type: "turn_end", aborted: false });
+  await h.link.settled();
+  await h.adapter.sendReply(null, { kind: "reply", turnId: "edit-turn", text: "Updated preferences.", toolCount: 2 }, { outboxId: "edit-reply", ledger: { isSent: () => false, markSent: () => {} }, plain: false });
+  const history = historyPage(h.log, { limit: 30 }, { maxBytes: 100_000 });
+  expect(history.items).toMatchObject([{ type: "assistant", tools: [{ id: "first", diff }, { id: "second" }] }]);
+  const item = history.items[0];
+  if (item.type !== "assistant") throw new Error("missing reply");
+  expect(item.tools[1]).not.toHaveProperty("diff");
+});
+
+test("large edit diffs do not displace reply text in bounded history pages", async () => {
+  const h = setup();
+  const diff = { patch: "--- USER.md\n+++ USER.md\n@@ -1 +1 @@\n-old\n+" + "new".repeat(3000) };
+  h.event("large-edit", { type: "tool_start", name: "edit", summary: "USER.md", toolCallId: "edit" });
+  await h.link.settled();
+  h.event("large-edit", { type: "tool_end", name: "edit", ok: true, toolCallId: "edit", diff });
+  h.timers.flush();
+  await h.link.settled();
+  h.event("large-edit", { type: "turn_end", aborted: false });
+  await h.link.settled();
+  await h.adapter.sendReply(null, { kind: "reply", turnId: "large-edit", text: "Updated preferences.", toolCount: 1 }, { outboxId: "large-reply", ledger: { isSent: () => false, markSent: () => {} }, plain: false });
+  expect(historyPage(h.log, { limit: 30 }, { maxBytes: 2000 }).items).toMatchObject([{ text: "Updated preferences.", tools: [{ diff: { patch: "", truncated: true } }] }]);
+});

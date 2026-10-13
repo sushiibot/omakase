@@ -1008,7 +1008,7 @@ export class WorkspaceLink {
         return;
       case "tool_end":
         if (this.turns.get(p.turnId)) this.turns.get(p.turnId)!.modelActivity = "waiting";
-        this.endToolLine(this.turns.get(p.turnId), ev.name, ev.ok, undefined, ev.toolCallId);
+        this.endToolLine(this.turns.get(p.turnId), ev.name, ev.ok, undefined, ev.toolCallId, ev.diff);
         return;
       case "turn_end": {
         // A turn this process never saw start has nothing to finalize; the workspace can repeat these at will.
@@ -1046,7 +1046,7 @@ export class WorkspaceLink {
       return;
     }
     if (p.ev.type === "tool_start") this.addToolLine(turn, { name: p.ev.name, summary: p.ev.summary, state: "run", agentId: p.agentId, ...(p.ev.toolCallId ? { id: p.ev.toolCallId } : {}) });
-    else if (p.ev.type === "tool_end") this.endToolLine(turn, p.ev.name, p.ev.ok, p.agentId, p.ev.toolCallId);
+    else if (p.ev.type === "tool_end") this.endToolLine(turn, p.ev.name, p.ev.ok, p.agentId, p.ev.toolCallId, p.ev.diff);
   }
 
   private addToolLine(turn: TurnProgress, line: ToolLine): void {
@@ -1078,10 +1078,11 @@ export class WorkspaceLink {
     });
   }
 
-  private endToolLine(turn: TurnProgress | undefined, name: string, ok: boolean, agentId: string | undefined, toolCallId?: string): void {
+  private endToolLine(turn: TurnProgress | undefined, name: string, ok: boolean, agentId: string | undefined, toolCallId?: string, diff?: ToolLine["diff"]): void {
     const line = turn?.lines.find((l) => l.name === name && l.agentId === agentId && l.state === "run" && (!toolCallId || l.id === toolCallId));
     if (!turn || !line) return;
     line.state = ok ? "ok" : "err";
+    if (diff) line.diff = diff;
     this.markDirty(turn);
     this.persistProgress();
   }

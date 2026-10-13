@@ -78,7 +78,13 @@ export interface UploadRef {
 	inline: boolean;
 }
 
+export interface ToolDiff {
+	patch: string;
+	truncated?: boolean;
+}
+
 export interface ToolLine {
+	diff?: ToolDiff;
 	id?: string;
 	/** UTF-16 position in assistant text when this call began. */
 	textOffset?: number;
@@ -338,6 +344,7 @@ export interface ChatEventMap {
 	/** Apply only when `offset` equals the local text length; otherwise wait for a snapshot. */
 	delta: { turnId: string; offset: number; text: string };
 	tool: {
+		diff?: ToolDiff;
 		turnId: string;
 		name: string;
 		summary: string;
@@ -435,6 +442,7 @@ export type WebHistoryItem =
 			turnId?: string;
 			activityText?: string;
 			tools: {
+				diff?: ToolDiff;
 				name: string;
 				summary: string;
 				ok: boolean;

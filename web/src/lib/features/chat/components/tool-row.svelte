@@ -1,6 +1,7 @@
 <script lang="ts">
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import ToolIcon from './tool-icon.svelte';
+	import ToolDiff from './tool-diff.svelte';
 	import { toolCategory } from '../tool-activity';
 	import CircleX from '@lucide/svelte/icons/circle-x';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -110,6 +111,14 @@
 						<pre
 							class="max-h-48 overflow-auto font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{step.input}</pre>
 					</dd>
+				</div>{/if}
+			{#if step.diff}<div>
+					<dt class="sr-only">File changes</dt>
+					<dd><ToolDiff diff={step.diff} /></dd>
+				</div>
+			{:else if step.tool === 'edit' && step.state === 'ok'}<div>
+					<dt class="sr-only">File changes</dt>
+					<dd>Diff was not recorded for this call.</dd>
 				</div>{/if}
 			{#if step.output}<div>
 					<dt>Output</dt>

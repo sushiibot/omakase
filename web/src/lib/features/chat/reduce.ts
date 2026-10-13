@@ -287,7 +287,8 @@ function applyToolEvent(item: Extract<ChatItem, { kind: 'assistant' }>, e: ChatE
 				state: 'run',
 				id: e.id,
 				textOffset: e.textOffset ?? item.text.length,
-				agentId: e.agentId
+				agentId: e.agentId,
+				diff: e.diff
 			}
 		];
 		return;
@@ -306,11 +307,14 @@ function applyToolEvent(item: Extract<ChatItem, { kind: 'assistant' }>, e: ChatE
 						state,
 						id: e.id,
 						textOffset: e.textOffset ?? item.text.length,
-						agentId: e.agentId
+						agentId: e.agentId,
+						diff: e.diff
 					}
 				]
 			: turn.lines.map((l, i) =>
-					i === idx ? { ...l, summary: e.summary || l.summary, state } : l
+					i === idx
+						? { ...l, summary: e.summary || l.summary, state, ...(e.diff ? { diff: e.diff } : {}) }
+						: l
 				);
 }
 

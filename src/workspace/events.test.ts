@@ -66,3 +66,13 @@ test("a new assistant attempt and completed text block stop stale typing or thin
   expect(acc.modelActivity).toBeUndefined();
   expect(mapSessionEvent(update("text_end"), acc)).toEqual([{ type: "model_activity", activity: "waiting" }]);
 });
+
+test("successful edit results carry the actual unified patch with a bounded payload", () => {
+  const acc = newRunAccumulator();
+  const end = (patch: unknown, isError = false) => mapSessionEvent({ type: "tool_execution_end", toolName: "edit", toolCallId: "edit1", isError, result: { content: [], details: { patch } } } as unknown as AgentSessionEvent, acc);
+  const patch = "--- USER.md\n+++ USER.md\n@@ -1 +1 @@\n-old\n+new\n";
+  expect(end(patch)).toEqual([{ type: "tool_end", name: "edit", ok: true, toolCallId: "edit1", diff: { patch } }]);
+  expect(end(patch, true)[0]).not.toHaveProperty("diff");
+  expect(end(123)[0]).not.toHaveProperty("diff");
+  expect(end("x".repeat(20_000))[0]).toMatchObject({ diff: { patch: "x".repeat(16_384), truncated: true } });
+});

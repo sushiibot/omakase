@@ -1,5 +1,5 @@
 import type { SessionBoundary } from "../sessionContracts.ts";
-import type { AskResolution, ChatOrigin, ChatUsage, DeliverFile, DeliverJob, JobAlertWire, ToolCallResult } from "../contracts.ts";
+import type { AskResolution, ChatOrigin, ChatUsage, DeliverFile, DeliverJob, JobAlertWire, ToolCallResult, ToolDiff } from "../contracts.ts";
 
 /** What a chat surface can render. The core consults these instead of assuming Discord's feature set. */
 export interface SurfaceCapabilities {
@@ -18,7 +18,7 @@ export interface SurfaceCapabilities {
 }
 
 /** One tool in a turn's progress view. `agentId` is set for a subagent's tool, shown nested under the turn. */
-export type ToolLine = { name: string; summary: string; state: "run" | "ok" | "err"; agentId?: string; id?: string; textOffset?: number };
+export type ToolLine = { name: string; summary: string; state: "run" | "ok" | "err"; agentId?: string; id?: string; textOffset?: number; diff?: ToolDiff };
 
 export interface ProgressView {
   modelActivity?: "waiting" | "thinking";
