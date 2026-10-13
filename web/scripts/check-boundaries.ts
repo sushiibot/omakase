@@ -3,6 +3,7 @@
 import { parse } from 'svelte/compiler';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, normalize, relative } from 'node:path';
+import { reportDrift, strict } from './ui-drift-mode';
 
 export interface Violation {
 	file: string;
@@ -176,6 +177,16 @@ export function checkFile(
 	});
 }
 
+/** Package imports reported as UI drift rather than failing the lint. */
+export function checkDrift(file: string, source: string): Violation[] {
+	if (!feature(file)) return [];
+	return specifiers(file, source).flatMap((specifier) =>
+		specifier === 'bits-ui' || specifier.startsWith('bits-ui/')
+			? [{ file, specifier, rule: 'features use bits-ui through lib/ui' }]
+			: []
+	);
+}
+
 function walk(dir: string): string[] {
 	return readdirSync(dir).flatMap((name) => {
 		const path = join(dir, name);
@@ -188,13 +199,20 @@ if (import.meta.main) {
 	const root = join(import.meta.dir, '..');
 	const exists = (path: string) =>
 		existsSync(join(root, path)) && statSync(join(root, path)).isFile();
-	const violations = walk(join(root, 'src')).flatMap((path) =>
-		checkFile(relative(root, path).replace(/\\/g, '/'), readFileSync(path, 'utf8'), exists)
-	);
+	const files = walk(join(root, 'src')).map((path) => ({
+		file: relative(root, path).replace(/\\/g, '/'),
+		source: readFileSync(path, 'utf8')
+	}));
+	const drift = files
+		.flatMap(({ file, source }) => checkDrift(file, source))
+		.map((v) => ({ where: `${v.file}  ${v.specifier}`, rule: v.rule }));
+	const driftExit = reportDrift('check-boundaries', drift, strict);
+	const violations = files.flatMap(({ file, source }) => checkFile(file, source, exists));
 	for (const v of violations) console.error(`${v.file}  ${v.specifier}  ${v.rule}`);
 	if (violations.length) {
 		console.error(`\n${violations.length} boundary violation(s). See web/README.md, Layout.`);
 		process.exit(1);
 	}
 	console.log('imports follow the layers');
+	process.exit(driftExit);
 }

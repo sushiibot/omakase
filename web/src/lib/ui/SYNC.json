@@ -1,0 +1,27 @@
+{
+	"badge": { "drift": "none" },
+	"button": {
+		"drift": "invisible coarse-pointer hit area (ux-guidelines.md#reach-and-touch-targets)"
+	},
+	"empty": { "drift": "none" },
+	"input": {
+		"drift": "invisible coarse-pointer hit area (ux-guidelines.md#reach-and-touch-targets)"
+	},
+	"item": { "drift": "none" },
+	"radio-group": {
+		"drift": "card and segment variants sized for touch (ux-guidelines.md#reach-and-touch-targets)"
+	},
+	"separator": { "drift": "none" },
+	"sheet": {
+		"drift": "motion duration tokens and reduced-motion override (ux-guidelines.md#motion)"
+	},
+	"skeleton": { "drift": "none" },
+	"spinner": {
+		"drift": "forwards icon color props only when set so the icon keeps currentColor (ux-guidelines.md#tokens)"
+	},
+	"switch": { "drift": "none" },
+	"tabs": {
+		"drift": "swipe pager engine for tabbed screens (ux-guidelines.md#tabs-swipes-and-scroll-ownership)"
+	},
+	"textarea": { "drift": "none" }
+}
