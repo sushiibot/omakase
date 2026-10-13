@@ -323,6 +323,7 @@ export class Voice {
 	}
 	#pauseMic() {
 		this.micLevel = 0;
+		this.#meterPeak = 0;
 		this.micReady = false;
 		this.#liveText.stop();
 		this.#input?.disconnect();
@@ -664,6 +665,7 @@ export class Voice {
 	mute() {
 		this.muted = !this.muted;
 		this.micLevel = 0;
+		this.#meterPeak = 0;
 		if (this.muted) this.#liveText.stop();
 		else if (this.micReady) this.#startLiveText();
 		this.#turnDetector.reset();
