@@ -9,6 +9,7 @@
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import User from '@lucide/svelte/icons/user';
 	import { Markdown } from '$lib/features/chat';
+	import { Button } from '$lib/ui/button';
 	import { clock, duration } from '$lib/ui/format/time';
 	import { cn } from '$lib/utils';
 	import type { RunStep } from '../types';
@@ -28,12 +29,12 @@
 {#if step.type === 'tool'}
 	{@const Icon = step.ok === null ? CircleDashed : step.ok ? CircleCheck : CircleX}
 	<div class="flex flex-col">
-		<button
-			type="button"
+		<Button
+			variant="ghost"
 			aria-expanded={expanded}
 			aria-controls="{uid}-detail"
 			onclick={() => (expanded = !expanded)}
-			class="flex min-h-12 w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-muted/60"
+			class="h-auto min-h-10 w-full items-start justify-start gap-2.5 px-2 py-2 text-left font-normal whitespace-normal any-pointer-coarse:after:hidden"
 		>
 			<Icon
 				class={cn(
@@ -58,7 +59,7 @@
 				)}
 				aria-hidden="true"
 			/>
-		</button>
+		</Button>
 		<div id="{uid}-detail" hidden={!expanded} class="ml-8 flex flex-col gap-2 pr-2 pb-2">
 			<dl class="flex flex-col gap-2 text-meta">
 				<div class="flex flex-col gap-1">
@@ -118,15 +119,16 @@
 				{#if step.type === 'assistant'}<Markdown text={step.text} />{:else}{step.text}{/if}
 			</div>
 			{#if long}
-				<button
-					type="button"
+				<Button
+					variant="ghost"
+					size="sm"
 					aria-expanded={expanded}
 					aria-controls="{uid}-text"
 					onclick={() => (expanded = !expanded)}
-					class="-ml-2 flex h-12 items-center self-start px-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+					class="-ms-2.5 self-start text-muted-foreground"
 				>
 					{expanded ? 'Show less' : 'Show all'}
-				</button>
+				</Button>
 			{/if}
 		</div>
 	</div>

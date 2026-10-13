@@ -1,9 +1,9 @@
-import { Tabs } from 'bits-ui';
+import Root from './tabs.svelte';
+import Content from './tabs-content.svelte';
+import List from './tabs-list.svelte';
+import Trigger from './tabs-trigger.svelte';
 
-export const Root = Tabs.Root;
-export const List = Tabs.List;
-export const Trigger = Tabs.Trigger;
-export const Content = Tabs.Content;
+export { Root, List, Trigger, Content };
 export { default as SwipeableTabs } from './swipeable-tabs.svelte';
 export type { SwipeableTab } from './swipeable-tabs.svelte';
 export { default as Tabs } from './tabs.svelte';

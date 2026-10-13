@@ -3,6 +3,8 @@
 	import Download from '@lucide/svelte/icons/download';
 	import { fileUrl, type UploadRef } from '$lib/core/realtime/events';
 	import { clock } from '$lib/ui/format/time';
+	import * as Item from '$lib/ui/item';
+	import Section from '$lib/ui/section/section.svelte';
 	import type { RunApprovalRecord, RunEvidence } from '../types';
 
 	let {
@@ -43,8 +45,7 @@
 	<h3 {id} class="text-sm font-medium text-muted-foreground">{text}</h3>
 {/snippet}
 
-<section aria-labelledby="{uid}-h" class="flex flex-col gap-4">
-	<h2 id="{uid}-h" class="text-base font-semibold">Checks and outputs</h2>
+<Section id="{uid}-h" title="Checks and outputs" class="gap-4">
 	{#if nothing}
 		<p class="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
 			The transcript shows no checks, files or memory writes for this attempt.
@@ -88,15 +89,15 @@
 			<ul class="flex flex-col divide-y rounded-xl border">
 				{#each files as file (file.id)}
 					<li>
-						<a
-							href={fileUrl(file.id)}
-							download={file.name}
-							class="flex min-h-12 items-center gap-3 px-3 py-2 hover:bg-muted/60"
-						>
-							<Download class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-							<span class="min-w-0 flex-1 text-sm [overflow-wrap:anywhere]">{file.name}</span>
-							<span class="shrink-0 text-meta text-muted-foreground">{size(file.bytes)}</span>
-						</a>
+						<Item.Root size="sm" class="rounded-none any-pointer-coarse:py-3.5">
+							{#snippet child({ props })}
+								<a href={fileUrl(file.id)} download={file.name} {...props}>
+									<Download class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+									<span class="min-w-0 flex-1 [overflow-wrap:anywhere]">{file.name}</span>
+									<span class="shrink-0 text-meta text-muted-foreground">{size(file.bytes)}</span>
+								</a>
+							{/snippet}
+						</Item.Root>
 					</li>
 				{/each}
 				{#each (evidence?.filesSent ?? []).filter((f) => !files.some((u) => u.name === f.name)) as f, i (i)}
@@ -138,4 +139,4 @@
 			</ul>
 		</div>
 	{/if}
-</section>
+</Section>

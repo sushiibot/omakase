@@ -7,6 +7,11 @@
 	import X from '@lucide/svelte/icons/x';
 	import { Button } from '$lib/ui/button';
 	import ChecklistCheckbox from '$lib/ui/checklist-checkbox.svelte';
+	import * as Field from '$lib/ui/field';
+	import { Input } from '$lib/ui/input';
+	import * as InputGroup from '$lib/ui/input-group';
+	import { PageHeader } from '$lib/ui/page';
+	import { Textarea } from '$lib/ui/textarea';
 	import type { TaskRecord } from './types';
 	import { taskLabels } from './types';
 	let {
@@ -36,6 +41,7 @@
 		onstop: () => void;
 		onretry: () => void;
 	} = $props();
+	const uid = $props.id();
 	let tab = $state<'details' | 'activity' | 'results'>('details');
 	let editing = $state(false);
 	let title = $state(untrack(() => task.title));
@@ -64,7 +70,9 @@
 	}
 	async function addStep() {
 		if (
+			!busy &&
 			step.trim() &&
+			task.checklist.length < 100 &&
 			(await onupdate({
 				checklist: [
 					...task.checklist,
@@ -82,24 +90,28 @@
 </script>
 
 <div class="flex min-h-0 flex-1 flex-col" data-task-inspector>
-	<header class="flex min-h-13 shrink-0 items-center gap-2 border-b px-2 py-1">
-		<Button size="icon" variant="ghost" class="shrink-0" aria-label="Back to tasks" onclick={onback}
-			><ChevronLeft /></Button
-		>
-		<div class="min-w-0 flex-1">
-			<h2 class="truncate text-base font-semibold">Task details</h2>
-			<p class="text-meta text-muted-foreground">
-				{taskLabels[task.status]}{task.agent ? ` · ${task.agent}` : ''}
-			</p>
-		</div>
-		{#if onclose}<Button
-				size="icon"
-				variant="ghost"
-				class="shrink-0"
-				aria-label="Close task details"
-				onclick={onclose}><X /></Button
-			>{/if}
-	</header>
+	{#snippet leading()}<Button
+			size="icon-sm"
+			variant="ghost"
+			class="-ms-1.5 text-muted-foreground"
+			aria-label="Back to tasks"
+			onclick={onback}><ChevronLeft /></Button
+		>{/snippet}
+	{#snippet subtitle()}{taskLabels[task.status]}{task.agent ? ` · ${task.agent}` : ''}{/snippet}
+	{#snippet actions()}<Button
+			size="icon-sm"
+			variant="ghost"
+			class="text-muted-foreground"
+			aria-label="Close task details"
+			onclick={onclose}><X /></Button
+		>{/snippet}
+	<PageHeader
+		title="Task details"
+		level={2}
+		{leading}
+		{subtitle}
+		actions={onclose ? actions : undefined}
+	/>
 	<div class="flex shrink-0 border-b px-2" aria-label="Task sections">
 		{#each ['details', 'activity', 'results'] as value}<Button
 				variant="ghost"
@@ -143,22 +155,20 @@
 						void save();
 					}}
 				>
-					<label class="flex flex-col gap-1 text-sm font-medium"
-						>Task<input
-							maxlength="200"
-							required
-							class="min-h-12 rounded-lg border bg-background px-3 text-base font-normal"
-							bind:value={title}
-						/></label
-					>
-					<label class="flex flex-col gap-1 text-sm font-medium"
-						>Brief<textarea
-							maxlength="16000"
-							rows="4"
+					<Field.Field>
+						<Field.Label for="{uid}-title">Task</Field.Label>
+						<Input id="{uid}-title" maxlength={200} required bind:value={title} />
+					</Field.Field>
+					<Field.Field>
+						<Field.Label for="{uid}-brief">Brief</Field.Label>
+						<Textarea
+							id="{uid}-brief"
+							maxlength={16000}
+							rows={4}
 							placeholder="What needs to happen? What does done look like?"
-							class="min-h-24 rounded-lg border bg-background p-3 text-base font-normal"
-							bind:value={brief}></textarea></label
-					>
+							bind:value={brief}
+						/>
+					</Field.Field>
 					{#if title !== task.title || brief !== task.brief}<Button
 							type="submit"
 							variant="outline"
@@ -198,26 +208,28 @@
 						>
 					</div>{/each}
 				<form
-					class="flex gap-2"
 					onsubmit={(e) => {
 						e.preventDefault();
 						void addStep();
 					}}
 				>
-					<input
-						aria-label="New checklist step"
-						maxlength="300"
-						placeholder="Add a step…"
-						bind:value={step}
-						class="min-h-12 min-w-0 flex-1 rounded-lg border bg-background px-3 text-base"
-					/><Button
-						size="icon"
-						type="submit"
-						aria-label="Add checklist step"
-						variant="outline"
-						class="shrink-0 self-center"
-						disabled={busy || !step.trim() || task.checklist.length >= 100}><Plus /></Button
-					>
+					<InputGroup.Root>
+						<InputGroup.Input
+							aria-label="New checklist step"
+							maxlength={300}
+							placeholder="Add a step…"
+							bind:value={step}
+						/>
+						<InputGroup.Addon align="inline-end">
+							<InputGroup.Button
+								size="icon-sm"
+								type="submit"
+								aria-label="Add checklist step"
+								aria-disabled={busy || !step.trim() || task.checklist.length >= 100}
+								><Plus /></InputGroup.Button
+							>
+						</InputGroup.Addon>
+					</InputGroup.Root>
 				</form>
 			</section>
 			<div class="flex flex-col gap-2 any-pointer-coarse:gap-4">

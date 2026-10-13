@@ -7,6 +7,8 @@
 	import { request } from '$lib/core/http';
 	import { leaveSheet, routedSheet } from '$lib/core/nav/sheet';
 	import { Button } from '$lib/ui/button';
+	import * as Collapsible from '$lib/ui/collapsible';
+	import * as Sheet from '$lib/ui/sheet';
 	import RoutedSheet from '$lib/ui/sheet/routed-sheet.svelte';
 	import { duration } from '$lib/ui/format/time';
 	import { activityTitle, executionLabel } from './format';
@@ -105,27 +107,35 @@
 
 {#if shown.length}
 	{#if compact}
-		<details class="border-t px-4 text-sm" data-background-work>
-			<summary class="flex min-h-12 cursor-pointer items-center gap-2 text-muted-foreground">
-				<Bot class="size-4" aria-hidden="true" />
-				Delegated tasks · {shown.length} running
-			</summary>
-			{#each shown as run (run.runId)}
-				<button
-					class="flex min-h-12 w-full items-center gap-2 text-left"
-					onclick={() => void inspect(run)}
-				>
-					<Bot class="size-4 shrink-0" aria-hidden="true" /><span class="min-w-0 flex-1 truncate"
-						>{activityTitle(run)}</span
-					><ChevronRight class="size-4" aria-hidden="true" />
-				</button>
-			{/each}
-		</details>
+		<Collapsible.Root class="flex flex-col border-t px-4 py-2 text-sm" data-background-work>
+			<Collapsible.Trigger>
+				{#snippet child({ props })}
+					<Button {...props} variant="ghost" class="-ms-2.5 self-start text-muted-foreground">
+						<Bot aria-hidden="true" />
+						Delegated tasks · {shown.length} running
+					</Button>
+				{/snippet}
+			</Collapsible.Trigger>
+			<Collapsible.Content class="flex flex-col">
+				{#each shown as run (run.runId)}
+					<Button
+						variant="ghost"
+						class="h-auto min-h-10 justify-start px-2.5 text-left font-normal any-pointer-coarse:after:hidden"
+						onclick={() => void inspect(run)}
+					>
+						<Bot aria-hidden="true" /><span class="min-w-0 flex-1 truncate"
+							>{activityTitle(run)}</span
+						><ChevronRight aria-hidden="true" />
+					</Button>
+				{/each}
+			</Collapsible.Content>
+		</Collapsible.Root>
 	{:else}
 		<div class="flex flex-col gap-1" data-delegated-agents>
 			{#each shown as run (run.runId)}
-				<button
-					class="flex min-h-12 w-full items-center gap-3 rounded-lg border px-3 py-2 text-left text-sm hover:bg-muted/50"
+				<Button
+					variant="outline"
+					class="h-auto min-h-10 justify-start gap-3 px-3 py-2 text-left font-normal whitespace-normal any-pointer-coarse:after:hidden"
 					onclick={() => void inspect(run)}
 				>
 					<Bot class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -143,7 +153,7 @@
 							>{/if}</span
 					>
 					<ChevronRight class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-				</button>
+				</Button>
 			{/each}
 		</div>
 	{/if}
@@ -152,33 +162,37 @@
 <RoutedSheet open={sheetOpen} label="Agent activity" onclose={() => sheet.close()}>
 	<div class="flex flex-col gap-3 px-5 pb-5">
 		{#if selected}
-			<h2 class="text-lg font-semibold">Agent activity</h2>
+			<Sheet.Title class="text-base font-medium">Agent activity</Sheet.Title>
 			<p class="text-sm text-muted-foreground">
 				{selected.agentName}{selected.repo ? ` · ${selected.repo}` : ''} · {executionLabel(
 					detail?.run.status ?? selected.status
 				)}
 			</p>
-			<details class="group/task min-w-0" data-task-brief>
-				<summary
-					class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-2 text-ui font-medium [&::-webkit-details-marker]:hidden"
-				>
-					Task brief
-					<ChevronDown
-						class="size-4 shrink-0 text-muted-foreground transition-transform group-open/task:rotate-180 motion-reduce:transition-none"
-						aria-hidden="true"
-					/>
-				</summary>
-				<!-- The brief scrolls inside the sheet; keyboard users must be able to focus it. -->
-				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-				<p
-					tabindex="0"
-					role="region"
-					aria-label="Task brief"
-					class="max-h-48 overflow-y-auto pb-2 text-ui leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap"
-				>
-					{detail?.taskBrief ?? selected.title}
-				</p>
-			</details>
+			<Collapsible.Root class="group/task flex min-w-0 flex-col gap-2" data-task-brief>
+				<Collapsible.Trigger>
+					{#snippet child({ props })}
+						<Button {...props} variant="ghost" class="-ms-2.5 self-start">
+							Task brief
+							<ChevronDown
+								class="text-muted-foreground transition-transform group-data-[state=open]/task:rotate-180 motion-reduce:transition-none"
+								aria-hidden="true"
+							/>
+						</Button>
+					{/snippet}
+				</Collapsible.Trigger>
+				<Collapsible.Content>
+					<!-- The brief scrolls inside the sheet; keyboard users must be able to focus it. -->
+					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+					<p
+						tabindex="0"
+						role="region"
+						aria-label="Task brief"
+						class="max-h-48 overflow-y-auto pb-2 text-ui leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap"
+					>
+						{detail?.taskBrief ?? selected.title}
+					</p>
+				</Collapsible.Content>
+			</Collapsible.Root>
 			{#if error}<p role="alert" class="text-sm text-failed">{error}</p>{/if}
 			{#if detail}
 				<p class="text-meta text-muted-foreground">

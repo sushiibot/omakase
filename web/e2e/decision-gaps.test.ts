@@ -112,3 +112,22 @@ test('the task action stack keeps Stop and Mark done apart on touch', async ({ p
 	await expectNearerOrNothing(ask, stop);
 	await expectNearerOrNothing(stop, done);
 });
+
+test('the task inspector keeps Ask, Stop and Mark done apart on touch', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await page.goto('/chat');
+	await page.getByRole('button', { name: /^Tasks, \d+ open/ }).click();
+	const panel = page.getByRole('complementary', { name: 'Conversation tasks' });
+	await panel.getByRole('tab', { name: 'Tasks', exact: true }).click();
+	await panel.getByRole('button', { name: /Review the deployment notes/ }).click();
+	const inspector = panel.locator('[data-task-inspector]');
+	const ask = inspector.getByRole('button', { name: /Ask Sushii|Continue with Sushii/ });
+	const stop = inspector.getByRole('button', { name: 'Stop active work' });
+	const done = inspector.getByRole('button', { name: 'Mark done' });
+	await expect(stop).toBeVisible();
+	await expectNearerOrNothing(ask, stop);
+	await expectNearerOrNothing(stop, done);
+});

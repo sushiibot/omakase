@@ -1,9 +1,11 @@
 <script lang="ts">
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { Button } from '$lib/ui/button';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import { byDay } from '$lib/ui/format/time';
+	import { ItemGroup } from '$lib/ui/item';
+	import Section from '$lib/ui/section/section.svelte';
+	import { Spinner } from '$lib/ui/spinner';
 	import TabbedScreen from '$lib/ui/screen/tabbed-screen.svelte';
 	import ScreenState from '$lib/ui/screen/screen-state.svelte';
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
@@ -120,9 +122,10 @@
 			disabled={loading}
 			onclick={() => current && onloadolder?.()}
 		>
-			{#if loading}<LoaderCircle
-					class="animate-spin motion-reduce:animate-none"
+			{#if loading}<Spinner
+					role="presentation"
 					aria-hidden="true"
+					class="motion-reduce:animate-none"
 				/>Loading older activity…{:else}<ChevronDown />Show older activity{/if}
 		</Button>
 		{#if error}<p role="alert" class="text-sm text-failed">
@@ -172,16 +175,13 @@
 						}}
 			>
 				{#each sections as group, i (group.label)}
-					<section aria-labelledby={`${uid}-${value}-s${i}`} class="flex flex-col gap-1">
-						<h2 id={`${uid}-${value}-s${i}`} class="px-1 text-sm font-medium text-muted-foreground">
-							{group.label}
-						</h2>
-						<ul class="flex flex-col">
-							{#each group.items as run (run.runId)}<li class="min-h-12">
+					<Section id={`${uid}-${value}-s${i}`} title={group.label} tone="list">
+						<ItemGroup class="gap-0 has-data-[size=sm]:gap-0">
+							{#each group.items as run (run.runId)}<div role="listitem">
 									{@render row(run)}
-								</li>{/each}
-						</ul>
-					</section>
+								</div>{/each}
+						</ItemGroup>
+					</Section>
 				{/each}
 				{@render after(value)}
 			</ScreenState>

@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { INSPECTOR_BREAKPOINT } from '$lib/ui/breakpoints';
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { TaskPanel, TaskWorkspace, TaskChat, tasksStore } from '$lib/features/tasks';
+	import { TaskDetailScreen, TaskWorkspace, TaskChat, tasksStore } from '$lib/features/tasks';
+	import { backTo } from '$lib/core/nav/back';
 	import { routedSheet } from '$lib/core/nav/sheet';
 	import { getWorkspace } from '$lib/ui/workspace/context';
 	import { followAgentLink, openAgentFrom, openAgentPage } from '$lib/core/nav/agent-link';
@@ -26,6 +26,7 @@
 		untrack(() => followAgentLink({ docked, sheet: taskPane, openPanel: showAgent }));
 	});
 	const store = tasksStore();
+	const goBack = backTo(resolve('/tasks'));
 	let selectedId = $derived(page.params.id);
 	const task = $derived(store.tasks.find((task) => task.id === selectedId));
 	const channel = $derived(
@@ -72,4 +73,7 @@
 				/>
 			{/snippet}
 		</TaskWorkspace>{/key}
-{:else}<TaskPanel {selectedId} fullPage onclose={() => void goto(resolve('/tasks'))} />{/if}
+{:else}<TaskDetailScreen
+		id={selectedId ?? ''}
+		back={{ href: resolve('/tasks'), label: 'Tasks', onclick: goBack }}
+	/>{/if}

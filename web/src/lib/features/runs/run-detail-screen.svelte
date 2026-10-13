@@ -4,13 +4,16 @@
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import FileText from '@lucide/svelte/icons/file-text';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import * as Breadcrumb from '$lib/ui/breadcrumb';
 	import { Button } from '$lib/ui/button';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import { ago, clock, duration } from '$lib/ui/format/time';
+	import { PageIntro } from '$lib/ui/page';
 	import TabbedScreen from '$lib/ui/screen/tabbed-screen.svelte';
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
+	import Section from '$lib/ui/section/section.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
+	import { Spinner } from '$lib/ui/spinner';
 	import StatePill from '$lib/ui/status/state-pill.svelte';
 	import Evidence from './components/evidence.svelte';
 	import RunRow from './components/run-row.svelte';
@@ -126,6 +129,13 @@
 		}
 		return rows;
 	});
+	const title = $derived(
+		run?.kind === 'chat'
+			? 'Reply activity'
+			: run?.kind === 'flush' || run?.kind === 'rotate'
+				? 'System activity'
+				: 'Activity'
+	);
 	const day = $derived(
 		detail?.historyFile
 			?.match(/^(\d{4}-\d{2})\/(\d{2})-/)
@@ -147,15 +157,25 @@
 	<p role="status" class="sr-only">Loading activity…</p>
 {/snippet}
 
+{#snippet breadcrumb()}
+	<Breadcrumb.Root class="min-w-0">
+		<Breadcrumb.List class="flex-nowrap">
+			<Breadcrumb.Item><Breadcrumb.Link href={back.href}>Activity</Breadcrumb.Link></Breadcrumb.Item
+			>
+			<Breadcrumb.Separator />
+			<Breadcrumb.Item class="min-w-0"
+				><Breadcrumb.Page class="truncate">{run ? activityTitle(run) : title}</Breadcrumb.Page
+				></Breadcrumb.Item
+			>
+		</Breadcrumb.List>
+	</Breadcrumb.Root>
+{/snippet}
+
 <TabbedScreen
-	wide
 	hasContent={!!detail}
-	title={run?.kind === 'chat'
-		? 'Reply activity'
-		: run?.kind === 'flush' || run?.kind === 'rotate'
-			? 'System activity'
-			: 'Activity'}
-	{back}
+	{title}
+	back={{ ...back, desktop: false }}
+	breadcrumb={run ? breadcrumb : undefined}
 	{banner}
 	state={{
 		remote,
@@ -180,15 +200,17 @@
 	{#snippet lead()}
 		{#if detail && run}
 			<div class="flex flex-col gap-2">
-				{#if run.kind !== 'chat'}<p
-						class="text-lg leading-snug font-semibold [overflow-wrap:anywhere]"
-					>
-						{activityTitle(run)}
-					</p>{/if}
-				<p class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-					<StatePill of={run.status} label={run.status === 'done' ? 'Finished' : undefined} />
-					<span>{kindLabel(run)}{run.repo ? ` · ${run.repo}` : ''}</span>
-				</p>
+				<PageIntro
+					title={run.kind === 'chat' ? undefined : activityTitle(run)}
+					class="[overflow-wrap:anywhere]"
+				>
+					{#snippet description()}
+						<p class="flex flex-wrap items-center gap-2">
+							<StatePill of={run.status} label={run.status === 'done' ? 'Finished' : undefined} />
+							<span>{kindLabel(run)}{run.repo ? ` · ${run.repo}` : ''}</span>
+						</p>
+					{/snippet}
+				</PageIntro>
 				{#if activeChildren && run.status !== 'running'}
 					<p role="status" class="text-sm text-muted-foreground">
 						{activeChildren} delegated {activeChildren === 1 ? 'task is' : 'tasks are'} still running.
@@ -203,19 +225,16 @@
 	{#snippet children(tabValue)}
 		{#if detail && run}
 			{#if tabValue === 'timeline'}
-				<section aria-labelledby="{uid}-tl" class="flex flex-col gap-3">
-					<h2
-						id="{uid}-tl"
-						class="flex items-baseline justify-between gap-3 text-base font-semibold"
-					>
-						Activity
-						{#if steps.length}<span class="text-meta font-normal text-muted-foreground tabular-nums"
-								>{steps.length}{hasMore ? '+' : ''} steps</span
-							>{/if}
-					</h2>
-					<p class="text-meta text-muted-foreground">
-						Oldest first · tool details expand in place.
-					</p>
+				{#snippet stepCount()}<span class="tabular-nums"
+						>{steps.length}{hasMore ? '+' : ''} steps</span
+					>{/snippet}
+				<Section
+					id="{uid}-tl"
+					title="Activity"
+					description="Oldest first · tool details expand in place."
+					aside={steps.length ? stepCount : undefined}
+					class="gap-3"
+				>
 					{#if run.kind === 'chat'}<p class="text-sm text-muted-foreground">
 							One reply cycle within your conversation, including tools and follow-up instructions.
 						</p>{/if}
@@ -237,9 +256,10 @@
 							disabled={moreLoading}
 							onclick={() => onloadmore?.()}
 						>
-							{#if moreLoading}<LoaderCircle
-									class="animate-spin motion-reduce:animate-none"
+							{#if moreLoading}<Spinner
+									role="presentation"
 									aria-hidden="true"
+									class="motion-reduce:animate-none"
 								/>Loading more steps…
 							{:else}<ChevronDown />Show more steps{/if}
 						</Button>
@@ -247,11 +267,10 @@
 								Couldn't load more steps. {moreError}
 							</p>{/if}
 					{/if}
-				</section>
+				</Section>
 			{:else if tabValue === 'evidence'}
 				<div class="flex flex-col gap-6">
-					<section aria-labelledby="{uid}-out" class="flex flex-col gap-2">
-						<h2 id="{uid}-out" class="text-base font-semibold">Result</h2>
+					<Section id="{uid}-out" title="Result">
 						<p class="text-sm">{outcome}</p>
 						{#if run.resultSummary}<p
 								class="text-sm leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap"
@@ -263,26 +282,25 @@
 							>
 								Delegated work is still running. Open Details to follow each task.
 							</p>{/if}
-					</section>
+					</Section>
 					<Evidence evidence={detail.evidence} approvals={detail.approvals} files={detail.files} />
 				</div>
 			{:else if tabValue === 'overview'}
 				<div class="flex flex-col gap-6">
-					<section aria-labelledby="{uid}-brief" class="flex flex-col gap-2">
-						<h2 id="{uid}-brief" class="text-base font-semibold">
-							{run.kind === 'chat'
-								? 'Request'
-								: run.kind === 'flush' || run.kind === 'rotate'
-									? 'System event'
-									: 'Task brief'}
-						</h2>
+					<Section
+						id="{uid}-brief"
+						title={run.kind === 'chat'
+							? 'Request'
+							: run.kind === 'flush' || run.kind === 'rotate'
+								? 'System event'
+								: 'Task brief'}
+					>
 						<p class="text-sm leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap">
 							{steps.find((step) => step.type === 'user')?.text ?? run.title}
 						</p>
-					</section>
+					</Section>
 					{#if detail.parent || detail.children.length}
-						<section aria-labelledby="{uid}-agents" class="flex flex-col gap-2">
-							<h2 id="{uid}-agents" class="text-base font-semibold">Agents and delegation</h2>
+						<Section id="{uid}-agents" title="Agents and delegation">
 							<ul class="flex flex-col">
 								{#if detail.parent}<li class="flex flex-col">
 										<span class="px-2 text-meta text-muted-foreground">Started by</span><RunRow
@@ -297,21 +315,20 @@
 										><RunRow run={child} {now} href={runHref(child.runId)} jump={false} />
 									</li>{/each}
 							</ul>
-						</section>
+						</Section>
 					{/if}
-					<section aria-labelledby="{uid}-execution" class="flex flex-col gap-2">
-						<h2 id="{uid}-execution" class="text-base font-semibold">Execution details</h2>
-						<p class="text-sm text-muted-foreground">
-							This record covers one execution attempt. Follow-up replies remain in the
-							conversation.
-						</p>
+					<Section
+						id="{uid}-execution"
+						title="Execution details"
+						description="This record covers one execution attempt. Follow-up replies remain in the conversation."
+					>
 						<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
 							{#each facts as [k, v] (k)}<dt class="text-muted-foreground">{k}</dt>
 								<dd class="min-w-0 [overflow-wrap:anywhere] tabular-nums">{v}</dd>{/each}
 							<dt class="text-muted-foreground">Run ID</dt>
 							<dd class="min-w-0 font-mono text-code [overflow-wrap:anywhere]">{run.runId}</dd>
 						</dl>
-					</section>
+					</Section>
 					{#if day}<Button variant="outline" href={historyHref(day)} class="self-start"
 							><FileText />Notes from that day<ArrowUpRight /></Button
 						>{/if}
