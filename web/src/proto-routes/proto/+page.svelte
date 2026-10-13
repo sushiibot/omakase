@@ -59,7 +59,8 @@
 			<div class="flex flex-col">
 				<h1 class="text-lg font-semibold tracking-tight">Personal agent · flow board</h1>
 				<p class="text-sm text-muted-foreground">
-					Clickable prototype. Fixture data only, nothing is sent.
+					Clickable prototype. Fixture data only, nothing is sent. Screens follow the window width,
+					not the frame: use a phone-width window for phone layouts.
 				</p>
 			</div>
 			<div class="ml-auto flex items-center gap-2">

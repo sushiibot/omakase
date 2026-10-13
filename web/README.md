@@ -23,6 +23,8 @@ bun run dev:proto    # http://localhost:5173/proto
 bun run build:proto  # single-file board at build-proto/proto.html
 ```
 
+Frames set a phone width, but the shell and screens pick their layout from the browser window (`MediaQuery` and viewport `md:`/`lg:` classes), not from the frame. Open the board in a window narrower than 768px, or in devtools device mode, to see the phone layout inside phone frames; desktop frames need a window at least 1024px wide.
+
 Brand assets are rendered from the transparent PNG masters in `brand-src/` with
 `bun scripts/render-icons.ts`. This rebuilds `static/brand/`, the favicon, install
 icons, and the monochrome notification badge. The maskable icon keeps the character
