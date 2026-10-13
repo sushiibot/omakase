@@ -1,3 +1,4 @@
+// shadcn-svelte nova: ui/empty/index.ts
 import Content from './empty-content.svelte';
 import Description from './empty-description.svelte';
 import Header from './empty-header.svelte';

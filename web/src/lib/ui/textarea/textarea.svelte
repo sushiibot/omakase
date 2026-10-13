@@ -1,3 +1,4 @@
+<!-- shadcn-svelte nova: ui/textarea/textarea.svelte -->
 <script lang="ts">
 	import { cn, type WithElementRef, type WithoutChildren } from '$lib/utils.js';
 	import type { HTMLTextareaAttributes } from 'svelte/elements';

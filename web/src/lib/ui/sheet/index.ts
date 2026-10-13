@@ -1,3 +1,4 @@
+// shadcn-svelte nova: ui/sheet/index.ts
 import Close from './sheet-close.svelte';
 import Content from './sheet-content.svelte';
 import Description from './sheet-description.svelte';

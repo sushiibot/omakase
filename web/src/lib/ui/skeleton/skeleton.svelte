@@ -1,3 +1,4 @@
+<!-- shadcn-svelte nova: ui/skeleton/skeleton.svelte -->
 <script lang="ts">
 	import { cn, type WithElementRef, type WithoutChildren } from '$lib/utils.js';
 	import type { HTMLAttributes } from 'svelte/elements';

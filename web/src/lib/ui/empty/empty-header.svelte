@@ -1,3 +1,4 @@
+<!-- shadcn-svelte nova: ui/empty/empty-header.svelte -->
 <script lang="ts">
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import type { HTMLAttributes } from 'svelte/elements';

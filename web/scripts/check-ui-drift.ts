@@ -291,7 +291,8 @@ export const LOCAL_FILES = new Set([
 	'radio-group/radio-group-card.svelte',
 	'sheet/routed-sheet.svelte',
 	'switch/switch-row.svelte',
-	'tabs/swipeable-tabs.svelte'
+	'tabs/swipeable-tabs.svelte',
+	'tabs/index.ts'
 ]);
 
 /** GitHub-style heading anchors of a markdown document, ignoring fenced code. */

@@ -1,3 +1,4 @@
+<!-- shadcn-svelte nova: ui/item/item-group.svelte -->
 <script lang="ts">
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import type { HTMLAttributes } from 'svelte/elements';

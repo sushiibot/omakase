@@ -1,3 +1,4 @@
+<!-- shadcn-svelte nova: ui/sheet/sheet.svelte -->
 <script lang="ts">
 	import { Dialog as SheetPrimitive } from 'bits-ui';
 

@@ -1,3 +1,4 @@
+<!-- shadcn-svelte nova: ui/item/item-separator.svelte -->
 <script lang="ts">
 	import { Separator } from '$lib/ui/separator/index.js';
 	import { cn } from '$lib/utils.js';

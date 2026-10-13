@@ -1,3 +1,4 @@
+// shadcn-svelte nova: ui/item/index.ts
 import Actions from './item-actions.svelte';
 import Content from './item-content.svelte';
 import Description from './item-description.svelte';

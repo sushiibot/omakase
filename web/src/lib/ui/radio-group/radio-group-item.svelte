@@ -1,3 +1,4 @@
+<!-- shadcn-svelte nova: ui/radio-group/radio-group-item.svelte -->
 <script lang="ts">
 	import { RadioGroup as RadioGroupPrimitive } from 'bits-ui';
 	import CircleIcon from '@lucide/svelte/icons/circle';

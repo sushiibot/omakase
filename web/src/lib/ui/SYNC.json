@@ -1,27 +1,77 @@
 {
-	"badge": { "drift": "none" },
+	"badge": {
+		"drift": "none"
+	},
+	"breadcrumb": {
+		"drift": "none"
+	},
 	"button": {
-		"drift": "invisible coarse-pointer hit area (ux-guidelines.md#reach-and-touch-targets)"
+		"drift": "invisible coarse-pointer hit area and aria-disabled styling for disabled links (ux-guidelines.md#reach-and-touch-targets)"
 	},
-	"empty": { "drift": "none" },
+	"card": {
+		"drift": "none"
+	},
+	"checkbox": {
+		"drift": "none"
+	},
+	"collapsible": {
+		"drift": "none"
+	},
+	"dropdown-menu": {
+		"drift": "none"
+	},
+	"empty": {
+		"drift": "none"
+	},
+	"field": {
+		"drift": "none"
+	},
 	"input": {
-		"drift": "invisible coarse-pointer hit area (ux-guidelines.md#reach-and-touch-targets)"
+		"drift": "none"
 	},
-	"item": { "drift": "none" },
+	"input-group": {
+		"drift": "none"
+	},
+	"item": {
+		"drift": "none"
+	},
+	"label": {
+		"drift": "none"
+	},
 	"radio-group": {
 		"drift": "segmented layout and a choice-card part used by settings (ux-guidelines.md#shared-component-patterns)"
 	},
-	"separator": { "drift": "none" },
+	"separator": {
+		"drift": "none"
+	},
 	"sheet": {
 		"drift": "motion duration tokens and reduced-motion override (ux-guidelines.md#motion)"
 	},
-	"skeleton": { "drift": "none" },
+	"sidebar": {
+		"drift": "none"
+	},
+	"skeleton": {
+		"drift": "none"
+	},
 	"spinner": {
 		"drift": "forwards icon color props only when set so the icon keeps currentColor (ux-guidelines.md#tokens)"
 	},
-	"switch": { "drift": "none" },
-	"tabs": {
-		"drift": "swipe pager engine for tabbed screens (ux-guidelines.md#tabs-swipes-and-scroll-ownership)"
+	"switch": {
+		"drift": "none"
 	},
-	"textarea": { "drift": "none" }
+	"tabs": {
+		"drift": "swipe pager beside the stock parts; index re-exports raw bits-ui parts under the stock names (ux-guidelines.md#tabs-swipes-and-scroll-ownership)"
+	},
+	"textarea": {
+		"drift": "none"
+	},
+	"toggle": {
+		"drift": "none"
+	},
+	"toggle-group": {
+		"drift": "none"
+	},
+	"tooltip": {
+		"drift": "none"
+	}
 }

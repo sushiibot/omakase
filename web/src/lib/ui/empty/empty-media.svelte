@@ -1,3 +1,4 @@
+<!-- shadcn-svelte nova: ui/empty/empty-media.svelte -->
 <script lang="ts" module>
 	import type { VariantProps } from 'tailwind-variants';
 	import { tv } from '$lib/utils.js';

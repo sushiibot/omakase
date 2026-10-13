@@ -1,3 +1,4 @@
+// shadcn-svelte nova: ui/switch/index.ts
 import Root from './switch.svelte';
 import Row from './switch-row.svelte';
 
