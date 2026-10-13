@@ -9,23 +9,9 @@ import { AgentEvents } from "./events.ts";
 import { CodingAgents, CodingAgentStore } from "./agents.ts";
 import { MachineRoutes } from "../../surfaces/web/machineRoutes.ts";
 import { FAKE_PROVIDER } from "../../workspace/machine/fakeProvider.ts";
-import type { JsonState } from "../../db/jsonState.ts";
+import { MemoryJsonState } from "../../db/jsonState.ts";
 import type { PushEvent } from "../../surfaces/web/pushRules.ts";
 import type { AgentResultParams } from "./contracts.ts";
-
-class MemoryState implements JsonState {
-  map = new Map<string, string>();
-  get<T>(key: string) {
-    const v = this.map.get(key);
-    return v === undefined ? undefined : (JSON.parse(v) as T);
-  }
-  set(key: string, value: unknown) {
-    this.map.set(key, JSON.stringify(value));
-  }
-  list<T>(prefix: string) {
-    return [...this.map].filter(([k]) => k.startsWith(prefix)).map(([, v]) => JSON.parse(v) as T);
-  }
-}
 
 async function eventually<T>(get: () => Promise<T> | T, predicate: (v: T) => boolean) {
   for (let i = 0; i < 200; i++) {
@@ -48,7 +34,7 @@ test("a machine daemon reports agents' changes: results wake their conversation 
   const server = new OrchestrationServer({ secretGrants: { workspace: { principalId: "owner" } } });
   server.setMachineHub(hub);
   server.listen();
-  const state = new MemoryState();
+  const state = new MemoryJsonState();
   const control = new MachineControl(hub, new CodingAgentStore(state));
   const agents = new CodingAgents(control);
   const routes = new MachineRoutes(control, agents);
@@ -60,6 +46,7 @@ test("a machine daemon reports agents' changes: results wake their conversation 
     state,
     push: async (e) => void pushes.push(e),
     lastOwnerMessageAt: () => undefined,
+    outboxRetryMs: 0,
   });
   control.observer = events;
   hub.setSessionListener(events.onSession);

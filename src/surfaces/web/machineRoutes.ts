@@ -44,7 +44,7 @@ export class MachineRoutes {
         session = await this.control.messageSession(agent.machineId, agent.id, p.text, "owner");
       } else {
         z.object({}).strict().parse(raw ?? {});
-        this.control.observer?.noteAction(agent.id, "owner", false);
+        this.control.observer?.noteAction(agent.conversationId, "owner");
         session = await this.control.stopSession(agent.machineId, agent.id);
       }
       return json({ agent: this.agents.require(agent.id), session: agentSessionView(session) });

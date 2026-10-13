@@ -21,6 +21,8 @@ export type PushEvent =
   | { kind: "agentResolved"; agentId: string; requestId: string; conversationId: string; label: string }
   /** A coding agent ended or stalled and the owner's agent could not be woken to report it. */
   | { kind: "agentResult"; agentId: string; conversationId: string; label: string; status: "completed" | "failed" | "interrupted" | "stalled"; text: string }
+  /** The owner's agent may not start or message coding agents in this conversation until the owner replies. */
+  | { kind: "agentsPaused"; conversationId: string; cycles: number }
   | { kind: "quota"; usedBytes: number; capBytes: number };
 
 // Approval, ask and alert links keep their older addresses, which the app redirects to the inbox: a service
@@ -53,13 +55,15 @@ export function pushFor(event: PushEvent): PushPayload {
     case "interrupted":
       return { title: TITLE, body: "Turn interrupted", url: "/chat", tag: "chat" };
     case "agentNeedsYou":
-      return { title: `${event.label} needs approval`, body: plainPushBody(event.description), url: conversationUrl(event.conversationId), tag: agentTag(event.agentId, event.requestId), requireInteraction: true };
+      return { title: `${event.label} needs approval`, body: plainPushBody(event.description), url: agentUrl(event.conversationId, event.agentId), tag: agentTag(event.agentId, event.requestId), requireInteraction: true };
     case "agentResolved":
-      return { title: `${event.label}: approval answered`, body: "", url: conversationUrl(event.conversationId), tag: agentTag(event.agentId, event.requestId), silent: true };
+      return { title: `${event.label}: approval answered`, body: "", url: agentUrl(event.conversationId, event.agentId), tag: agentTag(event.agentId, event.requestId), silent: true };
     case "agentResult": {
       const outcome = { completed: "finished", failed: "failed", interrupted: "was interrupted", stalled: "stalled" }[event.status];
-      return { title: `${event.label} ${outcome}`, body: plainPushBody(event.text), url: conversationUrl(event.conversationId), tag: `agent:${event.agentId}` };
+      return { title: `${event.label} ${outcome}`, body: plainPushBody(event.text), url: agentUrl(event.conversationId, event.agentId), tag: `agent:${event.agentId}` };
     }
+    case "agentsPaused":
+      return { title: "Coding agents paused", body: `Your agent followed up ${event.cycles} times on its own. Reply in the conversation to let it continue.`, url: conversationUrl(event.conversationId), tag: `agents-paused:${event.conversationId}` };
     case "quota":
       return { title: "Photo storage almost full", body: `${Math.round((event.usedBytes / event.capBytes) * 100)}% of the photo quota is used.`, url: "/chat", tag: "quota" };
   }
@@ -68,6 +72,11 @@ export function pushFor(event: PushEvent): PushPayload {
 // The conversation shows its agents above the composer; same addresses as the app's conversationHref.
 const conversationUrl = (id: string) =>
   id === "main" ? "/chat" : id.startsWith("task-t-") ? `/tasks/${encodeURIComponent(id.slice(5))}?view=conversation` : `/chats/${encodeURIComponent(id)}`;
+/** Opens the conversation with that agent's row expanded. */
+const agentUrl = (conversationId: string, agentId: string) => {
+  const url = conversationUrl(conversationId);
+  return `${url}${url.includes("?") ? "&" : "?"}agent=${encodeURIComponent(agentId)}`;
+};
 const agentTag = (agentId: string, requestId: string) => `agent:${agentId}:${requestId}`;
 
 /** Markdown reduced to the words a notification shade can show, cut to PUSH_BODY_MAX code points. */

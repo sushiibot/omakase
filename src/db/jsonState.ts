@@ -6,6 +6,7 @@ import { kv } from "./schema.ts";
 export interface JsonState {
   get<T>(key: string): T | undefined;
   set(key: string, value: unknown): void;
+  delete(key: string): void;
   /** Values under keys starting with `prefix` (no SQL wildcards). */
   list<T>(prefix: string): T[];
 }
@@ -40,8 +41,30 @@ export class KvJsonState implements JsonState {
     return out;
   }
 
+  delete(key: string): void {
+    this.orm.delete(kv).where(eq(kv.key, key)).run();
+  }
+
   set(key: string, value: unknown): void {
     const json = JSON.stringify(value);
     this.orm.insert(kv).values({ key, value: json }).onConflictDoUpdate({ target: kv.key, set: { value: json } }).run();
+  }
+}
+
+/** For tests and tools that need the same contract without a database. */
+export class MemoryJsonState implements JsonState {
+  readonly map = new Map<string, string>();
+  get<T>(key: string): T | undefined {
+    const v = this.map.get(key);
+    return v === undefined ? undefined : (JSON.parse(v) as T);
+  }
+  set(key: string, value: unknown): void {
+    this.map.set(key, JSON.stringify(value));
+  }
+  delete(key: string): void {
+    this.map.delete(key);
+  }
+  list<T>(prefix: string): T[] {
+    return [...this.map].filter(([k]) => k.startsWith(prefix)).map(([, v]) => JSON.parse(v) as T);
   }
 }

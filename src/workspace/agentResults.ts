@@ -12,6 +12,8 @@ import type { Wake } from "./personalSession.ts";
 
 const FILE = "agent-results.json";
 const DONE_MAX = 2000;
+const LATEST_MAX = 2000;
+const RETRY_MAX_MS = 5 * 60_000;
 export const AGENT_RESULT_DEBOUNCE_MS = 3000;
 
 type Result = Omit<AgentResultParams, "principalId">;
@@ -27,12 +29,15 @@ type Stored = z.infer<typeof stored>;
 // CSI/OSC escape sequences, then other control characters except tab and newline.
 const ANSI = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-_]/g;
 const CONTROL = /[\x00-\x08\x0b-\x1f\x7f-\x9f]/g;
+// Line/paragraph separators, bidi overrides and zero-width characters: text must read as it renders.
+const FORMAT = /[\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g;
 const TAG = "coding-agent-result";
 function clean(text: string): string {
   return text
     .replace(/\r\n?/g, "\n")
     .replace(ANSI, "")
     .replace(CONTROL, "")
+    .replace(FORMAT, "")
     .replace(/<\/?coding-agent-result/gi, (m) => m.replace("<", "&lt;"));
 }
 const attr = (text: string) => clean(text).replace(/[\n"<>&]/g, " ");
@@ -64,6 +69,8 @@ export interface AgentResultDeps {
   conversationExists(conversationId: string): boolean;
   wake(conversationId: string, wake: Wake): Promise<void>;
   debounceMs?: number;
+  /** First retry delay after a failed wake; doubles up to five minutes. */
+  retryBaseMs?: number;
   warn?(err: unknown, message: string): void;
 }
 
@@ -76,6 +83,7 @@ export class AgentResults {
   private state: Stored;
   private readonly path: string;
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private failures = new Map<string, number>();
   /** Entry ids already inside a wake that has not been consumed yet. */
   private waking = new Set<string>();
   private closed = false;
@@ -110,7 +118,11 @@ export class AgentResults {
     const entry: Entry = { ...rest, id: `agent:${p.agentId}:${p.stateVersion}` };
     if (this.state.done.includes(entry.id) || this.state.pending.some((e) => e.id === entry.id)) return { accepted: true };
     if ((this.state.latest[p.agentId] ?? 0) > p.stateVersion) return { accepted: true };
+    delete this.state.latest[p.agentId];
     this.state.latest[p.agentId] = p.stateVersion;
+    // Insertion order is recency, so the oldest agents go first.
+    const agents = Object.keys(this.state.latest);
+    for (const old of agents.slice(0, Math.max(0, agents.length - LATEST_MAX))) delete this.state.latest[old];
     // A newer result for the same agent replaces an older one that has not reached the conversation.
     const superseded = this.state.pending.filter((e) => e.agentId === p.agentId).map((e) => e.id);
     this.state.pending.push(entry);
@@ -129,15 +141,21 @@ export class AgentResults {
     for (const id of new Set(this.state.pending.map((e) => e.conversationId))) this.schedule(id);
   }
 
-  private schedule(conversationId: string) {
+  private schedule(conversationId: string, delayMs = this.deps.debounceMs ?? AGENT_RESULT_DEBOUNCE_MS) {
     if (this.closed) return;
     clearTimeout(this.timers.get(conversationId));
     const timer = setTimeout(() => {
       this.timers.delete(conversationId);
-      void this.flush(conversationId).catch((err) =>
-        this.deps.warn?.(err, "waking a conversation with a coding agent result failed; it stays pending"),
+      void this.flush(conversationId).then(
+        () => this.failures.delete(conversationId),
+        (err) => {
+          const failures = (this.failures.get(conversationId) ?? 0) + 1;
+          this.failures.set(conversationId, failures);
+          this.deps.warn?.(err, "waking a conversation with a coding agent result failed; retrying");
+          this.schedule(conversationId, Math.min(RETRY_MAX_MS, (this.deps.retryBaseMs ?? 5000) * 2 ** (failures - 1)));
+        },
       );
-    }, this.deps.debounceMs ?? AGENT_RESULT_DEBOUNCE_MS);
+    }, delayMs);
     timer.unref?.();
     this.timers.set(conversationId, timer);
   }

@@ -5,7 +5,7 @@ import {
   type SessionSummary,
 } from "./contracts.ts";
 import type { ActionOrigin, MachineControl, SessionObserver } from "./control.ts";
-import type { CodingAgentRecord } from "./agents.ts";
+import { agentKeys, type CodingAgentRecord } from "./agents.ts";
 import type { WorkspaceLink } from "../workspace/link.ts";
 import type { JsonState } from "../../db/jsonState.ts";
 import type { PushEvent } from "../../surfaces/web/pushRules.ts";
@@ -13,11 +13,10 @@ import { getLogger } from "../../logger.ts";
 
 const log = getLogger("agent-events");
 type Reported = AgentResultParams["status"];
+type Result = Omit<AgentResultParams, "principalId">;
 const TERMINAL = new Set<string>(["completed", "failed", "interrupted"]);
-/** Automatic wake → message cycles an agent may run before the owner hears about it instead. */
+/** Wake → agent action cycles a conversation may run without the owner before its agent is paused. */
 export const MAX_AUTO_CYCLES = 3;
-/** A session first seen with an older change was handled before this gateway tracked it. */
-const FIRST_SIGHT_MS = 10 * 60_000;
 const TAIL_MAX = 2000;
 
 interface Acted {
@@ -27,9 +26,13 @@ interface Acted {
   /** The stall episode (its stalledAt) already reported, so one stall wakes the agent once. */
   stall?: string;
 }
+/** Per conversation. A cycle is a wake followed by the agent starting or messaging a coding agent. */
 interface Loop {
-  count: number;
+  cycles: number;
+  /** When the count last reset: an owner message or an owner action in the app. */
   since: number;
+  wokeAt?: number;
+  countedWake?: number;
 }
 export interface AgentEventDeps {
   control: Pick<MachineControl, "hub" | "agents" | "list">;
@@ -38,12 +41,13 @@ export interface AgentEventDeps {
   push(event: PushEvent): Promise<unknown>;
   lastOwnerMessageAt(conversationId: string): number | undefined;
   now?(): number;
-  /** How long a result waits for a reconnecting workspace before it is pushed instead. */
+  /** How long a result waits for a reconnecting workspace before the owner is pushed as well. */
   workspaceWaitMs?: number;
+  /** How often undelivered results are retried; 0 leaves it to flushOutbox calls. */
+  outboxRetryMs?: number;
 }
 
-const actedKey = (id: string) => `agent-acted:${id}`;
-const loopKey = (id: string) => `agent-loop:${id}`;
+const loopKey = (conversationId: string) => `agent-loop:${conversationId}`;
 const isRecord = (v: SessionSummary | SessionRecord): v is SessionRecord => "id" in v;
 
 /** "Codex agent on Desktop": how the owner and the agent name a coding agent. */
@@ -57,7 +61,18 @@ export function agentLabel(provider: CodingAgentRecord["provider"], machineName:
  */
 export class AgentEvents implements SessionObserver {
   private queues = new Map<string, Promise<void>>();
-  constructor(private deps: AgentEventDeps) {}
+  private timer?: ReturnType<typeof setInterval>;
+  constructor(private deps: AgentEventDeps) {
+    const retry = deps.outboxRetryMs ?? 15_000;
+    if (retry > 0) {
+      this.timer = setInterval(() => void this.flushOutbox(), retry);
+      this.timer.unref?.();
+    }
+  }
+
+  close() {
+    clearInterval(this.timer);
+  }
 
   private now() {
     return this.deps.now?.() ?? Date.now();
@@ -89,23 +104,39 @@ export class AgentEvents implements SessionObserver {
     return next;
   }
 
-  noteAction(agentId: string, origin: ActionOrigin, followUp: boolean): void {
-    const now = this.now();
-    if (origin === "owner") {
-      this.deps.state.set(loopKey(agentId), { count: 0, since: now } satisfies Loop);
-      return;
-    }
-    if (!followUp) return;
-    const agent = this.deps.control.agents.get(agentId);
-    const loop = agent ? this.loop(agent) : { count: 0, since: 0 };
-    this.deps.state.set(loopKey(agentId), { count: loop.count + 1, since: now } satisfies Loop);
+  /** The conversation's cycle count, reset by an owner message there since the last reset. */
+  private loop(conversationId: string): Loop {
+    const loop = this.deps.state.get<Loop>(loopKey(conversationId)) ?? { cycles: 0, since: 0 };
+    const owner = this.deps.lastOwnerMessageAt(conversationId);
+    return owner !== undefined && owner > loop.since ? { cycles: 0, since: owner } : loop;
   }
 
-  /** The automatic cycle count, reset by an owner message in the agent's conversation since the last count. */
-  private loop(agent: CodingAgentRecord): Loop {
-    const loop = this.deps.state.get<Loop>(loopKey(agent.id)) ?? { count: 0, since: 0 };
-    const owner = this.deps.lastOwnerMessageAt(agent.conversationId);
-    return owner !== undefined && owner > loop.since ? { count: 0, since: owner } : loop;
+  /** Refuses an agent-initiated start or message once the conversation ran its automatic cycles. */
+  guard(conversationId: string): void {
+    const loop = this.loop(conversationId);
+    if (loop.cycles < MAX_AUTO_CYCLES) return;
+    void this.push({ kind: "agentsPaused", conversationId, cycles: loop.cycles });
+    throw new Error(
+      `Coding agents in this conversation are paused after ${loop.cycles} automatic follow-ups. Tell the owner what happened and wait for their reply before starting or messaging an agent again.`,
+    );
+  }
+
+  noteAction(conversationId: string, origin: ActionOrigin): void {
+    if (origin === "owner") {
+      this.deps.state.set(loopKey(conversationId), { cycles: 0, since: this.now() } satisfies Loop);
+      return;
+    }
+    const loop = this.loop(conversationId);
+    // Only the first action after a wake the owner has not answered makes a cycle.
+    if (loop.wokeAt === undefined || loop.wokeAt <= loop.since || loop.countedWake === loop.wokeAt) {
+      this.deps.state.set(loopKey(conversationId), loop);
+      return;
+    }
+    this.deps.state.set(loopKey(conversationId), { ...loop, cycles: loop.cycles + 1, countedWake: loop.wokeAt } satisfies Loop);
+  }
+
+  private woke(conversationId: string) {
+    this.deps.state.set(loopKey(conversationId), { ...this.loop(conversationId), wokeAt: this.now() } satisfies Loop);
   }
 
   private async run(machineId: string, input: SessionSummary | SessionRecord) {
@@ -114,7 +145,7 @@ export class AgentEvents implements SessionObserver {
     const agent = this.deps.control.agents.get(id);
     // A machine can only report on agents the gateway delegated to it.
     if (!agent || agent.machineId !== machineId) return;
-    const acted = this.deps.state.get<Acted>(actedKey(id));
+    const acted = this.deps.state.get<Acted>(agentKeys.acted(id));
     if (acted && input.stateVersion <= acted.v) return;
     const record = isRecord(input)
       ? input
@@ -123,22 +154,17 @@ export class AgentEvents implements SessionObserver {
     if (v === undefined || record.id !== id) return;
     if (acted && v <= acted.v) return;
     this.deps.control.agents.observe(record);
-    const done = (pushed: string[], stall?: string) =>
-      this.deps.state.set(actedKey(id), { v, pushed, ...(stall ? { stall } : {}) } satisfies Acted);
-    if (!acted) {
-      const at = Date.parse(record.turn?.endedAt ?? record.updatedAt);
-      if (!(this.now() - at < FIRST_SIGHT_MS)) return done([], record.stalledAt);
-    }
+    // Anything newer replaces a result still waiting for the workspace.
+    this.deps.state.delete(agentKeys.outbox(id));
     const machineName = this.deps.control.list().find((m) => m.id === machineId)?.name ?? machineId;
-    const label = agentLabel(agent.provider, machineName);
-    const pushed = await this.routeRequests(agent, label, record, acted?.pushed ?? []);
+    const pushed = await this.routeRequests(agent, machineName, record, acted?.pushed ?? []);
     let stall: string | undefined;
     if (record.status === "running" && record.stalled && record.stalledAt) {
       stall = record.stalledAt;
       if (stall !== acted?.stall) await this.routeResult(agent, machineName, record, "stalled");
     }
     if (TERMINAL.has(record.status)) await this.routeResult(agent, machineName, record, record.status as Reported);
-    done(pushed, stall);
+    this.deps.state.set(agentKeys.acted(id), { v, pushed, ...(stall ? { stall } : {}) } satisfies Acted);
   }
 
   private async push(event: PushEvent) {
@@ -150,47 +176,75 @@ export class AgentEvents implements SessionObserver {
   }
 
   /** Needs-you is the owner's to answer, so it pushes and never wakes the agent. */
-  private async routeRequests(agent: CodingAgentRecord, label: string, record: SessionRecord, pushed: string[]) {
+  private async routeRequests(agent: CodingAgentRecord, machineName: string, record: SessionRecord, pushed: string[]) {
     const open = record.status === "needs-you" ? record.requests : [];
     const ids = open.map((r) => String(r.id));
-    const base = { agentId: agent.id, conversationId: agent.conversationId, label };
-    for (const r of open)
-      if (!pushed.includes(String(r.id)))
-        await this.push({ kind: "agentNeedsYou", ...base, requestId: String(r.id), description: r.description });
+    const base = { agentId: agent.id, conversationId: agent.conversationId, label: agentLabel(agent.provider, machineName) };
+    for (const r of open) {
+      if (pushed.includes(String(r.id))) continue;
+      const d = r.detail;
+      // The thing being approved leads; the model's explanation never stands in for it.
+      const action = d?.host
+        ? `${d.host}${d.command ? `: ${d.command}` : ""}`
+        : (d?.command ?? (d?.files?.length ? d.files.map((f) => f.path).join(", ") : (d?.grantRoot ?? r.description)));
+      await this.push({ kind: "agentNeedsYou", ...base, requestId: String(r.id), description: action });
+    }
     for (const requestId of pushed)
       if (!ids.includes(requestId)) await this.push({ kind: "agentResolved", ...base, requestId });
     return ids;
   }
 
-  /** Terminal and stalled agents wake the conversation that started them; the owner is pushed only when that is impossible. */
+  /** Terminal and stalled agents wake the conversation that started them. */
   private async routeResult(agent: CodingAgentRecord, machineName: string, record: SessionRecord, status: Reported) {
-    const label = agentLabel(agent.provider, machineName);
+    const result: Result = {
+      conversationId: agent.conversationId,
+      agentId: agent.id,
+      stateVersion: record.stateVersion!,
+      status,
+      provider: agent.provider,
+      title: agent.title,
+      machineName: machineName.slice(0, 100),
+      ...(record.final ? { final: record.final } : {}),
+      ...(record.error ? { error: record.error } : {}),
+      ...(record.blocked?.deniedTools.length ? { deniedTools: record.blocked.deniedTools } : {}),
+      ...(status !== "completed" && record.output.trim() ? { tail: record.output.slice(-TAIL_MAX) } : {}),
+    };
+    const deadline = this.now() + (this.deps.workspaceWaitMs ?? 30_000);
+    while (!this.deps.link.isConnected() && this.now() < deadline) await Bun.sleep(500);
+    if (await this.deliver(result)) return;
+    // Kept until a workspace takes it; the owner hears now rather than after an unknown wait.
+    this.deps.state.set(agentKeys.outbox(agent.id), result);
     const summary = status === "stalled" ? "No output for a while." : (record.error ?? record.final ?? "");
-    const fallback = (text: string) =>
-      this.push({ kind: "agentResult", agentId: agent.id, conversationId: agent.conversationId, label, status, text });
-    const loop = this.loop(agent);
-    this.deps.state.set(loopKey(agent.id), loop);
-    if (loop.count >= MAX_AUTO_CYCLES) return fallback(`Automatic follow-ups paused after ${loop.count} messages. ${summary}`);
+    await this.push({
+      kind: "agentResult",
+      agentId: agent.id,
+      conversationId: agent.conversationId,
+      label: agentLabel(agent.provider, machineName),
+      status,
+      text: summary,
+    });
+  }
+
+  private async deliver(result: Result): Promise<boolean> {
     try {
-      const deadline = this.now() + (this.deps.workspaceWaitMs ?? 30_000);
-      while (!this.deps.link.isConnected() && this.now() < deadline) await Bun.sleep(500);
-      const outcome = await this.deps.link.agentResult({
-        conversationId: agent.conversationId,
-        agentId: agent.id,
-        stateVersion: record.stateVersion!,
-        status,
-        provider: agent.provider,
-        title: agent.title,
-        machineName: machineName.slice(0, 100),
-        ...(record.final ? { final: record.final } : {}),
-        ...(record.error ? { error: record.error } : {}),
-        ...(record.blocked?.deniedTools.length ? { deniedTools: record.blocked.deniedTools } : {}),
-        ...(status !== "completed" && record.output.trim() ? { tail: record.output.slice(-TAIL_MAX) } : {}),
-      });
-      if (outcome === "delivered") return;
+      if ((await this.deps.link.agentResult(result)) !== "delivered") return false;
+      this.woke(result.conversationId);
+      return true;
     } catch (err) {
-      log.warn({ err, agentId: agent.id }, "could not wake the conversation with a coding agent result; notifying the owner");
+      log.warn({ err, agentId: result.agentId }, "could not hand a coding agent result to the workspace; keeping it for a retry");
+      return false;
     }
-    await fallback(summary);
+  }
+
+  /** Retries results a workspace could not take; the workspace dedupes, so a repeat is harmless. */
+  async flushOutbox(): Promise<void> {
+    if (!this.deps.link.isConnected()) return;
+    for (const result of this.deps.state.list<Result>("agent-outbox:")) {
+      if (await this.deliver(result)) {
+        // Kept if a newer result replaced it meanwhile.
+        if (this.deps.state.get<Result>(agentKeys.outbox(result.agentId))?.stateVersion === result.stateVersion)
+          this.deps.state.delete(agentKeys.outbox(result.agentId));
+      }
+    }
   }
 }
