@@ -30,20 +30,20 @@
 
 <section
 	aria-labelledby={title ? headingId : undefined}
-	class={cn('flex min-w-0 flex-col gap-1', className)}
+	class={cn('flex min-w-0 flex-col gap-2', className)}
 >
 	{#if title}
 		<div
 			class={cn(
-				'flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1',
-				tone === 'list' && 'px-2'
+				'flex flex-wrap items-center justify-between gap-x-4 gap-y-1',
+				tone === 'list' && 'min-h-8 px-2'
 			)}
 		>
 			<h2
 				id={headingId}
 				class={cn(
 					'flex items-center gap-2',
-					tone === 'list' ? 'text-meta font-medium text-muted-foreground' : 'text-sm font-semibold'
+					tone === 'list' ? 'text-xs font-medium text-muted-foreground' : 'text-sm font-medium'
 				)}
 			>
 				{@render icon?.()}
@@ -54,7 +54,7 @@
 					>
 				{/if}
 			</h2>
-			{#if aside}<div class="text-meta text-muted-foreground">{@render aside()}</div>{/if}
+			{#if aside}<div class="text-xs text-muted-foreground">{@render aside()}</div>{/if}
 		</div>
 	{/if}
 	{#if description}<p class="max-w-prose text-sm text-muted-foreground">{description}</p>{/if}

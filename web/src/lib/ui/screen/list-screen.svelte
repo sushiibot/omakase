@@ -15,6 +15,7 @@
 
 <script lang="ts" generics="T">
 	import type { ComponentProps, Snippet } from 'svelte';
+	import type { PageMeasure } from '$lib/ui/page';
 	import SearchField from '$lib/ui/input/search-field.svelte';
 	import { cn } from '$lib/utils';
 	import Section from '$lib/ui/section/section.svelte';
@@ -27,6 +28,7 @@
 
 	let {
 		embedded = false,
+		measure = 'full',
 		title,
 		subtitle,
 		back,
@@ -48,6 +50,7 @@
 	}: Omit<ScreenProps, 'children' | 'stickToBottom' | 'scroller'> & {
 		/** Render inside an existing screen without a header or scroll container. */
 		embedded?: boolean;
+		measure?: PageMeasure;
 		state: Omit<StateProps, 'children' | 'isEmpty'>;
 		sections: ListSection<T>[];
 		/** Shows a search field when bound. */
@@ -71,7 +74,7 @@
 </script>
 
 {#snippet content()}
-	<ScreenContent {embedded}>
+	<ScreenContent {embedded} {measure}>
 		{#if search !== undefined}
 			<SearchField label={searchLabel} bind:value={search} bind:ref={searchInput} />
 		{/if}

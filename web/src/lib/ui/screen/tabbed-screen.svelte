@@ -1,5 +1,7 @@
 <script lang="ts">
 	import type { ComponentProps, Snippet } from 'svelte';
+	import { measureClass } from '$lib/ui/page';
+	import { cn } from '$lib/utils';
 	import Screen from './screen.svelte';
 	import ScreenState from './screen-state.svelte';
 	import SwipeableTabs, { type SwipeableTab } from '../tabs/swipeable-tabs.svelte';
@@ -19,7 +21,6 @@
 		label,
 		onchange,
 		lead: leadContent,
-		wide = false,
 		state,
 		hasContent = false,
 		children: panelContent
@@ -29,7 +30,7 @@
 		label: string;
 		onchange?: (value: string) => void;
 		lead?: Snippet;
-		/** Use the wider desktop measure for detailed content. */
+		/** Kept for callers; every tabbed screen now uses the reading measure. */
 		wide?: boolean;
 		state?: StateProps;
 		/** Keep the pager mounted while existing content refreshes. */
@@ -53,19 +54,16 @@
 </script>
 
 <Screen {title} {subtitle} {back} {actions} {banner} {toast} scrollable={false}>
-	<div
-		data-tabbed-screen
-		class="mx-auto flex h-full min-h-0 w-full min-w-0 flex-col {wide ? 'max-w-3xl' : 'max-w-2xl'}"
-	>
+	<div data-tabbed-screen class={cn('flex h-full min-h-0 min-w-0 flex-col', measureClass.reading)}>
 		{#if showPager}
 			<SwipeableTabs {tabs} bind:value {label} {onchange}>
 				{#snippet lead()}
 					{#if leadContent}
-						<div class="px-4 pt-4 pb-3">{@render leadContent()}</div>
+						<div class="px-4 pt-4 pb-3 md:px-6 md:pt-6">{@render leadContent()}</div>
 					{/if}
 				{/snippet}
 				{#snippet children(panelValue)}
-					<div data-tab-content class="min-w-0 px-4 pt-4 pb-12">
+					<div data-tab-content class="min-w-0 px-4 pt-4 pb-12 md:px-6 md:pt-6">
 						{@render panelContent(panelValue)}
 						{#if refreshFailure}
 							<div class="mt-5">
@@ -79,7 +77,7 @@
 			</SwipeableTabs>
 		{:else if effectiveState}
 			<div
-				class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4 pt-4 pb-12"
+				class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4 pt-4 pb-12 md:px-6 md:pt-6"
 			>
 				<ScreenState {...effectiveState}>{#snippet children()}{/snippet}</ScreenState>
 			</div>

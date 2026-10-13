@@ -2,6 +2,8 @@
 	import type { Snippet } from 'svelte';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import Menu from '@lucide/svelte/icons/menu';
+	import { Button } from '$lib/ui/button';
+	import { PageHeader } from '$lib/ui/page';
 	import { cn } from '$lib/utils';
 	import { getDrawer } from '../shell/drawer';
 
@@ -43,52 +45,49 @@
 
 	// A screen without a back chevron is a drawer destination; on a phone its header opens the drawer.
 	const drawer = getDrawer();
+	const showBack = $derived(!!back && !(channelNavigation && drawer?.channels));
+	const showMenu = $derived(!showBack && !!drawer && !drawer.persistent);
 </script>
 
-<header class="flex min-h-13 shrink-0 items-center gap-1 border-b px-2 py-1 @3xl:px-5">
-	{#if back && !(channelNavigation && drawer?.channels)}
-		<a
+{#snippet leading()}
+	{#if showBack && back}
+		<Button
 			href={back.href}
 			onclick={back.onclick}
-			class={cn(
-				'-ml-0.5 flex h-12 min-w-12 shrink-0 items-center rounded-md pr-1.5 pl-0.5 text-sm text-muted-foreground hover:text-foreground',
-				back.desktop === false && '@3xl:hidden'
-			)}
+			variant="ghost"
+			size="sm"
+			class="-ms-1.5 px-1.5 text-muted-foreground"
 		>
-			<ChevronLeft class="size-5" aria-hidden="true" /><span class="sr-only @3xl:not-sr-only"
-				>{back.label}</span
-			>
-		</a>
-	{:else if drawer && !drawer.persistent}
-		<button
-			type="button"
+			<ChevronLeft aria-hidden="true" /><span class="sr-only @3xl:not-sr-only">{back.label}</span>
+		</Button>
+	{:else if showMenu && drawer}
+		<Button
+			variant="ghost"
+			size="icon-sm"
+			class="-ms-1 text-muted-foreground"
 			aria-label={drawer.badge
 				? `Menu, ${typeof drawer.badge === 'number' ? `${drawer.badge} need you` : 'something new'}`
 				: 'Menu'}
 			onclick={() => drawer.open()}
-			class="relative grid size-12 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-foreground"
 		>
-			<Menu class="size-5" aria-hidden="true" />
+			<Menu aria-hidden="true" />
 			{#if drawer.badge}
 				<span
-					class="absolute top-2.5 right-2.5 size-2.5 rounded-full border-2 border-background bg-waiting"
+					class="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background bg-waiting"
 					aria-hidden="true"
 				></span>
 			{/if}
-		</button>
+		</Button>
 	{/if}
-	<div
-		class={cn(
-			'flex min-w-0 flex-col',
-			!back && !drawer && 'pl-2 @3xl:pl-0',
-			!back && drawer && '@3xl:pl-0'
-		)}
-	>
-		<h1 class="truncate text-base leading-tight font-semibold">{title}</h1>
-		{@render subtitle?.()}
-	</div>
-	<div class="ml-auto flex shrink-0 items-center gap-2">{@render actions?.()}</div>
-</header>
+{/snippet}
+
+<PageHeader
+	{title}
+	{subtitle}
+	{actions}
+	leading={showBack || showMenu ? leading : undefined}
+	leadingClass={showBack && back?.desktop === false ? '@3xl:hidden' : undefined}
+/>
 {#if toast && toastPosition === 'top'}
 	<div class="shrink-0 px-3 pt-3 @3xl:px-6">
 		<div
