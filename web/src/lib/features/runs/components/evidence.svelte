@@ -92,9 +92,15 @@
 						<Item.Root size="sm" class="rounded-none">
 							{#snippet child({ props })}
 								<a href={fileUrl(file.id)} download={file.name} {...props}>
-									<Download class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-									<span class="min-w-0 flex-1 [overflow-wrap:anywhere]">{file.name}</span>
-									<span class="shrink-0 text-meta text-muted-foreground">{size(file.bytes)}</span>
+									<Item.Media variant="icon">
+										<Download class="text-muted-foreground" aria-hidden="true" />
+									</Item.Media>
+									<Item.Content class="min-w-0">
+										<Item.Title class="line-clamp-none [overflow-wrap:anywhere]"
+											>{file.name}</Item.Title
+										>
+										<Item.Description>{size(file.bytes)} · Download</Item.Description>
+									</Item.Content>
 								</a>
 							{/snippet}
 						</Item.Root>

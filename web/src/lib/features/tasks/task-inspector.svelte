@@ -225,7 +225,7 @@
 								size="icon-sm"
 								type="submit"
 								aria-label="Add checklist step"
-								class="any-pointer-coarse:after:inset-x-0"
+								class="any-pointer-coarse:w-10 any-pointer-coarse:after:inset-x-0"
 								aria-disabled={busy || !step.trim() || task.checklist.length >= 100}
 								><Plus /></InputGroup.Button
 							>

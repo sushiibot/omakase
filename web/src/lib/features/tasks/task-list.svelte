@@ -94,7 +94,8 @@
 					type="submit"
 					aria-disabled={busy || !title.trim()}
 					aria-label="Add task"
-					class="any-pointer-coarse:after:inset-x-0"><Plus /></InputGroup.Button
+					class="any-pointer-coarse:w-10 any-pointer-coarse:after:inset-x-0"
+					><Plus /></InputGroup.Button
 				>
 			</InputGroup.Addon>
 		</InputGroup.Root>
