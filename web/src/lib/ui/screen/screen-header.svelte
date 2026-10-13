@@ -29,13 +29,24 @@
 			!(back.desktop === false && drawer?.persistent)
 	);
 	const showTrigger = $derived(!!drawer?.docked);
+	const attention = $derived(
+		drawer?.badge && !drawer.persistent
+			? typeof drawer.badge === 'number'
+				? `${drawer.badge} need you`
+				: 'something new'
+			: ''
+	);
 	const showMenu = $derived(!showBack && !!drawer && !drawer.docked);
 </script>
 
 {#snippet leading()}
 	{#if showTrigger && drawer}
 		<span class="relative flex">
-			<SidebarTrigger class="-ms-1 text-muted-foreground" />
+			<SidebarTrigger
+				class="-ms-1 text-muted-foreground"
+				aria-label={attention ? `Toggle sidebar, ${attention}` : 'Toggle sidebar'}
+				aria-expanded={!!drawer.persistent}
+			/>
 			{#if drawer.badge && !drawer.persistent}
 				<span
 					class="pointer-events-none absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background bg-waiting"

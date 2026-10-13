@@ -7,7 +7,7 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Settings from '@lucide/svelte/icons/settings';
 	import * as Sidebar from '$lib/ui/sidebar';
-	import { SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_COOKIE_NAME } from '$lib/ui/sidebar/constants';
+	import { SIDEBAR_COOKIE_NAME } from '$lib/ui/sidebar/constants';
 	import { Button } from '$lib/ui/button';
 	import { MOBILE_BREAKPOINT, INSPECTOR_BREAKPOINT } from '$lib/ui/breakpoints';
 	import { setDrawer } from './drawer';
@@ -106,8 +106,7 @@
 	});
 	setDrawer({
 		open() {
-			if (navDocked) setSidebarOpen(true, true);
-			else openNavigation();
+			openNavigation();
 		},
 		get badge() {
 			return badgeTotal;
@@ -123,22 +122,28 @@
 		}
 	});
 
-	/** The Provider writes its own cookie; callers outside it pass `persist`. */
-	function setSidebarOpen(value: boolean, persist = false) {
+	/** The Provider's setter; it writes the cookie itself. */
+	function setSidebarOpen(value: boolean) {
 		const nav = frame?.querySelector('[data-channel-navigation]');
 		if (!value && nav?.contains(document.activeElement))
-			frame?.querySelector<HTMLElement>('[data-slot="sidebar-inset"] main')?.focus({
-				preventScroll: true
-			});
+			frame
+				?.querySelector<HTMLElement>('[data-slot="sidebar-inset"] [data-sidebar="trigger"]')
+				?.focus({ preventScroll: true });
 		sidebarOpen = value;
-		if (persist)
-			document.cookie = `${SIDEBAR_COOKIE_NAME}=${value}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
-		if (value && persist)
-			void tick().then(() =>
-				frame
-					?.querySelector<HTMLElement>('[data-channel-navigation] a[href]')
-					?.focus({ preventScroll: true })
-			);
+	}
+	const sheetOpen = () =>
+		!!frame?.querySelector(
+			'[data-routed-sheet][data-state="open"],dialog[open],[data-slot="sheet-content"][data-state="open"]'
+		);
+	// Capture runs before the Provider's own Cmd+B, which below 768 would flip an unused mobile sheet,
+	// and at a fractional 767.x width would toggle and persist the desktop sidebar instead.
+	function phoneShortcut(e: KeyboardEvent) {
+		if (navDocked || e.key !== 'b' || !(e.metaKey || e.ctrlKey)) return;
+		e.stopImmediatePropagation();
+		e.preventDefault();
+		if (e.repeat || !navigation || sheetOpen()) return;
+		if (navOpen) closePane();
+		else openNavigation();
 	}
 	function openNavigation() {
 		focusBefore = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -225,12 +230,7 @@
 			document.getSelection()?.isCollapsed === false
 		)
 			return;
-		if (
-			frame?.querySelector(
-				'[data-routed-sheet][data-state="open"],dialog[open],[data-slot="sheet-content"][data-state="open"]'
-			)
-		)
-			return;
+		if (sheetOpen()) return;
 		const rect = root.getBoundingClientRect();
 		if (e.clientX - rect.left < motion.edge || rect.right - e.clientX < motion.edge) return;
 		for (let el: Element | null = target; el && el !== root; el = el.parentElement) {
@@ -286,12 +286,6 @@
 		select(next);
 	}
 	function keys(e: KeyboardEvent) {
-		// Below 768 the Provider's Cmd+B flips its unused mobile sheet; it opens the drawer instead.
-		if (!navDocked && e.key === 'b' && (e.metaKey || e.ctrlKey) && navigation) {
-			if (navOpen) closePane();
-			else openNavigation();
-			return;
-		}
 		if (e.defaultPrevented) return;
 		if (pane === 'chat') return;
 		if (e.key === 'Escape') {
@@ -336,10 +330,12 @@
 			if (document.hidden) recover();
 		};
 		addEventListener('blur', recover);
+		addEventListener('keydown', phoneShortcut, { capture: true });
 		document.addEventListener('visibilitychange', visibility);
 		return () => {
 			resize.disconnect();
 			removeEventListener('blur', recover);
+			removeEventListener('keydown', phoneShortcut, { capture: true });
 			document.removeEventListener('visibilitychange', visibility);
 		};
 	});
@@ -518,12 +514,14 @@
 				data-channel-navigation
 				role="navigation"
 				aria-label="Channel navigation"
+				aria-hidden={!sidebarOpen || undefined}
 				class="pt-(--safe-top) pb-(--safe-bottom)"
 			>
 				<div class="flex min-h-0 flex-1 flex-col" inert={!sidebarOpen || overlaid}>
 					{@render navBody()}
 				</div>
-				<Sidebar.Rail class="any-pointer-coarse:hidden" />
+				<!-- The header's trigger is the accessible toggle; the rail is a pointer shortcut. -->
+				<Sidebar.Rail aria-hidden="true" class="any-pointer-coarse:hidden" />
 			</Sidebar.Root>
 		{/if}
 		<!-- Sidebar.Inset's classes on a div: each screen renders the page's own <main> -->

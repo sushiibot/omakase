@@ -5,6 +5,7 @@ const nav = (page: Page) => page.getByRole('navigation', { name: 'Channel naviga
 const panel = (page: Page) => page.getByRole('complementary', { name: 'Conversation tasks' });
 const returnTarget = (page: Page) =>
 	page.getByRole('button', { name: 'Return to conversation', exact: true });
+const trigger = (page: Page) => page.getByRole('button', { name: /^Toggle sidebar/ });
 const focusedIn = (page: Page, selector: string) =>
 	page.evaluate((s) => !!document.activeElement?.closest(s), selector);
 
@@ -14,7 +15,7 @@ test('at 900px the nav docks and the inspector slides over the chat', async ({ p
 	await page.goto('/chat');
 	await expect(nav(page)).toBeVisible();
 	await expect(page.getByRole('dialog', { name: 'Menu' })).toHaveCount(0);
-	await expect(page.getByRole('button', { name: 'Toggle Sidebar' })).toBeVisible();
+	await expect(trigger(page)).toBeVisible();
 	await expect(page.getByRole('button', { name: /^Menu/ })).toHaveCount(0);
 
 	await page.getByRole('button', { name: 'Tasks, 3 open' }).click();
@@ -71,12 +72,73 @@ test('Cmd+B and the header trigger collapse the sidebar, and the choice survives
 
 	await page.reload();
 	await expect(sidebar).toHaveAttribute('data-state', 'collapsed');
-	await page.getByRole('button', { name: 'Toggle Sidebar' }).click();
+	await trigger(page).click();
 	await expect(sidebar).toHaveAttribute('data-state', 'expanded');
 	await expect(nav(page).getByRole('link', { name: 'Main', exact: true })).toBeVisible();
 
 	await page.reload();
 	await expect(sidebar).toHaveAttribute('data-state', 'expanded');
+	await expect(trigger(page)).toHaveAttribute('aria-expanded', 'true');
+
+	// Collapsing from inside the nav hands focus to the header's trigger, not to the page body.
+	await nav(page).getByRole('link', { name: 'Main', exact: true }).focus();
+	await page.keyboard.press('ControlOrMeta+b');
+	await expect(sidebar).toHaveAttribute('data-state', 'collapsed');
+	await expect(page.locator(':focus')).toHaveAttribute('data-sidebar', 'trigger');
+	await expect(trigger(page)).toHaveAttribute('aria-expanded', 'false');
+	await expect(trigger(page)).toHaveAccessibleName(/^Toggle sidebar, \d+ need you$/);
+	await expect(nav(page)).toHaveCount(0);
+});
+
+test('below 768 Cmd+B toggles the drawer, but not behind an open sheet', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await page.goto('/chat');
+	const menu = page.getByRole('dialog', { name: 'Menu', exact: true });
+	await expect(page.getByRole('button', { name: /^Menu/ })).toBeVisible();
+	await page.keyboard.press('ControlOrMeta+b');
+	await expect(menu).toBeVisible();
+	await page.keyboard.press('ControlOrMeta+b');
+	await expect(menu).toBeHidden();
+
+	await page.getByRole('button', { name: 'Chat commands', exact: true }).click();
+	await expect(page.getByRole('dialog', { name: 'Chat commands' })).toBeVisible();
+	await page.keyboard.press('ControlOrMeta+b');
+	await expect(menu).toBeHidden();
+	expect(await page.evaluate(() => document.cookie)).not.toContain('sidebar_state');
+});
+
+test.describe('with a mouse', () => {
+	test.use({ isMobile: false, hasTouch: false });
+
+	test('row options reveal on hover and the rail toggles the sidebar', async ({
+		page,
+		context
+	}) => {
+		await fixtureApp(context);
+		await page.setViewportSize({ width: 1280, height: 900 });
+		await page.goto('/chat');
+		const row = nav(page).locator('[data-sidebar="menu-item"]', {
+			has: page.getByRole('link', { name: /^October trip/ })
+		});
+		const options = row.getByRole('button', { name: 'Options for October trip' });
+		await expect(options).toHaveCSS('opacity', '0');
+		await row.hover();
+		await expect(options).toHaveCSS('opacity', '1');
+		await options.click();
+		await expect(page.getByRole('dialog', { name: 'Conversation settings' })).toBeVisible();
+		await page.keyboard.press('Escape');
+
+		const sidebar = page.locator('[data-slot="sidebar"]');
+		const rail = page.locator('[data-sidebar="rail"]');
+		await expect(rail).toHaveAttribute('aria-hidden', 'true');
+		await rail.click();
+		await expect(sidebar).toHaveAttribute('data-state', 'collapsed');
+		await rail.click({ position: { x: 12, y: 300 } });
+		await expect(sidebar).toHaveAttribute('data-state', 'expanded');
+	});
 });
 
 test('resizing across both breakpoints keeps nav state and moves focus out of the inert chat', async ({
