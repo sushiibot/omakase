@@ -55,7 +55,7 @@ export function pushFor(event: PushEvent): PushPayload {
     case "interrupted":
       return { title: TITLE, body: "Turn interrupted", url: "/chat", tag: "chat" };
     case "agentNeedsYou":
-      return { title: `${event.label} needs approval`, body: plainPushBody(event.description), url: agentUrl(event.conversationId, event.agentId), tag: agentTag(event.agentId, event.requestId), requireInteraction: true };
+      return { title: `${event.label} needs approval`, body: literalPushBody(event.description), url: agentUrl(event.conversationId, event.agentId), tag: agentTag(event.agentId, event.requestId), requireInteraction: true };
     case "agentResolved":
       return { title: `${event.label}: approval answered`, body: "", url: agentUrl(event.conversationId, event.agentId), tag: agentTag(event.agentId, event.requestId), silent: true };
     case "agentResult": {
@@ -78,6 +78,12 @@ const agentUrl = (conversationId: string, agentId: string) => {
   return `${url}${url.includes("?") ? "&" : "?"}agent=${encodeURIComponent(agentId)}`;
 };
 const agentTag = (agentId: string, requestId: string) => `agent:${agentId}:${requestId}`;
+
+/** Text shown as written, such as a command to approve: whitespace collapsed and cut, never markdown-stripped. */
+export function literalPushBody(text: string, max = PUSH_BODY_MAX): string {
+  const points = Array.from(text.replace(/\s+/g, " ").trim());
+  return points.length > max ? `${points.slice(0, max - 1).join("")}…` : points.join("");
+}
 
 /** Markdown reduced to the words a notification shade can show, cut to PUSH_BODY_MAX code points. */
 export function plainPushBody(text: string, max = PUSH_BODY_MAX): string {

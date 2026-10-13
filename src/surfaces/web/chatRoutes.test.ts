@@ -12,7 +12,7 @@ import { RpcErrorReply } from "../../orchestration/transport/server.ts";
 import type { SurfaceActor } from "../../orchestration/workspace/surface.ts";
 import { isVerifiedWebActor, mintWebActor } from "./actor.ts";
 import { INBOUND_RETENTION_MS, SqliteChatLog } from "./chatLog.ts";
-import { createChatRoutes, type ChatRouteLink } from "./chatRoutes.ts";
+import { agentPosted, createChatRoutes, lastOwnerMessageAt, type ChatRouteLink } from "./chatRoutes.ts";
 import type { HistoryResponse } from "./events.ts";
 import { WebInboundStore } from "./inbound.ts";
 import { png } from "./__fixtures__/images.ts";
@@ -1016,3 +1016,23 @@ describe("the server-side queue: a send while a turn runs is held by the bot", (
   expect(h.link.sent[0]?.voice).toBe(true);
   expect(h.link.sent[0]?.text).toBe("Check my calendar");
  });
+
+test("a message the gateway posts for the agent is marked, and never counts as the owner writing", async () => {
+  const h = setup();
+  await post(h.handler, "/api/chat/messages", { clientId: CLIENT, text: "owner says hi" });
+  const ownerAt = lastOwnerMessageAt(h.log);
+  expect(ownerAt).toBeDefined();
+  const req = new Request("http://task.local/api/chat/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clientId: "01J0000000000000000000AGNT", text: "Work on task t-1" }),
+  });
+  agentPosted.add(req);
+  const res = await h.routes.handle(req, "/api/chat/messages", mintWebActor(OWNER, "Owner"));
+  expect(res?.status).toBe(202);
+  const events = h.log.page(["user"], { limit: 5 });
+  expect((events[0]!.data as { byAgent?: boolean }).byAgent).toBe(true);
+  expect((events[1]!.data as { byAgent?: boolean }).byAgent).toBeUndefined();
+  expect(lastOwnerMessageAt(h.log)).toBe(ownerAt);
+  await h.routes.idle();
+});

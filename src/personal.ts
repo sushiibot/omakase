@@ -14,6 +14,7 @@ import { OwnerNameStore } from "./db/ownerName.ts";
 import { createSettingsRoutes } from "./surfaces/web/settingsRoutes.ts";
 import { personalConfig } from "./surfaces/web/config.ts";
 import { TaskRoutes } from "./surfaces/web/taskRoutes.ts";
+import { lastOwnerMessageAt } from "./surfaces/web/chatRoutes.ts";
 import { FileStores } from "./orchestration/workspace/fileStores/service.ts";
 import { FileStoreRoutes } from "./surfaces/web/fileStoreRoutes.ts";
 import { MachineHub, machineGrants } from "./orchestration/machines/hub.ts";
@@ -84,7 +85,7 @@ async function main() {
   workspace.tools.setCodingAgents((args, conversationId) => codingAgents.action(args, conversationId, "agent"));
   const taskRoutes = new TaskRoutes(workspace.link, webChat.threads);
   workspace.tools.setChannelRequests(() => webChat.threads.pendingRequests());
-  workspace.tools.setTaskControl((args, actor, conversationId) => taskRoutes.action(args, actor, conversationId));
+  workspace.tools.setTaskControl((args, actor, conversationId) => taskRoutes.action(args, actor, conversationId, "agent"));
   const agentEvents = new AgentEvents({
     control: machineControl,
     link: workspace.link,
@@ -92,7 +93,7 @@ async function main() {
     push: (event) => sendPush(pushFor(event)),
     lastOwnerMessageAt: (id) => {
       try {
-        return webChat.threads.channel(id).log.page(["user"], { limit: 1 })[0]?.createdAt;
+        return lastOwnerMessageAt(webChat.threads.channel(id).log);
       } catch {
         return undefined;
       }

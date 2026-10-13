@@ -8,6 +8,10 @@ import { TaskRoutes } from "./taskRoutes.ts";
 import type { WebThreads } from "./threadRoutes.ts";
 import type { TaskRequest } from "../../orchestration/taskContracts.ts";
 import { mintWebActor } from "./actor.ts";
+import { agentPosted } from "./chatRoutes.ts";
+import { AgentEvents, MAX_AUTO_CYCLES } from "../../orchestration/machines/events.ts";
+import { CodingAgentStore } from "../../orchestration/machines/agents.ts";
+import { MemoryJsonState } from "../../db/jsonState.ts";
 const dirs: string[] = [];
 afterEach(() => {
   for (const dir of dirs.splice(0))
@@ -131,4 +135,49 @@ test("stopping a parent also stops child runs and task conversations", async () 
   expect(stopped).toEqual(["parent-run", "child-run"]);
   expect(sent.filter(s => s.path === "/api/chat/stop").map(s => s.id)).toEqual([`task-${parent.id}`, `task-${child.id}`]);
   expect(store.get(child.id).status).toBe("todo");
+});
+
+test("an agent at the automatic-cycle cap cannot reset it by starting a task: only the owner's own message does", async () => {
+  const home = mkdtempSync(join(tmpdir(), "task-routes-"));
+  dirs.push(home);
+  const store = new TaskStore(join(home, "state"), home);
+  // The owner's last message per conversation, as the gateway reads it: agent-posted messages skipped.
+  const ownerAt = new Map<string, number>();
+  let now = 1_000_000;
+  const threads = {
+    taskNeedsInput: () => false,
+    async ensureTask() {},
+    channel(id: string) {
+      return {
+        routes: {
+          async handle(req: Request) {
+            if (!agentPosted.has(req)) ownerAt.set(id, ++now);
+            return Response.json({}, { status: 202 });
+          },
+        },
+      };
+    },
+  } as unknown as WebThreads;
+  const routes = new TaskRoutes({ tasksManage: async (r: TaskRequest) => store.manage(r), runsStop: async () => ({ stopped: true }) }, threads);
+  const state = new MemoryJsonState();
+  const events = new AgentEvents({
+    control: { hub: {} as never, agents: new CodingAgentStore(state), list: () => [] },
+    link: { isConnected: () => true, agentResult: async () => "delivered" },
+    state,
+    push: async () => {},
+    lastOwnerMessageAt: (id) => ownerAt.get(id),
+    now: () => now,
+    outboxRetryMs: 0,
+  });
+  const actor = mintWebActor("owner@example.com", "Owner");
+  const task = (await routes.action({ action: "create", title: "Fix login" }, actor)).tasks[0]!;
+  const conversation = `task-${task.id}`;
+  state.set(`agent-loop:${conversation}`, { cycles: MAX_AUTO_CYCLES, since: 0 });
+  expect(() => events.guard(conversation)).toThrow("paused");
+  await routes.action({ action: "start", id: task.id, text: "keep going" }, actor, conversation, "agent");
+  now += 10;
+  expect(() => events.guard(conversation)).toThrow("paused");
+  await routes.action({ action: "start", id: task.id, text: "go on" }, actor, conversation, "owner");
+  now += 10;
+  expect(() => events.guard(conversation)).not.toThrow();
 });

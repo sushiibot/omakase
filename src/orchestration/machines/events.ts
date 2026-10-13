@@ -33,7 +33,16 @@ interface Loop {
   since: number;
   wokeAt?: number;
   countedWake?: number;
+  /** The owner was told about this pause already. */
+  notified?: boolean;
 }
+/** A result waiting for a workspace that can take it. */
+interface Pending {
+  result: Result;
+  attempts: number;
+  nextAt: number;
+}
+const OUTBOX_RETRY_MAX_MS = 60 * 60_000;
 export interface AgentEventDeps {
   control: Pick<MachineControl, "hub" | "agents" | "list">;
   link: Pick<WorkspaceLink, "agentResult" | "isConnected">;
@@ -115,7 +124,10 @@ export class AgentEvents implements SessionObserver {
   guard(conversationId: string): void {
     const loop = this.loop(conversationId);
     if (loop.cycles < MAX_AUTO_CYCLES) return;
-    void this.push({ kind: "agentsPaused", conversationId, cycles: loop.cycles });
+    if (!loop.notified) {
+      this.deps.state.set(loopKey(conversationId), { ...loop, notified: true } satisfies Loop);
+      void this.push({ kind: "agentsPaused", conversationId, cycles: loop.cycles });
+    }
     throw new Error(
       `Coding agents in this conversation are paused after ${loop.cycles} automatic follow-ups. Tell the owner what happened and wait for their reply before starting or messaging an agent again.`,
     );
@@ -186,7 +198,9 @@ export class AgentEvents implements SessionObserver {
       // The thing being approved leads; the model's explanation never stands in for it.
       const action = d?.host
         ? `${d.host}${d.command ? `: ${d.command}` : ""}`
-        : (d?.command ?? (d?.files?.length ? d.files.map((f) => f.path).join(", ") : (d?.grantRoot ?? r.description)));
+        : (d?.command ?? (d?.files?.length
+            ? d.files.map((f) => `${f.change} ${f.path}${f.movePath ? ` → ${f.movePath}` : ""}`).join(", ")
+            : (d?.grantRoot ?? r.description)));
       await this.push({ kind: "agentNeedsYou", ...base, requestId: String(r.id), description: action });
     }
     for (const requestId of pushed)
@@ -211,9 +225,11 @@ export class AgentEvents implements SessionObserver {
     };
     const deadline = this.now() + (this.deps.workspaceWaitMs ?? 30_000);
     while (!this.deps.link.isConnected() && this.now() < deadline) await Bun.sleep(500);
-    if (await this.deliver(result)) return;
+    const outcome = await this.deliver(result);
+    if (outcome === "delivered") return;
     // Kept until a workspace takes it; the owner hears now rather than after an unknown wait.
-    this.deps.state.set(agentKeys.outbox(agent.id), result);
+    if (outcome === "retry")
+      this.deps.state.set(agentKeys.outbox(agent.id), { result, attempts: 1, nextAt: this.now() + this.backoff(1) } satisfies Pending);
     const summary = status === "stalled" ? "No output for a while." : (record.error ?? record.final ?? "");
     await this.push({
       kind: "agentResult",
@@ -225,26 +241,35 @@ export class AgentEvents implements SessionObserver {
     });
   }
 
-  private async deliver(result: Result): Promise<boolean> {
+  private backoff(attempts: number) {
+    return Math.min(OUTBOX_RETRY_MAX_MS, (this.deps.outboxRetryMs || 15_000) * 2 ** (attempts - 1));
+  }
+
+  /** "gone": the conversation no longer exists, so no retry can deliver it. */
+  private async deliver(result: Result): Promise<"delivered" | "retry" | "gone"> {
     try {
-      if ((await this.deps.link.agentResult(result)) !== "delivered") return false;
+      if ((await this.deps.link.agentResult(result)) !== "delivered") return "retry";
       this.woke(result.conversationId);
-      return true;
+      return "delivered";
     } catch (err) {
+      if ((err as { code?: unknown }).code === -32040) return "gone";
       log.warn({ err, agentId: result.agentId }, "could not hand a coding agent result to the workspace; keeping it for a retry");
-      return false;
+      return "retry";
     }
   }
 
-  /** Retries results a workspace could not take; the workspace dedupes, so a repeat is harmless. */
+  /** Retries results a workspace could not take, backing off to hourly; the workspace dedupes repeats. */
   async flushOutbox(): Promise<void> {
     if (!this.deps.link.isConnected()) return;
-    for (const result of this.deps.state.list<Result>("agent-outbox:")) {
-      if (await this.deliver(result)) {
-        // Kept if a newer result replaced it meanwhile.
-        if (this.deps.state.get<Result>(agentKeys.outbox(result.agentId))?.stateVersion === result.stateVersion)
-          this.deps.state.delete(agentKeys.outbox(result.agentId));
-      }
+    for (const pending of this.deps.state.list<Pending>("agent-outbox:")) {
+      if (!pending?.result || pending.nextAt > this.now()) continue;
+      const key = agentKeys.outbox(pending.result.agentId);
+      const outcome = await this.deliver(pending.result);
+      // A newer result may have replaced this one meanwhile.
+      if (this.deps.state.get<Pending>(key)?.result.stateVersion !== pending.result.stateVersion) continue;
+      if (outcome === "retry")
+        this.deps.state.set(key, { ...pending, attempts: pending.attempts + 1, nextAt: this.now() + this.backoff(pending.attempts + 1) } satisfies Pending);
+      else this.deps.state.delete(key);
     }
   }
 }

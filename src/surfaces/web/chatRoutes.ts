@@ -32,6 +32,15 @@ import type { WebUploadPort, WebWorkspaceAdapter } from "./workspaceAdapter.ts";
 const log = getLogger("web/chatRoutes");
 
 /** MESSAGE_TEXT_MAX chars can reach ~48 KB of UTF-8, plus the JSON around it. */
+
+/** Messages the gateway posts for the agent (a task it starts). Only an object identity marks one, so no HTTP
+ *  request can claim it, and such a message never counts as the owner speaking. */
+export const agentPosted = new WeakSet<Request>();
+
+/** When the owner last wrote in this log, skipping messages the agent posted. */
+export function lastOwnerMessageAt(log: Pick<SqliteChatLog, "page">): number | undefined {
+  return log.page(["user"], { limit: 50 }).find((e) => !(e.data as { byAgent?: boolean }).byAgent)?.createdAt;
+}
 export const MESSAGE_BODY_MAX = 64 * 1024;
 export const HISTORY_RESPONSE_MAX = 2 * 1024 * 1024;
 const HISTORY_DEFAULT_LIMIT = 40;
@@ -252,7 +261,7 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
         // In the same transaction as the insert, so a message held for days never loses its photos to orphan GC.
         const missing = uploadIds.length ? deps.uploads!.markReferenced(uploadIds, body.clientId).missing : [];
         if (missing.length) throw new UploadMissing(missing);
-        const seq = chatLog.append("user", { key: body.clientId, text: body.text, uploadIds, at: new Date(at).toISOString() }, body.clientId);
+        const seq = chatLog.append("user", { key: body.clientId, text: body.text, uploadIds, at: new Date(at).toISOString(), ...(agentPosted.has(req) ? { byAgent: true as const } : {}) }, body.clientId);
         const stored = { clientId: body.clientId, text: body.text, uploadIds, seq, createdAt: at, ...(body.voice ? { voice: true } : {}) };
         inbound.insert(stored);
         return { ...stored, routedAt: null, state: "pending" as const };

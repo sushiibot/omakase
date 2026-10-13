@@ -151,13 +151,50 @@ test("a result the workspace cannot take pushes the owner and is delivered once 
     await h.events.reconcile("pc", h.record(2, { status: "completed", final: "Done" }));
     expect(h.pushes).toEqual([expect.objectContaining({ kind: "agentResult", status: "completed", text: "Done" })]);
     expect(pushFor(h.pushes[0]!).title).toBe("Codex agent on Desktop finished");
+    h.advance(16_000);
     await h.events.flushOutbox();
     expect(h.wakes).toEqual([]);
     h.setOutcome("delivered");
+    h.advance(60_000);
     await h.events.flushOutbox();
     await h.events.flushOutbox();
     expect(h.wakes).toEqual([expect.objectContaining({ agentId: "a-1", stateVersion: 2 })]);
   }
+});
+
+test("retries back off after each failed delivery", async () => {
+  const h = harness("unsupported");
+  await h.events.reconcile("pc", h.record(2, { status: "completed", final: "Done" }));
+  const due = () => h.state.list<{ nextAt: number; attempts: number }>("agent-outbox:")[0]!;
+  const first = due();
+  h.advance(first.nextAt - h.now());
+  await h.events.flushOutbox();
+  const second = due();
+  expect(second.attempts).toBe(2);
+  expect(second.nextAt - h.now()).toBe(2 * (first.nextAt - Date.parse("2026-10-12T12:00:00Z")));
+});
+
+test("a result for a conversation that no longer exists is dropped, not retried", async () => {
+  const h = harness();
+  const gone = Object.assign(new Error("Unknown conversation."), { code: -32040 });
+  (h as unknown as { events: { deps: { link: { agentResult: () => Promise<never> } } } }).events.deps.link.agentResult = async () => {
+    throw gone;
+  };
+  await h.events.reconcile("pc", h.record(2, { status: "completed", final: "Done" }));
+  expect(h.pushes).toEqual([expect.objectContaining({ kind: "agentResult" })]);
+  expect(h.state.list("agent-outbox:")).toEqual([]);
+});
+
+test("an approval push shows a command exactly as written", async () => {
+  const h = harness();
+  await h.events.reconcile(
+    "pc",
+    h.record(2, {
+      status: "needs-you",
+      requests: [{ id: 1, method: "m", description: "Run", detail: { kind: "command", command: "rm -rf **/__pycache__ `ls`" } }],
+    }),
+  );
+  expect(pushFor(h.pushes[0]!).body).toBe("rm -rf **/__pycache__ `ls`");
 });
 
 test("a newer change replaces a result still waiting for the workspace", async () => {
@@ -203,6 +240,8 @@ test("after three wake → action cycles without the owner, the conversation's a
   h.advance(1000);
   await wake();
   expect(() => h.events.guard("main")).toThrow("paused after 3 automatic follow-ups");
+  expect(() => h.events.guard("main")).toThrow("paused");
+  // The owner hears once per pause, not on every refused call.
   expect(h.pushes).toEqual([expect.objectContaining({ kind: "agentsPaused", conversationId: "main", cycles: 3 })]);
   // Another conversation is unaffected.
   h.events.guard("topic-1");

@@ -5,6 +5,7 @@ import type { SurfaceActor } from "../../orchestration/workspace/surface.ts";
 import { RpcErrorReply } from "../../orchestration/transport/server.ts";
 import type { WebThreads } from "./threadRoutes.ts";
 import { json, readJson } from "./http.ts";
+import { agentPosted } from "./chatRoutes.ts";
 import { unavailableFor } from "./readRoutes.ts";
 
 export class TaskRoutes {
@@ -13,7 +14,13 @@ export class TaskRoutes {
     private readonly threads: WebThreads,
   ) {}
   private mutation: Promise<unknown> = Promise.resolve();
-  async action(raw: unknown, actor: SurfaceActor, conversationId = "main") {
+  /** `origin` "agent" marks a task the agent starts, so its opening message never counts as the owner's. */
+  async action(
+    raw: unknown,
+    actor: SurfaceActor,
+    conversationId = "main",
+    origin: "owner" | "agent" = "owner",
+  ) {
     const request = taskAction.parse(raw);
     if (request.action === "list" || request.action === "get") {
       const result = await this.link.tasksManage(request);
@@ -111,20 +118,20 @@ export class TaskRoutes {
         ).tasks[0]!;
       // Scheduling prepares both bot and workspace routing without starting an agent turn.
       if (request.action === "prepare") return { tasks: [task] };
-      const res = await this.threads.channel(id).routes.handle(
-        new Request("http://task.local/api/chat/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            clientId: ulid(),
-            text:
-              request.text ??
-              `Work on task ${task.id}: ${task.title}. ${task.brief}`,
-          }),
+      const message = new Request("http://task.local/api/chat/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: ulid(),
+          text:
+            request.text ??
+            `Work on task ${task.id}: ${task.title}. ${task.brief}`,
         }),
-        "/api/chat/messages",
-        actor,
-      );
+      });
+      if (origin === "agent") agentPosted.add(message);
+      const res = await this.threads
+        .channel(id)
+        .routes.handle(message, "/api/chat/messages", actor);
       if (!res?.ok)
         throw new Error(
           "The task message could not be accepted. Your task is saved; try again.",
