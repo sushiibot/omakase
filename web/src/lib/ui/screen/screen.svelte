@@ -44,7 +44,7 @@
 		footer?: Snippet;
 		/** The body's measure; ScreenContent and ScreenFooter inherit it. */
 		measure?: PageMeasure;
-		/** `page` lines the footer up with the body; `raw` leaves its layout to the caller, as chat does. */
+		/** `page` lines toasts up with the body measure; `raw` keeps them at the screen edge, as chat does. ScreenFooter lays out the footer either way. */
 		footerLayout?: 'page' | 'raw';
 		/** Disable when the content owns its vertical scroll, such as a tab pager. */
 		scrollable?: boolean;
@@ -78,14 +78,21 @@
 	{actions}
 	class={headerClass}
 />
+{#snippet toastBox(className?: string)}
+	<div
+		role="status"
+		class={cn(
+			'flex items-center gap-3 rounded-xl bg-foreground px-4 py-3 text-sm [overflow-wrap:anywhere] text-background shadow-lg',
+			className
+		)}
+	>
+		{@render toast?.()}
+	</div>
+{/snippet}
+
 {#if toast && toastPosition === 'top'}
 	<div class={pageFrame ? cn('shrink-0 pt-3', pageFrame) : 'shrink-0 px-3 pt-3 @3xl:px-6'}>
-		<div
-			role="status"
-			class="flex items-center gap-3 rounded-xl bg-foreground px-4 py-3 text-sm [overflow-wrap:anywhere] text-background shadow-lg"
-		>
-			{@render toast()}
-		</div>
+		{@render toastBox()}
 	</div>
 {/if}
 {@render banner?.()}
@@ -106,22 +113,12 @@
 	{#if toast && toastPosition === 'bottom'}
 		{#if pageFrame}
 			<div class="pointer-events-none absolute inset-x-0 bottom-full mb-3">
-				<div class={pageFrame}>
-					<div
-						role="status"
-						class="pointer-events-auto flex items-center gap-3 rounded-xl bg-foreground px-4 py-3 text-sm [overflow-wrap:anywhere] text-background shadow-lg md:w-96"
-					>
-						{@render toast()}
-					</div>
-				</div>
+				<div class={pageFrame}>{@render toastBox('pointer-events-auto md:w-96')}</div>
 			</div>
 		{:else}
-			<div
-				role="status"
-				class="absolute inset-x-3 bottom-full mb-3 flex items-center gap-3 rounded-xl bg-foreground px-4 py-3 text-sm [overflow-wrap:anywhere] text-background shadow-lg @3xl:right-auto @3xl:left-6 @3xl:w-96"
-			>
-				{@render toast()}
-			</div>
+			{@render toastBox(
+				'absolute inset-x-3 bottom-full mb-3 @3xl:right-auto @3xl:left-6 @3xl:w-96'
+			)}
 		{/if}
 	{/if}
 	{@render footer?.()}
