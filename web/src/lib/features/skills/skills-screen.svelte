@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
+	import { PageIntro } from '$lib/ui/page';
 	import ListScreen, { type ListSection } from '$lib/ui/screen/list-screen.svelte';
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
@@ -46,7 +47,7 @@
 {#snippet skeleton()}
 	<div class="flex flex-col gap-3" aria-hidden="true">
 		{#each [0, 1, 2] as i (i)}
-			<div class="flex flex-col gap-2 px-2 py-3">
+			<div class="flex flex-col gap-2 px-3 py-2.5">
 				<Skeleton class="h-4 w-1/2" />
 				<Skeleton class="h-3 w-4/5" />
 			</div>
@@ -56,9 +57,9 @@
 {/snippet}
 
 {#snippet lead()}
-	<p class="px-1 text-sm text-muted-foreground">
-		How-tos the agent wrote for itself. A draft loads on its own only after three verified runs.
-	</p>
+	<PageIntro
+		description="How-tos the agent wrote for itself. A draft loads on its own only after three verified runs."
+	/>
 {/snippet}
 
 {#snippet row(s: SkillSummary)}

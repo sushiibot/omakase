@@ -4,8 +4,8 @@
 	import X from '@lucide/svelte/icons/x';
 	import ZoomIn from '@lucide/svelte/icons/zoom-in';
 	import ZoomOut from '@lucide/svelte/icons/zoom-out';
-	import { Dialog } from 'bits-ui';
 	import { Button } from '$lib/ui/button';
+	import * as Sheet from '$lib/ui/sheet';
 	import type { BrowserPreviewFrame, BrowserPreviewStatus } from '../preview-types';
 
 	let {
@@ -65,7 +65,7 @@
 			<Monitor class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
 			<div class="min-w-0 flex-1">
 				<p class="truncate text-sm font-medium">{hostname}</p>
-				<p role="status" class="text-meta text-muted-foreground">{label}</p>
+				<p role="status" class="text-xs text-muted-foreground">{label}</p>
 			</div>
 			{#if hidden}
 				{#if status.state !== 'ended'}<Button variant="ghost" onclick={onshow}>Show</Button>{/if}
@@ -91,72 +91,68 @@
 					onload={() => onframe(frame!.seq)}
 				/>
 				{#if reconnecting || stale || status.state === 'ended'}<p
-						class="absolute right-2 bottom-2 rounded-md bg-background px-2 py-1 text-meta"
+						class="absolute right-2 bottom-2 rounded-md bg-background px-2 py-1 text-xs"
 					>
 						{label} · last frame
 					</p>{/if}
 			</div>
-			<p class="truncate px-3 py-1 text-meta text-muted-foreground">{status.action}</p>
+			<p class="truncate px-3 py-1 text-xs text-muted-foreground">{status.action}</p>
 		{/if}
 	</section>
 {/if}
 
-<Dialog.Root
+<Sheet.Root
 	open={expanded}
 	onOpenChange={(open) => {
 		if (!open) onclose();
 	}}
 >
-	<Dialog.Portal>
-		<Dialog.Overlay class="fixed inset-0 z-50 bg-scrim" />
-		<Dialog.Content
-			aria-label="Browser screen"
-			class="fixed inset-x-0 top-0 bottom-(--kb) z-50 flex flex-col bg-background pt-(--safe-top) pb-(--safe-bottom) text-foreground outline-none"
-		>
-			<div class="flex shrink-0 items-center gap-2 border-b px-3">
-				<Dialog.Title class="min-w-0 flex-1 truncate text-sm font-medium"
-					>{hostname} · {label}</Dialog.Title
-				>
-				<Button
-					variant="ghost"
-					aria-label={zoomed ? 'Fit browser screen' : 'Zoom browser screen'}
-					aria-pressed={zoomed}
-					onclick={() => (zoomed = !zoomed)}
-					>{#if zoomed}<ZoomOut aria-hidden="true" />{:else}<ZoomIn
-							aria-hidden="true"
-						/>{/if}</Button
-				>
-				<Button size="icon" variant="ghost" aria-label="Close browser screen" onclick={onclose}
-					><X aria-hidden="true" /></Button
-				>
-			</div>
-			<Dialog.Description class="sr-only"
-				>Watch the agent's browser. This preview is read-only.</Dialog.Description
+	<Sheet.Content
+		side="bottom"
+		showCloseButton={false}
+		aria-label="Browser screen"
+		class="gap-0 bg-background pt-(--safe-top) pb-(--safe-bottom) text-foreground outline-none data-[side=bottom]:top-0 data-[side=bottom]:bottom-(--kb) data-[side=bottom]:border-t-0"
+	>
+		<div class="flex shrink-0 items-center gap-2 border-b px-3">
+			<Sheet.Title class="min-w-0 flex-1 truncate text-sm">{hostname} · {label}</Sheet.Title>
+			<Button
+				size="icon"
+				variant="ghost"
+				aria-label={zoomed ? 'Fit browser screen' : 'Zoom browser screen'}
+				aria-pressed={zoomed}
+				onclick={() => (zoomed = !zoomed)}
+				>{#if zoomed}<ZoomOut aria-hidden="true" />{:else}<ZoomIn aria-hidden="true" />{/if}</Button
 			>
-			<div class="flex min-h-0 flex-1 items-center overflow-auto overscroll-contain bg-muted">
-				{#if frame}<img
-						src={source}
-						alt={`Agent browser at ${hostname}`}
-						class={zoomed ? 'max-w-none shrink-0' : 'max-h-full w-full object-contain'}
-						width={zoomed ? frame.width : undefined}
-						height={zoomed ? frame.height : undefined}
-						onload={() => onframe(frame!.seq)}
-					/>
-				{:else}<p role="status" class="m-auto text-sm text-muted-foreground">
-						Waiting for the browser screen…
-					</p>{/if}
+			<Button size="icon" variant="ghost" aria-label="Close browser screen" onclick={onclose}
+				><X aria-hidden="true" /></Button
+			>
+		</div>
+		<Sheet.Description class="sr-only"
+			>Watch the agent's browser. This preview is read-only.</Sheet.Description
+		>
+		<div class="flex min-h-0 flex-1 items-center overflow-auto overscroll-contain bg-muted">
+			{#if frame}<img
+					src={source}
+					alt={`Agent browser at ${hostname}`}
+					class={zoomed ? 'max-w-none shrink-0' : 'max-h-full w-full object-contain'}
+					width={zoomed ? frame.width : undefined}
+					height={zoomed ? frame.height : undefined}
+					onload={() => onframe(frame!.seq)}
+				/>
+			{:else}<p role="status" class="m-auto text-sm text-muted-foreground">
+					Waiting for the browser screen…
+				</p>{/if}
+		</div>
+		<div class="shrink-0 border-t px-3">
+			<div class="flex items-center justify-between gap-2">
+				<p class="truncate text-sm">{status?.action ?? 'Browser finished'}</p>
+				<Button variant="ghost" aria-expanded={details} onclick={() => (details = !details)}
+					>Details</Button
+				>
 			</div>
-			<div class="shrink-0 border-t px-3">
-				<div class="flex items-center justify-between gap-2">
-					<p class="truncate text-sm">{status?.action ?? 'Browser finished'}</p>
-					<Button variant="ghost" aria-expanded={details} onclick={() => (details = !details)}
-						>Details</Button
-					>
-				</div>
-				{#if details}<p class="pb-3 text-meta [overflow-wrap:anywhere] text-muted-foreground">
-						{status?.url ?? 'No page address'} · Read-only
-					</p>{/if}
-			</div>
-		</Dialog.Content>
-	</Dialog.Portal>
-</Dialog.Root>
+			{#if details}<p class="pb-3 text-xs [overflow-wrap:anywhere] text-muted-foreground">
+					{status?.url ?? 'No page address'} · Read-only
+				</p>{/if}
+		</div>
+	</Sheet.Content>
+</Sheet.Root>

@@ -27,6 +27,7 @@
 	{now}
 	back={{ href: parent, label: 'Back', onclick: goBack }}
 	online={pwa.online}
+	skillsHref={resolve('/skills')}
 	runHref={(id) => resolve('/runs/[id]', { id })}
 	onretry={() => void remote.refetch()}
 />

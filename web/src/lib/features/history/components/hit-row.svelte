@@ -4,6 +4,7 @@
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import NotebookText from '@lucide/svelte/icons/notebook-text';
 	import { ago, dayLabel, fromDate } from '$lib/ui/format/time';
+	import * as Item from '$lib/ui/item';
 	import type { SearchHit } from '../types';
 	import Highlight from './highlight.svelte';
 
@@ -31,30 +32,33 @@
 </script>
 
 {#snippet body()}
-	<span class="flex min-w-0 flex-1 flex-col gap-1">
-		<span class="flex items-center gap-1.5 text-meta text-muted-foreground">
+	<Item.Content class="min-w-0">
+		<p class="flex items-center gap-1.5 text-xs text-muted-foreground">
 			<source.icon class="size-3.5 shrink-0" aria-hidden="true" />
 			<span class="font-medium">{source.label}</span>
 			<span aria-hidden="true">·</span>
 			<span class="tabular-nums">{when}</span>
-		</span>
+		</p>
 		{#if hit.source === 'notes' && hit.heading}
-			<span class="text-ui font-medium [overflow-wrap:anywhere]">{hit.heading}</span>
+			<Item.Title class="line-clamp-none [overflow-wrap:anywhere]">{hit.heading}</Item.Title>
 		{/if}
-		<span class="line-clamp-3 text-sm [overflow-wrap:anywhere]"
-			><Highlight text={hit.snippet} ranges={hit.ranges} /></span
+		<Item.Description class="line-clamp-3 [overflow-wrap:anywhere] text-foreground"
+			><Highlight text={hit.snippet} ranges={hit.ranges} /></Item.Description
 		>
-	</span>
+	</Item.Content>
 {/snippet}
 
 {#if href}
-	<a
-		{href}
-		class="flex min-h-16 items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-muted/60"
-	>
-		{@render body()}
-		<ChevronRight class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-	</a>
+	<Item.Root size="sm">
+		{#snippet child({ props })}
+			<a {href} {...props}>
+				{@render body()}
+				<Item.Actions>
+					<ChevronRight class="size-4 text-muted-foreground" aria-hidden="true" />
+				</Item.Actions>
+			</a>
+		{/snippet}
+	</Item.Root>
 {:else}
-	<div class="flex min-h-16 items-center gap-3 px-2 py-2.5">{@render body()}</div>
+	<Item.Root size="sm">{@render body()}</Item.Root>
 {/if}

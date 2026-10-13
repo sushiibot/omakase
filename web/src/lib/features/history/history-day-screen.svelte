@@ -3,10 +3,15 @@
 	// files, so a planted image or link to an upload stays text.
 	import { Markdown } from '$lib/features/chat';
 	import { RunRow } from '$lib/features/runs';
+	import * as Breadcrumb from '$lib/ui/breadcrumb';
+	import * as Card from '$lib/ui/card';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
+	import * as Empty from '$lib/ui/empty';
 	import { longDate } from '$lib/ui/format/time';
+	import { PageIntro } from '$lib/ui/page';
 	import TabbedScreen from '$lib/ui/screen/tabbed-screen.svelte';
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
+	import Section from '$lib/ui/section/section.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
 	import type { HistoryDayDetail } from './types';
 	import { costLabel, costDescription } from './cost';
@@ -65,23 +70,36 @@
 
 {#snippet lead()}
 	{#if day}
-		<div class="flex flex-col gap-3">
-			{#if day.runs.length || day.cost?.unpricedRuns || day.cost?.recordedRuns}
-				<p class="text-sm text-muted-foreground" title={costDescription(day.cost)}>
-					{costLabel(day.cost)}
-					{#if day.cost?.unpricedRuns}
-						· {day.cost.unpricedRuns}
-						{day.cost.unpricedRuns === 1 ? 'execution has' : 'executions have'} no recorded price
-					{/if}
-				</p>
-			{/if}
-		</div>
+		{#if day.runs.length || day.cost?.unpricedRuns || day.cost?.recordedRuns}
+			<PageIntro>
+				{#snippet description()}
+					<p title={costDescription(day.cost)}>
+						{costLabel(day.cost)}
+						{#if day.cost?.unpricedRuns}
+							· {day.cost.unpricedRuns}
+							{day.cost.unpricedRuns === 1 ? 'execution has' : 'executions have'} no recorded price
+						{/if}
+					</p>
+				{/snippet}
+			</PageIntro>
+		{/if}
 	{/if}
+{/snippet}
+
+{#snippet breadcrumb()}
+	<Breadcrumb.Root>
+		<Breadcrumb.List>
+			<Breadcrumb.Item><Breadcrumb.Link href={back.href}>History</Breadcrumb.Link></Breadcrumb.Item>
+			<Breadcrumb.Separator />
+			<Breadcrumb.Item><Breadcrumb.Page>{title}</Breadcrumb.Page></Breadcrumb.Item>
+		</Breadcrumb.List>
+	</Breadcrumb.Root>
 {/snippet}
 
 <TabbedScreen
 	{title}
-	{back}
+	back={{ ...back, desktop: false }}
+	{breadcrumb}
 	{banner}
 	state={{
 		remote,
@@ -103,50 +121,47 @@
 	label="History sections"
 	{lead}
 	hasContent={!!day}
-	wide
 >
 	{#snippet children(tabValue)}
 		{#if day}
 			{#if tabValue === 'recaps'}
-				<section aria-labelledby="{uid}-s" class="flex flex-col gap-3">
-					<h2 id="{uid}-s" class="flex flex-col gap-0.5">
-						<span class="text-base font-semibold">Work recaps</span>
-						<span class="text-meta font-normal text-muted-foreground"
-							>The agent’s written summaries of its work that day.</span
-						>
-					</h2>
+				<Section
+					title="Work recaps"
+					description="The agent’s written summaries of its work that day."
+					class="gap-3"
+				>
 					{#if day.sessions.length}
 						{#each day.sessions as session, i (i)}
-							<article
-								aria-labelledby="{uid}-h{i}"
-								class="flex flex-col gap-2 rounded-xl border bg-card px-4 py-3"
-							>
-								<h3 id="{uid}-h{i}" class="text-ui font-semibold [overflow-wrap:anywhere]">
-									{session.heading}
-								</h3>
-								<div class="min-w-0 [overflow-wrap:anywhere]">
+							<Card.Root role="article" aria-labelledby="{uid}-h{i}">
+								<Card.Header>
+									<h3
+										id="{uid}-h{i}"
+										class="text-sm leading-snug font-medium [overflow-wrap:anywhere]"
+									>
+										{session.heading}
+									</h3>
+								</Card.Header>
+								<Card.Content class="min-w-0 [overflow-wrap:anywhere]">
 									<Markdown text={session.markdown} />
-								</div>
-							</article>
+								</Card.Content>
+							</Card.Root>
 						{/each}
 					{:else}
-						<p class="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
-							No work recaps for this day.
-						</p>
+						<Empty.Root class="border p-4">
+							<Empty.Description>No work recaps for this day.</Empty.Description>
+						</Empty.Root>
 					{/if}
 					{#if day.truncated}
 						<p role="status" class="text-sm text-muted-foreground">
 							This day's notes are longer than the app reads, so the end is cut off.
 						</p>
 					{/if}
-				</section>
+				</Section>
 			{:else if tabValue === 'runs'}
-				<section aria-labelledby="{uid}-r" class="flex flex-col gap-1">
-					<h2 id="{uid}-r" class="text-base font-semibold">Activity that day</h2>
-					<p class="mb-2 text-sm text-muted-foreground">
-						Each record is one chat response or task attempt. Open it to see the steps, result and
-						evidence.
-					</p>
+				<Section
+					title="Activity that day"
+					description="Each record is one chat response or task attempt. Open it to see the steps, result and evidence."
+				>
 					{#if day.runs.length}
 						<ul class="flex flex-col">
 							{#each day.runs as run (run.runId)}
@@ -156,7 +171,7 @@
 					{:else}
 						<p class="text-sm text-muted-foreground">No activity started that day.</p>
 					{/if}
-				</section>
+				</Section>
 			{/if}
 		{/if}
 	{/snippet}

@@ -1,10 +1,15 @@
 <script lang="ts">
-	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
 	import { Markdown } from '$lib/features/chat';
+	import * as Breadcrumb from '$lib/ui/breadcrumb';
+	import * as Card from '$lib/ui/card';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import { ago } from '$lib/ui/format/time';
+	import * as Item from '$lib/ui/item';
+	import { PageIntro } from '$lib/ui/page';
 	import DetailScreen from '$lib/ui/screen/detail-screen.svelte';
+	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
+	import Section from '$lib/ui/section/section.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
 	import WriteRow from './components/write-row.svelte';
 	import type { MemoryFileDetail } from './types';
@@ -27,7 +32,6 @@
 		writeHref?: (id: string) => string;
 		onretry?: () => void;
 	} = $props();
-	const uid = $props.id();
 </script>
 
 {#snippet banner()}
@@ -35,16 +39,29 @@
 {/snippet}
 
 {#snippet skeleton()}
-	<div class="flex flex-col gap-3 px-4 py-4" aria-hidden="true">
+	<div class="flex flex-col gap-3 p-4 md:p-6" aria-hidden="true">
 		<Skeleton class="h-3 w-1/3" />
 		{#each [0, 1, 2, 3] as i (i)}<Skeleton class="h-4 w-full" />{/each}
 	</div>
 	<p role="status" class="sr-only">Loading the file…</p>
 {/snippet}
 
+{#snippet breadcrumb()}
+	<Breadcrumb.Root>
+		<Breadcrumb.List>
+			<Breadcrumb.Item><Breadcrumb.Link href={back.href}>Memory</Breadcrumb.Link></Breadcrumb.Item>
+			<Breadcrumb.Separator />
+			<Breadcrumb.Item>
+				<Breadcrumb.Page class="font-mono">{detail?.file.path}</Breadcrumb.Page>
+			</Breadcrumb.Item>
+		</Breadcrumb.List>
+	</Breadcrumb.Root>
+{/snippet}
+
 <DetailScreen
 	title={detail?.file.path ?? 'Memory file'}
-	{back}
+	back={detail ? { ...back, desktop: false } : back}
+	breadcrumb={detail ? breadcrumb : undefined}
 	{banner}
 	state={{
 		remote: detail === null ? { status: 'ready' } : remote,
@@ -57,30 +74,24 @@
 	}}
 >
 	{#if detail}
-		<ScreenContent measure="reading">
-			<p class="text-sm text-muted-foreground">
-				{detail.file.about}. Changed {ago(detail.file.updatedAt, now)}.
-			</p>
+		<ScreenContent>
+			<PageIntro description="{detail.file.about}. Changed {ago(detail.file.updatedAt, now)}." />
 			{#if detail.file.truncated}<p role="status" class="text-sm text-muted-foreground">
 					This file is large. Showing the first 256 KB.
 				</p>{/if}
-			<section
-				aria-label="What the file says"
-				class="rounded-xl border bg-card px-4 py-3 text-body"
-			>
-				<Markdown text={detail.file.content} />
+			<section aria-label="What the file says">
+				<Card.Root>
+					<Card.Content class="text-body"><Markdown text={detail.file.content} /></Card.Content>
+				</Card.Root>
 			</section>
 			{#if detail.writes.length}
-				<section aria-labelledby="{uid}-w" class="flex flex-col gap-1">
-					<h2 id="{uid}-w" class="px-1 text-sm font-medium text-muted-foreground">
-						Changes to this file
-					</h2>
-					<ul class="flex flex-col">
+				<Section title="Changes to this file" tone="list">
+					<Item.Group class="gap-0">
 						{#each detail.writes as w (w.id)}
-							<li><WriteRow write={w} {now} href={writeHref(w.id)} /></li>
+							<div role="listitem"><WriteRow write={w} {now} href={writeHref(w.id)} /></div>
 						{/each}
-					</ul>
-				</section>
+					</Item.Group>
+				</Section>
 			{/if}
 		</ScreenContent>
 	{/if}

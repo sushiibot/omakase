@@ -30,6 +30,7 @@
 	{now}
 	back={{ href: resolve('/skills'), label: 'Back', onclick: goBack }}
 	online={pwa.online}
+	skillsHref={resolve('/skills')}
 	busy={skills.busy}
 	error={skills.error}
 	runHref={(id) => resolve('/runs/[id]', { id })}

@@ -35,7 +35,7 @@
 {#snippet skeleton()}
 	<div class="flex flex-col gap-3" aria-hidden="true">
 		{#each [0, 1, 2] as i (i)}
-			<div class="flex flex-col gap-2 px-2 py-3">
+			<div class="flex flex-col gap-2 px-3 py-2.5">
 				<Skeleton class="h-4 w-3/4" />
 				<Skeleton class="h-3 w-1/2" />
 			</div>

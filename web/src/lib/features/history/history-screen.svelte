@@ -1,14 +1,16 @@
 <script lang="ts">
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Search from '@lucide/svelte/icons/search';
 	import { Button } from '$lib/ui/button';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import { dayLabel, fromDate } from '$lib/ui/format/time';
+	import * as Item from '$lib/ui/item';
+	import { PageIntro } from '$lib/ui/page';
 	import ListScreen, { type ListSection } from '$lib/ui/screen/list-screen.svelte';
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
+	import { Spinner } from '$lib/ui/spinner';
 	import type { HistoryDay } from './types';
 	import { costLabel, costDescription } from './cost';
 
@@ -64,26 +66,27 @@
 {/snippet}
 
 {#snippet lead()}
-	<p class="text-sm text-muted-foreground">
-		Work history by day: the agent’s written recaps and the activity behind them.
-	</p>
+	<PageIntro
+		description="Work history by day: the agent’s written recaps and the activity behind them."
+	/>
 	{#if memoryHref}
 		<Button variant="outline" href={memoryHref} class="self-start">View saved memory</Button>
 		<p class="text-sm text-muted-foreground">Saved facts and daily memory notes are in Memory.</p>
 	{/if}
-	<a
+	<Button
+		variant="outline"
 		href={searchHref}
-		class="flex h-12 items-center gap-2.5 rounded-lg border border-input px-3 text-base text-muted-foreground hover:bg-muted/60 dark:bg-input/30"
+		class="justify-start border-input font-normal text-muted-foreground"
 	>
-		<Search class="size-4 shrink-0" aria-hidden="true" />Search chat and notes
-	</a>
+		<Search aria-hidden="true" />Search chat and notes
+	</Button>
 {/snippet}
 
 {#snippet skeleton()}
 	<div class="flex flex-col gap-2" aria-hidden="true">
 		<Skeleton class="h-4 w-28" />
 		{#each [0, 1, 2, 3, 4] as i (i)}
-			<div class="flex flex-col gap-2 px-2 py-3">
+			<div class="flex flex-col gap-2 px-3 py-2.5">
 				<Skeleton class="h-4 w-1/3" />
 				<Skeleton class="h-3 w-1/2" />
 			</div>
@@ -93,28 +96,31 @@
 {/snippet}
 
 {#snippet row(day: HistoryDay)}
-	<a
-		href={dayHref(day.date)}
-		class="flex min-h-14 items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-muted/60"
-	>
-		<span class="flex min-w-0 flex-1 flex-col gap-0.5">
-			<span class="text-ui font-medium">{dayLabel(fromDate(day.date), now)}</span>
-			<span class="text-sm text-muted-foreground">
-				{day.sessions || day.runs
-					? [
-							day.sessions && count(day.sessions, 'recap', 'recaps'),
-							day.runs && count(day.runs, 'execution', 'executions')
-						]
-							.filter(Boolean)
-							.join(' · ')
-					: 'Nothing recorded'}
-				{#if day.runs}
-					<span title={costDescription(day.cost)}> · {costLabel(day.cost)}</span>
-				{/if}
-			</span>
-		</span>
-		<ChevronRight class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-	</a>
+	<Item.Root size="sm">
+		{#snippet child({ props })}
+			<a href={dayHref(day.date)} {...props}>
+				<Item.Content class="min-w-0">
+					<Item.Title>{dayLabel(fromDate(day.date), now)}</Item.Title>
+					<Item.Description>
+						{day.sessions || day.runs
+							? [
+									day.sessions && count(day.sessions, 'recap', 'recaps'),
+									day.runs && count(day.runs, 'execution', 'executions')
+								]
+									.filter(Boolean)
+									.join(' · ')
+							: 'Nothing recorded'}
+						{#if day.runs}
+							<span title={costDescription(day.cost)}> · {costLabel(day.cost)}</span>
+						{/if}
+					</Item.Description>
+				</Item.Content>
+				<Item.Actions>
+					<ChevronRight class="size-4 text-muted-foreground" aria-hidden="true" />
+				</Item.Actions>
+			</a>
+		{/snippet}
+	</Item.Root>
 {/snippet}
 
 {#snippet after()}
@@ -127,8 +133,7 @@
 	{#if hasOlder}
 		<Button variant="outline" disabled={olderLoading} onclick={() => onloadolder?.()}>
 			{#if olderLoading}
-				<LoaderCircle class="animate-spin motion-reduce:animate-none" aria-hidden="true" />Loading
-				older days…
+				<Spinner class="motion-reduce:animate-none" aria-hidden="true" />Loading older days…
 			{:else}
 				<ChevronDown />Show older days
 			{/if}

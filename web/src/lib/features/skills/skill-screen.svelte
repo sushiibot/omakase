@@ -1,16 +1,22 @@
 <script lang="ts">
-	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
 	import Archive from '@lucide/svelte/icons/archive';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import CircleX from '@lucide/svelte/icons/circle-x';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import * as Breadcrumb from '$lib/ui/breadcrumb';
 	import { Button } from '$lib/ui/button';
+	import * as Card from '$lib/ui/card';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import { ago } from '$lib/ui/format/time';
+	import * as Item from '$lib/ui/item';
+	import { PageIntro } from '$lib/ui/page';
 	import DetailScreen from '$lib/ui/screen/detail-screen.svelte';
+	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
+	import ScreenFooter from '$lib/ui/screen/screen-footer.svelte';
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
+	import Section from '$lib/ui/section/section.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
+	import { Spinner } from '$lib/ui/spinner';
 	import StatePill from '$lib/ui/status/state-pill.svelte';
 	import type { SkillDetail } from './types';
 
@@ -22,6 +28,7 @@
 		online = true,
 		busy = false,
 		error = null,
+		skillsHref = '/skills',
 		runHref = (id) => `/runs/${id}`,
 		versionsHref = (name) => `/skills/${name}/versions`,
 		onsetstage,
@@ -35,12 +42,12 @@
 		online?: boolean;
 		busy?: boolean;
 		error?: string | null;
+		skillsHref?: string;
 		runHref?: (id: string) => string;
 		versionsHref?: (name: string) => string;
 		onsetstage?: (stage: 'active' | 'archived') => void;
 		onretry?: () => void;
 	} = $props();
-	const uid = $props.id();
 	const pct = (n: number | null) => (n === null ? '–' : `${Math.round(n * 100)}%`);
 </script>
 
@@ -49,7 +56,7 @@
 {/snippet}
 
 {#snippet skeleton()}
-	<div class="flex flex-col gap-3 px-4 py-4" aria-hidden="true">
+	<div class="flex flex-col gap-3 p-4 md:p-6" aria-hidden="true">
 		<Skeleton class="h-6 w-1/2" />
 		<Skeleton class="h-16 w-full rounded-xl" />
 		<Skeleton class="h-4 w-4/5" />
@@ -59,37 +66,50 @@
 
 {#snippet footer()}
 	{#if skill && skill.stage !== 'archived'}
-		<div class="flex flex-col gap-2 border-t px-4 py-3">
+		<ScreenFooter>
 			{#if error}<p role="alert" class="text-sm text-failed">Couldn't change it. {error}</p>{/if}
-			<div class="flex gap-2 any-pointer-coarse:gap-4">
+			<div class="flex gap-2 md:justify-end any-pointer-coarse:gap-4">
 				<Button
 					size="lg"
 					variant="outline"
-					class="flex-1"
+					class="max-md:flex-1"
 					disabled={busy || !online}
 					onclick={() => onsetstage?.('archived')}><Archive />Archive</Button
 				>
 				{#if skill.stage === 'draft' || skill.stage === 'stale'}
 					<Button
 						size="lg"
-						class="flex-1"
+						class="max-md:flex-1"
 						disabled={busy || !online}
 						onclick={() => onsetstage?.('active')}
 					>
-						{#if busy}<LoaderCircle
-								class="animate-spin motion-reduce:animate-none"
+						{#if busy}<Spinner
+								class="motion-reduce:animate-none"
 								aria-hidden="true"
 							/>Saving…{:else}{skill.stage === 'draft' ? 'Use it now' : 'Mark in use'}{/if}
 					</Button>
 				{/if}
 			</div>
-		</div>
+		</ScreenFooter>
 	{/if}
 {/snippet}
 
+{#snippet breadcrumb()}
+	<Breadcrumb.Root>
+		<Breadcrumb.List>
+			<Breadcrumb.Item><Breadcrumb.Link href={skillsHref}>Skills</Breadcrumb.Link></Breadcrumb.Item>
+			<Breadcrumb.Separator />
+			<Breadcrumb.Item>
+				<Breadcrumb.Page class="font-mono">{skill?.name}</Breadcrumb.Page>
+			</Breadcrumb.Item>
+		</Breadcrumb.List>
+	</Breadcrumb.Root>
+{/snippet}
+
 <DetailScreen
-	title="Skill"
-	{back}
+	title={skill?.name ?? 'Skill'}
+	back={skill ? { ...back, desktop: false } : back}
+	breadcrumb={skill ? breadcrumb : undefined}
 	{banner}
 	footer={skill ? footer : undefined}
 	state={{
@@ -103,89 +123,89 @@
 	}}
 >
 	{#if skill}
-		<ScreenContent measure="reading">
-			<article class="flex flex-col gap-6">
-				<header class="flex flex-col gap-2">
-					<div class="flex flex-wrap items-center gap-2">
-						<h2 class="font-mono text-base font-semibold [overflow-wrap:anywhere]">{skill.name}</h2>
-						<StatePill of={skill.stage} />
-					</div>
-					<p class="text-sm text-muted-foreground">{skill.description}</p>
-				</header>
+		<ScreenContent>
+			<PageIntro description={skill.description}>
+				{#snippet actions()}<StatePill of={skill.stage} />{/snippet}
+			</PageIntro>
 
-				<dl class="grid grid-cols-3 divide-x rounded-xl border text-sm">
-					{#each [['Loaded', `${skill.uses} runs`], ['Verified', pct(skill.successRate)], ['Last used', skill.lastUsed ? ago(skill.lastUsed, now) : 'Never']] as [k, v] (k)}
-						<div class="flex min-w-0 flex-col px-3 py-2">
-							<dt class="text-meta text-muted-foreground">{k}</dt>
-							<dd class="font-medium [overflow-wrap:anywhere] tabular-nums">{v}</dd>
-						</div>
+			<dl class="grid grid-cols-3 gap-2">
+				{#each [['Loaded', `${skill.uses} runs`], ['Verified', pct(skill.successRate)], ['Last used', skill.lastUsed ? ago(skill.lastUsed, now) : 'Never']] as [k, v] (k)}
+					<Card.Root size="sm" class="min-w-0 gap-1 px-(--card-spacing)">
+						<dt class="text-xs text-muted-foreground">{k}</dt>
+						<dd class="font-medium [overflow-wrap:anywhere] tabular-nums">{v}</dd>
+					</Card.Root>
+				{/each}
+			</dl>
+
+			<Section title="Why it's {skill.stage === 'active' ? 'in use' : skill.stage}">
+				<p class="text-sm">{skill.why}</p>
+			</Section>
+
+			<Item.Root variant="outline" size="sm">
+				{#snippet child({ props })}
+					<a href={versionsHref(skill.name)} {...props}>
+						<Item.Content>
+							<Item.Title>Versions and SKILL.md</Item.Title>
+							<Item.Description
+								>Version {skill.version}, {skill.versions.length}
+								{skill.versions.length === 1 ? 'change' : 'changes'} with diffs</Item.Description
+							>
+						</Item.Content>
+						<Item.Actions>
+							<ChevronRight class="size-4 text-muted-foreground" aria-hidden="true" />
+						</Item.Actions>
+					</a>
+				{/snippet}
+			</Item.Root>
+
+			<Section title="Lifecycle">
+				<ol class="flex flex-col gap-3 border-l pl-4">
+					{#each skill.history as h (h.at + h.event)}
+						<li class="relative text-sm">
+							<span
+								class="absolute top-1.5 -left-5.25 size-2 rounded-full bg-foreground/40"
+								aria-hidden="true"
+							></span>
+							<span class="font-medium">{h.event}</span>
+							<span class="text-muted-foreground"> · {ago(h.at, now)}</span>
+							<p class="text-muted-foreground">{h.reason}</p>
+						</li>
 					{/each}
-				</dl>
+				</ol>
+			</Section>
 
-				<section class="flex flex-col gap-1.5">
-					<h3 class="text-sm font-semibold">
-						Why it's {skill.stage === 'active' ? 'in use' : skill.stage}
-					</h3>
-					<p class="text-sm">{skill.why}</p>
-				</section>
-
-				<a
-					href={versionsHref(skill.name)}
-					class="flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2 hover:bg-muted/60"
-				>
-					<span class="flex flex-1 flex-col">
-						<span class="text-ui font-medium">Versions and SKILL.md</span>
-						<span class="text-meta text-muted-foreground"
-							>Version {skill.version}, {skill.versions.length}
-							{skill.versions.length === 1 ? 'change' : 'changes'} with diffs</span
-						>
-					</span>
-					<ChevronRight class="size-4 text-muted-foreground" aria-hidden="true" />
-				</a>
-
-				<section aria-labelledby="{uid}-life" class="flex flex-col gap-2">
-					<h3 id="{uid}-life" class="text-sm font-semibold">Lifecycle</h3>
-					<ol class="flex flex-col gap-3 border-l pl-4">
-						{#each skill.history as h (h.at + h.event)}
-							<li class="relative text-sm">
-								<span
-									class="absolute top-1.5 -left-5.25 size-2 rounded-full bg-foreground/40"
-									aria-hidden="true"
-								></span>
-								<span class="font-medium">{h.event}</span>
-								<span class="text-muted-foreground"> · {ago(h.at, now)}</span>
-								<p class="text-muted-foreground">{h.reason}</p>
-							</li>
+			{#if skill.runs.length}
+				<Section title="Runs that loaded it">
+					<Item.Group class="gap-0">
+						{#each skill.runs as r (r.id)}
+							<div role="listitem">
+								<Item.Root size="sm" class="any-pointer-coarse:min-h-12">
+									{#snippet child({ props })}
+										<a href={runHref(r.id)} {...props}>
+											<Item.Media variant="icon">
+												{#if r.ok}
+													<CircleCheck class="text-review" aria-hidden="true" />
+												{:else}
+													<CircleX class="text-failed" aria-hidden="true" />
+												{/if}
+											</Item.Media>
+											<Item.Content class="min-w-0">
+												<Item.Title class="line-clamp-none"
+													><span class="sr-only">{r.ok ? 'Verified:' : 'Failed:'}</span>
+													{r.title}</Item.Title
+												>
+											</Item.Content>
+											<Item.Actions>
+												<span class="text-xs text-muted-foreground">{ago(r.at, now)}</span>
+											</Item.Actions>
+										</a>
+									{/snippet}
+								</Item.Root>
+							</div>
 						{/each}
-					</ol>
-				</section>
-
-				{#if skill.runs.length}
-					<section aria-labelledby="{uid}-runs" class="flex flex-col gap-2">
-						<h3 id="{uid}-runs" class="text-sm font-semibold">Runs that loaded it</h3>
-						<ul class="flex flex-col divide-y rounded-xl border text-sm">
-							{#each skill.runs as r (r.id)}
-								<li>
-									<a
-										href={runHref(r.id)}
-										class="flex min-h-12 items-center gap-2 px-3 py-2 hover:bg-muted/60"
-									>
-										{#if r.ok}
-											<CircleCheck class="size-4 shrink-0 text-review" aria-hidden="true" />
-											<span class="sr-only">Verified:</span>
-										{:else}
-											<CircleX class="size-4 shrink-0 text-failed" aria-hidden="true" />
-											<span class="sr-only">Failed:</span>
-										{/if}
-										<span class="flex-1">{r.title}</span>
-										<span class="text-meta text-muted-foreground">{ago(r.at, now)}</span>
-									</a>
-								</li>
-							{/each}
-						</ul>
-					</section>
-				{/if}
-			</article>
+					</Item.Group>
+				</Section>
+			{/if}
 		</ScreenContent>
 	{/if}
 </DetailScreen>

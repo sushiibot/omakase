@@ -17,6 +17,7 @@
 	import type { ComponentProps, Snippet } from 'svelte';
 	import type { PageMeasure } from '$lib/ui/page';
 	import SearchField from '$lib/ui/input/search-field.svelte';
+	import { ItemGroup } from '$lib/ui/item';
 	import { cn } from '$lib/utils';
 	import Section from '$lib/ui/section/section.svelte';
 	import Screen from './screen.svelte';
@@ -88,11 +89,12 @@
 									aria-hidden="true"
 								/>{/if}
 						{/snippet}
-						<ul class="flex flex-col">
+						<!-- gap-0 keeps rows that are not an Item contiguous; Item rows set their own gap. -->
+						<ItemGroup class="gap-0">
 							{#each section.items as item (key(item))}
-								<li class="min-h-12">{@render row(item)}</li>
+								<div role="listitem">{@render row(item)}</div>
 							{/each}
-						</ul>
+						</ItemGroup>
 					</Section>
 				{/if}
 			{/each}
