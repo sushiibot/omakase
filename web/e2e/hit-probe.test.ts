@@ -16,9 +16,8 @@ for (const touch of [true, false]) {
 			await page.goto(harness);
 			for (const name of ['Default action', 'Icon action']) {
 				const control = page.getByRole('button', { name, exact: true });
-				// Stacked neighbors sit above and below and the viewport edge is on the left; fine
-				// pointers have no reach requirement.
-				await expectHitArea(page, control, { freeSides: touch ? ['right'] : [] });
+				// Fine pointers have no reach requirement.
+				await expectHitArea(page, control, touch ? {} : { freeSides: [] });
 			}
 		} finally {
 			await context.close();

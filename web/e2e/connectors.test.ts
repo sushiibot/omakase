@@ -355,17 +355,13 @@ for (const hasTouch of [false, true]) {
 			await expect(add).toBeVisible();
 			const bounds = await add.boundingBox();
 			expect(bounds!.width).toBeLessThan(260);
-			expect(bounds!.height).toBe(hasTouch ? 48 : 32);
-			await expect(add.locator('[data-slot="button-face"]')).toHaveCSS(
-				'height',
-				hasTouch ? '36px' : '32px'
-			);
-			// The invisible touch padding must activate the control too.
-			await add.click(hasTouch ? { position: { x: 12, y: 2 } } : undefined);
+			expect(bounds!.height).toBe(32);
+			// The invisible touch hit area must activate the control too.
+			await add.click(hasTouch ? { position: { x: 12, y: -6 } } : undefined);
 			await expect(page.getByRole('link', { name: 'Back to Connectors' })).toBeVisible();
 			const next = await page.getByRole('button', { name: 'Continue', exact: true }).boundingBox();
 			expect(next!.width).toBeLessThan(200);
-			expect(next!.height).toBe(hasTouch ? 48 : 32);
+			expect(next!.height).toBe(32);
 		} finally {
 			await context.close();
 		}

@@ -1,5 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { axe, push, smallTargets, stubStream } from './helpers';
+import { expectHitArea } from './hit-probe';
 
 const TOKEN = 'x'.repeat(3000);
 const UPLOAD_ID = 'AbCdEfGhIjKlMnOpQrStUv';
@@ -253,9 +254,7 @@ test('the auto-mode ask keeps its lines, clamps the command and expands it', asy
 
 	const toggle = card.getByRole('button', { name: 'Show full command' });
 	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-	const box = (await toggle.boundingBox())!;
-	expect(box.height).toBeGreaterThanOrEqual(48);
-	expect(box.width).toBeGreaterThanOrEqual(48);
+	await expectHitArea(page, toggle);
 	await toggle.click();
 	const less = card.getByRole('button', { name: 'Show less' });
 	await expect(less).toHaveAttribute('aria-expanded', 'true');

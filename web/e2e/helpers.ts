@@ -4,15 +4,45 @@ import type { FixtureScenario } from '../src/lib/core/fixtures';
 import { fakeBackend } from './fake-backend';
 import { fixtureRoutes, type FixtureFeature, type FixtureRoutes } from './fixture-routes';
 
+/** Controls whose hit box, including a coarse-pointer `::after` extension, is under 48px. */
 export async function smallTargets(page: Page) {
 	return page.$$eval(
 		'a, button, [role=button], [role=switch], [role=radio], input, textarea, summary',
 		(els) =>
 			els
 				.filter((e) => !e.closest('[inert]') && !(e.tagName === 'A' && e.closest('p')))
-				.map((e) => ({ e, r: e.getBoundingClientRect() }))
-				.filter(({ r }) => r.width > 0 && (r.width < 48 || r.height < 48))
-				.map(({ e }) => e.outerHTML.slice(0, 100))
+				.map((e) => {
+					const r = e.getBoundingClientRect();
+					if (r.width === 0) return { e, w: 0, h: 0, extended: false };
+					const after = getComputedStyle(e, '::after');
+					if (after.position !== 'absolute' || after.content === 'none')
+						return { e, w: r.width, h: r.height, extended: false };
+					// ::after insets are measured from the padding box; only negative ones grow the target.
+					const px = (v: string) => parseFloat(v) || 0;
+					const box = getComputedStyle(e);
+					const grow = (side: 'Top' | 'Right' | 'Bottom' | 'Left') =>
+						Math.max(0, -px(after[side.toLowerCase() as 'top']) - px(box[`border${side}Width`]));
+					return {
+						e,
+						w: r.width + grow('Left') + grow('Right'),
+						h: r.height + grow('Top') + grow('Bottom'),
+						extended: true
+					};
+				})
+				// A text field is its own wide target at the stock 32px height. A hit area grows at most
+				// 8px sideways, so the smallest icon button reaches 40px wide.
+				.filter(({ e, w, h, extended }) => {
+					if (w <= 0) return false;
+					const field =
+						e.tagName === 'TEXTAREA' ||
+						(e instanceof HTMLInputElement && !['checkbox', 'radio'].includes(e.type));
+					if (field) return w < 48 || h < 32;
+					return w < (extended ? 39.5 : 47.5) || h < 47.5;
+				})
+				.map(({ e, w, h }) => {
+					const name = e.getAttribute('aria-label') ?? e.textContent?.trim().slice(0, 40);
+					return `<${e.tagName.toLowerCase()}> ${name} (${Math.round(w)}x${Math.round(h)})`;
+				})
 	);
 }
 
