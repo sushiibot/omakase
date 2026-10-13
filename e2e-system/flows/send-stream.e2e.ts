@@ -31,22 +31,21 @@ test("a sent message reaches the workspace and the streamed reply renders as mar
   expect(await watch.violations()).toEqual([]);
 });
 
-test("activity follows reasoning events while a model without reasoning stays waiting", async ({ page, watch }) => {
+test("the typing indicator covers reasoning and non-reasoning models until the reply, and reasoning never reaches chat", async ({ page, watch }) => {
   await openChat(page);
   const activity = page.locator("[data-channel-activity] [data-typing]");
   const tag = nonce();
   await send(page, `E2E-THINK #${tag}`);
-  await expect(activity).toHaveText("Waiting for the model…");
-  await expect(activity).toHaveText("Sushii is thinking…");
+  await expect(activity).toHaveText("Sushii is typing…");
   await expect(activity).toHaveAttribute("role", "status");
   await expect(page.getByText("Private reasoning must never appear in chat.", { exact: true })).toHaveCount(0);
   await expect(bubble(page, `re-${tag}`)).toContainText("Thoughtful reply.");
   await expect(activity).toBeHidden();
   const waitTag = nonce();
   await send(page, `E2E-WAIT #${waitTag}`);
-  await expect(activity).toHaveText("Waiting for the model…");
+  await expect(activity).toHaveText("Sushii is typing…");
   await page.waitForTimeout(2200);
-  await expect(activity).toHaveText("Waiting for the model…");
+  await expect(activity).toHaveText("Sushii is typing…");
   await expect(bubble(page, `re-${waitTag}`)).toContainText("Reply without reasoning.");
   await expect(activity).toBeHidden();
   expect(await watch.violations()).toEqual([]);
