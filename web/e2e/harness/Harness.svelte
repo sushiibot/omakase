@@ -4,6 +4,7 @@
 	import WorkingRow from '$lib/features/chat/components/working-row.svelte';
 	import Conversation from '$lib/features/chat/components/conversation.svelte';
 	import Controls from './Controls.svelte';
+	import Surfaces from './Surfaces.svelte';
 	import { api } from './api.svelte';
 
 	const files = (f: unknown) => f as { id: string; inline: boolean }[] | undefined;
@@ -35,3 +36,4 @@
 {/if}
 
 {#if new URLSearchParams(location.search).has('controls')}<Controls />{/if}
+{#if new URLSearchParams(location.search).has('surfaces')}<Surfaces />{/if}
