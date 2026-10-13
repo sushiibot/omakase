@@ -116,7 +116,7 @@ describe("bindings", () => {
 });
 
 describe("stub execute", () => {
-  test("sends one tool/call as the main agent with the args exactly as given", async () => {
+  test("sends one tool/call as the main agent with the args exactly as given and the model's call id", async () => {
     const { s, calls } = stubs();
     s.update([SEARCH]);
     const res = await run(byName(s, "web_search"), { query: "bun", extra: 1 });
@@ -124,7 +124,7 @@ describe("stub execute", () => {
     expect(calls).toEqual([
       {
         method: "tool/call",
-        params: { principalId: "drk", callId: "01CALL1", name: "web_search", args: { query: "bun", extra: 1 }, agentId: "main", agentName: "main" },
+        params: { principalId: "drk", callId: "01CALL1", name: "web_search", args: { query: "bun", extra: 1 }, agentId: "main", agentName: "main", toolCallId: "tc1" },
         timeoutMs: TOOL_TIMEOUT_MS,
       },
     ]);

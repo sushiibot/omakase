@@ -213,9 +213,9 @@ export class WorkspaceTools {
   /** Read-only projection from bot-owned channel logs; never settles an approval or dialog. */
   private externalFiles?: (raw: unknown) => Promise<unknown>;
   setExternalFiles(call: (raw: unknown) => Promise<unknown>): void { this.externalFiles = call; }
-  private codingAgents?: (args: unknown, conversationId?: string) => Promise<unknown>;
+  private codingAgents?: (args: unknown, conversationId?: string, toolCallId?: string) => Promise<unknown>;
   /** The coding_agent tool: delegated Codex / Claude Code agents on the owner's machines. */
-  setCodingAgents(call: (args: unknown, conversationId?: string) => Promise<unknown>): void { this.codingAgents = call; }
+  setCodingAgents(call: (args: unknown, conversationId?: string, toolCallId?: string) => Promise<unknown>): void { this.codingAgents = call; }
   private machineFiles?: (raw: unknown) => Promise<unknown>;
   setMachineFiles(call: (raw: unknown) => Promise<unknown>): void { this.machineFiles = call; }
   setChannelRequests(read: () => unknown): void { this.channelRequests = read; }
@@ -293,7 +293,7 @@ export class WorkspaceTools {
       try {
         // Results report to a web conversation; a call from elsewhere (a job, another surface) reports to Main.
         const conversationId = p.origin?.surface === "web" ? p.origin.conversationId : "main";
-        return { ok: true, result: JSON.stringify(await this.codingAgents(p.args, conversationId)) };
+        return { ok: true, result: JSON.stringify(await this.codingAgents(p.args, conversationId, p.toolCallId)) };
       } catch (err) { return { ok: false, error: errorText(err) }; }
     }
     if (p.name === "list_channel_requests") {

@@ -734,6 +734,8 @@ export const toolCallParams = z.object({
   agentName: z.string().max(ID_MAX),
   parentRunId: z.string().max(ID_MAX).optional(),
   origin: chatOrigin.optional(),
+  /** The model's id for this call, as the chat's tool lines carry it. An older bot ignores it. */
+  toolCallId: z.string().min(1).max(256).optional(),
 });
 export type ToolCallParams = z.infer<typeof toolCallParams>;
 export type ToolCallResult = { ok: true; result: string } | { ok: false; error: string; denied?: boolean };

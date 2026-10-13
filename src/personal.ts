@@ -82,7 +82,7 @@ async function main() {
   const fileStores = new FileStores(db);
   workspace.tools.setExternalFiles(raw => fileStores.action(raw));
   workspace.tools.setMachineFiles(async raw => (raw as { action?: string })?.action === "list_machines" ? { machines: machineControl.list() } : machineControl.files(raw));
-  workspace.tools.setCodingAgents((args, conversationId) => codingAgents.action(args, conversationId, "agent"));
+  workspace.tools.setCodingAgents((args, conversationId, toolCallId) => codingAgents.action(args, conversationId, "agent", toolCallId));
   const taskRoutes = new TaskRoutes(workspace.link, webChat.threads);
   workspace.tools.setChannelRequests(() => webChat.threads.pendingRequests());
   workspace.tools.setTaskControl((args, actor, conversationId) => taskRoutes.action(args, actor, conversationId, "agent"));

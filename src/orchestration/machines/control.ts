@@ -26,6 +26,7 @@ export interface AgentStart {
   prompt: string;
   title: string;
   conversationId: string;
+  toolCallId?: string;
 }
 export class MachineControl {
   observer?: SessionObserver;
@@ -89,6 +90,7 @@ export class MachineControl {
       title: input.title.slice(0, 200),
       prompt: input.prompt.slice(0, 4000),
       conversationId: input.conversationId,
+      ...(input.toolCallId ? { toolCallId: input.toolCallId } : {}),
       createdAt: at,
       updatedAt: at,
     };

@@ -129,13 +129,13 @@ export class ToolStubs {
       // Fixed text: a session keeps its tool list, and the system prompt names the user.
       promptSnippet: `${entry.name}: runs through the gateway${entry.approval === "ask" ? " and needs the user's approval in chat" : ""}`,
       parameters: entry.inputSchema as ToolDefinition["parameters"],
-      execute: (_toolCallId, params, signal) => this.call(entry.name, params, ctx, signal),
+      execute: (toolCallId, params, signal) => this.call(entry.name, params, ctx, signal, toolCallId),
     };
     return def;
   }
 
   // Pi has already validated (and coerced) params against the closed schema; they go to the bot as Pi left them.
-  private async call(name: string, args: unknown, ctx: StubAgentContext, signal: AbortSignal | undefined): Promise<StubResult> {
+  private async call(name: string, args: unknown, ctx: StubAgentContext, signal: AbortSignal | undefined, toolCallId?: string): Promise<StubResult> {
     const entry = this.manifest.get(name);
     if (!entry) throw new Error(`${name} is no longer offered by the bot`);
     const callId = (this.opts.newId ?? ulid)();
@@ -148,6 +148,7 @@ export class ToolStubs {
       agentName: ctx.agentName,
       ...(ctx.parentRunId ? { parentRunId: ctx.parentRunId } : {}),
       ...(ctx.origin ? { origin: ctx.origin } : {}),
+      ...(toolCallId ? { toolCallId: toolCallId.slice(0, 256) } : {}),
     };
     if (signal?.aborted) throw new Error(`${name} was aborted before it was sent`);
     const pending = this.opts.request(RPC_METHODS.toolCall, params, toolTimeoutMs(entry.approval));

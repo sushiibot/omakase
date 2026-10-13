@@ -5,6 +5,7 @@ import {
   provider,
   sessionStatus,
   type SessionRecord,
+  type TranscriptItem,
 } from "./contracts.ts";
 import type { ActionOrigin, MachineControl } from "./control.ts";
 import type { JsonState } from "../../db/jsonState.ts";
@@ -30,6 +31,15 @@ export const codingAgentRecord = z
     conversationId,
     remoteStatus: sessionStatus.optional(),
     stateVersion: z.number().int().min(0).optional(),
+    /** The main chat's tool call that started it, so the chat shows the agent at that call. */
+    toolCallId: z.string().max(256).optional(),
+    /** Mirrored from the session for the app's list: pending requests, the first one's title, stall and error. */
+    requests: z.number().int().min(0).max(20).optional(),
+    requestTitle: z.string().max(200).optional(),
+    stalled: z.boolean().optional(),
+    error: z.string().max(200).optional(),
+    /** The latest step as one line, refreshed whenever the gateway reads the session. */
+    activity: z.string().max(200).optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
   })
@@ -88,25 +98,22 @@ export class CodingAgentStore {
       this.all().delete(agent.id);
     }
   }
-  /** Mirrors the session's latest state onto the record. */
+  /** Mirrors the session's latest state onto the record; a read of the same version refreshes only its summary. */
   observe(record: SessionRecord) {
     const agent = this.get(record.id);
-    if (
-      !agent ||
-      (agent.stateVersion !== undefined &&
-        (record.stateVersion ?? 0) < agent.stateVersion) ||
-      (agent.remoteStatus === record.status &&
-        agent.stateVersion === record.stateVersion)
-    )
-      return;
-    this.put({
-      ...agent,
+    if (!agent || (agent.stateVersion !== undefined && (record.stateVersion ?? 0) < agent.stateVersion)) return;
+    const changed = agent.remoteStatus !== record.status || agent.stateVersion !== record.stateVersion;
+    const { requests: _r, requestTitle: _t, stalled: _s, error: _e, activity: _a, ...base } = agent;
+    const summary = sessionSummaryFields(record);
+    const next: CodingAgentRecord = {
+      ...base,
+      ...summary,
       remoteStatus: record.status,
-      ...(record.stateVersion !== undefined
-        ? { stateVersion: record.stateVersion }
-        : {}),
-      updatedAt: new Date().toISOString(),
-    });
+      ...(record.stateVersion !== undefined ? { stateVersion: record.stateVersion } : {}),
+      updatedAt: changed ? new Date().toISOString() : agent.updatedAt,
+    };
+    if (!changed && JSON.stringify(next) === JSON.stringify(agent)) return;
+    this.put(next);
   }
 }
 
@@ -141,6 +148,48 @@ export const codingAgentAction = z.discriminatedUnion("action", [
 export type CodingAgentAction = z.infer<typeof codingAgentAction>;
 
 const OUTPUT_TAIL = 4000;
+const line = (text: string | undefined, max = 200) => {
+  const first = text?.split("\n").find((l) => l.trim())?.trim();
+  return first ? (first.length > max ? `${first.slice(0, max - 1)}…` : first) : undefined;
+};
+
+/** One line for the latest transcript step, as a list row shows it. */
+export function activityLine(item: TranscriptItem | undefined): string | undefined {
+  if (!item) return undefined;
+  switch (item.kind) {
+    case "command":
+      return line(`${item.exitCode === undefined && !item.outputTail ? "Running" : "Ran"} ${item.command}${item.exitCode ? ` · exit ${item.exitCode}` : ""}`);
+    case "fileChange": {
+      const n = item.files.length + (item.more ?? 0);
+      return n === 1 ? line(`Changed ${item.files[0]!.path}`) : `Changed ${n} files`;
+    }
+    case "tool":
+      return line(item.detail ? `${item.name}: ${item.detail}` : item.name);
+    case "message":
+      return line(item.text);
+    case "approval":
+      return line(item.title);
+    case "prompt":
+      return item.origin === "owner" ? "Read your message" : "Read a message from Sushii";
+    case "turnEnd":
+      return undefined;
+  }
+}
+
+function sessionSummaryFields(record: SessionRecord) {
+  const items = record.transcript ?? [];
+  let activity: string | undefined;
+  for (let i = items.length - 1; i >= 0 && !activity; i--) activity = activityLine(items[i]);
+  const requestTitle = line(record.requests[0]?.description);
+  const error = line(record.error);
+  return {
+    ...(record.requests.length ? { requests: record.requests.length } : {}),
+    ...(requestTitle ? { requestTitle } : {}),
+    ...(record.stalled ? { stalled: true } : {}),
+    ...(error && record.status !== "completed" && record.status !== "stopped" ? { error } : {}),
+    ...(activity ? { activity } : {}),
+  };
+}
 
 /** `./web/` → `web`; the root itself (`.`) is no path. */
 export function folderPath(path: string | undefined): string | undefined {
@@ -189,9 +238,11 @@ export class CodingAgents {
     };
   }
 
-  async action(raw: unknown, conversation = "main", origin: ActionOrigin = "agent") {
+  async action(raw: unknown, conversation = "main", origin: ActionOrigin = "agent", toolCallId?: string) {
     const p = codingAgentAction.parse(raw);
-    if (p.action === "list") return { agents: this.list(p.conversationId) };
+    // The mirrored activity, request title and error are provider-written; the model reads them through get, labelled.
+    if (p.action === "list")
+      return { agents: this.list(p.conversationId).map(({ activity: _a, requestTitle: _t, error: _e, ...agent }) => agent) };
     if (p.action === "get") return this.get(p.id);
     if (p.action === "start") {
       const path = folderPath(p.path);
@@ -205,6 +256,7 @@ export class CodingAgents {
             prompt: p.prompt,
             title: p.title ?? p.prompt.split("\n")[0]!.slice(0, 120),
             conversationId: conversationId.safeParse(conversation).success ? conversation : "main",
+            ...(toolCallId ? { toolCallId: toolCallId.slice(0, 256) } : {}),
           },
           origin,
         ),

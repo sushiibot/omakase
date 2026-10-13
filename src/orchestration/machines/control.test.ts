@@ -158,3 +158,41 @@ test("the coding_agent schema takes a folder path", () => {
   expect(Check(codingAgentManifest.inputSchema, { action: "start", machineId: "pc", rootId: "code", path: "omakase", provider: "codex", prompt: "x" })).toBe(true);
   expect(codingAgentManifest.description).toContain("path");
 });
+
+test("an agent remembers the chat tool call that started it, and its record mirrors what the list shows", async () => {
+  const store = new CodingAgentStore(new MemoryJsonState());
+  let session: Record<string, unknown> = {};
+  const hub = {
+    list: () => [{ id: "pc", name: "Desktop", connected: true, providers: ["codex"], roots: [{ id: "code", name: "Code", coding: true }] }],
+    supportsEvents: () => true,
+    supportsTranscript: () => true,
+    request: async (_m: string, _method: string, p: { sessionId: string }) => ({ id: p.sessionId, taskId: "", rootId: "code", provider: "codex", output: "", updatedAt: new Date().toISOString(), attempts: 1, promptIds: [], requests: [], status: "running", stateVersion: 1, ...session }),
+  } as unknown as MachineHub;
+  const agents = new CodingAgents(new MachineControl(hub, store));
+  session = { transcript: [{ kind: "command", command: "bun test", at: "" }] };
+  const { agent } = (await agents.action({ action: "start", machineId: "pc", rootId: "code", provider: "codex", prompt: "Fix it" }, "main", "agent", "call-7")) as { agent: CodingAgentRecord };
+  expect(agent).toMatchObject({ toolCallId: "call-7", activity: "Running bun test" });
+
+  // A read of the same version refreshes the step without moving the agent's time.
+  session = { transcript: [{ kind: "command", command: "bun test", exitCode: 1, outputTail: "1 fail", at: "" }] };
+  await agents.get(agent.id);
+  expect(store.get(agent.id)).toMatchObject({ activity: "Ran bun test · exit 1", updatedAt: agent.updatedAt });
+
+  session = {
+    status: "needs-you",
+    stateVersion: 2,
+    requests: [{ id: 1, method: "m", description: "Run: rm -rf build\nAgent's explanation: clean" }],
+  };
+  await agents.get(agent.id);
+  expect(store.get(agent.id)).toMatchObject({ remoteStatus: "needs-you", requests: 1, requestTitle: "Run: rm -rf build" });
+
+  session = { status: "failed", stateVersion: 3, error: "model overloaded" };
+  await agents.get(agent.id);
+  const failed = store.get(agent.id)!;
+  expect(failed).toMatchObject({ error: "model overloaded" });
+  expect(failed).not.toHaveProperty("requests");
+  // The model's list never carries provider-written lines; get labels them as data.
+  const listed = (await agents.action({ action: "list" })) as { agents: Record<string, unknown>[] };
+  expect(listed.agents[0]).not.toHaveProperty("error");
+  expect(listed.agents[0]).not.toHaveProperty("activity");
+});
