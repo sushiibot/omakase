@@ -66,7 +66,7 @@ Review shared changes on desktop and touch layouts, in both themes.
 
 Adding UI:
 
-1. Check whether shadcn-svelte nova ships it, and add it with the CLI (`bunx shadcn-svelte@latest add <name>`) into `src/lib/ui` before writing anything by hand. Start each file with the source header the drift check expects: `<!-- shadcn-svelte nova: ui/<name>/<file> -->` in Svelte files, `// shadcn-svelte nova: ui/<name>/<file>` in TypeScript.
+1. Check whether shadcn-svelte nova ships it, and add it with the CLI (`bunx shadcn-svelte add <name>`, the pinned dev dependency) into `src/lib/ui` before writing anything by hand. Start each file with the source header the drift check expects: `<!-- shadcn-svelte nova: ui/<name>/<file> -->` in Svelte files, `// shadcn-svelte nova: ui/<name>/<file>` in TypeScript.
 2. Add a `src/lib/ui/SYNC.json` entry for the new component: `"drift": "none"`, or one line saying what differs and citing the rule (`(ux-guidelines.md#<anchor>)`).
 3. For a layout with no stock component, copy from the nearest shadcn-svelte block and name it in a header comment (`<!-- modeled on shadcn-svelte dashboard-01 ... -->`).
 4. Run `bun run lint`; the UI drift checks fail it. `bun run lint:drift` lists every hit, and `UI_DRIFT_STRICT=0` reports drift as warnings while fixing a batch.
