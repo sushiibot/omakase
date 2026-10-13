@@ -228,7 +228,7 @@
 				</p>
 			</div>
 			{#if error}<p role="alert" class="text-sm text-failed">Couldn't archive it. {error}</p>{/if}
-			<div class="flex flex-col gap-2 pt-1">
+			<div class="flex flex-col gap-2 pt-1 any-pointer-coarse:gap-4">
 				<Button size="lg" disabled={busy} onclick={onclose}>
 					{#if busy}<LoaderCircle
 							class="animate-spin motion-reduce:animate-none"

@@ -220,7 +220,7 @@
 					>
 				</form>
 			</section>
-			<div class="flex flex-col gap-2">
+			<div class="flex flex-col gap-2 any-pointer-coarse:gap-4">
 				<Button disabled={busy} onclick={() => void start()}
 					><Play />{task.workConversationId
 						? 'Continue with Sushii'

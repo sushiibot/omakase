@@ -118,7 +118,7 @@
 	{#if pending.tainted}<p class="mb-2 flex items-start gap-2 text-meta text-taint">
 			<TriangleAlert class="mt-0.5 size-4 shrink-0" aria-hidden="true" />{pending.tainted}
 		</p>{/if}
-	<div class="flex gap-3">
+	<div class="flex gap-2 any-pointer-coarse:mt-2 any-pointer-coarse:gap-4">
 		<Button
 			variant="outline"
 			disabled={submitting || locating}

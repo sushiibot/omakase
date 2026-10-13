@@ -118,7 +118,11 @@
 		{:else}
 			{@render question('The agent asks:', true)}
 			{#if live}
-				<div role="group" aria-label="Answers" class="flex min-w-0 flex-wrap gap-2">
+				<div
+					role="group"
+					aria-label="Answers"
+					class="flex min-w-0 flex-wrap gap-2 any-pointer-coarse:gap-4"
+				>
 					{#each ask.choices as choice, index (index)}
 						{@const picked = ask.state === 'answering' && ask.answer === choice}
 						<Button

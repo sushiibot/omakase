@@ -61,7 +61,7 @@
 		{#if error}
 			<p role="alert" class="text-sm text-failed">Couldn't start the conversation. {error}</p>
 		{/if}
-		<div class="flex flex-col gap-2">
+		<div class="flex flex-col gap-2 any-pointer-coarse:gap-4">
 			<Button size="lg" type="submit" disabled={!ready}>
 				{#if busy}<LoaderCircle
 						class="animate-spin motion-reduce:animate-none"

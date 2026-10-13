@@ -608,7 +608,7 @@
 					can take up to 4 minutes.
 				</p>
 			</div>
-			<div class="flex flex-col gap-2">
+			<div class="flex flex-col gap-2 any-pointer-coarse:gap-4">
 				<Button size="lg" disabled={commandsOffline} onclick={() => runCommand('new')}
 					><MessageSquarePlus />Reset context</Button
 				>

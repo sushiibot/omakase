@@ -193,7 +193,7 @@
 			{:else if !error}<p role="status" class="text-sm text-muted-foreground">
 					Loading activity…
 				</p>{/if}
-			<div class="flex flex-wrap gap-2">
+			<div class="flex flex-wrap gap-2 any-pointer-coarse:gap-4">
 				<Button
 					variant="outline"
 					href="/runs/{selected.runId}"

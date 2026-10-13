@@ -60,7 +60,7 @@
 
 {#if state !== 'idle'}
 	<section aria-label="Voice call" class="shrink-0 border-t bg-muted/30 px-2 py-1">
-		<div class="flex items-center gap-2">
+		<div class="flex items-center gap-2 any-pointer-coarse:gap-4">
 			<Button
 				variant="ghost"
 				class="h-auto min-h-8 min-w-0 flex-1 justify-start gap-2 px-2 py-1 text-left"

@@ -95,7 +95,7 @@
 				class="text-meta text-muted-foreground">Off: this request only.</span
 			></SwitchRow
 		>{/if}
-	<div class="flex gap-3">
+	<div class="flex gap-2 any-pointer-coarse:gap-4">
 		{#each options as choice (choice.decision)}
 			<Button
 				variant={choice.primary ? 'default' : 'outline'}

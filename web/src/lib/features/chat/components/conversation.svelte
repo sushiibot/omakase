@@ -368,7 +368,7 @@
 									>Moved to the conversation<ArrowUpRight class="size-3.5" aria-hidden="true" /></a
 								>
 							{:else if onstartthread}
-								<div class="flex flex-wrap gap-2">
+								<div class="flex flex-wrap gap-2 any-pointer-coarse:gap-4">
 									<Button size="lg" onclick={() => onstartthread(message.id)}
 										><Split />Start conversation</Button
 									>
@@ -476,7 +476,7 @@
 					</p>
 				{/if}
 				{#if unsent}
-					<div class="flex gap-2">
+					<div class="flex gap-2 any-pointer-coarse:gap-4">
 						{#each actions as a (a.id)}
 							<Button
 								size="icon-sm"

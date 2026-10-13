@@ -61,7 +61,7 @@
 	{#if skill && skill.stage !== 'archived'}
 		<div class="flex flex-col gap-2 border-t px-4 py-3">
 			{#if error}<p role="alert" class="text-sm text-failed">Couldn't change it. {error}</p>{/if}
-			<div class="flex gap-2">
+			<div class="flex gap-2 any-pointer-coarse:gap-4">
 				<Button
 					size="lg"
 					variant="outline"

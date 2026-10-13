@@ -186,7 +186,7 @@
 						Remove this connection and its saved credentials? Your account data stays with the
 						provider.
 					</p>
-					<div class="flex flex-wrap gap-2">
+					<div class="flex flex-wrap gap-2 any-pointer-coarse:gap-4">
 						<Button variant="outline" disabled={busy || !online} onclick={onremove}>
 							<span class="grid"
 								><span aria-hidden="true" class="invisible col-start-1 row-start-1"

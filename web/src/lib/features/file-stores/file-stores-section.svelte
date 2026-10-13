@@ -204,7 +204,7 @@
 				{@render issue('folders')}
 				<div class="flex flex-col divide-y">
 					{#each form.folders as folder, index}
-						<div class="flex min-w-0 flex-col gap-2 py-3">
+						<div class="flex min-w-0 flex-col gap-2 py-3 any-pointer-coarse:gap-4">
 							<label for={`store-folder-${index}`} class="flex flex-col gap-1.5 text-sm font-medium"
 								>Folder {index + 1}<Input
 									disabled={!!busy}
@@ -377,7 +377,7 @@
 					{/if}
 					{#if removeId === store.id}
 						<p class="text-sm">Remove this connection? Files on the server will stay in place.</p>
-						<div class="flex flex-wrap gap-2">
+						<div class="flex flex-wrap gap-2 any-pointer-coarse:gap-4">
 							<Button variant="destructive" disabled={!!busy} onclick={() => void remove(store)}
 								>Remove connection</Button
 							><Button variant="outline" disabled={!!busy} onclick={() => (removeId = null)}
@@ -385,7 +385,7 @@
 							>
 						</div>
 					{:else}
-						<div class="flex flex-wrap gap-2">
+						<div class="flex flex-wrap gap-2 any-pointer-coarse:gap-4">
 							<Button variant="outline" disabled={!!busy} onclick={() => void test(store)}
 								>{busy === store.id ? 'Testing…' : 'Test connection'}</Button
 							><Button variant="outline" disabled={!!busy} onclick={() => edit(store)}>Edit</Button

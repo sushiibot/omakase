@@ -67,7 +67,7 @@
 		{#if confirmation.reason}<p class="my-2 text-meta text-muted-foreground">
 				{confirmation.reason}
 			</p>{/if}
-		<div class="flex gap-3">
+		<div class="flex gap-2 any-pointer-coarse:gap-4">
 			{#each ask.choices as choice, index (index)}
 				<Button
 					variant={/^(yes|approve|allow|confirm)$/i.test(choice) ? 'default' : 'outline'}

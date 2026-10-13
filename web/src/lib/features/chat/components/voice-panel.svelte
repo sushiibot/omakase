@@ -344,7 +344,7 @@
 				<span class="font-medium">Sushii:</span>
 				{assistantText}
 			</p>{/if}
-		<div class="flex gap-2">
+		<div class="flex gap-2 any-pointer-coarse:gap-4">
 			<Button variant="outline" disabled={callState === 'connecting'} onclick={onmute}
 				>{muted ? 'Unmute microphone' : 'Mute microphone'}</Button
 			>
