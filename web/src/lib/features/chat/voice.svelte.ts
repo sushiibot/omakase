@@ -11,6 +11,8 @@ export class Voice {
 	reader = new ReadAloud();
 	micLevel = $state(0);
 	#meterAt = 0;
+	// The loudest chunk since the meter last moved, so a short sound between updates still shows.
+	#meterPeak = 0;
 	async readAloud(message: ChatMessage) {
 		if (this.state !== 'idle') return;
 		this.stopPreview();
@@ -444,8 +446,10 @@ export class Voice {
 					this.#fail('Voice connection is too slow. Try again.');
 					return;
 				}
+				this.#meterPeak = Math.max(this.#meterPeak, microphoneLevel(new Int16Array(data), 32768));
 				if (performance.now() - this.#meterAt >= 80) {
-					this.micLevel = this.muted ? 0 : microphoneLevel(new Int16Array(data), 32768);
+					this.micLevel = this.muted ? 0 : this.#meterPeak;
+					this.#meterPeak = 0;
 					this.#meterAt = performance.now();
 				}
 				const turn =

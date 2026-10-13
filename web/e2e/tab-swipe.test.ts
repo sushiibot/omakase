@@ -246,6 +246,8 @@ async function heldDrag(page: Page, distance: number) {
 	};
 }
 
+type Box = { x: number; width: number };
+
 async function indicatorBox(page: Page) {
 	return page.locator('[data-tab-indicator]').evaluate((el) => {
 		const { x, width } = el.getBoundingClientRect();
@@ -284,16 +286,47 @@ test('held touch tracks the finger, reveals the adjacent pane and moves the unde
 	const second = await page.getByRole('tab', { name: 'Results', exact: true }).boundingBox();
 	const drag = await heldDrag(page, 130);
 	try {
+		// The pager eases toward the finger over several frames, so wait for it to stop, then read the
+		// pane and the underline from one frame.
+		const frame = () =>
+			page.evaluate(
+				() =>
+					new Promise<{ pane: number; neighbor: Box; underline: Box }>((resolve) =>
+						requestAnimationFrame(() => {
+							const box = (el: Element) => {
+								const { x, width } = el.getBoundingClientRect();
+								return { x, width };
+							};
+							const pane = (name: string) => {
+								const tab = [...document.querySelectorAll('[role="tab"]')].find(
+									(t) => t.textContent?.trim() === name
+								)!;
+								const id = tab.getAttribute('aria-controls')!;
+								return box(document.getElementById(id)!);
+							};
+							resolve({
+								pane: pane('Activity').x,
+								neighbor: pane('Results'),
+								underline: box(document.querySelector('[data-tab-indicator]')!)
+							});
+						})
+					)
+			);
+		let settled = await frame();
 		await expect
-			.poll(async () => start!.x - (await panel(page, 'Activity').boundingBox())!.x)
-			.toBeGreaterThan(115);
-		const current = await panel(page, 'Activity').boundingBox();
-		expect(start!.x - current!.x).toBeLessThan(145);
-		const neighbor = await panel(page, 'Results').boundingBox();
-		expect(neighbor!.x).toBeLessThan(start!.x + drag.width);
-		expect(neighbor!.x + neighbor!.width).toBeGreaterThan(start!.x);
-		const underline = await indicatorBox(page);
-		const fraction = (start!.x - current!.x) / drag.width;
+			.poll(async () => {
+				const previous = settled.pane;
+				settled = await frame();
+				return start!.x - settled.pane > 115 && Math.abs(settled.pane - previous) < 0.5;
+			})
+			.toBe(true);
+		const current = { x: settled.pane };
+		expect(start!.x - current.x).toBeLessThan(145);
+		const neighbor = settled.neighbor;
+		expect(neighbor.x).toBeLessThan(start!.x + drag.width);
+		expect(neighbor.x + neighbor.width).toBeGreaterThan(start!.x);
+		const underline = settled.underline;
+		const fraction = (start!.x - current.x) / drag.width;
 		expect(Math.abs(underline.x - (first!.x + (second!.x - first!.x) * fraction))).toBeLessThan(3);
 		expect(
 			Math.abs(underline.width - (first!.width + (second!.width - first!.width) * fraction))

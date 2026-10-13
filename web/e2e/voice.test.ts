@@ -141,10 +141,11 @@ test('PCM streams in both directions, interruption stops playback, mute and end 
 		)
 		.toBeGreaterThan(0);
 	await page.screenshot({ path: '/tmp/sushii-microphone-meter.png' });
+	// Ten seconds of audio, so Speaking lasts until the interruption below rather than one second.
 	connection.send(
 		JSON.stringify({
 			type: 'audio',
-			audio: Buffer.alloc(48000).toString('base64'),
+			audio: Buffer.alloc(480000).toString('base64'),
 			sampleRate: 24000
 		})
 	);

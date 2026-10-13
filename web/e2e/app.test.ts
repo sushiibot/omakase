@@ -707,6 +707,10 @@ test('a push honours its flags and never keeps a cross-origin url', async ({ pag
 		requireInteraction: true,
 		renotify: true
 	});
+	// Show the first before sending the second, so the two notification store writes never overlap.
+	await expect
+		.poll(async () => (await shownNotifications(page)).map((n) => n.tag))
+		.toEqual(['approval:n1']);
 	await push({
 		title: 'Reply',
 		body: 'night',
