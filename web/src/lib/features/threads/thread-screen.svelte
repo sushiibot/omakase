@@ -110,13 +110,12 @@
 
 {#snippet subtitle()}
 	{#if thread}
-		<!-- The hit area stops at the header's bottom edge so it never covers the transcript. -->
 		<Button
 			variant="link"
 			size="xs"
 			aria-haspopup="dialog"
 			onclick={() => onopensheet?.('thread-memory')}
-			class="-my-1 max-w-full min-w-0 shrink justify-start p-0 font-normal text-muted-foreground hover:text-foreground hover:no-underline any-pointer-coarse:after:-top-3.5 any-pointer-coarse:after:-bottom-1.5"
+			class="max-w-full min-w-0 shrink justify-start p-0 font-normal text-muted-foreground hover:text-foreground hover:no-underline"
 		>
 			<BookMarked class="size-3.5" aria-hidden="true" />
 			<span class="truncate"

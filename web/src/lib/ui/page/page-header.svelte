@@ -57,10 +57,10 @@
 			<h1 class={titleClass}>{title}</h1>
 		{/if}
 		{#if subtitle}
-			<!-- Clipped sideways only, so a control here keeps its coarse-pointer hit area. -->
+			<!-- Clipped sideways only. A button here reaches from the title's bottom to the header's, never over either. -->
 			<div
 				class={cn(
-					'overflow-x-clip text-xs text-ellipsis whitespace-nowrap text-muted-foreground',
+					'overflow-x-clip text-xs text-ellipsis whitespace-nowrap text-muted-foreground [&_[data-slot=button]]:any-pointer-coarse:after:top-0 [&_[data-slot=button]]:any-pointer-coarse:after:-bottom-1',
 					breadcrumb && 'md:hidden'
 				)}
 			>

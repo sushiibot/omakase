@@ -377,7 +377,7 @@ Where the app departs:
 
 `Page.Body` centers content at `max-w-3xl` for `reading` and spans the inset for `full`.
 A sticky footer is a `ScreenFooter` passed as the Screen's `footer`: it draws the full-bleed top border and lines its `flex flex-col gap-2 px-4 py-3 md:px-6` contents up with the body measure. Footers bring no border or gutters of their own.
-The header `subtitle` clips text sideways only, so a control in it (such as the thread memory link) keeps its coarse-pointer hit area; keep that hit area inside the header's bottom edge so it never covers the content below.
+The header `subtitle` clips text sideways only. `Page.Header` owns the vertical reach of a `Button` in it: on coarse pointers its `::after` runs from the button's top edge, which is the title's bottom, to 4px below its face, which is the header's bottom edge. That keeps it off the title and off the content below. The thread memory link is 28px tall on touch, an exception to the 44px rule, and callers add no hit-area classes.
 It owns gutters and section rhythm. Embedded content adds no competing outer geometry.
 Chat transcripts, the workspace shell, and tab pagers retain their specialized scrolling layouts.
 
