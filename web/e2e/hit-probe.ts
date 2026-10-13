@@ -94,3 +94,24 @@ export async function expectHitArea(page: Page, control: Locator, opts?: HitProb
 	expect(result.failures, `hit probe failures for ${control}`).toEqual([]);
 	return result;
 }
+
+/** Whether a tap `distance` px outside the control's face, at the middle of `side`, reaches it. */
+export async function outsideFace(control: Locator, side: Side, distance: number) {
+	return control.evaluate(
+		(el, { side, distance }) => {
+			el.scrollIntoView({ block: 'center', inline: 'center' });
+			const r = el.getBoundingClientRect();
+			const cx = r.left + r.width / 2;
+			const cy = r.top + r.height / 2;
+			const point: Record<Side, [number, number]> = {
+				top: [cx, r.top - distance],
+				right: [r.right + distance, cy],
+				bottom: [cx, r.bottom + distance],
+				left: [r.left - distance, cy]
+			};
+			const hit = (el.getRootNode() as Document | ShadowRoot).elementFromPoint(...point[side]);
+			return !!hit && (hit === el || el.contains(hit));
+		},
+		{ side, distance }
+	);
+}

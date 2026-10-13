@@ -4,45 +4,127 @@ import type { FixtureScenario } from '../src/lib/core/fixtures';
 import { fakeBackend } from './fake-backend';
 import { fixtureRoutes, type FixtureFeature, type FixtureRoutes } from './fixture-routes';
 
-/** Controls whose hit box, including a coarse-pointer `::after` extension, is under 48px. */
+/**
+ * Controls whose hit box is too small. A coarse-pointer `::after` extension counts only as far as
+ * `elementFromPoint` still resolves to the control, so a neighbour or a clipping ancestor shrinks
+ * it. Points outside the viewport, and controls under an overlay or scrolled partly out of view,
+ * fall back to geometry.
+ */
 export async function smallTargets(page: Page) {
 	return page.$$eval(
 		'a, button, [role=button], [role=switch], [role=radio], input, textarea, summary',
-		(els) =>
-			els
-				.filter((e) => !e.closest('[inert]') && !(e.tagName === 'A' && e.closest('p')))
-				.map((e) => {
-					const r = e.getBoundingClientRect();
-					if (r.width === 0) return { e, w: 0, h: 0, extended: false };
-					const after = getComputedStyle(e, '::after');
-					if (after.position !== 'absolute' || after.content === 'none')
-						return { e, w: r.width, h: r.height, extended: false };
-					// ::after insets are measured from the padding box; only negative ones grow the target.
-					const px = (v: string) => parseFloat(v) || 0;
-					const box = getComputedStyle(e);
-					const grow = (side: 'Top' | 'Right' | 'Bottom' | 'Left') =>
-						Math.max(0, -px(after[side.toLowerCase() as 'top']) - px(box[`border${side}Width`]));
+		(els) => {
+			const control =
+				'a, button, [role=button], [role=switch], [role=radio], input, select, textarea, summary, label';
+			// A point is lost to a clipping ancestor or to another control. Anything else on top, such as
+			// a sticky footer at this scroll position, says nothing about the hit area, so it counts.
+			const hitsSelf = (e: Element, x: number, y: number) => {
+				if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return true;
+				const hit = document.elementFromPoint(x, y);
+				if (!hit || hit === e || e.contains(hit)) return true;
+				return !(hit.contains(e) || hit.closest(control));
+			};
+			const px = (v: string) => parseFloat(v) || 0;
+			type Side = 'Top' | 'Right' | 'Bottom' | 'Left';
+			const sides: [Side, number, number][] = [
+				['Top', 0, -1],
+				['Right', 1, 0],
+				['Bottom', 0, 1],
+				['Left', -1, 0]
+			];
+			const measure = (e: Element) => {
+				const r = e.getBoundingClientRect();
+				if (r.width === 0) return null;
+				const after = getComputedStyle(e, '::after');
+				const extended = after.position === 'absolute' && after.content !== 'none';
+				const inField = [...(e.parentElement?.querySelectorAll('input') ?? [])].some((input) => {
+					const f = input.getBoundingClientRect();
+					return f.top <= r.top && f.bottom >= r.bottom && f.left <= r.left && f.right >= r.right;
+				});
+				// A Button whose hit area is switched off is a contiguous row and sizes its own box.
+				const row =
+					e.getAttribute('data-slot') === 'button' &&
+					after.display === 'none' &&
+					matchMedia('(any-pointer: coarse)').matches;
+				if (!extended || after.display === 'none')
 					return {
-						e,
-						w: r.width + grow('Left') + grow('Right'),
-						h: r.height + grow('Top') + grow('Bottom'),
-						extended: true
+						w: r.width,
+						h: r.height,
+						kind: row ? 'row' : 'box',
+						covered: false,
+						lost: [] as string[]
 					};
-				})
-				// A text field is its own wide target at the stock 32px height. A hit area grows at most
-				// 8px sideways, so the smallest icon button reaches 40px wide.
-				.filter(({ e, w, h, extended }) => {
-					if (w <= 0) return false;
-					const field =
-						e.tagName === 'TEXTAREA' ||
-						(e instanceof HTMLInputElement && !['checkbox', 'radio'].includes(e.type));
-					if (field) return w < 48 || h < 32;
-					return w < (extended ? 39.5 : 47.5) || h < 47.5;
-				})
-				.map(({ e, w, h }) => {
-					const name = e.getAttribute('aria-label') ?? e.textContent?.trim().slice(0, 40);
-					return `<${e.tagName.toLowerCase()}> ${name} (${Math.round(w)}x${Math.round(h)})`;
-				})
+				// ::after insets are measured from the padding box; only negative ones grow the target.
+				const box = getComputedStyle(e);
+				const grow = (side: Side) =>
+					Math.max(0, -px(after[side.toLowerCase() as 'top']) - px(box[`border${side}Width`]));
+				const cx = r.left + r.width / 2;
+				const cy = r.top + r.height / 2;
+				const reach: Record<Side, number> = { Top: 0, Right: 0, Bottom: 0, Left: 0 };
+				const lost: string[] = [];
+				let covered = false;
+				const hit = document.elementFromPoint(cx, cy);
+				const exposed = !!hit && (hit === e || e.contains(hit));
+				// A face partly scrolled out of a scrolling ancestor is clipped by position, not by design.
+				let scrolled = false;
+				for (let a = e.parentElement; a; a = a.parentElement) {
+					if (!/auto|scroll/.test(getComputedStyle(a).overflow)) continue;
+					const c = a.getBoundingClientRect();
+					if (r.top < c.top || r.bottom > c.bottom || r.left < c.left || r.right > c.right)
+						scrolled = true;
+				}
+				if (exposed && !scrolled) {
+					for (const [side, dx, dy] of sides) {
+						const ex = dx > 0 ? r.right : dx < 0 ? r.left : cx;
+						const ey = dy > 0 ? r.bottom : dy < 0 ? r.top : cy;
+						// 2px in: at fractional device scale factors an `::after` can snap 1px past its inset.
+						if (!hitsSelf(e, ex - 2 * dx, ey - 2 * dy)) covered = true;
+						let n = 0;
+						while (n < grow(side) && hitsSelf(e, ex + dx * (n + 0.5), ey + dy * (n + 0.5))) n++;
+						reach[side] = n;
+						if (n < grow(side)) {
+							const by = document.elementFromPoint(ex + dx * (n + 0.5), ey + dy * (n + 0.5));
+							const label = by
+								? (by.getAttribute('aria-label') ?? by.tagName.toLowerCase())
+								: 'edge';
+							lost.push(`${side.toLowerCase()} ${n}/${grow(side)} to ${label}`);
+						}
+					}
+				} else for (const [side] of sides) reach[side] = grow(side);
+				return {
+					w: r.width + reach.Left + reach.Right,
+					h: r.height + reach.Top + reach.Bottom,
+					kind: inField ? 'in-field' : 'extended',
+					covered,
+					lost
+				};
+			};
+			return (
+				els
+					.filter((e) => !e.closest('[inert]') && !(e.tagName === 'A' && e.closest('p')))
+					.map((e) => ({ e, m: measure(e) }))
+					// A text field is its own wide target at the stock 32px height, and so is a control
+					// inside one. A hit area keeps at least 40px in the axis where a neighbour owns the gap
+					// and about 48px in the other; contiguous rows are at least 40px tall.
+					.filter(({ e, m }) => {
+						if (!m) return false;
+						const field =
+							e.tagName === 'TEXTAREA' ||
+							(e instanceof HTMLInputElement && !['checkbox', 'radio'].includes(e.type));
+						if (field) return m.w < 48 || m.h < 32;
+						if (m.kind === 'in-field') return m.h < 31.5;
+						if (m.covered) return true;
+						if (m.kind === 'row') return m.w < 47.5 || m.h < 39.5;
+						if (m.kind === 'extended')
+							return Math.min(m.w, m.h) < 39.5 || Math.max(m.w, m.h) < 46.5;
+						return m.w < 47.5 || m.h < 47.5;
+					})
+					.map(({ e, m }) => {
+						const name = e.getAttribute('aria-label') ?? e.textContent?.trim().slice(0, 40);
+						return `<${e.tagName.toLowerCase()}> ${name} (${Math.round(m!.w)}x${Math.round(m!.h)}${m!.covered ? ', face covered' : ''}${m!.lost.length ? `; ${m!.lost.join(', ')}` : ''})`;
+					})
+			);
+		}
 	);
 }
 

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectHitArea, outsideFace } from './hit-probe';
 
 // Drives the render components in Chromium, under the gateway's Trusted Types policy. The depth
 // payloads live here rather than only in bun tests because JSC overflows on them only sometimes.
@@ -458,6 +459,19 @@ test.describe('approval tray hold', () => {
 		});
 		await expect(approve(page)).toBeDisabled();
 		await expect(approve(page)).toBeEnabled();
+	});
+
+	test('Deny and Approve keep their hit areas toward each other on touch', async ({ page }) => {
+		await open(page);
+		await setTray(page, ['AAAAAAAAAAAAAAAA']);
+		await expect(approve(page)).toBeEnabled();
+		expect(await page.evaluate(() => matchMedia('(any-pointer: coarse)').matches)).toBe(true);
+		const deny = page.getByRole('button', { name: /^Deny/ });
+		await expectHitArea(page, deny, { freeSides: ['right'] });
+		await expectHitArea(page, approve(page), { freeSides: ['left'] });
+		// 7px past each face, into the gap between them: each side still owns its half.
+		expect(await outsideFace(deny, 'right', 7)).toBe(true);
+		expect(await outsideFace(approve(page), 'left', 7)).toBe(true);
 	});
 
 	test('an empty list renders nothing and does not crash', async ({ page }) => {

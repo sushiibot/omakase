@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { checkScreen, fixtureApp } from './helpers';
+import { expectHitArea } from './hit-probe';
 
 test('connector tool changes are informational and the tracking snapshot is optional', async ({
 	page,
@@ -132,6 +133,12 @@ test('Fastmail token connection can disconnect, reconnect and remove its credent
 	await page.getByRole('button', { name: 'Continue', exact: true }).click();
 	await expect(page.getByText('Connected. The agent can use these tools')).toBeVisible();
 	await page.getByRole('button', { name: 'Connection actions', exact: true }).click();
+	// Menu rows are contiguous: each sizes its own box and none covers the next.
+	for (const name of ['Reconnect', 'Disconnect', 'Remove…']) {
+		const row = page.getByRole('button', { name, exact: true });
+		await expect(row).toHaveCSS('height', '44px');
+		await expectHitArea(page, row, { freeSides: [] });
+	}
 	await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
 	await expect(page.getByText('Disconnected', { exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Connection actions', exact: true }).click();
