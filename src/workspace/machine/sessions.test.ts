@@ -4,9 +4,9 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SharedFiles } from "./files.ts";
-import { MachineSessions, wireRecord } from "./sessions.ts";
+import { capTranscript, MachineSessions, wireRecord } from "./sessions.ts";
 import { FAKE_PROVIDER } from "./fakeProvider.ts";
-import type { SessionRecord, SessionSummary } from "../../orchestration/machines/contracts.ts";
+import { transcriptItem, type SessionRecord, type SessionSummary, type TranscriptItem } from "../../orchestration/machines/contracts.ts";
 
 const dirs: string[] = [];
 const live: MachineSessions[] = [];
@@ -472,4 +472,61 @@ test("only a gateway that negotiated transcripts gets one, and never without ses
   expect(Object.keys(wireRecord(record, true, true))).not.toContain("transcript");
   expect(Object.keys(wireRecord(record, false, true, true))).not.toContain("transcript");
   expect(wireRecord(record, true, false, true).transcript).toEqual(record.transcript);
+});
+
+test("the transcript cap holds after in-place changes, and one item cannot outgrow it", () => {
+  const big = (i: number): TranscriptItem => ({ kind: "command", id: `c${i}`, command: "x".repeat(1900), outputTail: "y".repeat(1900), at: "" });
+  const items = Array.from({ length: 40 }, (_, i) => big(i));
+  const capped = capTranscript(items, 300, 64000);
+  expect(JSON.stringify(capped).length).toBeLessThanOrEqual(64000);
+  expect(capped.at(-1)).toMatchObject({ id: "c39" });
+  expect(capTranscript(items, 5, 64000)).toHaveLength(5);
+  // A file change at its caps still fits the transcript on its own.
+  const files: TranscriptItem = {
+    kind: "fileChange",
+    files: Array.from({ length: 50 }, () => ({ path: "p".repeat(500), change: "update" as const, movePath: "m".repeat(500) })),
+    at: "",
+  };
+  expect(JSON.stringify(files).length).toBeLessThan(64000);
+  expect(transcriptItem.safeParse({ ...files, files: [{ path: "p".repeat(501), change: "update" }] }).success).toBe(false);
+});
+
+test("finished sessions beyond the newest few keep only the end of their transcript on disk", async () => {
+  const { dir, sessions } = setup();
+  for (let i = 0; i < 22; i++) {
+    await start(sessions, `s${i}`, "codex", "commands");
+    await until(get(sessions, `s${i}`), (r) => r.status === "completed");
+    await Bun.sleep(5);
+  }
+  await start(sessions, "last", "codex", "hello");
+  await until(get(sessions, "last"), (r) => r.status === "completed");
+  await Bun.sleep(80);
+  const saved = JSON.parse(readFileSync(join(dir, "state", "sessions.json"), "utf8")) as SessionRecord[];
+  const byId = new Map(saved.map((r) => [r.id, r]));
+  // 23 finished: the newest 20 are whole, the oldest keep their end.
+  expect(byId.get("last")!.transcript![0]).toMatchObject({ kind: "prompt" });
+  expect(byId.get("s21")!.transcript![0]).toMatchObject({ kind: "prompt" });
+  expect(JSON.stringify(byId.get("s0")!.transcript).length).toBeLessThanOrEqual(8000);
+  expect(byId.get("s0")!.transcript!.at(-1)).toMatchObject({ kind: "turnEnd" });
+}, 60000);
+
+test("a Claude result that repeats the turn's text marks it final instead of adding it again", async () => {
+  const { sessions } = setup();
+  await start(sessions, "c1", "claude", "hello");
+  const done = await until(get(sessions, "c1"), (r) => r.status === "completed");
+  // The fake's reply and its result differ, so both show; when they match only one does.
+  const messages = done.transcript!.filter((i) => i.kind === "message");
+  expect(messages.filter((m) => m.kind === "message" && m.final)).toHaveLength(1);
+  await start(sessions, "c2", "claude", "same");
+  const same = await until(get(sessions, "c2"), (r) => r.status === "completed");
+  expect(same.transcript!.filter((i) => i.kind === "message")).toEqual([
+    expect.objectContaining({ text: "Same answer", final: true }),
+  ]);
+});
+
+test("an unrecognised Codex change shape shows as unknown, not as an update", async () => {
+  const { sessions } = setup();
+  await start(sessions, "s1", "codex", "oddcommit");
+  const done = await until(get(sessions, "s1"), (r) => r.status === "completed");
+  expect(done.transcript!.find((i) => i.kind === "fileChange")).toMatchObject({ files: [{ path: "src/a.ts", change: "unknown" }] });
 });

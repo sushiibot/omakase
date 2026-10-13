@@ -136,9 +136,10 @@ export const sessionRequest = z.discriminatedUnion("action", [
 const at = z.string().max(40);
 const transcriptFile = z
   .object({
-    path: z.string().max(2000),
-    change: z.enum(["add", "delete", "update"]),
-    movePath: z.string().max(2000).optional(),
+    path: z.string().max(500),
+    /** `unknown` is a change shape the daemon does not recognise; the transcript says so rather than guessing. */
+    change: z.enum(["add", "delete", "update", "unknown"]),
+    movePath: z.string().max(500).optional(),
   })
   .strict();
 /** Caps for one transcript item's text fields; the whole transcript is also capped by item count and size. */
@@ -150,7 +151,12 @@ export const TRANSCRIPT_LIMITS = {
   command: 2000,
   outputTail: 2000,
   files: 50,
+  path: 500,
   summary: 500,
+  /** Finished sessions beyond the newest few keep this much of their transcript. */
+  keepFull: 20,
+  shortItems: 20,
+  shortChars: 8000,
 } as const;
 /** One step of a session as the app shows it: prompts, the agent's messages and its tool work. */
 export const transcriptItem = z.discriminatedUnion("kind", [

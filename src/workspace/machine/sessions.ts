@@ -71,6 +71,13 @@ const cut = (v: string | undefined, n: number) =>
   v && v.length > n ? `${v.slice(0, n - 1)}…` : v;
 const tail = (v: string, n: number) => (v.length > n ? `…${v.slice(-(n - 1))}` : v);
 const now = () => new Date().toISOString();
+/** The newest items that fit the count and size; one item never exceeds the size, as its fields are capped. */
+export function capTranscript(items: TranscriptItem[], maxItems: number, maxChars: number): TranscriptItem[] {
+  const out = items.slice(-maxItems);
+  let size = JSON.stringify(out).length;
+  while (out.length > 1 && size > maxChars) size -= JSON.stringify(out.shift()).length + 1;
+  return out;
+}
 function lastIndex<T>(items: readonly T[], ok: (item: T) => boolean) {
   for (let i = items.length - 1; i >= 0; i--) if (ok(items[i]!)) return i;
   return -1;
@@ -384,9 +391,18 @@ export class MachineSessions {
   private persist() {
     if (this.persistTimer) clearTimeout(this.persistTimer);
     this.persistTimer = undefined;
+    this.shortenOldTranscripts();
     const tmp = `${this.path}.tmp`;
     writeFileSync(tmp, JSON.stringify(this.records), { mode: 0o600 });
     renameSync(tmp, this.path);
+  }
+  /** Live sessions and the newest finished ones keep their whole transcript; older ones keep its end, so the store stays small. */
+  private shortenOldTranscripts() {
+    const finished = this.records
+      .filter((r) => r.transcript?.length && !this.active.has(r.id) && r.status !== "running" && r.status !== "needs-you")
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    for (const record of finished.slice(TRANSCRIPT_LIMITS.keepFull))
+      record.transcript = capTranscript(record.transcript!, TRANSCRIPT_LIMITS.shortItems, TRANSCRIPT_LIMITS.shortChars);
   }
   private get(id: string) {
     const record = this.records.find((r) => r.id === id);
@@ -429,13 +445,14 @@ export class MachineSessions {
     record.output = (record.output + text).slice(-64000);
     this.dirty(record);
   }
-  /** Appends to the capped transcript: oldest items go first when it exceeds its count or size. */
+  /** Appends to the capped transcript. */
   private record(record: SessionRecord, item: TranscriptItem) {
-    const items = [...(record.transcript ?? []), item];
-    let size = JSON.stringify(items).length;
-    while (items.length > 1 && (items.length > TRANSCRIPT_LIMITS.items || size > TRANSCRIPT_LIMITS.chars))
-      size -= JSON.stringify(items.shift()).length + 1;
-    record.transcript = items;
+    record.transcript = [...(record.transcript ?? []), item];
+    this.touch(record);
+  }
+  /** After any transcript change: the oldest items go until it fits its count and size again. */
+  private touch(record: SessionRecord) {
+    record.transcript = capTranscript(record.transcript ?? [], TRANSCRIPT_LIMITS.items, TRANSCRIPT_LIMITS.chars);
     this.dirty(record);
   }
   private findItem<K extends TranscriptItem["kind"]>(record: SessionRecord, kind: K, id: string) {
@@ -466,7 +483,7 @@ export class MachineSessions {
     const item = items[lastIndex(items, (i) => i.kind === "approval" && String(i.requestId) === String(requestId))];
     if (item?.kind === "approval" && item.status === "pending") {
       item.status = status;
-      this.dirty(record);
+      this.touch(record);
     }
   }
   /** Approvals still open when their turn ends can no longer be answered. */
@@ -862,7 +879,7 @@ export class MachineSessions {
       const existing = str(item.id) ? this.findItem(record, "command", cut(item.id, 200)!) : undefined;
       if (existing) {
         Object.assign(existing, exit, output, failed);
-        this.dirty(record);
+        this.touch(record);
       } else
         this.record(record, {
           kind: "command",
@@ -879,9 +896,9 @@ export class MachineSessions {
         .map(parseChange)
         .filter((c: FileChanges[number]) => c.path)
         .map((c: FileChanges[number]) => ({
-          path: cut(c.path, 2000)!,
-          change: c.change ?? "update",
-          ...(c.movePath ? { movePath: cut(c.movePath, 2000)! } : {}),
+          path: cut(c.path, TRANSCRIPT_LIMITS.path)!,
+          change: c.change ?? "unknown",
+          ...(c.movePath ? { movePath: cut(c.movePath, TRANSCRIPT_LIMITS.path)! } : {}),
         }));
       if (!files.length) return;
       this.record(record, {
@@ -980,13 +997,21 @@ export class MachineSessions {
     if (typeof msg.result === "string" && msg.result) {
       if (!failed) record.final = msg.result.slice(-FINAL_MAX);
       if (!record.output.trim()) record.output = msg.result.slice(-64000);
-      // The result is the turn's answer: it marks the matching message, or is added when no message carried it.
+      // The result is the turn's answer, replacing the text blocks it repeats.
       const items = record.transcript ?? [];
       const turn = items.slice(lastIndex(items, (i) => i.kind === "prompt") + 1);
-      const last = turn[lastIndex(turn, (i) => i.kind === "message")];
       if (!failed) {
-        if (last?.kind === "message" && last.text.trim() === msg.result.trim()) last.final = true;
-        else this.message(record, msg.result, true);
+        const flat = (t: string) => t.replace(/\s+/g, "");
+        // The result repeats the turn's closing text blocks (one or several): those become the one final answer.
+        let start = items.length;
+        while (start > items.length - turn.length && items[start - 1]!.kind === "message") start--;
+        for (let from = start; from < items.length; from++) {
+          const said = items.slice(from).map((i) => (i.kind === "message" ? i.text : "")).join("");
+          if (flat(said) !== flat(msg.result)) continue;
+          record.transcript = items.slice(0, from);
+          break;
+        }
+        this.message(record, msg.result, true);
       }
     }
     this.endTurn(record);
@@ -1006,7 +1031,7 @@ export class MachineSessions {
     if (file && typeof (input.file_path ?? input.notebook_path) === "string") {
       this.record(record, {
         kind: "fileChange",
-        files: [{ path: cut(input.file_path ?? input.notebook_path, 2000)!, change: file }],
+        files: [{ path: cut(input.file_path ?? input.notebook_path, TRANSCRIPT_LIMITS.path)!, change: file }],
         at: now(),
       });
       return;
@@ -1038,7 +1063,7 @@ export class MachineSessions {
     const text = resultText(item.content);
     if (text.trim()) target.outputTail = tail(text, TRANSCRIPT_LIMITS.outputTail);
     if (item.is_error === true) target.failed = true;
-    this.dirty(record);
+    this.touch(record);
   }
   private deny(record: SessionRecord, tools: unknown[]) {
     const names = tools

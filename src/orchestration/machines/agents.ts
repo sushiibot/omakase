@@ -208,6 +208,9 @@ export function agentFolder(agent: Pick<CodingAgentRecord, "rootId" | "rootName"
   return agent.path ? `${root}/${agent.path}` : root;
 }
 
+/** A record without the lines the coding agent wrote, for the model. */
+const forModel = ({ activity: _a, requestTitle: _t, error: _e, ...agent }: CodingAgentRecord) => agent;
+
 /** The coding_agent tool and the app's agent controls. */
 export class CodingAgents {
   constructor(private control: MachineControl) {}
@@ -240,10 +243,13 @@ export class CodingAgents {
 
   async action(raw: unknown, conversation = "main", origin: ActionOrigin = "agent", toolCallId?: string) {
     const p = codingAgentAction.parse(raw);
-    // The mirrored activity, request title and error are provider-written; the model reads them through get, labelled.
+    // The mirrored activity, request title and error are provider-written; the model reads them in get's labelled session.
     if (p.action === "list")
-      return { agents: this.list(p.conversationId).map(({ activity: _a, requestTitle: _t, error: _e, ...agent }) => agent) };
-    if (p.action === "get") return this.get(p.id);
+      return { agents: this.list(p.conversationId).map(forModel) };
+    if (p.action === "get") {
+      const { agent, ...rest } = await this.get(p.id);
+      return { agent: forModel(agent), ...rest };
+    }
     if (p.action === "start") {
       const path = folderPath(p.path);
       return {

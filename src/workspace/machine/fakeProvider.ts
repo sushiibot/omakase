@@ -26,6 +26,11 @@ if (process.argv.includes('-p')) {
       setInterval(() => {}, 1000);
       return;
     }
+    if (prompt.includes('same')) {
+      send({ type: 'assistant', session_id: 'claude-one', message: { content: [{ type: 'text', text: 'Same ' }, { type: 'text', text: 'answer' }] } });
+      send({ type: 'result', subtype: 'success', is_error: false, result: 'Same answer', session_id: 'claude-one', result_index: 0 });
+      return;
+    }
     if (prompt.includes('tools')) {
       send({ type: 'assistant', session_id: 'claude-one', message: { content: [
         { type: 'text', text: 'Checking the tests.' },
@@ -113,6 +118,10 @@ if (process.argv.includes('-p')) {
       send({ method: 'item/completed', params: { item: { type: 'fileChange', id: 'f2', status: 'completed', changes: [{ path: 'src/a.ts', kind: { type: 'update', move_path: null }, diff: '' }, { path: 'src/n.ts', kind: { type: 'add' }, diff: '' }] } } });
       send({ method: 'item/completed', params: { item: { type: 'mcpToolCall', id: 't1', server: 'docs', tool: 'search', status: 'completed', arguments: { q: 'redirect' } } } });
       return finish('Fixed it.');
+    }
+    if (text.includes('oddcommit')) {
+      send({ method: 'item/completed', params: { item: { type: 'fileChange', id: 'f3', status: 'completed', changes: [{ path: 'src/a.ts', kind: { type: 'rename', to: 'x' }, diff: '' }] } } });
+      return finish('Done.');
     }
     if (text.includes('fail')) {
       send({ method: 'error', params: { error: { message: 'rate limited' }, willRetry: true } });
