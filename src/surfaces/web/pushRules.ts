@@ -69,10 +69,10 @@ export function pushFor(event: PushEvent): PushPayload {
   }
 }
 
-// The conversation shows its agents above the composer; same addresses as the app's conversationHref.
+// Same addresses as the app's conversationHref.
 const conversationUrl = (id: string) =>
   id === "main" ? "/chat" : id.startsWith("task-t-") ? `/tasks/${encodeURIComponent(id.slice(5))}?view=conversation` : `/chats/${encodeURIComponent(id)}`;
-/** Opens the conversation with that agent's row expanded. */
+/** Opens that agent from its conversation: in the side panel on desktop, as its own page on phones. */
 const agentUrl = (conversationId: string, agentId: string) => {
   const url = conversationUrl(conversationId);
   return `${url}${url.includes("?") ? "&" : "?"}agent=${encodeURIComponent(agentId)}`;

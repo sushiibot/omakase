@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { MachineControl } from "../../orchestration/machines/control.ts";
-import { agentFolder, agentSessionView, type CodingAgents } from "../../orchestration/machines/agents.ts";
+import { agentFolder, agentSessionView, type CodingAgentRecord, type CodingAgents } from "../../orchestration/machines/agents.ts";
 import { answerDecision } from "../../orchestration/machines/contracts.ts";
 import { json, readJson } from "./http.ts";
 
@@ -10,6 +10,15 @@ export class MachineRoutes {
     private control: MachineControl,
     private agents: CodingAgents,
   ) {}
+  /** The record with the names the app shows: its machine and `<root>/<path>` folder. */
+  private view(a: CodingAgentRecord) {
+    const machine = this.control.list().find((m) => m.id === a.machineId);
+    return {
+      ...a,
+      machineName: machine?.name ?? a.machineId,
+      folder: agentFolder(a, machine?.roots.find((r) => r.id === a.rootId)?.name),
+    };
+  }
   async handle(req: Request, path: string): Promise<Response | null> {
     const machines = path === "/api/machines" || path.startsWith("/api/machines/");
     const agents = path === "/api/agents" || path.startsWith("/api/agents/");
@@ -23,22 +32,15 @@ export class MachineRoutes {
       }
       if (path === "/api/agents" && req.method === "GET") {
         const conversationId = new URL(req.url).searchParams.get("conversationId") ?? undefined;
-        const machines = new Map(this.control.list().map((m) => [m.id, m]));
-        return json({
-          agents: this.agents.list(conversationId).map((a) => {
-            const machine = machines.get(a.machineId);
-            return {
-              ...a,
-              machineName: machine?.name ?? a.machineId,
-              folder: agentFolder(a, machine?.roots.find((r) => r.id === a.rootId)?.name),
-            };
-          }),
-        });
+        return json({ agents: this.agents.list(conversationId).map((a) => this.view(a)) });
       }
       const match = /^\/api\/agents\/([a-z0-9][a-z0-9-]{0,63})(?:\/(answer|message|stop))?$/.exec(path);
       if (!match) return json({ error: "Not found." }, 404);
       const agent = this.agents.require(match[1]!);
-      if (!match[2] && req.method === "GET") return json(await this.agents.get(agent.id, { transcript: true }));
+      if (!match[2] && req.method === "GET") {
+        const detail = await this.agents.get(agent.id, { transcript: true });
+        return json({ ...detail, agent: this.view(detail.agent) });
+      }
       if (!match[2] || req.method !== "POST") return json({ error: "Method not allowed." }, 405);
       const raw = await readJson(req, 20000);
       if (raw instanceof Response) return raw;
@@ -54,7 +56,7 @@ export class MachineRoutes {
         this.control.observer?.noteAction(agent.conversationId, "owner");
         session = await this.control.stopSession(agent.machineId, agent.id);
       }
-      return json({ agent: this.agents.require(agent.id), session: agentSessionView(session, { transcript: true }) });
+      return json({ agent: this.view(this.agents.require(agent.id)), session: agentSessionView(session, { transcript: true }) });
     } catch (err) {
       return json(
         { error: err instanceof Error ? err.message : "Machine request failed." },
