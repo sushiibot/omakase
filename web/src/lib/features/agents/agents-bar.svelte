@@ -154,6 +154,8 @@
 				<span class="flex min-w-0 flex-1 flex-col py-1"
 					><span class="truncate font-medium">{agentName(agent)}</span><span
 						class="truncate text-muted-foreground">{agent.title}</span
+					><span class="truncate font-mono text-muted-foreground" title={agent.folder}
+						>{agent.folder}</span
 					></span
 				>
 				<StatePill of={state.of} label={state.label} />

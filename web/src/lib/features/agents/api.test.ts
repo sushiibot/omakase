@@ -7,6 +7,7 @@ const agent = (id: string, remoteStatus: AgentRecord['remoteStatus'], updatedAt:
 		machineId: 'pc',
 		machineName: 'Desktop',
 		rootId: 'code',
+		folder: 'Code',
 		provider: 'codex',
 		title: id,
 		conversationId: 'main',

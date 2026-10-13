@@ -29,6 +29,8 @@ for (const width of [320, 1280]) {
 			machineId: 'pc',
 			machineName: 'Desktop',
 			rootId: 'code',
+			path: 'omakase/web',
+			folder: 'Code/omakase/web',
 			provider: 'codex',
 			title: 'Fix the login redirect',
 			conversationId: 'main',
@@ -65,6 +67,9 @@ for (const width of [320, 1280]) {
 		await expect(approve).not.toBeFocused();
 		await expect(page.getByRole('button', { name: /Codex agent on Desktop/ })).toContainText(
 			'Needs approval'
+		);
+		await expect(page.getByRole('button', { name: /Codex agent on Desktop/ })).toContainText(
+			'Code/omakase/web'
 		);
 		await expect(page.getByLabel('Agent output')).toContainText('Inspecting the login redirect');
 		await expect(page.getByLabel('Exact input')).toHaveText('bun test');
