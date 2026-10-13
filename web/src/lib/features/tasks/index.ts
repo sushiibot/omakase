@@ -7,4 +7,5 @@ export type { TaskRecord } from './types';
 export type { TasksApi } from './api';
 
 export { default as TaskChat } from './task-chat.svelte';
+export { default as TaskRuns } from './task-runs.svelte';
 export { default as PanelButton } from './panel-button.svelte';

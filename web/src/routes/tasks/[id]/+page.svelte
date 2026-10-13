@@ -3,7 +3,14 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { TaskDetailScreen, TaskWorkspace, TaskChat, tasksStore } from '$lib/features/tasks';
+	import {
+		TaskDetailScreen,
+		TaskWorkspace,
+		TaskChat,
+		TaskRuns,
+		tasksStore,
+		type TaskRecord
+	} from '$lib/features/tasks';
 	import { backTo } from '$lib/core/nav/back';
 	import { routedSheet } from '$lib/core/nav/sheet';
 	import { getWorkspace } from '$lib/ui/workspace/context';
@@ -73,7 +80,23 @@
 				/>
 			{/snippet}
 		</TaskWorkspace>{/key}
-{:else}<TaskDetailScreen
-		id={selectedId ?? ''}
+{:else}
+	{#snippet runs()}{#if task}<TaskRuns ids={task.runIds} />{/if}{/snippet}
+	{#snippet conversation(viewing: boolean)}{#if task}{#key task.id}<TaskChat
+					{task}
+					{viewing}
+				/>{/key}{/if}{/snippet}
+	<TaskDetailScreen
+		{task}
+		loading={store.loading}
+		busy={store.busy}
+		error={store.error}
 		back={{ href: resolve('/tasks'), label: 'Tasks', onclick: goBack }}
+		{conversation}
+		{runs}
+		onupdate={async (patch) => !!task && !!(await store.update(task, patch))}
+		onstart={async (text) =>
+			!!task && !!(await store.action({ action: 'start', id: task.id, ...(text ? { text } : {}) }))}
+		onstop={() => task && void store.action({ action: 'stop', id: task.id })}
+		onretry={() => void store.refresh(true)}
 	/>{/if}
