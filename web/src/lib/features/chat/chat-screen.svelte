@@ -36,8 +36,8 @@
 		subtitle: subtitleOverride,
 		headerActions,
 		commandActions,
-		backgroundActivity,
 		delegatedActivity,
+		agentActivity,
 		readOnly,
 		history = 'ready',
 		hasOlder = false,
@@ -127,8 +127,9 @@
 		headerActions?: Snippet;
 		/** Conversation actions in the existing three-dot menu, before chat commands. */
 		commandActions?: Snippet;
-		backgroundActivity?: Snippet;
 		delegatedActivity?: Snippet<[string]>;
+		/** Coding agents a message started, by the ids of its coding_agent calls. */
+		agentActivity?: Snippet<[string[]]>;
 		/** Shown instead of the composer, for a conversation that can't take messages. */
 		readOnly?: Snippet;
 		history?: 'loading' | 'ready' | 'error';
@@ -699,7 +700,6 @@
 
 {#snippet footer()}
 	{#if !readOnly && !voiceActive}<ActivityLine {activity} onreview={reviewRequest} />{/if}
-	{#if backgroundActivity}{@render backgroundActivity()}{/if}
 	{#if newMessages}
 		<div class="pointer-events-none absolute inset-x-0 bottom-full flex justify-center pb-3">
 			<Button
@@ -828,6 +828,7 @@
 				{approvals}
 				{approvalSubmitting}
 				{delegatedActivity}
+				{agentActivity}
 				{onapprove}
 				{ondeny}
 			/>

@@ -47,6 +47,34 @@ function history(): WebHistoryItem[] {
 				summary: 'Talked about car service and invoices.'
 			});
 	}
+	// The newest exchange started coding agents, so `?fake` shows their cards in Main.
+	items.push(
+		{
+			type: 'user',
+			id: 'hu-agents',
+			clientId: undefined,
+			at: at(15),
+			text: 'Fix the login redirect, add OTel spans to the gateway and bump drizzle.',
+			attachments: []
+		},
+		{
+			type: 'assistant',
+			id: 'ha-agents',
+			at: at(14),
+			text: 'I started three coding agents on your computers. Each one reports back here when it finishes.',
+			tools: [
+				{ id: 'call-login', name: 'coding_agent', summary: 'action=start machineId=pc', ok: true },
+				{ id: 'call-otel', name: 'coding_agent', summary: 'action=start machineId=pc', ok: true },
+				{
+					id: 'call-drizzle',
+					name: 'coding_agent',
+					summary: 'action=start machineId=laptop',
+					ok: true
+				}
+			],
+			files: []
+		}
+	);
 	return items;
 }
 

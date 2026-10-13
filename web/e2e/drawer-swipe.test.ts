@@ -259,5 +259,5 @@ test('the inspector retains native vertical scrolling while horizontal swipes di
 	);
 	await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
 	await expect(inspector).toBeVisible();
-	await expect(inspector.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible();
+	await expect(inspector.getByRole('tab', { name: 'Tasks', exact: true })).toBeVisible();
 });

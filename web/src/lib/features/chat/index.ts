@@ -3,6 +3,7 @@ export { default as ClearNotifications } from './clear-notifications.svelte';
 export { default as ApprovalTray } from './components/approval-tray.svelte';
 export { default as AskCard } from './components/ask-card.svelte';
 export { default as Markdown } from './render/markdown.svelte';
+export { default as Composer } from './components/composer.svelte';
 export { chatApi, chatStore, configureChat } from './store.svelte';
 export { Dictation, type DictationState, type Transcribe } from './dictation.svelte';
 export { default as VoiceControl } from './voice-control.svelte';

@@ -9,6 +9,8 @@ export interface WorkspaceInspector {
 
 export interface WorkspaceHandle {
 	readonly contentVisible: boolean;
+	/** The inspector sits beside the conversation rather than sliding over it. */
+	readonly docked: boolean;
 	registerInspector(inspector: WorkspaceInspector): () => void;
 }
 

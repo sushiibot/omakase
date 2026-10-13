@@ -5,9 +5,24 @@
 	import { page } from '$app/state';
 	import { TaskPanel, TaskWorkspace, TaskChat, tasksStore } from '$lib/features/tasks';
 	import { routedSheet } from '$lib/core/nav/sheet';
+	import { getWorkspace } from '$lib/ui/workspace/context';
+	import { followAgentLink, openAgentFrom, openAgentPage } from '$lib/core/nav/agent-link';
+	import { untrack } from 'svelte';
 	import { Button } from '$lib/ui/button';
 	import ListChecks from '@lucide/svelte/icons/list-checks';
 	const taskPane = routedSheet('tasks');
+	const workspaceLayout = getWorkspace();
+	const docked = () => workspaceLayout?.docked ?? matchMedia('(min-width: 1100px)').matches;
+	let panelTab = $state<'tasks' | 'agents'>('tasks');
+	let panelAgent = $state<string | undefined>();
+	function showAgent(id: string) {
+		panelTab = 'agents';
+		panelAgent = id;
+	}
+	$effect(() => {
+		if (!page.url.searchParams.has('agent')) return;
+		untrack(() => followAgentLink({ docked, sheet: taskPane, openPanel: showAgent }));
+	});
 	const store = tasksStore();
 	let selectedId = $derived(page.params.id);
 	const task = $derived(store.tasks.find((task) => task.id === selectedId));
@@ -23,11 +38,14 @@
 >
 {#if channel && task}
 	{#key task.id}<TaskWorkspace
-			conversationId={task.workConversationId!}
+			conversationId={task?.workConversationId ?? ''}
 			initialSelectedId={task.id}
 			open={taskPane.open}
+			bind:tab={panelTab}
+			bind:agentId={panelAgent}
 			onopen={() => taskPane.openWith()}
 			onclose={() => taskPane.close()}
+			onnavigate={(href) => void openAgentPage(href, taskPane)}
 		>
 			{#snippet children(toggle: () => void)}
 				{#snippet actions()}<Button
@@ -43,7 +61,12 @@
 					focusTurn={page.url.searchParams.get('turn') ?? undefined}
 					focusAsk={page.url.searchParams.get('ask') ?? undefined}
 					focusApproval={page.url.searchParams.get('approve') ?? undefined}
-					focusAgent={page.url.searchParams.get('agent') ?? undefined}
+					onopenagent={(agent, event) =>
+						openAgentFrom(event, agent.id, {
+							docked: docked(),
+							sheet: taskPane,
+							showInPanel: showAgent
+						})}
 				/>
 			{/snippet}
 		</TaskWorkspace>{/key}

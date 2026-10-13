@@ -63,6 +63,7 @@
 		approvals = [],
 		approvalSubmitting = false,
 		delegatedActivity,
+		agentActivity,
 		onapprove,
 		ondeny
 	}: {
@@ -104,6 +105,7 @@
 		approvals?: PendingApproval[];
 		approvalSubmitting?: boolean;
 		delegatedActivity?: Snippet<[string]>;
+		agentActivity?: Snippet<[string[]]>;
 	} = $props();
 
 	// Keep disclosure state when a lone call becomes a group.
@@ -113,6 +115,10 @@
 		messages.findLast((m) => m.role === 'assistant' && !m.streaming && hasText(m))?.id
 	);
 
+	const agentCalls = (message: ChatMessage) =>
+		message.parts.flatMap((part) =>
+			part.type === 'data-tool' && part.data.tool === 'coding_agent' ? [part.data.id] : []
+		);
 	function actionsFor(message: ChatMessage): MessageAction[] {
 		if (!oncopy) return [];
 		const copy: MessageAction = {
@@ -459,6 +465,10 @@
 							/>{/if}{message.partial ? (owner ? 'Transcribing…' : 'Responding…') : 'Voice'}
 					</p>{/if}
 				{#if message.turnId && delegatedActivity}{@render delegatedActivity(message.turnId)}{/if}
+				{#if agentActivity && message.role === 'assistant'}
+					{@const calls = agentCalls(message)}
+					{#if calls.length}{@render agentActivity(calls)}{/if}
+				{/if}
 				{#if message.delivery}
 					{@const d = delivery[message.delivery]}
 					<p class={cn('flex items-center gap-1 text-xs text-muted-foreground', d.tone)}>

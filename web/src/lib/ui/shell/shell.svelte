@@ -77,6 +77,9 @@
 		get contentVisible() {
 			return wide || pane === 'chat';
 		},
+		get docked() {
+			return wide;
+		},
 		registerInspector(next) {
 			inspector = next;
 			return () => {

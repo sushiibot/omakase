@@ -63,6 +63,8 @@ export const APPROVAL_SURFACE_FILES = new Set([
 	'src/lib/features/chat/components/tool-confirmation.svelte',
 	'src/lib/features/chat/components/ask-card.svelte',
 	'src/lib/features/chat/components/conversation.svelte',
+	// A coding agent's approval: its exact input comes from the daemon, not from agent-written text.
+	'src/lib/features/agents/components/approval-card.svelte',
 	'src/lib/features/home/components/home-row.svelte',
 	'src/lib/features/home/components/peek.svelte'
 ]);

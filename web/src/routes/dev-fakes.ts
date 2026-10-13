@@ -1,6 +1,8 @@
 import { configureChannels } from '$lib/features/channels';
 import { createFixtureChannelsApi } from '$lib/features/channels/fake';
 import { configureTasks } from '$lib/features/tasks';
+import { configureAgents } from '$lib/features/agents';
+import { createFixtureAgentsApi } from '$lib/features/agents/fake';
 import { createFixtureTasksApi } from '$lib/features/tasks/fake';
 // Dev only (`bun dev` with ?fake); +layout.ts imports it behind import.meta.env.DEV.
 import { CLIENT_FEATURES, features } from '$lib/core/features.svelte';
@@ -57,6 +59,7 @@ export function installFakes() {
 			drafts: memoryKeyValue<Draft>((d) => d.id)
 		};
 	});
+	configureAgents(createFixtureAgentsApi());
 	configureRuns(fixtureRunsApi);
 	configureHistory(fixtureHistoryApi);
 	configureMemory(createFixtureMemoryApi());

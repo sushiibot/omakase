@@ -18,6 +18,9 @@
 	let {
 		value = $bindable(''),
 		placeholder = 'Message your agent',
+		label = 'Message',
+		sendLabel = 'Send message',
+		unavailable,
 		running = false,
 		stopping = false,
 		stop = true,
@@ -41,6 +44,11 @@
 	}: {
 		value?: string;
 		placeholder?: string;
+		/** The box's accessible name, naming who receives the message. */
+		label?: string;
+		sendLabel?: string;
+		/** Why sending is off right now; the text stays editable. */
+		unavailable?: string;
 		/** A turn is running: Send steers it, and Stop shows as its own control. */
 		running?: boolean;
 		stopping?: boolean;
@@ -90,11 +98,12 @@
 	);
 	const failed = $derived(photos.filter((p) => p.state === 'failed'));
 	const blocked = $derived(
-		failed.length
-			? `Send is off: remove or retry ${failed.length === 1 ? 'the failed photo' : `${failed.length} failed photos`}.`
-			: pending.length
-				? `Send is off until ${pending.length === 1 ? '1 photo finishes' : `${pending.length} photos finish`} uploading.`
-				: undefined
+		unavailable ??
+			(failed.length
+				? `Send is off: remove or retry ${failed.length === 1 ? 'the failed photo' : `${failed.length} failed photos`}.`
+				: pending.length
+					? `Send is off until ${pending.length === 1 ? '1 photo finishes' : `${pending.length} photos finish`} uploading.`
+					: undefined)
 	);
 	const dictating = $derived(
 		dictation?.state === 'starting' ||
@@ -270,7 +279,7 @@
 				{/each}
 			</ul>
 		{/if}
-		<label for="{uid}-composer" class="sr-only">Message</label>
+		<label for="{uid}-composer" class="sr-only">{label}</label>
 		<Textarea
 			id="{uid}-composer"
 			rows={1}
@@ -400,7 +409,7 @@
 				{/if}
 				<button
 					type={dictation?.state === 'recording' ? 'button' : 'submit'}
-					aria-label={dictation?.state === 'recording' ? 'Send dictation now' : 'Send message'}
+					aria-label={dictation?.state === 'recording' ? 'Send dictation now' : sendLabel}
 					onclick={() => {
 						if (dictation?.state === 'recording') ondictatesend?.();
 					}}

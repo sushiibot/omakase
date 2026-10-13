@@ -2,7 +2,7 @@
 	import { untrack, type Snippet } from 'svelte';
 	import { getWorkspace } from '$lib/ui/workspace/context';
 	import { ChatScreen, chatStore, createHttpChatApi } from '$lib/features/chat';
-	import { AgentsBar } from '$lib/features/agents';
+	import { AgentCards, type AgentRecord } from '$lib/features/agents';
 	import { createHub } from '$lib/core/realtime/hub.svelte';
 	import { fetchSse } from '$lib/core/realtime/transport';
 	import { taskChatDeps } from './tasks.svelte';
@@ -14,7 +14,7 @@
 		focusTurn,
 		focusAsk,
 		focusApproval,
-		focusAgent
+		onopenagent
 	}: {
 		task: TaskRecord;
 		viewing?: boolean;
@@ -22,7 +22,8 @@
 		focusTurn?: string;
 		focusAsk?: string;
 		focusApproval?: string;
-		focusAgent?: string;
+		/** Opens a coding agent this conversation started. */
+		onopenagent?: (agent: AgentRecord, event: MouseEvent) => void;
 	} = $props();
 	const workspace = getWorkspace();
 	const id = untrack(() => task.workConversationId!);
@@ -45,11 +46,15 @@
 	});
 </script>
 
-{#snippet agents()}<AgentsBar conversationId={id} {focusAgent} />{/snippet}
+{#snippet agents(calls: string[])}<AgentCards
+		conversationId={id}
+		toolCallIds={calls}
+		onopen={(agent, event) => onopenagent?.(agent, event)}
+	/>{/snippet}
 
 <ChatScreen
 	title={task.title}
-	backgroundActivity={agents}
+	agentActivity={agents}
 	{headerActions}
 	{focusTurn}
 	{focusAsk}

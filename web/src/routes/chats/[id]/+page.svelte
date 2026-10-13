@@ -1,10 +1,9 @@
 <script lang="ts">
-	import { AgentsBar } from '$lib/features/agents';
+	import { AgentCards } from '$lib/features/agents';
+	import { followAgentLink, openAgentFrom, openAgentPage } from '$lib/core/nav/agent-link';
 	import { getWorkspace } from '$lib/ui/workspace/context';
 	const workspaceLayout = getWorkspace();
-	import { TaskWorkspace } from '$lib/features/tasks';
-	import { Button } from '$lib/ui/button';
-	import ListTodo from '@lucide/svelte/icons/list-todo';
+	import { PanelButton, TaskWorkspace } from '$lib/features/tasks';
 	import { BrowserPreview, BrowserPreviewPanel } from '$lib/features/browser';
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
@@ -39,6 +38,21 @@
 	const store = $derived(detail ? threads.chat(detail) : null);
 	const browserSheet = routedSheet('browser-preview');
 	const taskPane = routedSheet('tasks');
+	let panelTab = $state<'tasks' | 'agents'>('tasks');
+	let panelAgent = $state<string | undefined>();
+	$effect(() => {
+		if (!page.url.searchParams.has('agent')) return;
+		untrack(() =>
+			followAgentLink({
+				docked: () => workspaceLayout?.docked ?? matchMedia('(min-width: 1100px)').matches,
+				sheet: taskPane,
+				openPanel: (agent) => {
+					panelTab = 'agents';
+					panelAgent = agent;
+				}
+			})
+		);
+	});
 	const browser = $derived(new BrowserPreview(id));
 	$effect(() => {
 		const preview = browser;
@@ -140,9 +154,18 @@
 
 <svelte:head><title>{detail?.summary.title ?? 'Channel'} · sushii</title></svelte:head>
 
-{#snippet agents()}<AgentsBar
+{#snippet agents(calls: string[])}<AgentCards
 		conversationId={id}
-		focusAgent={page.url.searchParams.get('agent') ?? undefined}
+		toolCallIds={calls}
+		onopen={(agent, event) =>
+			openAgentFrom(event, agent.id, {
+				docked: workspaceLayout?.docked ?? false,
+				sheet: taskPane,
+				showInPanel: (id) => {
+					panelTab = 'agents';
+					panelAgent = id;
+				}
+			})}
 	/>{/snippet}
 
 {#snippet browserPreview()}
@@ -216,18 +239,19 @@
 <TaskWorkspace
 	conversationId={id}
 	open={taskPane.open}
+	bind:tab={panelTab}
+	bind:agentId={panelAgent}
 	onopen={() => taskPane.openWith()}
 	onclose={() => taskPane.close()}
+	onnavigate={(href) => void openAgentPage(href, taskPane)}
 >
-	{#snippet children(toggle: () => void, count: number)}
-		{#snippet taskActions()}<Button
-				variant="ghost"
-				class="min-w-12 gap-1 px-2"
-				aria-label="Tasks, {count} open"
-				aria-expanded={taskPane.open}
+	{#snippet children(toggle: () => void, count: number, waiting: number)}
+		{#snippet taskActions()}<PanelButton
+				{count}
+				{waiting}
+				open={taskPane.open}
 				onclick={toggle}
-				><ListTodo class="size-5" /><span class="text-sm">{count || 'Tasks'}</span></Button
-			>{/snippet}
+			/>{/snippet}
 		<ThreadScreen
 			{remote}
 			{detail}
@@ -284,7 +308,7 @@
 						voice: voiceControls,
 						voiceStatus,
 						browserPreview,
-						backgroundActivity: agents,
+						agentActivity: agents,
 						voiceActive: voice.state !== 'idle',
 						voiceHasContent: voice.state !== 'idle' && !!(voice.userText || voice.assistantText),
 						usage: store.usage,

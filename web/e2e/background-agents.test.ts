@@ -121,7 +121,7 @@ test('task prompts use their task channel and preserve the main composer draft',
 	await page.goBack();
 	await expect(page).toHaveURL(/\/chat$/);
 	if (await panel.isVisible())
-		await panel.getByRole('button', { name: 'Close tasks', exact: true }).click();
+		await panel.getByRole('button', { name: 'Close side panel', exact: true }).click();
 	await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue(
 		'Main draft'
 	);

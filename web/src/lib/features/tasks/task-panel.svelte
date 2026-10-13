@@ -8,20 +8,36 @@
 	import { Button } from '$lib/ui/button';
 	import Screen from '$lib/ui/screen/screen.svelte';
 	import X from '@lucide/svelte/icons/x';
+	import * as Tabs from '$lib/ui/tabs';
+	import { Badge } from '$lib/ui/badge';
+	import { AgentsPanel, agentList } from '$lib/features/agents';
 	import type { TaskRecord } from './types';
 	let {
 		conversationId,
 		selectedId = $bindable<string | undefined>(),
 		onclose,
 		fullPage = false,
-		onselect
+		onselect,
+		tab = $bindable<'tasks' | 'agents'>('tasks'),
+		agentId = $bindable<string | undefined>(),
+		docked = true,
+		onnavigate
 	}: {
 		conversationId?: string;
 		selectedId?: string;
 		onclose?: () => void;
 		fullPage?: boolean;
 		onselect?: (id: string) => void;
+		/** The side panel's tab: this conversation's tasks or its coding agents. */
+		tab?: 'tasks' | 'agents';
+		/** The agent open in the docked panel. */
+		agentId?: string;
+		docked?: boolean;
+		/** Leaves the panel for a page, such as an agent's on phones. */
+		onnavigate?: (href: string) => void;
 	} = $props();
+	const agents = $derived(agentList(conversationId ?? 'main'));
+	$effect(() => (fullPage ? undefined : agents.watch()));
 	const store = tasksStore();
 	const task = $derived(store.tasks.find((t) => t.id === selectedId));
 	const visible = $derived(
@@ -39,9 +55,49 @@
 	}
 </script>
 
-{#if task}
+{#snippet taskList()}
+	<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+		<TaskList
+			tasks={visible}
+			loading={store.loading}
+			busy={store.busy}
+			error={store.error}
+			oncreate={async (title) =>
+				!!(await store.action({
+					action: 'create',
+					title,
+					conversationId: conversationId ?? 'main'
+				}))}
+			ontoggle={(task) =>
+				void store.update(task, { status: task.status === 'done' ? 'todo' : 'done' })}
+			onselect={(id) => {
+				// Route-owned selection mounts its editor once, at the destination.
+				if (onselect) onselect(id);
+				else selectedId = id;
+			}}
+			onretry={() => void store.refresh(true)}
+		/>
+	</div>{/snippet}
+{#snippet inspector(task: TaskRecord)}
 	{#snippet runs()}<TaskRuns ids={task.runIds} />{/snippet}
-	{#if fullPage}
+	{#key task.id}<TaskInspector
+			{task}
+			busy={store.busy}
+			error={store.error}
+			fullHref={`/tasks/${task.id}?view=conversation`}
+			{runs}
+			onback={() => (selectedId = undefined)}
+			onupdate={update}
+			onstart={async (text) =>
+				!!(await store.action({ action: 'start', id: task.id, ...(text ? { text } : {}) }))}
+			onstop={() => void store.action({ action: 'stop', id: task.id })}
+			onretry={() => void store.refresh(true)}
+		/>{/key}
+{/snippet}
+
+{#if fullPage}
+	{#if task}
+		{#snippet runs()}<TaskRuns ids={task.runIds} />{/snippet}
 		{#snippet conversation(viewing: boolean)}{#key task.id}<TaskChat
 					{task}
 					{viewing}
@@ -62,60 +118,45 @@
 				onstop={() => void store.action({ action: 'stop', id: task.id })}
 				onretry={() => void store.refresh(true)}
 			/>{/key}
-	{:else}
-		{#key task.id}<TaskInspector
-				{task}
-				busy={store.busy}
-				error={store.error}
-				fullHref={`/tasks/${task.id}?view=conversation`}
-				{runs}
-				{onclose}
-				onback={() => (selectedId = undefined)}
-				onupdate={update}
-				onstart={async (text) =>
-					!!(await store.action({ action: 'start', id: task.id, ...(text ? { text } : {}) }))}
-				onstop={() => void store.action({ action: 'stop', id: task.id })}
-				onretry={() => void store.refresh(true)}
-			/>{/key}
-	{/if}
-{:else}
-	{#snippet taskList()}
-		<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-			<TaskList
-				tasks={visible}
-				loading={store.loading}
-				busy={store.busy}
-				error={store.error}
-				oncreate={async (title) =>
-					!!(await store.action({
-						action: 'create',
-						title,
-						conversationId: conversationId ?? 'main'
-					}))}
-				ontoggle={(task) =>
-					void store.update(task, { status: task.status === 'done' ? 'todo' : 'done' })}
-				onselect={(id) => {
-					// Route-owned selection mounts its editor once, at the destination.
-					if (onselect) onselect(id);
-					else selectedId = id;
-				}}
-				onretry={() => void store.refresh(true)}
-			/>
-		</div>{/snippet}
-	{#if fullPage}<Screen title="Tasks" scrollable={false}
+	{:else}<Screen title="Tasks" scrollable={false}
 			><div class="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
 				{@render taskList()}
 			</div></Screen
-		>{:else}
-		<header class="flex min-h-13 shrink-0 items-center gap-2 border-b px-4 py-1">
-			<h1 class="flex-1 text-base font-semibold">Tasks</h1>
+		>{/if}
+{:else}
+	<Tabs.Root bind:value={tab} class="flex min-h-0 flex-1 flex-col">
+		<header class="flex min-h-13 shrink-0 items-center gap-2 border-b pl-2">
+			<Tabs.List aria-label="Side panel" class="flex min-w-0 flex-1 gap-1 self-stretch">
+				{#each [{ value: 'tasks', label: 'Tasks' }, { value: 'agents', label: 'Agents' }] as item (item.value)}
+					<Tabs.Trigger
+						value={item.value}
+						class="relative flex min-h-12 min-w-12 items-center gap-1.5 px-3 text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=active]:text-foreground data-[state=active]:after:absolute data-[state=active]:after:inset-x-2 data-[state=active]:after:bottom-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-foreground"
+						>{item.label}{#if item.value === 'agents' && agents.pending}<Badge
+								class="bg-waiting-soft text-waiting tabular-nums"
+								><span aria-hidden="true">{agents.pending}</span><span class="sr-only"
+									>, {agents.pending} need you</span
+								></Badge
+							>{/if}</Tabs.Trigger
+					>
+				{/each}
+			</Tabs.List>
 			{#if onclose}<Button
 					variant="ghost"
-					class="size-12 px-0"
-					aria-label="Close tasks"
+					class="size-12 shrink-0 px-0"
+					aria-label="Close side panel"
 					onclick={onclose}><X /></Button
 				>{/if}
 		</header>
-		{@render taskList()}
-	{/if}
+		<Tabs.Content value="tasks" class="flex min-h-0 flex-1 flex-col">
+			{#if task}{@render inspector(task)}{:else}{@render taskList()}{/if}
+		</Tabs.Content>
+		<Tabs.Content value="agents" class="flex min-h-0 flex-1 flex-col">
+			<AgentsPanel
+				conversationId={conversationId ?? 'main'}
+				bind:selected={agentId}
+				{docked}
+				onnavigate={(href) => onnavigate?.(href)}
+			/>
+		</Tabs.Content>
+	</Tabs.Root>
 {/if}
