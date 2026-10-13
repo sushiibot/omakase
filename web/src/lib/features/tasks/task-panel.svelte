@@ -111,10 +111,10 @@
 				onclick={onclose}><X /></Button
 			>{/if}
 	</div>
-	<Tabs.Content value="tasks" class="flex min-h-0 flex-col">
+	<Tabs.Content value="tasks" class="flex min-h-0 flex-col text-base">
 		{#if task}{@render inspector(task)}{:else}{@render taskList()}{/if}
 	</Tabs.Content>
-	<Tabs.Content value="agents" class="flex min-h-0 flex-col">
+	<Tabs.Content value="agents" class="flex min-h-0 flex-col text-base">
 		<AgentsPanel
 			conversationId={conversationId ?? 'main'}
 			bind:selected={agentId}

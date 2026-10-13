@@ -112,7 +112,7 @@
 		{subtitle}
 		actions={onclose ? actions : undefined}
 	/>
-	<div class="flex shrink-0 border-b px-2" aria-label="Task sections">
+	<div class="flex shrink-0 border-b px-2" role="group" aria-label="Task sections">
 		{#each ['details', 'activity', 'results'] as value}<Button
 				variant="ghost"
 				class="min-w-0 flex-1 rounded-none border-x-0 border-t-0 border-b-2 px-2 any-pointer-coarse:h-10 any-pointer-coarse:after:hidden {tab ===
@@ -225,6 +225,7 @@
 								size="icon-sm"
 								type="submit"
 								aria-label="Add checklist step"
+								class="any-pointer-coarse:after:inset-x-0"
 								aria-disabled={busy || !step.trim() || task.checklist.length >= 100}
 								><Plus /></InputGroup.Button
 							>

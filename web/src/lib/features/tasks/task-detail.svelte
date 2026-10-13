@@ -9,6 +9,7 @@
 	import { Input } from '$lib/ui/input';
 	import * as InputGroup from '$lib/ui/input-group';
 	import { measureClass } from '$lib/ui/page';
+	import Section from '$lib/ui/section/section.svelte';
 	import { Textarea } from '$lib/ui/textarea';
 	import type { TaskRecord } from './types';
 	let {
@@ -81,7 +82,7 @@
 </script>
 
 <div class="flex h-full min-h-0 flex-col" data-task-detail>
-	<div class="shrink-0 border-b px-2 md:px-4" aria-label="Task sections">
+	<div class="shrink-0 border-b px-2 md:px-4" role="group" aria-label="Task sections">
 		<div class="{measureClass.reading} flex">
 			{#each ['overview', 'conversation', 'runs'] as value}<Button
 					variant="ghost"
@@ -131,12 +132,10 @@
 						disabled={busy || !title.trim()}>Save changes</Button
 					>{/if}
 			</form>
-			<section class="flex flex-col gap-2" aria-label="Checklist">
-				<h3 class="text-sm font-semibold">
-					Checklist {#if task.checklist.length}<span class="text-muted-foreground"
-							>{task.checklist.filter((c) => c.done).length}/{task.checklist.length}</span
-						>{/if}
-				</h3>
+			{#snippet progress()}<span class="tabular-nums"
+					>{task.checklist.filter((c) => c.done).length}/{task.checklist.length} done</span
+				>{/snippet}
+			<Section title="Checklist" aside={task.checklist.length ? progress : undefined}>
 				{#each task.checklist as item (item.id)}<div
 						class="flex min-h-12 items-center gap-1 border-b"
 					>
@@ -172,17 +171,17 @@
 								size="icon-sm"
 								type="submit"
 								aria-label="Add checklist step"
+								class="any-pointer-coarse:after:inset-x-0"
 								aria-disabled={busy || !step.trim() || task.checklist.length >= 100}
 								><Plus /></InputGroup.Button
 							>
 						</InputGroup.Addon>
 					</InputGroup.Root>
 				</form>
-			</section>
-			{#if task.result}<section class="flex flex-col gap-2">
-					<h3 class="text-sm font-semibold">Latest result</h3>
+			</Section>
+			{#if task.result}<Section title="Latest result">
 					<p class="text-ui [overflow-wrap:anywhere] whitespace-pre-wrap">{task.result}</p>
-				</section>{/if}
+				</Section>{/if}
 			<div class="flex flex-col gap-2 any-pointer-coarse:gap-4">
 				<Button disabled={busy} onclick={() => void start()}
 					><Play />{task.workConversationId

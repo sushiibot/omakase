@@ -120,7 +120,7 @@
 				{#each shown as run (run.runId)}
 					<Button
 						variant="ghost"
-						class="h-auto min-h-10 justify-start px-2.5 text-left font-normal any-pointer-coarse:after:hidden"
+						class="h-auto min-h-10 justify-start px-2.5 text-left font-normal any-pointer-coarse:min-h-11 any-pointer-coarse:after:hidden"
 						onclick={() => void inspect(run)}
 					>
 						<Bot aria-hidden="true" /><span class="min-w-0 flex-1 truncate"
@@ -135,7 +135,7 @@
 			{#each shown as run (run.runId)}
 				<Button
 					variant="outline"
-					class="h-auto min-h-10 justify-start gap-3 px-3 py-2 text-left font-normal whitespace-normal any-pointer-coarse:after:hidden"
+					class="h-auto min-h-10 justify-start gap-3 px-3 py-2 text-left font-normal whitespace-normal any-pointer-coarse:min-h-11 any-pointer-coarse:after:hidden"
 					onclick={() => void inspect(run)}
 				>
 					<Bot class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />

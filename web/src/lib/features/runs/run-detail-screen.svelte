@@ -174,7 +174,7 @@
 <TabbedScreen
 	hasContent={!!detail}
 	{title}
-	back={{ ...back, desktop: false }}
+	back={run ? { ...back, desktop: false } : back}
 	breadcrumb={run ? breadcrumb : undefined}
 	{banner}
 	state={{

@@ -34,7 +34,7 @@
 			aria-expanded={expanded}
 			aria-controls="{uid}-detail"
 			onclick={() => (expanded = !expanded)}
-			class="h-auto min-h-10 w-full items-start justify-start gap-2.5 px-2 py-2 text-left font-normal whitespace-normal any-pointer-coarse:after:hidden"
+			class="h-auto min-h-10 w-full items-start justify-start gap-2.5 px-2 py-2 text-left font-normal whitespace-normal any-pointer-coarse:min-h-11 any-pointer-coarse:after:hidden"
 		>
 			<Icon
 				class={cn(

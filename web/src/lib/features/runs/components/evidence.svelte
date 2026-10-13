@@ -89,7 +89,7 @@
 			<ul class="flex flex-col divide-y rounded-xl border">
 				{#each files as file (file.id)}
 					<li>
-						<Item.Root size="sm" class="rounded-none any-pointer-coarse:py-3.5">
+						<Item.Root size="sm" class="rounded-none">
 							{#snippet child({ props })}
 								<a href={fileUrl(file.id)} download={file.name} {...props}>
 									<Download class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />

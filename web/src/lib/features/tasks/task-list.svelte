@@ -52,21 +52,21 @@
 				/>
 				<Button
 					variant="ghost"
-					class="h-auto min-h-10 min-w-0 flex-1 justify-start gap-2.5 px-2 py-2 text-left font-normal whitespace-normal any-pointer-coarse:after:hidden"
+					class="h-auto min-h-10 min-w-0 flex-1 justify-start gap-2.5 px-2 py-2 text-left font-normal whitespace-normal any-pointer-coarse:min-h-11 any-pointer-coarse:after:hidden"
 					onclick={() => onselect(task.id)}
 				>
-					<Item.Content class="min-w-0">
-						<Item.Title
-							class={cn('line-clamp-none [overflow-wrap:anywhere]', {
+					<span class="flex min-w-0 flex-1 flex-col gap-1">
+						<span
+							class={cn('text-sm leading-snug font-medium [overflow-wrap:anywhere]', {
 								'line-through': task.status === 'done'
-							})}>{task.title}</Item.Title
+							})}>{task.title}</span
 						>
-						{#if task.agent || task.checklist.length}<Item.Description class="text-xs"
+						{#if task.agent || task.checklist.length}<span class="text-xs text-muted-foreground"
 								>{task.agent ?? 'Your task'}{task.checklist.length
 									? ` · ${task.checklist.filter((c) => c.done).length}/${task.checklist.length} steps`
-									: ''}</Item.Description
+									: ''}</span
 							>{/if}
-					</Item.Content>
+					</span>
 					<ChevronRight class="text-muted-foreground" aria-hidden="true" />
 				</Button>
 			</div>
@@ -93,7 +93,8 @@
 					size="icon-sm"
 					type="submit"
 					aria-disabled={busy || !title.trim()}
-					aria-label="Add task"><Plus /></InputGroup.Button
+					aria-label="Add task"
+					class="any-pointer-coarse:after:inset-x-0"><Plus /></InputGroup.Button
 				>
 			</InputGroup.Addon>
 		</InputGroup.Root>
@@ -119,22 +120,25 @@
 		{#if section.length}
 			{#if status === 'done'}
 				<section aria-label={taskLabels[status]} class="flex min-w-0 flex-col gap-2">
-					<Button
-						variant="ghost"
-						size="sm"
-						class="self-start px-2 text-muted-foreground"
-						aria-expanded={showDone}
-						aria-controls={`${disclosureId}-done`}
-						onclick={() => (showDone = !showDone)}
-					>
-						<ChevronRight
-							class={cn('transition-transform motion-reduce:transition-none', {
-								'rotate-90': showDone
-							})}
-							aria-hidden="true"
-						/>
-						Done <span class="font-normal tabular-nums">{section.length}</span>
-					</Button>
+					<!-- The disclosure sits in the heading so heading navigation still reaches Done. -->
+					<div role="heading" aria-level={2} class="flex">
+						<Button
+							variant="ghost"
+							size="sm"
+							class="self-start px-2 text-muted-foreground"
+							aria-expanded={showDone}
+							aria-controls={`${disclosureId}-done`}
+							onclick={() => (showDone = !showDone)}
+						>
+							<ChevronRight
+								class={cn('transition-transform motion-reduce:transition-none', {
+									'rotate-90': showDone
+								})}
+								aria-hidden="true"
+							/>
+							Done <span class="font-normal tabular-nums">{section.length}</span>
+						</Button>
+					</div>
 					{@render rows(section, `${disclosureId}-done`, !showDone)}
 				</section>
 			{:else}

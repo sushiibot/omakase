@@ -211,3 +211,49 @@ for (const destination of ['/tasks', '/chat']) {
 		).not.toBeChecked();
 	});
 }
+
+test('a task page shows loading, a load error and a missing task in place', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	let release!: () => void;
+	const held = new Promise<void>((resolve) => (release = resolve));
+	let failing = false;
+	await context.route('**/api/tasks', async (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		if (failing) return route.fulfill({ status: 500, json: { error: 'Tasks are unavailable.' } });
+		await held;
+		return route.fallback();
+	});
+	await page.goto('/tasks/t-missing');
+	await expect(page.getByRole('status').filter({ hasText: 'Loading' })).toBeAttached();
+	release();
+	await expect(page.getByText('Task not found', { exact: true })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Task', level: 1 })).toBeAttached();
+
+	failing = true;
+	await page.reload();
+	await expect(page.getByRole('alert')).toContainText("Couldn't load this task.");
+	failing = false;
+	await page.getByRole('button', { name: 'Try again' }).click();
+	await expect(page.getByText('Task not found', { exact: true })).toBeVisible();
+});
+
+test('the task page back link returns to the list, in app and from a cold link', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await page.goto('/tasks');
+	await page.getByRole('button', { name: 'Book a dentist appointment', exact: true }).click();
+	await expect(page).toHaveURL(/\/tasks\/t-dentist$/);
+	await page.getByRole('banner').getByRole('link', { name: 'Tasks' }).click();
+	await expect(page).toHaveURL(/\/tasks$/);
+	await expect(page.locator('[data-task-list]')).toBeVisible();
+
+	await page.goto('/tasks/t-login');
+	await page.getByRole('banner').getByRole('link', { name: 'Tasks' }).click();
+	await expect(page).toHaveURL(/\/tasks$/);
+	await expect(page.locator('[data-task-list]')).toBeVisible();
+});

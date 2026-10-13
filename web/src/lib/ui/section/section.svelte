@@ -29,7 +29,7 @@
 </script>
 
 <section
-	aria-labelledby={title ? headingId : undefined}
+	aria-labelledby={title ? `${headingId}-title` : undefined}
 	class={cn('flex min-w-0 flex-col gap-2', className)}
 >
 	{#if title}
@@ -47,11 +47,11 @@
 				)}
 			>
 				{@render icon?.()}
-				{title}
+				<span id="{headingId}-title">{title}</span>
 				{#if count !== undefined}
 					<span aria-hidden="true" class="font-normal text-muted-foreground tabular-nums"
 						>{count}</span
-					>
+					><span class="sr-only">, {count}</span>
 				{/if}
 			</h2>
 			{#if aside}<div class="text-xs text-muted-foreground">{@render aside()}</div>{/if}
