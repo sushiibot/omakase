@@ -19,6 +19,10 @@ async function gapOwners(first: Locator, second: Locator) {
 				const hit = document.elementFromPoint(x, y);
 				return hit && a!.contains(hit) ? 'first' : hit && b!.contains(hit) ? 'second' : 'other';
 			};
+			const centres = [
+				owner((ra.left + ra.right) / 2, (ra.top + ra.bottom) / 2),
+				owner((rb.left + rb.right) / 2, (rb.top + rb.bottom) / 2)
+			];
 			const fromFirst: Owner[] = [];
 			const fromSecond: Owner[] = [];
 			for (let d = 1; d <= 7; d++) {
@@ -32,70 +36,101 @@ async function gapOwners(first: Locator, second: Locator) {
 					fromSecond.push(owner(x, rb.top - d));
 				}
 			}
-			return { fromFirst, fromSecond };
+			return { centres, fromFirst, fromSecond };
 		},
 		[a, b] as const
 	);
 }
 
+type Taps = { click: Owner | 'none'; press: Owner | 'none' };
+
 /**
  * The same sweep with real touchscreen taps, which Chromium's touch adjustment carries a few px past
- * any hit area. A capture listener records whose click each tap became and swallows it, so no handler
- * runs and the surface stays put between taps.
+ * any hit area. Capture listeners record whose click and whose pointerdown each tap became and
+ * swallow both, so no handler runs and the surface stays put between taps.
  */
 async function tapOwners(first: Locator, second: Locator) {
 	const page = first.page();
 	await first.scrollIntoViewIfNeeded();
 	const a = await first.elementHandle();
 	const b = await second.elementHandle();
+	type W = { taps: Taps; stopTaps: () => void };
 	await page.evaluate(
 		([a, b]) => {
-			const w = window as unknown as { tapOwner: string; stopTaps: () => void };
-			const record = (e: MouseEvent) => {
+			const w = window as unknown as W;
+			const owner = (e: Event) => {
 				const t = e.target as Node;
-				w.tapOwner = a!.contains(t) ? 'first' : b!.contains(t) ? 'second' : 'other';
+				return a!.contains(t) ? 'first' : b!.contains(t) ? 'second' : 'other';
+			};
+			const click = (e: MouseEvent) => {
+				w.taps.click = owner(e);
 				e.preventDefault();
 				e.stopImmediatePropagation();
 			};
-			window.addEventListener('click', record, true);
-			w.stopTaps = () => window.removeEventListener('click', record, true);
+			const press = (e: PointerEvent) => {
+				if (e.type === 'pointerdown') w.taps.press = owner(e);
+				e.stopImmediatePropagation();
+			};
+			window.addEventListener('click', click, true);
+			window.addEventListener('pointerdown', press, true);
+			window.addEventListener('pointerup', press, true);
+			w.stopTaps = () => {
+				window.removeEventListener('click', click, true);
+				window.removeEventListener('pointerdown', press, true);
+				window.removeEventListener('pointerup', press, true);
+			};
 		},
 		[a, b] as const
 	);
-	const ra = (await first.boundingBox())!;
-	const rb = (await second.boundingBox())!;
-	const across = rb.x >= ra.x + ra.width;
-	const tap = async (x: number, y: number) => {
-		await page.evaluate(() => ((window as unknown as { tapOwner: string }).tapOwner = 'none'));
-		await page.touchscreen.tap(x, y);
-		return page.evaluate(() => (window as unknown as { tapOwner: string }).tapOwner);
-	};
-	const fromFirst: string[] = [];
-	const fromSecond: string[] = [];
-	// Touch points land on whole CSS px, so stop short of the midpoint where two 8px reaches meet.
-	for (let d = 1; d <= 6; d++) {
-		if (across) {
-			const y = (Math.max(ra.y, rb.y) + Math.min(ra.y + ra.height, rb.y + rb.height)) / 2;
-			fromFirst.push(await tap(ra.x + ra.width + d, y));
-			fromSecond.push(await tap(rb.x - d, y));
-		} else {
-			const x = (Math.max(ra.x, rb.x) + Math.min(ra.x + ra.width, rb.x + rb.width)) / 2;
-			fromFirst.push(await tap(x, ra.y + ra.height + d));
-			fromSecond.push(await tap(x, rb.y - d));
+	try {
+		const ra = (await first.boundingBox())!;
+		const rb = (await second.boundingBox())!;
+		const across = rb.x >= ra.x + ra.width;
+		// A tap always clicks something, so wait for its click before reading or tapping again.
+		const tap = async (x: number, y: number) => {
+			await page.evaluate(() => ((window as unknown as W).taps = { click: 'none', press: 'none' }));
+			await page.touchscreen.tap(x, y);
+			await expect
+				.poll(() => page.evaluate(() => (window as unknown as W).taps.click), { timeout: 2000 })
+				.not.toBe('none');
+			return page.evaluate(() => (window as unknown as W).taps);
+		};
+		const centre = { first: await tap(ra.x + ra.width / 2, ra.y + ra.height / 2) };
+		const centreSecond = await tap(rb.x + rb.width / 2, rb.y + rb.height / 2);
+		expect([centre.first.click, centreSecond.click], 'centre taps land on their control').toEqual([
+			'first',
+			'second'
+		]);
+		const fromFirst: Taps[] = [];
+		const fromSecond: Taps[] = [];
+		// Touch points land on whole CSS px, so stop short of the midpoint where two 8px reaches meet.
+		for (let d = 1; d <= 6; d++) {
+			if (across) {
+				const y = (Math.max(ra.y, rb.y) + Math.min(ra.y + ra.height, rb.y + rb.height)) / 2;
+				fromFirst.push(await tap(ra.x + ra.width + d, y));
+				fromSecond.push(await tap(rb.x - d, y));
+			} else {
+				const x = (Math.max(ra.x, rb.x) + Math.min(ra.x + ra.width, rb.x + rb.width)) / 2;
+				fromFirst.push(await tap(x, ra.y + ra.height + d));
+				fromSecond.push(await tap(x, rb.y - d));
+			}
 		}
+		return { fromFirst, fromSecond };
+	} finally {
+		await page.evaluate(() => (window as unknown as W).stopTaps());
 	}
-	await page.evaluate(() => (window as unknown as { stopTaps: () => void }).stopTaps());
-	return { fromFirst, fromSecond };
 }
 
 /** Taps next to one control never land on the other, whichever side they start from. */
 async function expectNearerOrNothing(first: Locator, second: Locator) {
-	const { fromFirst, fromSecond } = await gapOwners(first, second);
+	const { centres, fromFirst, fromSecond } = await gapOwners(first, second);
+	expect(centres, 'each centre resolves to its control').toEqual(['first', 'second']);
 	expect(fromFirst, 'taps past the first control').not.toContain('second');
 	expect(fromSecond, 'taps past the second control').not.toContain('first');
 	const taps = await tapOwners(first, second);
-	expect(taps.fromFirst, 'real taps past the first control').not.toContain('second');
-	expect(taps.fromSecond, 'real taps past the second control').not.toContain('first');
+	const owners = (list: Taps[]) => list.flatMap((t) => [t.click, t.press]);
+	expect(owners(taps.fromFirst), 'real taps past the first control').not.toContain('second');
+	expect(owners(taps.fromSecond), 'real taps past the second control').not.toContain('first');
 }
 
 async function surfaces(page: Page) {
