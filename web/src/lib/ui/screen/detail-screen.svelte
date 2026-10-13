@@ -14,6 +14,7 @@
 		banner,
 		toast,
 		footer,
+		measure = 'reading',
 		scrollable = true,
 		state,
 		children
@@ -25,7 +26,7 @@
 	} = $props();
 </script>
 
-<Screen {title} {subtitle} {back} {actions} {banner} {toast} {footer} {scrollable}>
+<Screen {title} {subtitle} {back} {actions} {banner} {toast} {footer} {measure} {scrollable}>
 	{#if state}
 		<ScreenState {...state}>{@render children()}</ScreenState>
 	{:else}

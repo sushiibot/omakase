@@ -28,7 +28,7 @@
 
 	let {
 		embedded = false,
-		measure = 'full',
+		measure = 'reading',
 		title,
 		subtitle,
 		back,
@@ -111,7 +111,7 @@
 {#if embedded}
 	{@render content()}
 {:else}
-	<Screen {title} {subtitle} {back} {actions} {banner} {toast} {footer}>
+	<Screen {title} {subtitle} {back} {actions} {banner} {toast} {footer} {measure}>
 		{@render content()}
 	</Screen>
 {/if}

@@ -3,7 +3,7 @@
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import Menu from '@lucide/svelte/icons/menu';
 	import { Button } from '$lib/ui/button';
-	import { PageHeader } from '$lib/ui/page';
+	import { measureClass, PageHeader, type PageMeasure } from '$lib/ui/page';
 	import { cn } from '$lib/utils';
 	import { getDrawer } from '../shell/drawer';
 
@@ -16,6 +16,7 @@
 		toast,
 		toastPosition = 'bottom',
 		footer,
+		measure,
 		stickToBottom = false,
 		channelNavigation = false,
 		scrollable = true,
@@ -33,6 +34,8 @@
 		toast?: Snippet;
 		toastPosition?: 'top' | 'bottom';
 		footer?: Snippet;
+		/** Lines the footer up with the body; leave out when the footer lays itself out, as chat does. */
+		measure?: PageMeasure;
 		/** Disable when the content owns its vertical scroll, such as a tab pager. */
 		scrollable?: boolean;
 		/** Keep the newest content in view, for chats. */
@@ -112,7 +115,12 @@
 	<div class={stickToBottom ? 'shrink-0' : 'h-full'}>{@render children()}</div>
 </main>
 
-<div class="relative shrink-0 bg-background pb-(--safe-bottom) @3xl:pb-0 kb:pb-0">
+<div
+	class={cn(
+		'relative shrink-0 bg-background pb-(--safe-bottom) @3xl:pb-0 kb:pb-0',
+		measure && 'has-[[data-slot=screen-footer]>*]:border-t'
+	)}
+>
 	{#if toast && toastPosition === 'bottom'}
 		<div
 			role="status"
@@ -121,5 +129,15 @@
 			{@render toast()}
 		</div>
 	{/if}
-	{@render footer?.()}
+	{#if footer && measure}
+		<!-- The bar owns the full-bleed border and the body's gutters, so children drop their own. -->
+		<div
+			data-slot="screen-footer"
+			class={cn('px-4 *:border-t-0! *:px-0! md:px-6', measureClass[measure])}
+		>
+			{@render footer()}
+		</div>
+	{:else}
+		{@render footer?.()}
+	{/if}
 </div>
