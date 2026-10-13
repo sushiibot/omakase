@@ -108,7 +108,7 @@
 		{/if}
 		{#if add.stage === 'url'}
 			<Field.Group>
-				<Field.Field>
+				<Field.Field data-invalid={add.errorField === 'url' || undefined}>
 					<Field.Label for="{uid}-url">Server address</Field.Label>
 					<Input
 						id="{uid}-url"
@@ -177,7 +177,7 @@
 				</p>
 			</section>
 		{:else}
-			<Field.Field>
+			<Field.Field data-invalid={(!!add.redirect && !hasCode) || undefined}>
 				<Field.Label for="{uid}-redirect">Address from the browser</Field.Label>
 				<Input
 					id="{uid}-redirect"

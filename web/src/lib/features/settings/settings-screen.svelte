@@ -79,6 +79,7 @@
 		oninstall?: () => void;
 		onreload?: () => void;
 	} = $props();
+	const uid = $props.id();
 
 	const pushLabel = $derived(
 		{
@@ -90,7 +91,6 @@
 			on: 'On for this device'
 		}[push]
 	);
-	const uid = $props.id();
 	const pushToggleDisabled = $derived(
 		pushBusy || push === 'checking' || push === 'unsupported' || push === 'blocked'
 	);
@@ -127,167 +127,180 @@
 
 <DetailScreen title="Settings" {back} {banner} toast={updateReady ? toast : undefined}>
 	<ScreenContent>
-		<Section id="account" title="Account">
-			<Field.Group>
-				<ScreenState
-					remote={me}
-					errorTitle="Couldn't load your account."
-					onretry={onretryme}
-					skeleton={accountLoading}
-				>
-					{#if me.data}
-						<Field.Field orientation="horizontal">
-							<Field.Content>
-								<Field.Title>Signed in as</Field.Title>
-							</Field.Content>
-							<div class="min-w-0 text-right text-sm">
-								<p class="font-medium [overflow-wrap:anywhere]" data-testid="login">
-									{me.data.displayName ?? me.data.login}
-								</p>
-								{#if me.data.displayName}
-									<p class="text-xs [overflow-wrap:anywhere] text-muted-foreground">
-										{me.data.login}
+		<div class="flex flex-col gap-8 md:gap-10">
+			<Section id="account" title="Account">
+				<Field.Group>
+					<ScreenState
+						remote={me}
+						errorTitle="Couldn't load your account."
+						onretry={onretryme}
+						skeleton={accountLoading}
+					>
+						{#if me.data}
+							<Field.Field orientation="horizontal">
+								<Field.Content>
+									<Field.Title>Signed in as</Field.Title>
+								</Field.Content>
+								<div class="min-w-0 text-right text-sm">
+									<p class="font-medium [overflow-wrap:anywhere]" data-testid="login">
+										{me.data.displayName ?? me.data.login}
 									</p>
-								{/if}
-							</div>
-						</Field.Field>
-					{/if}
-				</ScreenState>
-
-				{#if ownerName}
-					<Field.Separator />
-					<OwnerNameField
-						remote={ownerName}
-						save={nameSave}
-						error={nameError}
-						onsave={onsavename}
-						onretry={onretryname}
-					/>
-				{/if}
-			</Field.Group>
-		</Section>
-
-		<Section id="appearance" title="Appearance">
-			<RadioGroup.Root
-				aria-labelledby="appearance"
-				orientation="horizontal"
-				onkeydowncapture={themeKeydown}
-				class="grid-cols-3"
-				bind:value={() => theme, (v) => onchoosetheme?.(v as ThemeChoice)}
-			>
-				{#each themes as t (t.id)}
-					<Field.Label for="{uid}-theme-{t.id}">
-						<Field.Field orientation="horizontal">
-							<RadioGroup.Item
-								value={t.id}
-								id="{uid}-theme-{t.id}"
-								aria-labelledby="{uid}-theme-{t.id}-label"
-								class="any-pointer-coarse:after:-inset-4.5"
-							/>
-							<Field.Title id="{uid}-theme-{t.id}-label">{t.label}</Field.Title>
-						</Field.Field>
-					</Field.Label>
-				{/each}
-			</RadioGroup.Root>
-		</Section>
-
-		<Section id="notifications" title="Notifications">
-			<Field.Group>
-				<Field.Field orientation="horizontal" data-disabled={pushToggleDisabled || undefined}>
-					<Field.Content>
-						<Field.Label for="{uid}-push">Notify this device</Field.Label>
-						<Field.Description id="{uid}-push-state">
-							{#if pushBusy}
-								{push === 'on' ? 'Turning off…' : 'Turning on…'}
-							{:else}
-								{pushLabel}
-							{/if}
-						</Field.Description>
-					</Field.Content>
-					<Switch
-						id="{uid}-push"
-						bind:checked={() => push === 'on', () => ontogglepush?.()}
-						disabled={pushToggleDisabled}
-						aria-describedby="{uid}-push-state"
-						class="any-pointer-coarse:after:-inset-y-3.5"
-					/>
-				</Field.Field>
-				<div class="flex flex-col items-start gap-2">
-					<Field.Description>
-						Only when the agent needs you, a run fails, or something you asked about finishes.
-					</Field.Description>
-					<Button variant="outline" disabled={push !== 'on' || testBusy} onclick={() => ontest?.()}>
-						{#if testBusy}
-							<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
-							Sending…
-						{:else}
-							<BellRing aria-hidden="true" />Send test notification
+									{#if me.data.displayName}
+										<p class="text-xs [overflow-wrap:anywhere] text-muted-foreground">
+											{me.data.login}
+										</p>
+									{/if}
+								</div>
+							</Field.Field>
 						{/if}
-					</Button>
-					{#if testResult}
-						<p
-							role={testResult.ok ? 'status' : 'alert'}
-							class={cn('text-sm', !testResult.ok && 'text-failed')}
+					</ScreenState>
+
+					{#if ownerName}
+						<Field.Separator />
+						<OwnerNameField
+							remote={ownerName}
+							save={nameSave}
+							error={nameError}
+							onsave={onsavename}
+							onretry={onretryname}
+						/>
+					{/if}
+				</Field.Group>
+			</Section>
+
+			<Section id="appearance" title="Appearance">
+				<RadioGroup.Root
+					aria-labelledby="appearance"
+					orientation="horizontal"
+					onkeydowncapture={themeKeydown}
+					class="grid-cols-3"
+					bind:value={() => theme, (v) => onchoosetheme?.(v as ThemeChoice)}
+				>
+					{#each themes as t (t.id)}
+						<Field.Label
+							for="{uid}-theme-{t.id}"
+							class="any-pointer-coarse:*:data-[slot=field]:px-3.5 any-pointer-coarse:*:data-[slot=field]:py-4"
 						>
-							{testResult.text}
+							<Field.Field orientation="horizontal">
+								<RadioGroup.Item
+									value={t.id}
+									id="{uid}-theme-{t.id}"
+									aria-labelledby="{uid}-theme-{t.id}-label"
+									class="any-pointer-coarse:after:-inset-x-3.5 any-pointer-coarse:after:-inset-y-4.5"
+								/>
+								<Field.Title id="{uid}-theme-{t.id}-label">{t.label}</Field.Title>
+							</Field.Field>
+						</Field.Label>
+					{/each}
+				</RadioGroup.Root>
+			</Section>
+
+			<Section id="notifications" title="Notifications">
+				<Field.Group>
+					<Field.Field orientation="horizontal" data-disabled={pushToggleDisabled || undefined}>
+						<Field.Content>
+							<Field.Label for="{uid}-push">Notify this device</Field.Label>
+							<Field.Description id="{uid}-push-state">
+								{#if pushBusy}
+									{push === 'on' ? 'Turning off…' : 'Turning on…'}
+								{:else}
+									{pushLabel}
+								{/if}
+							</Field.Description>
+						</Field.Content>
+						<Switch
+							id="{uid}-push"
+							bind:checked={() => push === 'on', () => ontogglepush?.()}
+							disabled={pushToggleDisabled}
+							aria-describedby="{uid}-push-state {uid}-push-help"
+							class="any-pointer-coarse:after:-inset-y-3.5"
+						/>
+					</Field.Field>
+					<div class="flex flex-col items-start gap-2">
+						<Field.Description id="{uid}-push-help">
+							Only when the agent needs you, a run fails, or something you asked about finishes.
+						</Field.Description>
+						<Button
+							variant="outline"
+							disabled={push !== 'on' || testBusy}
+							onclick={() => ontest?.()}
+						>
+							{#if testBusy}
+								<Spinner
+									role="presentation"
+									aria-hidden="true"
+									class="motion-reduce:animate-none"
+								/>
+								Sending…
+							{:else}
+								<BellRing aria-hidden="true" />Send test notification
+							{/if}
+						</Button>
+						{#if testResult}
+							<p
+								role={testResult.ok ? 'status' : 'alert'}
+								class={cn('text-sm', !testResult.ok && 'text-failed')}
+							>
+								{testResult.text}
+							</p>
+						{/if}
+					</div>
+				</Field.Group>
+				{#if pushError}
+					<p role="alert" class="text-sm text-failed">{pushError}</p>
+				{:else if push === 'on' && pushSyncFailed}
+					<p role="status" class="text-sm text-muted-foreground">
+						Couldn't sync this device with the agent. The app will retry when you come back to it.
+					</p>
+				{/if}
+				{#if push === 'blocked'}
+					<div class="flex flex-col gap-2 rounded-xl bg-waiting-soft px-4 py-3 text-sm">
+						<p class="font-medium">Turn notifications back on</p>
+						<ol class="flex list-decimal flex-col gap-1 pl-5">
+							<li>Long-press the sushii icon on your home screen and tap App info.</li>
+							<li>Tap Notifications and switch them on.</li>
+							<li>Come back here and turn notifications on.</li>
+						</ol>
+						<p class="text-muted-foreground">
+							In a Chrome tab instead: tap the icon left of the address, then Permissions, then
+							Notifications.
 						</p>
+					</div>
+				{/if}
+			</Section>
+
+			<Section id="app" title="App">
+				<dl class="flex flex-col gap-2 text-sm">
+					<div class="flex items-center justify-between gap-4">
+						<dt class="text-muted-foreground">Version</dt>
+						<dd class="font-mono text-xs [overflow-wrap:anywhere]" data-testid="version">
+							{version}
+						</dd>
+					</div>
+					<div class="flex items-center justify-between gap-4">
+						<dt class="text-muted-foreground">Installed</dt>
+						<dd class="text-right">{standalone ? 'Yes' : 'No, running in the browser'}</dd>
+					</div>
+				</dl>
+				<div class="flex flex-wrap gap-2">
+					<Button variant="outline" onclick={() => onreload?.()}>
+						<RotateCw aria-hidden="true" />Reload app
+					</Button>
+					{#if canInstall}
+						<Button onclick={() => oninstall?.()}>Install the app</Button>
 					{/if}
 				</div>
-			</Field.Group>
-			{#if pushError}
-				<p role="alert" class="text-sm text-failed">{pushError}</p>
-			{:else if push === 'on' && pushSyncFailed}
-				<p role="status" class="text-sm text-muted-foreground">
-					Couldn't sync this device with the agent. The app will retry when you come back to it.
-				</p>
-			{/if}
-			{#if push === 'blocked'}
-				<div class="flex flex-col gap-2 rounded-xl bg-waiting-soft px-4 py-3 text-sm">
-					<p class="font-medium">Turn notifications back on</p>
-					<ol class="flex list-decimal flex-col gap-1 pl-5">
-						<li>Long-press the sushii icon on your home screen and tap App info.</li>
-						<li>Tap Notifications and switch them on.</li>
-						<li>Come back here and turn notifications on.</li>
-					</ol>
-					<p class="text-muted-foreground">
-						In a Chrome tab instead: tap the icon left of the address, then Permissions, then
-						Notifications.
+				{#if installFailed}
+					<p role="alert" class="text-sm text-failed">
+						Chrome didn't open the install prompt. Open Chrome's menu and choose Install app.
 					</p>
-				</div>
-			{/if}
-		</Section>
-
-		<Section id="app" title="App">
-			<dl class="flex flex-col gap-2 text-sm">
-				<div class="flex items-center justify-between gap-4">
-					<dt class="text-muted-foreground">Version</dt>
-					<dd class="font-mono text-xs [overflow-wrap:anywhere]" data-testid="version">
-						{version}
-					</dd>
-				</div>
-				<div class="flex items-center justify-between gap-4">
-					<dt class="text-muted-foreground">Installed</dt>
-					<dd class="text-right">{standalone ? 'Yes' : 'No, running in the browser'}</dd>
-				</div>
-			</dl>
-			<div class="flex flex-wrap gap-2">
-				<Button variant="outline" onclick={() => onreload?.()}>
-					<RotateCw aria-hidden="true" />Reload app
-				</Button>
-				{#if canInstall}
-					<Button onclick={() => oninstall?.()}>Install the app</Button>
 				{/if}
-			</div>
-			{#if installFailed}
-				<p role="alert" class="text-sm text-failed">
-					Chrome didn't open the install prompt. Open Chrome's menu and choose Install app.
-				</p>
-			{/if}
-			{#if swError}
-				<p role="alert" class="text-sm text-failed">
-					Offline support is off: the background worker didn't start ({swError}).
-				</p>
-			{/if}
-		</Section>
+				{#if swError}
+					<p role="alert" class="text-sm text-failed">
+						Offline support is off: the background worker didn't start ({swError}).
+					</p>
+				{/if}
+			</Section>
+		</div>
 	</ScreenContent>
 </DetailScreen>

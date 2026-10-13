@@ -342,7 +342,7 @@
 					class="gap-2"
 				>
 					{#if server.usedBy.length}
-						<Item.Group class="gap-0 rounded-xl border">
+						<Item.Group class="gap-0 overflow-hidden rounded-xl border has-data-[size=sm]:gap-0">
 							{#each server.usedBy as u (u.runId + u.tool)}
 								<div role="listitem" class="not-first:border-t">
 									<Item.Root size="sm" class="rounded-none">

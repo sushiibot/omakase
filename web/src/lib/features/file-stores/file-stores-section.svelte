@@ -7,7 +7,6 @@
 	import * as Field from '$lib/ui/field';
 	import { Input } from '$lib/ui/input';
 	import * as Item from '$lib/ui/item';
-	import { PageIntro } from '$lib/ui/page';
 	import Section from '$lib/ui/section/section.svelte';
 	import { Spinner } from '$lib/ui/spinner';
 	import { Switch } from '$lib/ui/switch';
@@ -131,15 +130,15 @@
 		</p>{/if}
 {/snippet}
 
-<PageIntro description="Connect folders on your file server for the assistant to use.">
-	{#snippet actions()}
-		{#if !form}<Button variant="outline" disabled={!!busy || loading} onclick={() => edit()}
-				>Add file store</Button
+<Section id="external-files" title={heading}>
+	{#snippet aside()}
+		{#if !form}<Button
+				variant="outline"
+				class="text-foreground"
+				disabled={!!busy || loading}
+				onclick={() => edit()}>Add file store</Button
 			>{/if}
 	{/snippet}
-</PageIntro>
-
-<Section id="external-files" title={heading}>
 	{#if loading}
 		<p role="status" class="flex items-center gap-2 text-sm text-muted-foreground">
 			<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />Loading
@@ -168,9 +167,10 @@
 			}}
 		>
 			<Field.Set>
-				<Field.Legend>{form.id ? 'Edit file store' : 'Add file store'}</Field.Legend>
+				<Field.Legend variant="label">{form.id ? 'Edit file store' : 'Add file store'}</Field.Legend
+				>
 				<Field.Group>
-					<Field.Field>
+					<Field.Field data-invalid={!!fieldErrors.name || undefined}>
 						<Field.Label for="store-name">Name</Field.Label>
 						<Input
 							disabled={!!busy}
@@ -184,7 +184,7 @@
 						/>
 						{@render issue('name')}
 					</Field.Field>
-					<Field.Field>
+					<Field.Field data-invalid={!!fieldErrors.endpoint || undefined}>
 						<Field.Label for="store-address">Server address</Field.Label>
 						<Input
 							disabled={!!busy}
@@ -210,7 +210,7 @@
 						{@render issue('folders')}
 						{#each form.folders as folder, index}
 							<Field.Group class="gap-3 border-t pt-4 any-pointer-coarse:gap-4">
-								<Field.Field>
+								<Field.Field data-invalid={!!fieldErrors.folders || undefined}>
 									<Field.Label for={`store-folder-${index}`}>Folder {index + 1}</Field.Label>
 									<Input
 										disabled={!!busy}
@@ -255,8 +255,8 @@
 							}}>Add folder</Button
 						>
 					</Field.Set>
-					<div class="grid gap-5 sm:grid-cols-2 sm:gap-3">
-						<Field.Field>
+					<div class="grid gap-4 @md/field-group:grid-cols-2">
+						<Field.Field data-invalid={!!fieldErrors.username || undefined}>
 							<Field.Label for="store-account">NAS account</Field.Label>
 							<Input
 								disabled={!!busy}
@@ -269,7 +269,7 @@
 							/>
 							{@render issue('username')}
 						</Field.Field>
-						<Field.Field>
+						<Field.Field data-invalid={!!fieldErrors.password || undefined}>
 							<Field.Label for="store-password">Password</Field.Label>
 							<Input
 								disabled={!!busy}
@@ -284,7 +284,7 @@
 							/>
 							{@render issue('password')}
 						</Field.Field>
-						<Field.Description id="store-password-help" class="sm:col-span-2">
+						<Field.Description id="store-password-help" class="@md/field-group:col-span-2">
 							{form.id ? 'Leave blank to keep the saved password. ' : ''}Saved on the server; never
 							sent to the assistant.
 						</Field.Description>
@@ -301,7 +301,7 @@
 							{/snippet}
 						</Collapsible.Trigger>
 						<Collapsible.Content>
-							<Field.Field>
+							<Field.Field data-invalid={!!fieldErrors.certificateSha256 || undefined}>
 								<Field.Label for="store-certificate">Verified SHA-256 fingerprint</Field.Label>
 								<Input
 									disabled={!!busy}
@@ -369,7 +369,7 @@
 									: `${store.folders.length} ${store.folders.length === 1 ? 'folder' : 'folders'}`}</Badge
 							>
 						</Item.Actions>
-						<div class="flex basis-full flex-col gap-3">
+						<Item.Footer class="flex-col items-stretch gap-3">
 							<ul class="flex flex-col gap-2" aria-label="Allowed folders">
 								{#each store.folders as folder}<li
 										class="flex flex-wrap items-baseline justify-between gap-2 text-sm"
@@ -419,7 +419,7 @@
 									>
 								</div>
 							{/if}
-						</div>
+						</Item.Footer>
 					</Item.Root>
 				</div>
 			{/each}

@@ -99,7 +99,7 @@
 
 {#snippet row(s: McpServerSummary)}
 	<div role="listitem">
-		<Item.Root size="sm">
+		<Item.Root size="sm" class="px-2">
 			{#snippet child({ props })}
 				<a href={serverHref(s.id)} {...props}>
 					<Item.Media variant="icon">
