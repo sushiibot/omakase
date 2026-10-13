@@ -12,7 +12,7 @@
 		back,
 		channelNavigation = false,
 		...headerProps
-	}: Omit<ComponentProps<typeof PageHeader>, 'leading'> & {
+	}: Omit<ComponentProps<typeof PageHeader>, 'leading' | 'leadingClass'> & {
 		back?: ScreenBack;
 		/** The channel drawer replaces the back link. */
 		channelNavigation?: boolean;
@@ -62,4 +62,8 @@
 	{/if}
 {/snippet}
 
-<PageHeader {...headerProps} leading={showBack || showMenu ? leading : undefined} />
+<PageHeader
+	{...headerProps}
+	leading={showBack || showMenu ? leading : undefined}
+	leadingClass={showBack && headerProps.breadcrumb ? 'md:hidden' : undefined}
+/>
