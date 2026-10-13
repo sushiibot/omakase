@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import ThumbsDown from '@lucide/svelte/icons/thumbs-down';
 	import ThumbsUp from '@lucide/svelte/icons/thumbs-up';
@@ -136,7 +137,7 @@
 	}}
 >
 	{#if briefing}
-		<div class="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-4">
+		<ScreenContent measure="reading">
 			<header class="flex flex-col gap-1">
 				<h2 class="text-xl font-semibold tracking-tight">{longDate(briefing.date, now)}</h2>
 				<p class="text-sm text-muted-foreground">
@@ -161,6 +162,6 @@
 					? `${rated} rated. Tomorrow's briefing leads with what you found useful.`
 					: 'Rate items to tune what tomorrow leads with.'}
 			</p>
-		</div>
+		</ScreenContent>
 	{/if}
 </DetailScreen>

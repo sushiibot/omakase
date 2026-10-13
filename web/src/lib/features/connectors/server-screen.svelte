@@ -10,6 +10,7 @@
 	import TabbedScreen from '$lib/ui/screen/tabbed-screen.svelte';
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
+	import Section from '$lib/ui/section/section.svelte';
 	import StatePill from '$lib/ui/status/state-pill.svelte';
 	import { cn } from '$lib/utils';
 	import type { ConnectorOperation, McpServer } from './types';
@@ -264,16 +265,8 @@
 	{#snippet children(tabValue)}
 		{#if server}
 			{#if tabValue === 'tools'}
-				<section aria-labelledby="{uid}-tools" class="flex flex-col gap-2">
-					<h2
-						id="{uid}-tools"
-						class="flex flex-wrap items-baseline justify-between gap-2 text-sm font-semibold"
-					>
-						Tools
-						<span class="text-meta font-normal text-muted-foreground"
-							>list saved {ago(server.snapshotAt, now)}</span
-						>
-					</h2>
+				<Section id={`${uid}-tools`} title="Tools" class="gap-2">
+					{#snippet aside()}list saved {ago(server.snapshotAt, now)}{/snippet}
 					{#if server.changed}
 						<p class="text-sm text-muted-foreground">
 							Marked lines show changes since the saved snapshot. Added and changed tools are
@@ -314,12 +307,15 @@
 							</li>
 						{/each}
 					</ul>
-				</section>
+				</Section>
 				{@render trackingSnapshot()}
 			{:else if tabValue === 'history'}
-				<section aria-labelledby="{uid}-hist" class="flex flex-col gap-2">
-					<h2 id="{uid}-hist" class="text-sm font-semibold">Connection history</h2>
-					<p class="text-sm text-muted-foreground">Connection events and saved tool snapshots.</p>
+				<Section
+					id={`${uid}-hist`}
+					title="Connection history"
+					description="Connection events and saved tool snapshots."
+					class="gap-2"
+				>
 					{#if !server.history.length}<p class="text-sm text-muted-foreground">
 							No connection events recorded yet.
 						</p>{/if}
@@ -331,13 +327,14 @@
 							</li>
 						{/each}
 					</ol>
-				</section>
+				</Section>
 			{:else if tabValue === 'used'}
-				<section aria-labelledby="{uid}-used" class="flex flex-col gap-2">
-					<h2 id="{uid}-used" class="text-sm font-semibold">Runs using this connection</h2>
-					<p class="text-sm text-muted-foreground">
-						Open a run to see how the agent used these tools.
-					</p>
+				<Section
+					id={`${uid}-used`}
+					title="Runs using this connection"
+					description="Open a run to see how the agent used these tools."
+					class="gap-2"
+				>
 					{#if server.usedBy.length}
 						<ul class="flex flex-col divide-y rounded-xl border text-sm">
 							{#each server.usedBy as u (u.runId + u.tool)}
@@ -359,7 +356,7 @@
 					{:else}
 						<p class="text-sm text-muted-foreground">No runs have used it yet.</p>
 					{/if}
-				</section>
+				</Section>
 			{/if}
 		{/if}
 	{/snippet}

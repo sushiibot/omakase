@@ -52,8 +52,15 @@ See [MCP connections](../README.md#mcp-connections) for setup, protocol limits, 
 ## UI and UX guidance
 
 Read [UX guidelines](docs/ux-guidelines.md) before changing a screen or shared component.
-They cover interaction hierarchy, lists and filters, forms and recovery, mobile layout, loading, copy, and accessibility.
-The guidelines include review and verification methods. Document new reusable patterns there alongside their shared implementation.
+They are the authority for interaction, density, responsive layout, motion, loading, copy, and accessibility.
+The [shared component patterns](docs/ux-guidelines.md#shared-component-patterns) map each UI intent to its primitive.
+Document new reusable patterns there. Keep feature documents focused on domain behavior.
+
+Use the normal `Button` for routine actions. Its compact face preserves the full touch target.
+Use `ScreenContent` for content geometry, `Section` for repeated groups, and `SwitchRow` for toggle preferences.
+Use the shared segmented radio variant for short preference choices.
+Do not copy button sizing, page gutters, section headings, or control internals into feature classes.
+Review shared changes on desktop and touch layouts, in both themes.
 
 The [channel interaction rules](docs/channel-interaction-rules.md) define the workspace layout,
 source evidence, gesture behavior, and acceptance checks. The live shell keeps channel navigation
@@ -75,15 +82,17 @@ Imports point down this list only:
 
 Every screen on the prototype board is a feature's own screen, rendered from its `fixtures.ts`; the board imports features only through `index.ts` and `fixtures.ts`. Screens whose backend doesn't exist yet (skills, schedules, browser, briefing) call the routes that backend will serve (`api.ts`) and remain development previews, enabled through the device override in `localStorage` `features:override` (`all` or a comma list). All live screens are always available; `/api/me` `features` is a compatibility catalog, not a configuration switch. Their fixture APIs (`fake.ts`) never reach the app build (`scripts/bundle-guard.ts`): `bun dev` with `?fake` installs them from `src/routes/dev-fakes.ts` with every feature on, where `fixtures:<feature>` picks the state a fake serves (`empty`, `error`, `slow`, `offline`, `unsupported`), and the e2e suite serves the same APIs over `context.route` (`e2e/fixture-routes.ts`).
 
-A screen is built from `ui/screen` (`Screen`, `ListScreen`, `DetailScreen`, `ScreenState`) inside the root layout's `Shell`, with data from a feature store (`core/remote.svelte.ts` for fetched data, `core/realtime/hub.svelte.ts` for the stream). Sheets are `ui/sheet/routed-sheet.svelte`, opened through `core/nav/sheet.ts` so Android back closes them. Screens, their `components/` and `render/` take props and callbacks only, so the prototype board and the e2e harness can render them from fixtures.
+A screen is built from `ui/screen` (`Screen`, `ScreenContent`, `ListScreen`, `DetailScreen`, `TabbedScreen`, `ScreenState`) inside the root layout's `Shell`, with data from a feature store (`core/remote.svelte.ts` for fetched data, `core/realtime/hub.svelte.ts` for the stream). Sheets are `ui/sheet/routed-sheet.svelte`, opened through `core/nav/sheet.ts` so Android back closes them. Screens, their `components/` and `render/` take props and callbacks only, so the prototype board and the e2e harness can render them from fixtures.
 
-## Shared mobile tabs
+## Shared responsive tabs
 
 Use `ui/screen/TabbedScreen` for screens with tabs and swipe navigation.
 It owns the screen shell, full-width pager, 16px content gutters, and panel scrolling.
 Screens provide tab labels, lead content, panel content, and callbacks.
 Do not add an enclosing screen, horizontal padding, or another vertical scroll container.
 Use `wide` for the wider desktop content measure.
+Desktop tab changes are immediate. Touch taps select the label immediately while the panel moves.
+Reduced motion removes panel animation. Do not add feature-level carousel timing or active-tab state.
 
 The internal `SwipeableTabs` engine owns dragging, snapping, underline motion, and keyboard navigation.
 The import boundary check prevents features from using that engine directly.

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
 	import { Markdown } from '$lib/features/chat';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import { ago } from '$lib/ui/format/time';
@@ -56,7 +57,7 @@
 	}}
 >
 	{#if detail}
-		<div class="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-4">
+		<ScreenContent measure="reading">
 			<p class="text-sm text-muted-foreground">
 				{detail.file.about}. Changed {ago(detail.file.updatedAt, now)}.
 			</p>
@@ -81,6 +82,6 @@
 					</ul>
 				</section>
 			{/if}
-		</div>
+		</ScreenContent>
 	{/if}
 </DetailScreen>

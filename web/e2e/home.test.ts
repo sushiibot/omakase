@@ -568,9 +568,9 @@ test('swiping an inbox row sideways marks it done', async ({ page, context }) =>
 	await row.dispatchEvent('pointerup', { ...touch, clientX: box.x + 20, clientY: y });
 	await expect(row).toBeHidden();
 	await expect(page.getByRole('dialog')).toBeHidden();
-	expect(backend.calls.filter((c) => c.path === '/api/home/dismiss').map((c) => c.body)).toEqual([
-		{ id: 'msg:ob-heartbeat-1' }
-	]);
+	await expect
+		.poll(() => backend.calls.filter((c) => c.path === '/api/home/dismiss').map((c) => c.body))
+		.toEqual([{ id: 'msg:ob-heartbeat-1' }]);
 });
 
 test("a job message's push opens it on Home", async ({ page, context }) => {

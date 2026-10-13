@@ -7,7 +7,7 @@
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import { Input } from '$lib/ui/input';
 	import DetailScreen from '$lib/ui/screen/detail-screen.svelte';
-	import ManagementContent from '$lib/ui/screen/management-content.svelte';
+	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
 	import { cn } from '$lib/utils';
 	import type { AddState } from './types';
 
@@ -82,7 +82,7 @@
 {/snippet}
 
 <DetailScreen title="Add a server" {back} {banner} {footer}>
-	<ManagementContent>
+	<ScreenContent>
 		<div class="flex max-w-xl flex-col gap-5">
 			<ol class="grid grid-cols-3 gap-2 text-meta" aria-label="Steps">
 				{#each steps as label, i (label)}
@@ -121,7 +121,7 @@
 						autocomplete="off"
 						autocapitalize="off"
 						spellcheck={false}
-						class="h-12 rounded-sm font-mono text-base desktop-pointer:h-9 desktop-pointer:text-sm"
+						class="font-mono"
 					/>
 					<p id="{uid}-url-help" class="text-sm text-muted-foreground">
 						An https:// address for a Streamable HTTP MCP server. Leave the token blank to sign in
@@ -143,7 +143,6 @@
 						oninput={(e) => ontoken?.(e.currentTarget.value)}
 						autocomplete="off"
 						spellcheck={false}
-						class="h-12 rounded-sm text-base desktop-pointer:h-9 desktop-pointer:text-sm"
 					/>
 					<p id="{uid}-token-help" class="text-sm text-muted-foreground">
 						For Fastmail, use https://api.fastmail.com/mcp and create an MCP token with only “Read
@@ -196,7 +195,7 @@
 						autocomplete="off"
 						autocapitalize="off"
 						spellcheck={false}
-						class="h-12 rounded-sm font-mono text-base desktop-pointer:h-9 desktop-pointer:text-sm"
+						class="font-mono"
 					/>
 					<p id="{uid}-redirect-help" class="text-sm text-muted-foreground">
 						Copy the whole localhost callback address, including its code and state.
@@ -209,5 +208,5 @@
 				</section>
 			{/if}
 		</div>
-	</ManagementContent>
+	</ScreenContent>
 </DetailScreen>

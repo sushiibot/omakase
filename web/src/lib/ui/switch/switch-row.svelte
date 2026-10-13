@@ -5,7 +5,7 @@
 
 	let {
 		checked,
-		compact = false,
+		compact = true,
 		disabled = false,
 		describedby,
 		onchange,

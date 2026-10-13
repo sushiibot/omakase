@@ -3,6 +3,7 @@
 	import ApprovalTray from '$lib/features/chat/components/approval-tray.svelte';
 	import WorkingRow from '$lib/features/chat/components/working-row.svelte';
 	import Conversation from '$lib/features/chat/components/conversation.svelte';
+	import Controls from './Controls.svelte';
 	import { api } from './api.svelte';
 
 	const files = (f: unknown) => f as { id: string; inline: boolean }[] | undefined;
@@ -32,3 +33,5 @@
 		/>
 	</div>
 {/if}
+
+{#if new URLSearchParams(location.search).has('controls')}<Controls />{/if}

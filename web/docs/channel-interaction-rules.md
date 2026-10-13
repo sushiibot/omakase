@@ -1,8 +1,8 @@
 # Channel navigation and interaction rules
 
 Sushii uses channels for parallel conversations and an inspector for supporting details.
-This specification governs the workspace revision and its motion prototype.
-The production shell still uses its existing layout. The prototype establishes the new motion and layout behavior.
+This document defines workspace-specific behavior in the live shell and its isolated motion prototype.
+The [UX guidelines](ux-guidelines.md) own shared controls, content geometry, accessibility, and review gates.
 The desktop and mobile layouts preserve the same conversation, draft, requests, and task state.
 
 The primary jobs are reopening recent conversations and responding to requests.
@@ -32,7 +32,9 @@ The rules in this specification are Sushii requirements derived from the accepte
 | [Pointer touch behavior](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/touch-action)                                                                                                    | Touch-action determines browser gesture handling.                                                                             | A horizontal pane gesture must preserve vertical scrolling, controls, and horizontal child scrolling.                             |
 | [Browser animation performance](https://web.dev/articles/animations-guide)                                                                                                                                      | Transform and opacity avoid many layout and paint costs.                                                                      | Finger tracking updates transforms. Streamed text does not rebuild the pane layout.                                               |
 
-## Current implementation evidence
+## Historical investigation evidence
+
+The October 11 investigation recorded the following baseline. These timings do not describe the current accepted tab behavior.
 
 The application uses local shadcn-svelte components, with Bits UI underneath many interactive primitives.
 The custom `SwipeableTabs` component uses Embla 8.6.0 directly.
@@ -62,6 +64,11 @@ That setting does not control drag-release duration.
 | N9  | Use one channel row anatomy and distinct hover, selected, and focus states.                                    | Check Main and grouped channels in both themes. Align icons, labels, and badges; retain mobile touch targets. |
 
 Search and view filters stay collapsed until requested. Channel links remain the main navigation surface.
+Archived channels have a separate collapsed section outside search controls. Search can reveal matching archived channels.
+The owner can still collapse that section.
+
+Channel menus open with actions, including Open conversation and Rename. Archive or Restore appears where supported.
+Rename opens its editor only after selection. Main supports a saved display name and cannot be archived.
 
 Recent and All are alternate views of the same records. They do not duplicate conversation state.
 Task work conversations enter the catalog when a work conversation exists. Unstarted to-dos remain in Tasks.
@@ -97,7 +104,7 @@ Sidebar links, buttons, and the exposed chat return strip accept horizontal dism
 Settlement uses a fixed 200ms ease-out transition.
 Reduced motion uses immediate settlement.
 The initial settle budget is 240ms in an idle browser, including frame scheduling.
-Device profiling can change these values before production integration.
+Physical-device profiling can justify changes to these values. Shared shell tests must retain the documented behavior.
 
 ## Chat and attention rules
 
@@ -209,14 +216,13 @@ New question handles survive crashes so restart can withdraw orphan questions.
 Older unanswered log records have no recovery handle and can outlive their original dialog.
 The future attention interface must distinguish these unresolved records from verified live requests.
 
-1. Implement the additive channel catalog and shared request awareness independently of layout.
-2. Build the isolated pane prototype from P1–P12.
-3. Run synthetic gesture checks and record timing, displacement, and recovery results.
-4. Inspect desktop and mobile layouts together in light and dark themes.
-5. Validate the prototype on the installed PWA and a physical phone.
-6. Extract the accepted pane primitive into the shared workspace shell.
-7. Integrate channel navigation, inspector content, activity feedback, and request pings.
-8. Run the repository web gates and real-system conversation flows.
+For changes to the shared shell:
+
+1. Preserve channel identity, drafts, requests, and cached state.
+2. Run gesture checks for timing, displacement, cancellation, and recovery.
+3. Inspect desktop and mobile layouts together in light and dark themes.
+4. Check keyboard and system gestures on the installed PWA. Record unavailable device checks.
+5. Run the repository web gates and affected real-system conversation flows.
 
 The gesture prototype does not establish that subjective feel matches Discord.
 Automated checks establish state transitions and timing bounds.
@@ -229,4 +235,5 @@ One repair batch addresses those defects.
 The second round confirms repairs and records remaining limitations.
 
 The production gates remain in [UX guidelines](ux-guidelines.md#the-ux-gate).
-The rules above supplement the existing 48px target, accessibility, offline, and data-preservation requirements.
+The rules above supplement the shared touch-target, accessibility, offline, and data-preservation requirements.
+Shell navigation retains its deliberate row and icon geometry. Routine content actions use the shared compact `Button` defaults.

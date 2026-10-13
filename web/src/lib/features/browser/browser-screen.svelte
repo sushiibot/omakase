@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import Bot from '@lucide/svelte/icons/bot';
 	import Globe from '@lucide/svelte/icons/globe';
@@ -106,7 +107,7 @@
 	}}
 >
 	{#if status && status.holder !== 'idle'}
-		<div class="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-4">
+		<ScreenContent measure="reading">
 			<ol class="grid grid-cols-3 gap-2 text-meta" aria-label="Takeover steps">
 				{#each steps as s, i (s.id)}
 					<li
@@ -163,6 +164,6 @@
 					>For: {status.task.title}<ArrowUpRight class="size-3.5" aria-hidden="true" /></a
 				>
 			{/if}
-		</div>
+		</ScreenContent>
 	{/if}
 </DetailScreen>

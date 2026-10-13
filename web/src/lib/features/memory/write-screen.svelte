@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import GitCommitHorizontal from '@lucide/svelte/icons/git-commit-horizontal';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
@@ -118,60 +119,62 @@
 	}}
 >
 	{#if write}
-		<article class="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-4">
-			<header class="flex flex-col gap-2">
-				<a
-					href={fileHref(write.fileId)}
-					class="-my-3 flex min-h-12 items-center self-start font-mono text-meta [overflow-wrap:anywhere] text-muted-foreground hover:text-foreground"
-					>{write.path}</a
-				>
-				<h2 class="text-lg leading-snug font-semibold text-balance">{write.summary}</h2>
-				<p class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
-					<span class="tabular-nums">{ago(write.at, now)}</span>
-					<span class="inline-flex items-center gap-1 font-mono text-meta">
-						<GitCommitHorizontal class="size-3.5" aria-hidden="true" />{write.commit}
-					</span>
-					{#if write.taint}<StatePill of="tainted" label={write.taint} />{/if}
-					{#if write.reverted}<StatePill of="archived" label="Reverted" />{/if}
-				</p>
-			</header>
-
-			<DiffView lines={write.diff} file={write.path} />
-
-			{#if write.reverted}
-				<p class="text-sm text-muted-foreground">
-					Reverted {ago(write.reverted.at, now)} in
-					<span class="font-mono text-meta">{write.reverted.commit}</span>. The agent doesn't see
-					these lines any more.
-				</p>
-			{/if}
-
-			<section class="flex flex-col gap-1">
-				<h3 class="text-sm font-medium text-muted-foreground">Written by</h3>
-				{#if write.run}
+		<ScreenContent measure="reading">
+			<article class="flex flex-col gap-6">
+				<header class="flex flex-col gap-2">
 					<a
-						href={runHref(write.run.id)}
-						class="-my-1 flex min-h-12 items-center gap-1 self-start text-sm font-medium hover:underline"
-						>{write.run.title}<ArrowUpRight class="size-3.5 shrink-0" aria-hidden="true" /></a
+						href={fileHref(write.fileId)}
+						class="-my-3 flex min-h-12 items-center self-start font-mono text-meta [overflow-wrap:anywhere] text-muted-foreground hover:text-foreground"
+						>{write.path}</a
 					>
-				{/if}
-				{#if write.thread}
-					<a
-						href={threadHref(write.thread.id)}
-						class="-my-1 flex min-h-12 items-center gap-1 self-start text-sm font-medium hover:underline"
-						>Thread · {write.thread.title}<ArrowUpRight
-							class="size-3.5 shrink-0"
-							aria-hidden="true"
-						/></a
-					>
-				{/if}
-				{#if write.taint}
+					<h2 class="text-lg leading-snug font-semibold text-balance">{write.summary}</h2>
+					<p class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
+						<span class="tabular-nums">{ago(write.at, now)}</span>
+						<span class="inline-flex items-center gap-1 font-mono text-meta">
+							<GitCommitHorizontal class="size-3.5" aria-hidden="true" />{write.commit}
+						</span>
+						{#if write.taint}<StatePill of="tainted" label={write.taint} />{/if}
+						{#if write.reverted}<StatePill of="archived" label="Reverted" />{/if}
+					</p>
+				</header>
+
+				<DiffView lines={write.diff} file={write.path} />
+
+				{#if write.reverted}
 					<p class="text-sm text-muted-foreground">
-						That run had read content from outside before it wrote this. Check it before the agent
-						relies on it.
+						Reverted {ago(write.reverted.at, now)} in
+						<span class="font-mono text-meta">{write.reverted.commit}</span>. The agent doesn't see
+						these lines any more.
 					</p>
 				{/if}
-			</section>
-		</article>
+
+				<section class="flex flex-col gap-1">
+					<h3 class="text-sm font-medium text-muted-foreground">Written by</h3>
+					{#if write.run}
+						<a
+							href={runHref(write.run.id)}
+							class="-my-1 flex min-h-12 items-center gap-1 self-start text-sm font-medium hover:underline"
+							>{write.run.title}<ArrowUpRight class="size-3.5 shrink-0" aria-hidden="true" /></a
+						>
+					{/if}
+					{#if write.thread}
+						<a
+							href={threadHref(write.thread.id)}
+							class="-my-1 flex min-h-12 items-center gap-1 self-start text-sm font-medium hover:underline"
+							>Thread · {write.thread.title}<ArrowUpRight
+								class="size-3.5 shrink-0"
+								aria-hidden="true"
+							/></a
+						>
+					{/if}
+					{#if write.taint}
+						<p class="text-sm text-muted-foreground">
+							That run had read content from outside before it wrote this. Check it before the agent
+							relies on it.
+						</p>
+					{/if}
+				</section>
+			</article>
+		</ScreenContent>
 	{/if}
 </DetailScreen>

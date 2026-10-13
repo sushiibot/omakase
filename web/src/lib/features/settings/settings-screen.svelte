@@ -11,7 +11,9 @@
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import UpdateToast from '$lib/ui/pwa/update-toast.svelte';
 	import * as RadioGroup from '$lib/ui/radio-group';
-	import ManagementContent from '$lib/ui/screen/management-content.svelte';
+	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
+	import Section from '$lib/ui/section/section.svelte';
+	import PreferenceRow from '$lib/ui/preference/preference-row.svelte';
 	import DetailScreen from '$lib/ui/screen/detail-screen.svelte';
 	import ScreenState, { type RemoteLike } from '$lib/ui/screen/screen-state.svelte';
 	import { SwitchRow } from '$lib/ui/switch';
@@ -123,35 +125,30 @@
 {/snippet}
 
 <DetailScreen title="Settings" {back} {banner} toast={updateReady ? toast : undefined}>
-	<ManagementContent>
+	<ScreenContent>
 		<div class="flex max-w-3xl flex-col gap-6">
-			<section aria-labelledby="account" class="flex flex-col gap-1">
-				<h2 id="account" class="text-sm font-semibold">Account</h2>
-				<div class="py-3">
-					<ScreenState
-						compact
-						remote={me}
-						errorTitle="Couldn't load your account."
-						onretry={onretryme}
-						skeleton={accountLoading}
-					>
-						{#if me.data}
-							<div class="flex items-start justify-between gap-6 text-sm">
-								<p class="shrink-0 text-muted-foreground">Signed in as</p>
-								<div class="min-w-0 text-right">
-									<p class="font-medium [overflow-wrap:anywhere]" data-testid="login">
-										{me.data.displayName ?? me.data.login}
+			<Section id="account" title="Account">
+				<ScreenState
+					remote={me}
+					errorTitle="Couldn't load your account."
+					onretry={onretryme}
+					skeleton={accountLoading}
+				>
+					{#if me.data}
+						<PreferenceRow label="Signed in as">
+							<div class="min-w-0 text-right">
+								<p class="font-medium [overflow-wrap:anywhere]" data-testid="login">
+									{me.data.displayName ?? me.data.login}
+								</p>
+								{#if me.data.displayName}
+									<p class="text-xs [overflow-wrap:anywhere] text-muted-foreground">
+										{me.data.login}
 									</p>
-									{#if me.data.displayName}
-										<p class="text-xs [overflow-wrap:anywhere] text-muted-foreground">
-											{me.data.login}
-										</p>
-									{/if}
-								</div>
+								{/if}
 							</div>
-						{/if}
-					</ScreenState>
-				</div>
+						</PreferenceRow>
+					{/if}
+				</ScreenState>
 
 				{#if ownerName}
 					<div class="border-t">
@@ -164,33 +161,25 @@
 						/>
 					</div>
 				{/if}
-			</section>
+			</Section>
 
-			<section aria-labelledby="appearance" class="flex flex-col gap-1">
-				<h2 id="appearance" class="text-sm font-semibold">Appearance</h2>
-				<div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 py-1">
-					<p class="text-sm text-muted-foreground">Theme</p>
+			<Section id="appearance" title="Appearance">
+				<PreferenceRow label="Theme">
 					<RadioGroup.Root
 						aria-labelledby="appearance"
 						orientation="horizontal"
 						onkeydowncapture={themeKeydown}
-						class="relative isolate flex w-auto gap-0 before:absolute before:inset-x-0 before:inset-y-2 before:-z-10 before:rounded-lg before:bg-muted"
+						layout="segmented"
 						bind:value={() => theme, (v) => onchoosetheme?.(v as ThemeChoice)}
 					>
 						{#each themes as t (t.id)}
-							<RadioGroup.Card
-								value={t.id}
-								compact
-								class="px-0.5 [&>span]:h-7 [&>span]:min-w-16 [&>span]:rounded-md [&>span]:border-0 [&>span]:bg-transparent [&>span]:px-3 data-checked:[&>span]:bg-background data-checked:[&>span]:shadow-sm"
-								>{t.label}</RadioGroup.Card
-							>
+							<RadioGroup.Card value={t.id} variant="segment">{t.label}</RadioGroup.Card>
 						{/each}
 					</RadioGroup.Root>
-				</div>
-			</section>
+				</PreferenceRow>
+			</Section>
 
-			<section aria-labelledby="notifications" class="flex flex-col gap-1">
-				<h2 id="notifications" class="text-sm font-semibold">Notifications</h2>
+			<Section id="notifications" title="Notifications">
 				<div class="flex flex-col">
 					<SwitchRow
 						compact
@@ -257,10 +246,9 @@
 						</p>
 					</div>
 				{/if}
-			</section>
+			</Section>
 
-			<section aria-labelledby="app" class="flex flex-col gap-1">
-				<h2 id="app" class="text-sm font-semibold">App</h2>
+			<Section id="app" title="App">
 				<dl class="flex flex-col text-sm">
 					<div class="flex min-h-10 items-center justify-between gap-4 py-2">
 						<dt class="text-muted-foreground">Version</dt>
@@ -291,7 +279,7 @@
 						Offline support is off: the background worker didn't start ({swError}).
 					</p>
 				{/if}
-			</section>
+			</Section>
 		</div>
-	</ManagementContent>
+	</ScreenContent>
 </DetailScreen>

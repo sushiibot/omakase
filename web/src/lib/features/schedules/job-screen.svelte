@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import FlaskConical from '@lucide/svelte/icons/flask-conical';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
@@ -112,7 +113,7 @@
 	}}
 >
 	{#if job}
-		<div class="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-4">
+		<ScreenContent measure="reading">
 			<header class="flex flex-col gap-1">
 				<p class="text-sm font-medium">{job.schedule}</p>
 				<p class="text-sm text-muted-foreground tabular-nums">{nextRunLine(job, now)}</p>
@@ -159,7 +160,7 @@
 					<p class="text-sm text-muted-foreground">It hasn't run yet.</p>
 				{/if}
 			</section>
-		</div>
+		</ScreenContent>
 	{/if}
 </DetailScreen>
 

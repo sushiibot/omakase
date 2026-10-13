@@ -3,51 +3,60 @@
 	import { cn, tv, type WithElementRef } from '$lib/utils.js';
 	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
 
+	// The semantic element owns focus and hit testing; its face owns visual treatment.
+	// Keep hover on the outer group so the whole touch target responds consistently.
 	const buttonBase =
-		"focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 rounded-lg border border-transparent bg-clip-padding text-sm font-medium focus-visible:ring-3 aria-invalid:ring-3 active:not-aria-[haspopup]:translate-y-px [&_svg:not([class*='size-'])]:size-4 group/button inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-all outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0";
+		"group/button inline-flex shrink-0 items-center justify-center rounded-sm whitespace-nowrap text-sm font-medium outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50 aria-invalid:ring-2 aria-invalid:ring-destructive/20 disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
+	const regularTarget = 'h-12 min-w-12 p-0 desktop-pointer:h-8 desktop-pointer:min-w-8';
+	const iconTarget = 'size-12 p-0 desktop-pointer:size-8';
 
-	export const buttonVariants = tv({
+	const targetVariants = tv({
 		base: buttonBase,
 		variants: {
-			variant: {
-				default: 'bg-primary text-primary-foreground hover:bg-primary/80',
-				outline:
-					'border-border bg-background hover:bg-muted hover:text-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 aria-expanded:bg-muted aria-expanded:text-foreground',
-				secondary:
-					'bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
-				ghost:
-					'hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 aria-expanded:bg-muted aria-expanded:text-foreground',
-				destructive:
-					'bg-destructive/10 hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/20 text-destructive focus-visible:border-destructive/40 dark:hover:bg-destructive/30',
-				link: 'text-primary underline-offset-4 hover:underline'
-			},
 			size: {
-				// A real touch target surrounds a smaller painted face.
-				compact: 'h-12 min-w-12 p-0 desktop-pointer:h-8 desktop-pointer:min-w-8',
-				// Management actions stay touch-friendly and become denser for desktop pointers.
-				action:
-					'h-12 min-w-12 gap-2 px-4 text-sm font-medium desktop-pointer:h-9 desktop-pointer:min-w-9 desktop-pointer:px-3',
-				default:
-					'h-12 gap-2 px-6 text-body font-semibold has-data-[icon=inline-end]:pr-5 has-data-[icon=inline-start]:pl-5',
-				xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-				sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-				lg: 'h-12 gap-2 px-6 text-body font-semibold has-data-[icon=inline-end]:pr-5 has-data-[icon=inline-start]:pl-5',
-				icon: 'size-8',
-				'icon-xs':
-					"size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
-				'icon-sm':
-					'size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg',
-				'icon-lg': 'size-9'
+				default: regularTarget,
+				// Compatibility aliases: ordinary actions now share one density.
+				compact: regularTarget,
+				action: regularTarget,
+				xs: regularTarget,
+				sm: regularTarget,
+				lg: 'h-12 min-w-12 p-0 text-body font-semibold',
+				icon: iconTarget,
+				'icon-xs': iconTarget,
+				'icon-sm': iconTarget,
+				// Align the target with full-height fields and prominent controls.
+				'icon-lg': 'size-12 p-0'
 			}
 		},
-		defaultVariants: {
-			variant: 'default',
-			size: 'default'
-		}
+		defaultVariants: { size: 'default' }
 	});
 
-	export type ButtonVariant = VariantProps<typeof buttonVariants>['variant'];
-	export type ButtonSize = VariantProps<typeof buttonVariants>['size'];
+	const faceVariants = tv({
+		base: 'pointer-events-none inline-flex w-full items-center justify-[inherit] gap-2 rounded-[inherit] border border-transparent bg-clip-padding transition-colors duration-(--duration-short) motion-reduce:transition-none',
+		variants: {
+			variant: {
+				default: 'bg-primary text-primary-foreground group-hover/button:bg-primary/80',
+				outline:
+					'border-border bg-background group-hover/button:bg-muted group-hover/button:text-foreground dark:bg-input/30 dark:border-input dark:group-hover/button:bg-input/50 group-aria-expanded/button:bg-muted group-aria-expanded/button:text-foreground',
+				secondary:
+					'bg-secondary text-secondary-foreground group-hover/button:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] group-aria-expanded/button:bg-secondary group-aria-expanded/button:text-secondary-foreground',
+				ghost:
+					'group-hover/button:bg-muted group-hover/button:text-foreground dark:group-hover/button:bg-muted/50 group-aria-expanded/button:bg-muted group-aria-expanded/button:text-foreground',
+				destructive:
+					'bg-destructive/10 text-destructive group-hover/button:bg-destructive/20 dark:bg-destructive/20 dark:group-hover/button:bg-destructive/30',
+				link: 'text-primary underline-offset-4 group-hover/button:underline'
+			},
+			size: {
+				default: 'h-9 min-w-12 px-3 desktop-pointer:h-8 desktop-pointer:min-w-8',
+				lg: 'h-full px-6',
+				icon: 'size-9 justify-center p-0 desktop-pointer:size-8'
+			}
+		},
+		defaultVariants: { variant: 'default', size: 'default' }
+	});
+
+	export type ButtonVariant = VariantProps<typeof faceVariants>['variant'];
+	export type ButtonSize = VariantProps<typeof targetVariants>['size'];
 
 	export type ButtonProps = WithElementRef<HTMLButtonAttributes> &
 		WithElementRef<HTMLAnchorAttributes> & {
@@ -69,41 +78,14 @@
 		...restProps
 	}: ButtonProps = $props();
 
-	const controlClass = $derived(
-		size === 'compact'
-			? cn(
-					buttonBase,
-					'h-12 min-w-12 rounded-sm border-0 p-0 transition-colors duration-(--duration-short) focus-visible:ring-2 active:not-aria-[haspopup]:translate-y-0 motion-reduce:transition-none desktop-pointer:h-8 desktop-pointer:min-w-8',
-					className
-				)
-			: cn(buttonVariants({ variant, size }), className)
-	);
-	const compactHover = {
-		default: 'group-hover/button:bg-primary/80',
-		outline:
-			'group-hover/button:bg-muted group-hover/button:text-foreground dark:group-hover/button:bg-input/50',
-		secondary: 'group-hover/button:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]',
-		ghost: 'group-hover/button:bg-muted dark:group-hover/button:bg-muted/50',
-		destructive: 'group-hover/button:bg-destructive/20 dark:group-hover/button:bg-destructive/30',
-		link: 'group-hover/button:underline'
-	};
+	const controlClass = $derived(cn(targetVariants({ size }), className));
+	const faceSize = $derived(size === 'lg' ? 'lg' : size?.startsWith('icon') ? 'icon' : 'default');
 </script>
 
 {#snippet content()}
-	{#if size === 'compact'}
-		<span
-			data-slot="button-face"
-			class={cn(
-				buttonVariants({ variant, size: 'action' }),
-				'justify-[inherit] pointer-events-none h-9 w-full min-w-12 rounded-sm px-3 transition-colors duration-(--duration-short) motion-reduce:transition-none desktop-pointer:h-8 desktop-pointer:min-w-8',
-				compactHover[variant]
-			)}
-		>
-			{@render children?.()}
-		</span>
-	{:else}
+	<span data-slot="button-face" class={faceVariants({ variant, size: faceSize })}>
 		{@render children?.()}
-	{/if}
+	</span>
 {/snippet}
 
 {#if href}

@@ -1,10 +1,12 @@
 # UX guidelines
 
-Rules for every screen in the personal agent web app. The bar: better than a chat-app DM, judged on a real Android phone, one-handed, not in a desktop browser.
+Rules for every screen and shared component in the personal agent web app. Aim for a quiet, compact interface with clear hierarchy and immediate feedback. Evaluate desktop, touch, and keyboard use together. Android remains the primary installed-PWA device.
 
 Every rule has a one-line why and a check. A rule without a check is a wish, so review goes rule by rule and asks "did the check pass?"
 
-The clickable prototype (`src/proto-routes/proto`, which renders the shipped feature screens from `src/lib/features` on their fixtures) sets the design direction. Where the prototype breaks a rule below, the rule wins; see [Known gaps](#known-gaps-in-the-prototype).
+This document is the authority for shared UI patterns. The [README](../README.md#ui-and-ux-guidance) explains architecture and commands. The [channel rules](channel-interaction-rules.md) add workspace-specific behavior. Feature documents own domain behavior, not alternative sizing systems.
+
+The clickable prototype (`src/proto-routes/proto`) renders feature screens from fixtures. Use it to review states, not to prove production parity or accessibility. See [Prototype limits](#prototype-limits).
 
 ## Conversations, work and activity
 
@@ -29,23 +31,23 @@ Channel options first show actions: Open conversation, Rename, and Archive or Re
 | Tag      | Meaning                                                                                |
 | -------- | -------------------------------------------------------------------------------------- |
 | `axe`    | `@axe-core/playwright` scan, see [Accessibility](#accessibility)                       |
-| `pw`     | Playwright assertion at 412x915 (and 320 wide where noted)                             |
+| `pw`     | Playwright assertion on touch and desktop layouts (320 wide for reflow)                |
 | `shot`   | A screenshot in the [state matrix](#state-matrix), reviewed by eye against these rules |
 | `phone`  | Manual step on the real phone, installed PWA, not a browser tab                        |
 | `check`  | `bun run check` (svelte-check, compiler a11y warnings)                                 |
 | `review` | Code review reads the diff for it; no tool catches it                                  |
 
-## Mobile: Android first
+## Input methods and mobile behavior
 
-The primary device is an Android phone running the installed PWA (Chrome WebAPK, `display: standalone`). Desktop is a wider layout of the same app, not a separate design.
+The primary mobile device is an Android phone running the installed PWA (Chrome WebAPK, `display: standalone`). Desktop uses the same primitives with denser controls and wider content. Input capability determines target sizing. Available space determines layout.
 
 ### Reach and touch targets
 
-- **Every tappable element is at least 48x48 CSS px, including padding.** Why: Android and Material specify 48dp as the minimum for reliable touch ([Android API defaults](https://developer.android.com/develop/ui/compose/accessibility/api-defaults), [Android accessibility help](https://support.google.com/accessibility/android/answer/7101858)); 1 CSS px = 1dp on Android Chrome. Check: `pw` bounding-box assertion (below). axe does NOT cover this: its `target-size` rule tests the WCAG 2.5.8 floor of 24px (`minSize: 24` in axe-core 4.13).
-- **Keep visible size separate from touch size.** Use `Button size="compact"` on Connections and Settings: its painted face is 36px high inside a real 48px touch target, or 32px on desktop fine pointers. Other screens retain their existing `default`, `lg`, or `action` sizes until adapted. Do not use stock small sizes as mobile hit areas. Check: `pw` measures the control and its `data-slot="button-face"` separately.
+- **Every touch target is at least 48x48 CSS px, including padding.** Why: Android and Material specify 48dp as the minimum for reliable touch ([Android API defaults](https://developer.android.com/develop/ui/compose/accessibility/api-defaults), [Android accessibility help](https://support.google.com/accessibility/android/answer/7101858)); 1 CSS px = 1dp on Android Chrome. Check: `pw` bounding-box assertion (below). axe does NOT cover this: its `target-size` rule tests the WCAG 2.5.8 floor of 24px (`minSize: 24` in axe-core 4.13).
+- **Keep visible size separate from touch size.** The shared `Button` default paints a 36px face inside a real 48px touch target. Desktop fine pointers use 32px for both. Mixed-input devices retain touch sizing. See [Shared component patterns](#shared-component-patterns) for deliberate exceptions. Do not reduce the hit area with local height classes. Check: `pw` measures the control and its `data-slot="button-face"` separately.
 - **Separate action controls have at least 8px between their hit areas.** Why: Material spacing guidance; mis-taps on approve/deny rows are costly. Repeated channel navigation is a deliberate exception: contiguous full-width rows retain 48px touch targets, with shallow highlights inset inside them. Separate project groups with space; do not separate every channel like an action button. WCAG does not require a gap when targets meet its size minimum. Check: `shot`, `pw`.
 - **Inline text links inside prose are exempt from the 48px rule, but nothing important is reachable only through one.** Why: WCAG 2.5.8 exempts inline links because they are small and easy to miss. Check: `review`.
-- **Primary actions sit in the bottom third of the screen: composer, approve/deny, the main button of a sheet.** Why: about half of observed phone grips are one-handed, and the top corners are the hardest reach for that thumb ([Hoober, How do users really hold mobile devices](https://www.uxmatters.com/mt/archives/2013/02/how-do-users-really-hold-mobile-devices.php)). Check: `shot` at 412x915; the primary action's top edge is below y=610.
+- **Keep frequent phone actions within reach.** Place composer actions and sheet decisions near the bottom. Keep list creation actions beside their list. Do not stretch short pages to force every action below a fixed coordinate. Why: thumb reach matters alongside context ([Hoober, How do users really hold mobile devices](https://www.uxmatters.com/mt/archives/2013/02/how-do-users-really-hold-mobile-devices.php)). Check: `shot`, `phone` with the keyboard open and closed.
 - **The top bar holds title, back and secondary actions only. The general chat defaults to Sushii until the owner renames it, with no static subtitle; activity belongs beside the conversation.** Why: nothing there should need reaching for mid-task. Check: `review`.
 - **Destructive or outward actions (Deny, Delete, Send now) are never the largest target and never sit where a mis-tap from the primary lands.** Why: Fitts's law works against you for dangerous actions. Check: `shot`.
 - **Section swipes follow the visible tab order and stop at each end.** On touch screens, Runs filters, run details, History days, Memory and MCP details support left/right swipes in the content area. Vertical scrolling, text controls, selection and horizontal code/table scrolling keep their normal behavior. The left edge stays available to the drawer and the outer edges stay available to system navigation. Panels follow the finger continuously and snap on release; tapping a tab on phones animates the same pager, with its selected label and underline updating immediately. Desktop tabs switch panels instantly. During a held swipe the underline tracks the panel position, then marks the destination on release. Keep headers fixed and preserve each panel’s scroll and expanded content. Tabs remain the tap and keyboard alternatives. Check: `pw` (`e2e/tab-swipe.test.ts`).
@@ -53,7 +55,7 @@ The primary device is an Android phone running the installed PWA (Chrome WebAPK,
   - Per-message actions are visible icon buttons in a row under the message (Copy, and Share where the browser has `navigator.share`), never a gesture or a hijacked menu: the app does not intercept `contextmenu`, long-press or middle-click, so the browser's own menu, text selection and autoscroll work in the chat. The row is always shown under the newest reply and on touch screens; on hover-capable devices older rows are transparent until hover or `:focus-within`, keeping their height so nothing moves. Icons are 16px inside 48px buttons, each with an `aria-label` and a `title`. The row never holds anything approval-like. Check: `pw` (`e2e/message-actions.test.ts`).
 
 ```ts
-// 48px target assertion; run on every screen in the state matrix.
+// Run in a touch context. Review inline-link exceptions before applying globally.
 const small = await page.$$eval(
 	'a, button, [role=button], input, textarea, [role=tab], summary',
 	(els) =>
@@ -83,13 +85,13 @@ expect(small).toEqual([]);
 - **Keep the `--kb` visualViewport fallback for iOS, where `interactive-widget` has not shipped.** Why: iOS overlays the keyboard; the layout does not resize. Check: `review` (the shell and sheets read `--kb`, defined in `app.css`).
 - **The app root uses `100dvh` or `inset: 0`, never `100vh`.** Why: `100vh` ignores the dynamic browser UI and the keyboard. Check: `rg -n -g '!src/proto-routes/**' '100vh|h-screen' src` returns nothing (`h-screen`, `min-h-screen` and `max-h-screen` compile to `100vh`).
 - **Anything pinned to the top or bottom pads with `env(safe-area-inset-*)`: the header and the drawer add `--safe-top`, the composer and the drawer add `--safe-bottom`.** Why: edge-to-edge content otherwise sits under the status bar and the gesture bar. Check: `phone` with gesture navigation on; nothing tappable overlaps the gesture pill.
-- **Text inputs use a font size of at least 16px.** Why: iOS zooms the page on focus below 16px; the same size reads well on Android. Check: `pw` computed style on `textarea, input`.
+- **Touch inputs use a font size of at least 16px.** Why: iOS zooms the page on focus below 16px; the same size reads well on Android. Desktop fine-pointer inputs can use 14px. Check: `pw` computed style on `textarea, input` in both input contexts.
 - **`theme-color` matches `--background` in both themes, via two `<meta name="theme-color" media="(prefers-color-scheme: ...)">` tags or a script that follows the theme toggle.** Why: a white status bar over a dark app looks broken. Check: `phone` in light and dark.
 - **`overscroll-behavior: none` on the document, `contain` on scroll regions.** Why: stops pull-to-refresh from reloading the app mid-chat and stops scroll chaining into the page. Check: `phone`: pull down at the top of a chat; the app does not reload.
 
 ### Back gesture and navigation
 
-In a standalone PWA there is no browser back button: the Android back gesture is the only back control. It must do what the user expects on every screen.
+A standalone PWA has no browser toolbar. App back controls and the Android back gesture must agree.
 
 - **Back closes the topmost overlay first (sheet, dialog, menu), and only then leaves the screen.** Why: Android sends a close request that native `<dialog>` and `popover` handle for free; a `div role="dialog"` ignores it and back navigates away instead ([MDN CloseWatcher](https://developer.mozilla.org/en-US/docs/Web/API/CloseWatcher)). This applies to the shadcn-svelte Dialog and Sheet too: bits-ui renders them as `div`s, so each needs the history-entry wrapper or a verified close on the phone. Build overlays on `<dialog>`/`popover`, or have them push a history entry and close on `popstate`. Check: `phone`: open every sheet and press back; the sheet closes and the screen stays.
 - **Drawer navigation reveals the destination, not the previous page.** Keep the drawer open while a selected route loads. Close it after the destination renders. Choosing the current destination can close it immediately. Check: `pw`: delay the destination's route chunk; the drawer stays open and closes over the new header.
@@ -98,7 +100,7 @@ In a standalone PWA there is no browser back button: the Android back gesture is
 - **Back closes the drawer first; back from a drawer destination returns to the chat; back from the chat exits.** Why: the Android convention for drawer apps, and the chat is where the app opens. Picking a destination from the drawer replaces the entry unless it is left from the chat. Check: `pw` (`e2e/nav.test.ts`), `phone`.
 - **A dirty composer or edit survives back and return.** Why: a mis-swipe must not cost a typed message. Keep the draft per chat in memory, and in `sessionStorage` for reloads. Check: `phone`: type, swipe back, reopen the chat; the text is there.
 - **No `target="_blank"` for in-app routes.** Why: it opens a Custom Tab and breaks back. Check: `review`.
-- **The app opens on the chat. Top-level destinations (Chat, Inbox, Threads, Runs, History, ..., Settings) live in a drawer opened from the header's menu button on phones and in the sidebar on desktop; detail screens show a back chevron instead.** Why: the chat keeps the full height (no tab bar under the composer), and one navigation system per screen. The drawer is a native modal `<dialog>`, so Android back and Escape close it. The menu button carries a dot when the inbox has something waiting or unread. Check: `shot`, `pw` (`e2e/nav.test.ts`).
+- **The app opens on chat. Channels, Tasks, Activity, Workspace, and Settings use persistent desktop navigation and mobile navigation. Nested detail and creation screens show a back chevron to their parent.** Why: the chat keeps the full height (no tab bar under the composer), and one navigation system per screen. The drawer is a native modal `<dialog>`, so Android back and Escape close it. The menu button carries a dot when the inbox has something waiting or unread. Check: `shot`, `pw` (`e2e/nav.test.ts`).
 
 ## Interaction and information hierarchy
 
@@ -106,7 +108,7 @@ These rules guide new screens and changes to existing screens. They describe the
 
 - **Start with the user's next decision.** Why: a screen becomes easier to scan when its content supports one task. Check: `review`: name the task and the main action before choosing the layout.
 - **Reuse familiar controls and shared components.** Why: repeated patterns reduce relearning and prevent layout drift. Check: `review`: inspect existing `ui/` components and feature patterns before creating a new variant.
-- **Group secondary actions in one predictable menu.** Reuse `ui/menu/ActionMenu` for compact header commands. Why: several equally prominent actions compete with the main task. Check: `shot`, `phone`: related thread actions share one overflow menu, and the main action remains visible.
+- **Group secondary actions in one predictable menu.** Reuse [ActionMenu](../src/lib/ui/menu/action-menu.svelte) for compact header commands. Why: several equally prominent actions compete with the main task. Check: `shot`, `phone`: related thread actions share one overflow menu, and the main action remains visible.
 - **Use links for navigation and buttons for actions.** Why: browser behavior and accessible semantics depend on this distinction. Check: `review`, `check`: navigation rows use anchors; actions use buttons; interactive controls never nest inside anchors.
 - **Keep decision-changing information visible.** Why: users cannot act on a consequence hidden behind a disclosure. Check: `review`: permissions, action scope, and failure status remain visible before the relevant action.
 - **Disclose reference detail where it helps.** Why: long explanations crowd the task. Check: `shot`, `phone`: inline details use a disclosure; mid-task reading uses a sheet that returns to the same position.
@@ -299,15 +301,15 @@ The push payload is `{ title, body, url, tag? }`; the service worker shows it, a
 | Code         | 12–13px mono       | Code blocks, ids, tool names    |
 | Small label  | 11px / semibold    | Photo states, file chips        |
 
-- **Nothing below 11px; body text never below 14px; inputs at least 16px.** Why: legibility at arm's length. Check: `review`.
+- **Nothing below 11px; body text never below 14px; touch inputs at least 16px.** Why: legibility at arm's length. Check: `review`.
 - **Text sizes come from the type-scale tokens in `src/app.css` (`text-body`, `text-ui`, `text-meta`, `text-tab`, `text-code`) or Tailwind's rem sizes.** `scripts/check-tokens.ts` rejects `text-[Npx]`.
 - **Text sizes use `rem`, never `px`.** Why: with `<meta name="text-scale" content="scale">` (already in `app.html`) the root font size follows the OS text-size setting in browsers that support it, but only `rem`/`em` text scales ([MDN text-scale](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/text-scale)); WCAG 1.4.4 Resize Text. Check: `phone` at the largest system font size; nothing clips or overlaps.
 - **Sentence case everywhere; no Title Case, no ALL CAPS labels.** Why: easier to read, and matches the rest of the app. Check: `review`.
 
 ### Spacing and density
 
-- **4px grid. Screen gutter 16px (`px-4`); list rows at least 48px tall; 16px between messages.** Why: one-handed use needs room between targets more than it needs density. Check: `shot`.
-- **One column on phones. The desktop sidebar layout starts at the `@3xl` container width.** Why: phone first; desktop is a bonus. Check: `shot` at 412 and 1280.
+- **Use a 4px spacing grid.** Shared screen content owns 16px phone gutters and its desktop measure. Interactive touch rows retain 48px targets. Chat keeps 16px between messages. Why: compact painted controls do not require small hit areas. Check: `shot`.
+- **Use one content column on phones.** Desktop uses the shell's container-based pane layout and aligned metadata columns where useful. Why: each layout supports its available space. Check: `shot` at 412 and 1280.
 - **Keep layout dimensions in shared components.** Why: per-screen widths and gutters drift when each caller repeats them. Check: `review`, `shot`: screen wrappers own sizing and scroll policy; content does not add competing outer widths or gutters.
 - **Align visible content edges.** Why: a header or back control with unexplained inset looks detached from its content. Check: `shot` at 320px, 412px, and desktop: compare text and icon edges, not only control bounding boxes.
 - **Line length of chat text at most ~70 characters on desktop.** Why: long lines are hard to track. Check: `shot` at 1280.
@@ -323,16 +325,69 @@ The push payload is `{ title, body, url, tag? }`; the service worker shows it, a
 - **Motion explains a change (a sheet rising, a message arriving), never decorates.** Why: decorative motion delays the user. Check: `review`.
 - **The spinner icon (`LoaderCircle`) always comes with text.** Why: a spinner says nothing about what it waits on. Check: `review`.
 
-### Management actions and page navigation
+### Shared component patterns
 
-- **Size management actions for their input method.** Connections and Settings establish the compact pattern with `Button size="compact"`: 36px visible face within a 48px actual control on phones and touch devices; 32px for both on desktop fine pointers that support hover and have no coarse input. Mixed-input devices retain the touch target. The inner face is non-interactive; the outer control owns semantics, focus, disabled state, and the entire hit area. Use intrinsic widths and 14px medium labels. Use the compact control’s shared corner radius, short color transition, and stationary press state. File stores retain `size="action"` until a later pass.
-- **Use aligned management content.** `ui/screen/ManagementContent` owns a left-aligned, bounded desktop measure and the same gutters as the screen header. Connections uses compact divided rows with identity and status first; full addresses belong in Details. Settings uses divider groups and on-demand editors with Save and Cancel. Preserve drafts on failed or in-flight saves, and return focus to Edit when closing. Avoid full-width buttons and permanent editing forms for routine preferences. Use a consistent label/value/action alignment for preferences and stable metadata columns for desktop connection rows. Secondary states use quiet text and icons; color emphasizes recovery. `SwitchRow compact` paints a 36×20px switch within the full accessible row, and `ScreenState compact` keeps recovery controls consistent.
-- **Keep list actions near their content.** Add actions belong above a management list. Form footers can remain at the bottom, with intrinsic action widths on desktop.
-- **Use back navigation for nested pages.** Workspace destinations such as Connectors and File stores use the menu or persistent navigation. Their detail and add pages link back to the parent list, with a label that names the destination.
+Use the existing primitive before adding feature-specific styles. Linear informs density, alignment, and restraint. It does not supply a pixel specification for this app.
+
+| Intent                 | Shared implementation                                                         | Caller responsibility                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Normal action          | [Button](../src/lib/ui/button/button.svelte)                                  | Choose the action, variant, accessible name, and disabled/pending state. Use intrinsic width.                                            |
+| Prominent decision     | `Button size="lg"`                                                            | Reserve the larger face for a deliberate approval, composer, or sheet action. Do not use it for routine Add, Edit, Retry, or pagination. |
+| Screen geometry        | [ScreenContent](../src/lib/ui/screen/screen-content.svelte)                   | Choose `measure="management"` (default), `reading`, or `wide`. Use `embedded` inside an existing content region.                         |
+| Repeated collections   | [ListScreen](../src/lib/ui/screen/list-screen.svelte)                         | Supply sections, row content, search, state, and actions. Let the wrapper own outer spacing.                                             |
+| Remote state           | [ScreenState](../src/lib/ui/screen/screen-state.svelte)                       | Distinguish initial loading, empty collections, no matches, and cached refresh failures.                                                 |
+| Tabbed content         | [TabbedScreen](../src/lib/ui/screen/tabbed-screen.svelte)                     | Supply unpadded content. Preserve the pager's scroll ownership.                                                                          |
+| Section heading        | [Section](../src/lib/ui/section/section.svelte)                               | Supply the heading and optional supporting content. Do not repeat local heading typography and spacing.                                  |
+| Preference value       | [PreferenceRow](../src/lib/ui/preference/preference-row.svelte)               | Supply `label`, value/control children, and optional `actions`. Name each interactive control explicitly.                                |
+| Toggle preference      | [SwitchRow](../src/lib/ui/switch/switch-row.svelte)                           | Supply a clear label and current value. The whole row remains the touch target.                                                          |
+| Short exclusive choice | `RadioGroup.Root layout="segmented"` with `RadioGroup.Card variant="segment"` | Supply stable values and labels. Use radio semantics for a preference, not for navigation.                                               |
+| Secondary commands     | [ActionMenu](../src/lib/ui/menu/action-menu.svelte)                           | Group related actions. Open an editor only after the owner selects Edit or Rename.                                                       |
+
+`ScreenContent` uses left-aligned `max-w-4xl` content for `management`.
+The `reading` and `wide` measures center their content at `max-w-2xl` and `max-w-3xl`.
+It owns gutters and section rhythm. Embedded content adds no competing outer geometry.
+Chat transcripts, the workspace shell, and tab pagers retain their specialized scrolling layouts.
+
+The normal button uses 14px medium labels, shared corners, a short color transition, and a stationary press state.
+Its non-interactive face never owns focus or events. The outer control owns the full hit area, semantics, disabled state, and focus ring.
+`size="action"` and `size="compact"` remain aliases for the default treatment. New callers can omit the size.
+The `desktop-pointer` variant requires a wide viewport, hover, a fine primary pointer, and no coarse pointer.
+Do not substitute a width breakpoint for this input check.
+
+Use the default compact switch treatment for preferences. Its visible track is 36×20px inside an accessible row.
+Keep mobile input text at least 16px and input targets at least 48px.
+The shared `Input` uses 48px height and 16px text for touch, then 32px height and 14px text for desktop fine pointers.
+Small icon glyphs do not justify small touch targets. Label every icon-only action.
+`Button size="icon-lg"` retains a 48px target on all inputs for search and sheet-close controls.
+Its painted face remains compact. Shell navigation retains its documented geometry in the channel rules.
+
+Use `PreferenceRow` to align labels, values, and optional actions.
+Its label is display text, not an automatic form label. Give its input or radio group an accessible name.
+Use `Section title="…"` for related content, with optional `description`, `icon`, `count`, or `aside`.
+Use `tone="list"` for quieter collection headings. Section counts are decorative, not a replacement for meaningful text.
+Use on-demand editors with Save and Cancel for routine preferences.
+Preserve drafts after failed or in-flight saves. Return focus to Edit after the editor closes.
+Use quiet text and icons for secondary states. Reserve strong color for meaning and recovery.
+Use borders to separate groups, not to box every label and value.
+
+Keep Add actions above their collection. Keep pagination and secondary actions at intrinsic width.
+Full-width actions require a specific workflow reason, such as a phone sheet footer.
+Workspace destinations use global navigation. Detail and creation pages link back to their named parent.
+
+Before extracting another primitive:
+
+1. Find repeated intent in existing callers. Do not abstract a single unusual layout.
+2. Put domain-free geometry, states, and interaction defaults in `ui/`.
+3. Keep data fetching, domain labels, and mutations in the feature.
+4. Migrate the matching callers and remove their repeated classes.
+5. Document the contract here and add regression coverage for behavior that can break.
+
+Check: `review` rejects repeated outer gutters, per-page button heights, descendant-selector styling of shared controls, and unexplained full-width actions.
+Check: `pw` measures the actual target and `data-slot="button-face"` separately, including a click in the unpainted touch padding.
 
 ### Tabs, swipes, and scroll ownership
 
-- **Reuse the shared tabbed screen.** Use `ui/screen/TabbedScreen` for tabs with swipe navigation. It owns the screen shell, full-width pager, gutters, and panel scrolling. The import boundary check blocks direct feature imports of the pager engine.
+- **Reuse the shared tabbed screen.** Use [TabbedScreen](../src/lib/ui/screen/tabbed-screen.svelte) for tabs with swipe navigation. It owns the screen shell, full-width pager, gutters, and panel scrolling. The import boundary check blocks direct feature imports of the pager engine.
 - **Move panels with the finger.** Snap to the destination after release. Move the underline with the finger during a held swipe, then mark the destination on release. A phone tab tap updates the selected label and underline immediately while the panel moves. Desktop and fine-pointer tab changes switch panels instantly.
 - **Keep labels readable.** When labels do not fit, allow horizontal scrolling within the tab bar. Keep the full label instead of an ellipsis. Keep the document width within the viewport.
 - **Keep one vertical scroll owner per panel.** `TabbedScreen` disables outer scrolling and keeps the screen header and tab bar fixed. Supply content without an enclosing screen or extra vertical scroll container.
@@ -399,7 +454,7 @@ Target: WCAG 2.2 AA. The criteria that matter for this app, and how each is chec
 | 2.4.3 Focus Order / 2.4.7 Focus Visible | Sheets trap and return focus; `:focus-visible` ring stays  | manual keyboard pass           |
 | 2.4.11 Focus Not Obscured (AA)          | Sticky composer vs focused items                           | `phone`, `scroll-padding`      |
 | 2.5.7 Dragging Movements (AA)           | Swipe actions need a button alternative                    | `review`                       |
-| 2.5.8 Target Size (AA)                  | 24px floor; this app's own rule is 48px                    | `axe` + `pw` 48px assertion    |
+| 2.5.8 Target Size (AA)                  | 24px floor; this app uses 48px for touch                   | `axe` + `pw` 48px assertion    |
 | 4.1.2 Name, Role, Value (A)             | Custom tabs, `div` dialogs, switches                       | `axe`, `check`                 |
 | 4.1.3 Status Messages (AA)              | Delivery states, "Reconnecting", "Agent replied"           | `review` of `role="status"`    |
 
@@ -425,12 +480,15 @@ expect(results.violations).toEqual([]);
 
 ## The UX gate
 
-A milestone is done only when all four steps pass. Steps 1–2 are cheap and run first; the phone step is last because it's the most expensive.
+Run the automated gates before visual review. Keep physical-device findings separate from browser results.
 
-1. **Deterministic checks pass:** `bun run check` (fail on warnings), `bun run lint`, `bun run build`, and the Playwright suite at 412x915 (touch, `deviceScaleFactor: 2.625`, `isMobile: true`) including axe with `target-size`, the 48px assertion, reflow at 320 and 412, and the scroll-jank test.
-2. **State matrix screenshots** are captured by Playwright and reviewed against this doc, rule by rule.
-3. **Prototype parity:** the shipped screens match the `/proto` flow that was clicked through, or the difference is written down and agreed.
-4. **Dogfood on the phone:** the owner uses the installed PWA for real tasks for a day or two. Anything that annoys them is a bug and gets filed against this doc (either a rule is missing, or one was broken).
+1. **Run the web gates:** `bun run check`, `bun run lint`, `bun run build`, and `bun run test:e2e`.
+2. **Review changed patterns across inputs:** touch at 320px and 412px, desktop with a fine pointer, and a wide mixed-input device. Check both themes, keyboard focus, reduced motion, and 200% text size.
+3. **Capture relevant states:** use the state matrix below. Review alignment, hierarchy, target geometry, scrolling, and state preservation. A shared primitive change needs representative callers beyond the original feature.
+4. **Check device behavior:** use the installed PWA for keyboard, system gestures, safe areas, and thumb reach. Record checks that require owner device access. Do not claim them from desktop automation.
+
+The first visual round collects defects across sizes and themes. One repair batch addresses them. A second round confirms repairs and records remaining limitations.
+Existing regression suites cover target geometry, reflow, accessibility, and interaction behavior. Add focused assertions for changed contracts instead of duplicating implementation classes in tests.
 
 ### State matrix
 
@@ -443,6 +501,7 @@ Capture each screen that changed in every state that applies, at 412x915 unless 
 | Error        | Fixture server returns 500 / the tool step fails                |
 | Offline      | `context.setOffline(true)` after load                           |
 | Long content | 200-column code line, 5 KB message, 60-char unbroken URL, table |
+| Desktop      | Fine pointer and hover, plus a separate wide touch context      |
 | 320px        | Viewport 320x640                                                |
 | Dark         | `colorScheme: 'dark'` (and light for every other row)           |
 | Keyboard     | `phone` only: composer focused, screenshot from the device      |
@@ -451,7 +510,7 @@ Capture each screen that changed in every state that applies, at 412x915 unless 
 
 A UX bug blocks when any of these is true:
 
-- A check in this doc fails (axe violation, a target under 48px, overflow at 320px, the scroll-jank test).
+- A check in this doc fails (axe violation, a touch target under 48px without a documented exception, overflow at 320px, the scroll-jank test).
 - Data loss: a typed message, a draft edit, or a pending approval can disappear without the user choosing it.
 - A blocking wait, failure, or required action has no visible feedback. Cached background refreshes can remain quiet.
 - Back does the wrong thing (exits the app, skips a screen, leaves an overlay open).
@@ -472,17 +531,20 @@ Seen in open-source agent UIs and chat apps. Don't ship any of these.
 - **Auto-scroll that yanks the reader to the bottom** on every token.
 - **Approval prompts that paraphrase the action**, time out, or vanish after a reload.
 - **Uniform approval prompts for everything.** Approval fatigue trains click-through; ask only by exception and show why this one asked.
-- **Desktop-first layouts** squeezed onto a phone: sidebars as hamburgers, hover-only actions, tooltips as the only label.
+- **Layouts that ignore input or available space:** oversized desktop actions, undersized touch targets, hover-only actions, and tooltips as the only label.
 - **Enter-to-send on mobile**, and composers the keyboard hides.
 - **Silent reconnects** that lose or duplicate messages, or a "please refresh" banner instead of resuming.
 - **Notifications for every message**, or notifications that open the app's home.
 - **Settings dumped as a raw JSON editor** as the only way to change something common.
-- **Modals for reading material.** Use a bottom sheet for detail; keep dialogs for decisions.
+- **Blocking dialogs for routine reading.** Use the shared responsive sheet for detail, or the docked inspector when available. Keep confirmation dialogs for decisions.
 - **History that can't be searched or linked**: every run, approval and memory change needs a URL.
 
-## Known gaps in the prototype
+## Prototype limits
 
-Every frame on the board is a shipped feature screen, so the board breaks no rule the app keeps. Screens whose backend doesn't exist yet run on fixtures in the development preview; their gaps are in what the fixtures can show, not in the screens.
+The board renders shared feature screens, but fixtures do not prove live integration or complete state coverage.
+Screens without a backend remain development previews.
+Browser automation does not establish physical keyboard behavior, thumb reach, or subjective motion quality.
+Record untested device behavior explicitly. Do not describe an automated pass as a completed phone review.
 
 ## Sources
 

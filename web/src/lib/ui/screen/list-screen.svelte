@@ -17,7 +17,9 @@
 	import type { ComponentProps, Snippet } from 'svelte';
 	import SearchField from '$lib/ui/input/search-field.svelte';
 	import { cn } from '$lib/utils';
+	import Section from '$lib/ui/section/section.svelte';
 	import Screen from './screen.svelte';
+	import ScreenContent from './screen-content.svelte';
 	import ScreenState from './screen-state.svelte';
 
 	type ScreenProps = ComponentProps<typeof Screen>;
@@ -69,11 +71,7 @@
 </script>
 
 {#snippet content()}
-	<div
-		class={embedded
-			? 'flex flex-col gap-5'
-			: 'mx-auto flex max-w-2xl flex-col gap-5 px-4 pt-4 pb-10'}
-	>
+	<ScreenContent {embedded}>
 		{#if search !== undefined}
 			<SearchField label={searchLabel} bind:value={search} bind:ref={searchInput} />
 		{/if}
@@ -81,37 +79,30 @@
 		<ScreenState {...state} {isEmpty}>
 			{#each sections as section, i (section.label ?? i)}
 				{#if section.items.length}
-					<section
-						class="flex flex-col gap-1"
-						aria-labelledby={section.label ? `${uid}-s${i}` : undefined}
+					<Section
+						title={section.label ?? ''}
+						id={`${uid}-s${i}`}
+						tone="list"
+						count={section.count ? section.items.length : undefined}
 					>
-						{#if section.label}
-							<h2
-								id="{uid}-s{i}"
-								class="flex items-center gap-2 px-1 text-sm font-medium text-muted-foreground"
-							>
-								{#if section.icon}
-									<section.icon
-										class={cn('size-4 shrink-0', section.iconClass)}
-										aria-hidden="true"
-									/>
-								{/if}
-								{section.label}
-								{#if section.count}<span class="tabular-nums">{section.items.length}</span>{/if}
-							</h2>
-						{/if}
+						{#snippet icon()}
+							{#if section.icon}<section.icon
+									class={cn('size-4 shrink-0', section.iconClass)}
+									aria-hidden="true"
+								/>{/if}
+						{/snippet}
 						<ul class="flex flex-col">
 							{#each section.items as item (key(item))}
 								<li class="min-h-12">{@render row(item)}</li>
 							{/each}
 						</ul>
-					</section>
+					</Section>
 				{/if}
 			{/each}
 			{@render after?.()}
 		</ScreenState>
 		{@render tail?.()}
-	</div>
+	</ScreenContent>
 {/snippet}
 
 {#if embedded}

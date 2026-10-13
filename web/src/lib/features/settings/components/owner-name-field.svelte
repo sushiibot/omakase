@@ -3,6 +3,7 @@
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { Button } from '$lib/ui/button';
 	import { Input } from '$lib/ui/input';
+	import PreferenceRow from '$lib/ui/preference/preference-row.svelte';
 	import ScreenState, { type RemoteLike } from '$lib/ui/screen/screen-state.svelte';
 	import { OWNER_NAME_MAX } from '../types';
 
@@ -84,24 +85,22 @@
 {/snippet}
 
 <div class="py-2">
-	<ScreenState compact {remote} errorTitle="Couldn't load your name." {onretry} skeleton={loading}>
+	<ScreenState {remote} errorTitle="Couldn't load your name." {onretry} skeleton={loading}>
 		{#if !editing}
-			<div class="flex items-center justify-between gap-4">
-				<p class="shrink-0 text-sm text-muted-foreground">Your name</p>
-				<p
-					class="min-w-0 flex-1 text-right text-sm [overflow-wrap:anywhere]"
-					data-testid="owner-name"
-				>
+			<PreferenceRow label="Your name">
+				<p class="text-sm [overflow-wrap:anywhere]" data-testid="owner-name">
 					{current || 'Not set'}
 				</p>
-				<Button
-					id="{uid}-edit"
-					variant="outline"
-					size="compact"
-					aria-label="Edit your name"
-					onclick={openEditor}>Edit</Button
-				>
-			</div>
+				{#snippet actions()}
+					<Button
+						id="{uid}-edit"
+						variant="outline"
+						size="compact"
+						aria-label="Edit your name"
+						onclick={openEditor}>Edit</Button
+					>
+				{/snippet}
+			</PreferenceRow>
 		{:else}
 			<form
 				class="flex max-w-lg flex-col gap-3"
@@ -121,7 +120,6 @@
 						spellcheck={false}
 						aria-invalid={failed || undefined}
 						aria-describedby="{uid}-help{failed ? ` ${uid}-error` : ''}"
-						class="h-12 text-base md:text-base"
 					/>
 					<p id="{uid}-help" class="text-sm text-muted-foreground">
 						The agent calls you this from its next conversation. Leave it empty to be called “the

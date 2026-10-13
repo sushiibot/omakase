@@ -8,7 +8,8 @@
 	import { Button } from '$lib/ui/button';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import Screen from '$lib/ui/screen/screen.svelte';
-	import ManagementContent from '$lib/ui/screen/management-content.svelte';
+	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
+	import Section from '$lib/ui/section/section.svelte';
 	import ScreenState from '$lib/ui/screen/screen-state.svelte';
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
@@ -116,7 +117,7 @@
 {/snippet}
 
 <Screen title="Connectors" {back} {banner}>
-	<ManagementContent>
+	<ScreenContent>
 		<div class="flex flex-col gap-5">
 			<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b pb-3">
 				<p class="text-sm text-muted-foreground">Tools available to your agent.</p>
@@ -125,7 +126,6 @@
 				</Button>
 			</div>
 			<ScreenState
-				compact
 				{remote}
 				isEmpty={servers.length === 0}
 				offline={!online}
@@ -139,24 +139,19 @@
 			>
 				{#each sections as section, i (section.label)}
 					{#if section.items.length}
-						<section aria-labelledby="{uid}-section-{i}" class="flex flex-col gap-1">
-							<h2
-								id="{uid}-section-{i}"
-								class="flex items-center gap-2 px-2 text-meta font-medium text-muted-foreground"
-							>
-								{section.label}<span
-									aria-hidden="true"
-									class="font-normal text-muted-foreground tabular-nums"
-									>{section.items.length}</span
-								>
-							</h2>
+						<Section
+							id={`${uid}-section-${i}`}
+							title={section.label}
+							count={section.items.length}
+							tone="list"
+						>
 							<ul class="flex flex-col">
 								{#each section.items as s (s.id)}<li>{@render row(s)}</li>{/each}
 							</ul>
-						</section>
+						</Section>
 					{/if}
 				{/each}
 			</ScreenState>
 		</div>
-	</ManagementContent>
+	</ScreenContent>
 </Screen>

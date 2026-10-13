@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import { Markdown } from '$lib/features/chat';
@@ -60,7 +61,7 @@
 	}}
 >
 	{#if skill}
-		<div class="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-4">
+		<ScreenContent measure="reading">
 			<section aria-labelledby="{uid}-now" class="flex flex-col gap-2">
 				<h2 id="{uid}-now" class="text-sm font-semibold">SKILL.md now, version {skill.version}</h2>
 				<div class="rounded-xl border bg-card px-4 py-3 text-body">
@@ -112,6 +113,6 @@
 					<p class="text-sm text-muted-foreground">No saved versions.</p>
 				{/if}
 			</section>
-		</div>
+		</ScreenContent>
 	{/if}
 </DetailScreen>
