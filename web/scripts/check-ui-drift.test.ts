@@ -375,4 +375,14 @@ describe('run', () => {
 			rmSync(root, { recursive: true });
 		}
 	});
+
+	test('drift fails by default and UI_DRIFT_STRICT=0 lets it through', () => {
+		const root = fixture({ ...base, 'src/lib/features/a/b.svelte': '<h2>x</h2>' });
+		try {
+			expect(run(root, modeFromEnv({}), quiet, quiet)).toBe(1);
+			expect(run(root, modeFromEnv({ UI_DRIFT_STRICT: '0' }), quiet, quiet)).toBe(0);
+		} finally {
+			rmSync(root, { recursive: true });
+		}
+	});
 });
