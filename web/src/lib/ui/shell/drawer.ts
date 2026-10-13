@@ -7,7 +7,10 @@ export interface DrawerHandle {
 	open(): void;
 	/** Something in the drawer wants attention: a count, or true for a dot. */
 	readonly badge: number | boolean;
+	/** The sidebar is docked and expanded. */
 	readonly persistent?: boolean;
+	/** The sidebar docks beside the content, so the header leads with its trigger. */
+	readonly docked?: boolean;
 	readonly channels?: boolean;
 }
 

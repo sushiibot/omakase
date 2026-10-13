@@ -42,16 +42,18 @@ export async function smallTargets(page: Page) {
 					return f.top <= r.top && f.bottom >= r.bottom && f.left <= r.left && f.right >= r.right;
 				});
 				// A Button whose hit area is switched off, or a sidebar row, is a contiguous row and
-				// sizes its own box.
+				// sizes its own box. Sidebar rows are promised 44px on touch.
+				const coarse = matchMedia('(any-pointer: coarse)').matches;
+				const sidebarRow =
+					coarse && ['menu-button', 'group-label'].includes(e.getAttribute('data-sidebar') ?? '');
 				const row =
-					matchMedia('(any-pointer: coarse)').matches &&
-					((e.getAttribute('data-slot') === 'button' && after.display === 'none') ||
-						['menu-button', 'group-label'].includes(e.getAttribute('data-sidebar') ?? ''));
+					sidebarRow ||
+					(coarse && e.getAttribute('data-slot') === 'button' && after.display === 'none');
 				if (!extended || after.display === 'none')
 					return {
 						w: r.width,
 						h: r.height,
-						kind: row ? 'row' : 'box',
+						kind: sidebarRow ? 'sidebar-row' : row ? 'row' : 'box',
 						covered: false,
 						lost: [] as string[]
 					};
@@ -116,6 +118,7 @@ export async function smallTargets(page: Page) {
 						if (m.kind === 'in-field') return m.h < 31.5;
 						if (m.covered) return true;
 						if (m.kind === 'row') return m.w < 47.5 || m.h < 39.5;
+						if (m.kind === 'sidebar-row') return m.w < 47.5 || m.h < 43.5;
 						if (m.kind === 'extended')
 							return Math.min(m.w, m.h) < 39.5 || Math.max(m.w, m.h) < 46.5;
 						return m.w < 47.5 || m.h < 47.5;

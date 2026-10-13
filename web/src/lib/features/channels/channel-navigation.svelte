@@ -20,6 +20,8 @@
 		selected,
 		view = $bindable('all'),
 		query = $bindable(''),
+		closed = $bindable({ archived: true }),
+		filtersOpen = $bindable(false),
 		loading = false,
 		error,
 		replacing = false,
@@ -32,6 +34,9 @@
 		selected?: string;
 		view?: ChannelView;
 		query?: string;
+		/** Collapsed groups and the filter panel, kept by the caller so a remount keeps them. */
+		closed?: Record<string, boolean>;
+		filtersOpen?: boolean;
 		loading?: boolean;
 		error?: string | null;
 		replacing?: boolean;
@@ -40,14 +45,16 @@
 		onvisit: (id: string) => void;
 		onoptions?: (channel: Channel) => void;
 	} = $props();
-	let closed = $state<Record<string, boolean>>({ archived: true });
 	const active = $derived(channels.filter((c) => c.state !== 'archived'));
 	const archived = $derived(channels.filter((c) => c.state === 'archived'));
+	// Starting or clearing a search toggles Archived; a remount keeps whatever the owner chose.
+	let wasSearching = untrack(() => !!query.trim());
 	$effect(() => {
 		const searching = !!query.trim();
+		if (searching === wasSearching) return;
+		wasSearching = searching;
 		untrack(() => (closed = { ...closed, archived: !searching }));
 	});
-	let filtersOpen = $state(false);
 	const main = $derived(channels.find((c) => c.kind === 'main'));
 	const groups = $derived(
 		view !== 'all'
@@ -74,6 +81,9 @@
 	];
 	// Touch rows grow from h-8 to 44px, so the badge and action re-centre on them.
 	const coarseTop = 'any-pointer-coarse:peer-data-[size=default]/menu-button:top-3';
+	// The stock badge takes the row's accent colour on hover and selection; a request keeps its tone.
+	const waitingBadge =
+		'bg-waiting-soft text-waiting peer-hover/menu-button:text-waiting peer-data-active/menu-button:text-waiting';
 	const labelClass =
 		'w-full text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground any-pointer-coarse:h-11';
 	function destination(channel: Channel): string {
@@ -96,9 +106,11 @@
 			class={cn(
 				'any-pointer-coarse:h-11',
 				pending > 0 && 'font-semibold',
-				pending > 0 &&
-					onoptions &&
-					'group-has-data-[sidebar=menu-action]/menu-item:pr-14 any-pointer-coarse:group-has-data-[sidebar=menu-action]/menu-item:pr-16'
+				pending > 0 && !onoptions && 'pr-8',
+				onoptions &&
+					(pending > 0
+						? 'group-has-data-[sidebar=menu-action]/menu-item:pr-14 any-pointer-coarse:group-has-data-[sidebar=menu-action]/menu-item:pr-18'
+						: 'any-pointer-coarse:group-has-data-[sidebar=menu-action]/menu-item:pr-12')
 			)}
 		>
 			{#snippet child({ props })}
@@ -133,11 +145,8 @@
 		</Sidebar.MenuButton>
 		{#if pending > 0}<Sidebar.MenuBadge
 				aria-hidden="true"
-				class={cn(
-					'bg-waiting-soft text-waiting',
-					coarseTop,
-					onoptions && 'right-7 any-pointer-coarse:right-9'
-				)}>{pending}</Sidebar.MenuBadge
+				class={cn(waitingBadge, coarseTop, onoptions && 'right-7 any-pointer-coarse:right-12')}
+				>{pending}</Sidebar.MenuBadge
 			>{/if}
 		{#if onoptions}<Sidebar.MenuAction
 				showOnHover

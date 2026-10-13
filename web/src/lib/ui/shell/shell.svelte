@@ -9,8 +9,7 @@
 	import * as Sidebar from '$lib/ui/sidebar';
 	import { SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_COOKIE_NAME } from '$lib/ui/sidebar/constants';
 	import { Button } from '$lib/ui/button';
-	import { INSPECTOR_BREAKPOINT } from '$lib/ui/breakpoints';
-	import { IsMobile } from '$lib/hooks/is-mobile.svelte';
+	import { MOBILE_BREAKPOINT, INSPECTOR_BREAKPOINT } from '$lib/ui/breakpoints';
 	import { setDrawer } from './drawer';
 	import { setWorkspace, type WorkspaceInspector } from '../workspace/context';
 	import {
@@ -55,20 +54,22 @@
 
 	const uid = $props.id();
 	const sheets = `${uid}-sheets`;
-	const mobile = new IsMobile();
+	// min-width, like Tailwind's md:, so a fractional width at zoom never falls between the two.
+	const navQuery = new MediaQuery(`min-width: ${MOBILE_BREAKPOINT}px`);
 	const inspectorQuery = new MediaQuery(`min-width: ${INSPECTOR_BREAKPOINT}px`);
 	let frame = $state<HTMLElement | null>(null);
 	let root: HTMLElement;
 	let width = $state(412);
 	let sidebarOpen = $state(
-		typeof document === 'undefined' || !document.cookie.includes(`${SIDEBAR_COOKIE_NAME}=false`)
+		typeof document === 'undefined' ||
+			!new RegExp(`(?:^|;\\s*)${SIDEBAR_COOKIE_NAME}=false`).test(document.cookie)
 	);
 	let standaloneOpen = $state(false);
 	let inspector = $state.raw<WorkspaceInspector | null>(null);
 	let drag = $state<number | null>(null);
 	let focusBefore: HTMLElement | null = null;
 	let previous: Pane = 'chat';
-	const navDocked = $derived(!mobile.current);
+	const navDocked = $derived(navQuery.current);
 	const inspectorDocked = $derived(inspectorQuery.current);
 	const navOpen = $derived(onopenNavigation ? navigationOpen : standaloneOpen);
 	const pane = $derived<Pane>(navOpen ? 'navigation' : inspector?.open ? 'inspector' : 'chat');
@@ -105,7 +106,7 @@
 	});
 	setDrawer({
 		open() {
-			if (navDocked) setSidebarOpen(true);
+			if (navDocked) setSidebarOpen(true, true);
 			else openNavigation();
 		},
 		get badge() {
@@ -114,14 +115,30 @@
 		get persistent() {
 			return navDocked && sidebarOpen;
 		},
+		get docked() {
+			return navDocked;
+		},
 		get channels() {
 			return !!navigation;
 		}
 	});
 
-	function setSidebarOpen(value: boolean) {
+	/** The Provider writes its own cookie; callers outside it pass `persist`. */
+	function setSidebarOpen(value: boolean, persist = false) {
+		const nav = frame?.querySelector('[data-channel-navigation]');
+		if (!value && nav?.contains(document.activeElement))
+			frame?.querySelector<HTMLElement>('[data-slot="sidebar-inset"] main')?.focus({
+				preventScroll: true
+			});
 		sidebarOpen = value;
-		document.cookie = `${SIDEBAR_COOKIE_NAME}=${value}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+		if (persist)
+			document.cookie = `${SIDEBAR_COOKIE_NAME}=${value}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+		if (value && persist)
+			void tick().then(() =>
+				frame
+					?.querySelector<HTMLElement>('[data-channel-navigation] a[href]')
+					?.focus({ preventScroll: true })
+			);
 	}
 	function openNavigation() {
 		focusBefore = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -269,6 +286,12 @@
 		select(next);
 	}
 	function keys(e: KeyboardEvent) {
+		// Below 768 the Provider's Cmd+B flips its unused mobile sheet; it opens the drawer instead.
+		if (!navDocked && e.key === 'b' && (e.metaKey || e.ctrlKey) && navigation) {
+			if (navOpen) closePane();
+			else openNavigation();
+			return;
+		}
 		if (e.defaultPrevented) return;
 		if (pane === 'chat') return;
 		if (e.key === 'Escape') {
@@ -323,6 +346,20 @@
 	$effect(() => {
 		if (navDocked && navOpen) untrack(closePane);
 	});
+	// Narrowing below a breakpoint turns a docked pane into an overlay over the chat, which goes inert.
+	$effect(() => {
+		if (!overlaid) return;
+		const target = pane;
+		void tick().then(() => {
+			const active = document.activeElement;
+			if (active && active !== document.body && !active.closest('[inert]')) return;
+			root
+				?.querySelector<HTMLElement>(
+					target === 'navigation' ? '[data-channel-navigation]' : '[data-workspace-inspector]'
+				)
+				?.focus({ preventScroll: true });
+		});
+	});
 	$effect(() => {
 		void navigationKey;
 		recover();
@@ -354,13 +391,19 @@
 
 <svelte:window onkeydown={keys} />
 
-{#snippet badge(id: string)}
+{#snippet badge(id: string, size: 'default' | 'sm')}
 	{@const value = badges[id]}
+	{@const top =
+		size === 'sm'
+			? 'any-pointer-coarse:peer-data-[size=sm]/menu-button:top-3'
+			: 'any-pointer-coarse:peer-data-[size=default]/menu-button:top-3'}
 	{#if typeof value === 'number' && value > 0}<Sidebar.MenuBadge
-			class="bg-waiting-soft text-waiting any-pointer-coarse:top-3"
-			>{value}<span class="sr-only"> need you</span></Sidebar.MenuBadge
+			class={[
+				'bg-waiting-soft text-waiting peer-hover/menu-button:text-waiting peer-data-active/menu-button:text-waiting',
+				top
+			]}>{value}<span class="sr-only"> need you</span></Sidebar.MenuBadge
 		>
-	{:else if value === true}<Sidebar.MenuBadge class="any-pointer-coarse:top-3"
+	{:else if value === true}<Sidebar.MenuBadge class={top}
 			><span class="size-2 rounded-full bg-brand"></span><span class="sr-only">Unread</span
 			></Sidebar.MenuBadge
 		>{/if}
@@ -426,7 +469,7 @@
 									>
 								{/snippet}
 							</Sidebar.MenuButton>
-							{@render badge(item.id)}
+							{@render badge(item.id, 'default')}
 						</Sidebar.MenuItem>
 					{/each}
 				</Sidebar.Menu>
@@ -452,7 +495,7 @@
 									>
 								{/snippet}
 							</Sidebar.MenuButton>
-							{@render badge(item.id)}
+							{@render badge(item.id, 'sm')}
 						</Sidebar.MenuItem>
 					{/each}
 				</Sidebar.Menu>
@@ -477,13 +520,16 @@
 				aria-label="Channel navigation"
 				class="pt-(--safe-top) pb-(--safe-bottom)"
 			>
-				{@render navBody()}
+				<div class="flex min-h-0 flex-1 flex-col" inert={!sidebarOpen || overlaid}>
+					{@render navBody()}
+				</div>
+				<Sidebar.Rail class="any-pointer-coarse:hidden" />
 			</Sidebar.Root>
 		{/if}
 		<!-- Sidebar.Inset's classes on a div: each screen renders the page's own <main> -->
 		<div
 			data-slot="sidebar-inset"
-			class="relative flex w-full min-w-0 flex-1 flex-col bg-background"
+			class="@container relative flex w-full min-w-0 flex-1 flex-col bg-background"
 		>
 			<div
 				bind:this={root}
@@ -556,17 +602,22 @@
 				</div>
 			</div>
 		</div>
-		{#if inspector?.open && inspectorDocked}
-			<!-- 20rem rather than the stock 16rem: the panel hosts an agent transcript and its composer -->
+		{#if inspector && inspectorDocked}
+			<!-- 20rem rather than the stock 16rem: the panel hosts an agent transcript and its composer.
+			     Closed, it collapses in place so its content stays mounted. -->
 			<Sidebar.Root
 				collapsible="none"
-				class="h-full border-s pt-(--safe-top)"
+				class={inspector.open
+					? 'h-full border-s pt-(--safe-top)'
+					: 'invisible h-full w-0 overflow-hidden'}
 				style="--sidebar-width: 20rem"
 			>
 				<aside
 					data-workspace-inspector
 					aria-label="Conversation tasks"
 					tabindex="-1"
+					inert={!inspector.open}
+					aria-hidden={!inspector.open ? true : undefined}
 					class="flex min-h-0 flex-1 flex-col outline-none"
 				>
 					{@render inspector.content()}

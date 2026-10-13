@@ -42,7 +42,7 @@
 	)}
 >
 	{#if leading}
-		<div class={cn('flex shrink-0 items-center gap-2', leadingClass)}>
+		<div class={cn('flex shrink-0 items-center gap-2 any-pointer-coarse:gap-4', leadingClass)}>
 			{@render leading()}
 			<Separator orientation="vertical" class="me-2 data-vertical:h-4 data-vertical:self-auto" />
 		</div>

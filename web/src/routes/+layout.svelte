@@ -37,6 +37,8 @@
 	let channelTitle = $state('');
 	let query = $state('');
 	let view = $state<ChannelView>('all');
+	let closedGroups = $state<Record<string, boolean>>({ archived: true });
+	let filtersOpen = $state(false);
 	const channelSettings = routedSheet('channel-settings');
 	let selectedChannel = $state<Channel>();
 	const currentSelected = $derived(
@@ -148,6 +150,8 @@
 		selected={currentId}
 		bind:query
 		bind:view
+		bind:closed={closedGroups}
+		bind:filtersOpen
 		loading={catalog.list.status === 'loading'}
 		error={catalog.list.error}
 		replacing={navigation.open}
