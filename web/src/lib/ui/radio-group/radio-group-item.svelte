@@ -14,7 +14,12 @@
 	const uid = $props.id();
 	let labelledby = $state<string>();
 	$effect(() => {
-		if (!(ref instanceof HTMLButtonElement) || restProps['aria-label']) return;
+		if (
+			!(ref instanceof HTMLButtonElement) ||
+			restProps['aria-label'] ||
+			restProps['aria-labelledby']
+		)
+			return;
 		const ids = [...ref.labels].map((label, i) => (label.id ||= `${uid}-label-${i}`));
 		labelledby = ids.length ? ids.join(' ') : undefined;
 	});

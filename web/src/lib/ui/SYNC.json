@@ -39,7 +39,7 @@
 		"drift": "none"
 	},
 	"radio-group": {
-		"drift": "segmented layout, a choice-card part used by settings, and a coarse-pointer hit area on the item (ux-guidelines.md#shared-component-patterns)"
+		"drift": "segmented layout, a choice-card part used by settings, a coarse-pointer hit area on the item, and an item named from its associated labels (ux-guidelines.md#shared-component-patterns)"
 	},
 	"separator": {
 		"drift": "none"
