@@ -198,10 +198,10 @@ await expect(page.getByRole('button', { name: /new messages/i })).toBeVisible();
 ### Tool activity
 
 - **The agent shows a compact typing indicator within 300ms of receiving a message, until text or activity arrives.** Why: silence reads as a missed message, while an oversized status block wastes space. Check: `pw` with delayed replies.
-- **Tool calls appear individually in chronological order between assistant text.** Each compact row names the action in plain words and shows its status; do not merge every call into one block above the reply. Why: the user can follow the work where it happened. Check: `pw`, `shot` with interleaved text and 5+ calls.
+- **Tool calls appear individually in chronological order between assistant text.** Each compact row names the action in plain words and shows its status; do not merge every call into one block above the reply. Why: the user can follow the work where it happened. Coding-agent transcripts, where a turn runs dozens of commands, keep the rows individual inside one disclosure per turn whose summary names counts and failures ([Agents](agents.md#work-groups)). Check: `pw`, `shot` with interleaved text and 5+ calls.
 - **Each tool row expands to exact input and output on demand.** Keep raw JSON and long results out of the default transcript. A failed action remains visibly failed while collapsed. Check: `phone`, `shot`.
 - **Completed tools remain compact in history and preserve the same ordering after reload.** Why: streaming and restored history should describe the same conversation. Check: `pw` after reload.
-- **Delegated work stays visible in the originating conversation.** Show a compact task card with agent, repository, status, and latest activity; keep a background-work strip above the composer while agents run. Tap for activity, results, or agent-specific Stop. Inbox is a secondary notification surface. Why: work should be findable where the user started it. Check: `pw` after the parent reply and reload.
+- **Delegated work stays visible in the originating conversation.** Show a compact card under the message that started the work, with agent, folder, status, and latest activity; it updates in place and opens the detail. Live agents are listed in the side panel's Agents tab, not in a strip above the composer. Stop and steering live in the agent's detail. Inbox is a secondary notification surface. Why: work should be findable where the user started it, without crowding the composer. Check: `pw` after the parent reply and reload (`e2e/agents.test.ts`).
 
 ### Approval cards
 
@@ -211,7 +211,7 @@ await expect(page.getByRole('button', { name: /new messages/i })).toBeVisible();
 - **Once answered, replace the approval prompt with a quiet decision status in the tool's expandable details.** Retain the decision for inspection, but remove the attention card and controls. Denied, expired, and cancelled requests also cease to appear actionable. Why: an answered request should not look pending. Check: `pw` after answering and reload.
 - **Approval status is separate from execution status.** Approved does not imply Running, Completed, or successful execution. Check: `pw` for approval followed by execution failure.
 - **Durable allow rules are separate, off-by-default controls that explain exactly which future actions they cover.** Tainted runs explain why approval was requested despite an allow rule. Check: `review`.
-- **Every pending approval appears in Inbox and in the tab badge, with a link to its originating conversation.** Why: the user can find a buried request without making Inbox the only place it is visible. Check: `pw`.
+- **Every pending approval appears in Inbox and in the tab badge, with a link to its originating conversation.** Badges count pending request ids, never agents or failures. Why: the user can find a buried request without making Inbox the only place it is visible, and one decision counts once. Check: `pw`.
 
 ### Outcomes: finished is not succeeded
 
@@ -328,6 +328,25 @@ The push payload is `{ title, body, url, tag? }`; the service worker shows it, a
 ### Shared component patterns
 
 Use the existing primitive before adding feature-specific styles. Linear informs density, alignment, and restraint. It does not supply a pixel specification for this app.
+
+#### Linear patterns we follow
+
+Each line names what the app takes from Linear and the rule it maps to.
+
+- **Restraint and density:** quiet rows, status colour only on the icon and label, no decorative backgrounds. Rule: "Use quiet text and icons for secondary states".
+- **List rows:** title, one status line, one metadata line, right-aligned age in tabular numerals. Rule: "Keep row anatomy consistent".
+- **Status icon with a text label:** every status keeps its word next to the icon. Rule: status tokens via `StatePill`, WCAG 1.4.1.
+- **Side-peek detail:** a selected item opens beside the list in the docked inspector; phones open a full page. Rule: channel P1 agent exception, Back and navigation rules.
+- **Needs-attention grouping and inbox:** items waiting on the owner come first; Needs you and Inbox stay separate. Rule: "Choose a useful default order", Conversations destination.
+- **Collapsing similar events:** a coding agent's turn collapses into one work group with counts. Rule: tool-call rule, agent exception.
+- **Agent session card and activity:** the agent's card lives in the conversation that started it and shows its latest step. Rule: "Delegated work stays visible in the originating conversation".
+- **Delegate versus owner:** the agent works, the owner decides; approvals are answered only by the owner, labelled with who wrote each prompt. Rule: approval cards.
+
+Where the app departs:
+
+- **No icon-only status.** Linear's status circles carry no word; here the label always shows. Rule: WCAG 1.4.1.
+- **No gesture- or key-only actions.** Space-to-peek and swipe-to-delete need a visible control here. Rule: "No gesture-only actions".
+- **No single-key decisions on approvals.** Focus lands on the request heading, never on Approve. Rule: approval cards.
 
 | Intent                 | Shared implementation                                                         | Caller responsibility                                                                                                                    |
 | ---------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -560,6 +579,8 @@ Record untested device behavior explicitly. Do not describe an automated pass as
 - Agent products: [Claude routines](https://code.claude.com/docs/en/routines), [ChatGPT Dots](https://learn.chatgpt.com/docs/dots), [Grok Bot approvals](https://docs.x.ai/grok-bot/approvals-security-and-privacy)
 
 ## Tasks beside chat
+
+The side panel has two tabs: **Tasks** and **Agents** ([Agents](agents.md)).
 
 Use the task workspace for conversation-scoped assignments.
 On desktop, the right panel shares the available width with chat.

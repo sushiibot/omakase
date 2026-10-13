@@ -150,3 +150,9 @@ refreshes the list and any open conversation loaded from a snapshot.
 Tasks is a live screen with manual to-dos, checklists, task conversations, and execution history.
 Main and topic chats also expose tasks in a right panel.
 See [Tasks](docs/tasks.md) for lifecycle, migration, routing, and verification.
+
+## Agents
+
+Codex and Claude Code agents on connected machines appear in the side panel's Agents tab, as cards
+under the message that started them, and at `/agents/:id`. See [Agents](docs/agents.md) for placement,
+the transcript, approvals, navigation, and the precedent behind them.

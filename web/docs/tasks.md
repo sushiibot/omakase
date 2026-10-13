@@ -15,7 +15,8 @@ Runs link to the existing activity viewer, which shows execution steps and resul
 Main and topic conversations have a Tasks button in the header.
 On desktop, the panel appears beside the chat.
 On mobile, swipe left to reveal the panel or use the Tasks button.
-Swipe right, press Back, or use Close tasks to return to chat.
+Swipe right, press Back, or use Close side panel to return to chat.
+The panel's Agents tab lists the conversation's coding agents ([Agents](agents.md)).
 The chat draft stays in place.
 Each conversation panel shows tasks created there or assigned to that conversation.
 The main Tasks page shows all tasks.

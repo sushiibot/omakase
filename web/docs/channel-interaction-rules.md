@@ -91,6 +91,9 @@ Existing task project records do not automatically become channel groups.
 | P11 | Keep the active chat mounted while its inspector opens.             | Preserve draft, selection, transcript position, and streaming state.                               |
 | P12 | Coordinate pane modes through workspace width.                      | Resize across compact, two-pane, and three-pane modes. No invisible overlay retains focus.         |
 
+A coding agent's detail is the one exception to P1. On a docked inspector it shows the agent's transcript with its own composer, named "Message ‹agent title›" so it cannot be mistaken for the conversation's.
+The central conversation stays mounted beside it (P11). On phones the agent detail is a full page, `/agents/:id`. See [Agents](agents.md).
+
 The prototype starts with a navigation reveal width of the workspace width minus a 56px chat return target.
 Its inspector reveal width leaves a 48px return target.
 Three-pane desktop mode requires usable navigation, chat, and inspector widths.
@@ -126,6 +129,7 @@ Physical-device profiling can justify changes to these values. Shared shell test
 Thinking means response preparation. Typing means response text generation.
 Tool work uses a factual label, such as “Checking deployment”.
 Background delegation uses a compact count and an activity link.
+Coding agents add nothing near the composer: their cards sit under the message that started them, and the panel button's dot marks pending agent requests (C5 counts request ids).
 Idle channels show no activity text. Screen readers receive state changes rather than animation-frame announcements.
 
 ## Implementation choices
