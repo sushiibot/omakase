@@ -212,16 +212,11 @@
 						class="any-pointer-coarse:after:-inset-y-3.5"
 					/>
 				</Field.Field>
-				<Field.Field>
+				<div class="flex flex-col items-start gap-2">
 					<Field.Description>
 						Only when the agent needs you, a run fails, or something you asked about finishes.
 					</Field.Description>
-					<Button
-						variant="outline"
-						class="w-fit"
-						disabled={push !== 'on' || testBusy}
-						onclick={() => ontest?.()}
-					>
+					<Button variant="outline" disabled={push !== 'on' || testBusy} onclick={() => ontest?.()}>
 						{#if testBusy}
 							<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
 							Sending…
@@ -237,7 +232,7 @@
 							{testResult.text}
 						</p>
 					{/if}
-				</Field.Field>
+				</div>
 			</Field.Group>
 			{#if pushError}
 				<p role="alert" class="text-sm text-failed">{pushError}</p>
