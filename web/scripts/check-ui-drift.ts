@@ -82,7 +82,9 @@ export const ROUTE_ROOT_ALLOWED = new Set([
 	// The split workspace that hosts a chat screen beside the task inspector.
 	'TaskWorkspace',
 	// Renders nothing; it clears shown notifications while the chat is visible.
-	'ClearNotifications'
+	'ClearNotifications',
+	// An agent's transcript, like chat, owns its scroller and composer footer, which the shared screens drop.
+	'AgentPage'
 ]);
 
 /** Sheets and dialogs portal out of the layout, so they may sit beside the screen root. */

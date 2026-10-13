@@ -2006,7 +2006,7 @@ for (const width of [320, 412, 1280]) {
 		await expect(group.locator(':scope > summary')).toContainText('Read × 2');
 		await expect(group.locator(':scope > summary')).toContainText('Bash × 1');
 		await expect(page.locator('[data-tool-call="read-1"]')).not.toBeVisible();
-		expect((await group.locator(':scope > summary').boundingBox())!.height).toBe(48);
+		expect((await group.locator(':scope > summary').boundingBox())!.height).toBe(44);
 		await push(page, 'tool', {
 			turnId: 'grouped',
 			id: 'bad',
@@ -2137,7 +2137,7 @@ test('another-device decision with a long command reflows at 320px', async ({ pa
 	const summary = page.locator('[data-tool-call="long-call"] summary');
 	await expect(summary).toContainText('Approved on another device');
 	await expect(summary).toContainText('Running');
-	expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+	expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 	expect(
 		await page.evaluate(
 			() => document.documentElement.scrollWidth <= document.documentElement.clientWidth

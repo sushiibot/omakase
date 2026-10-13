@@ -38,6 +38,9 @@
 	"label": {
 		"drift": "none"
 	},
+	"native-select": {
+		"drift": "none"
+	},
 	"radio-group": {
 		"drift": "segmented layout, a choice-card part used by settings, a coarse-pointer hit area on the item (taller only in horizontal groups), and aria-labelledby pointing at its labels because axe-core skips label text inside a role=group Field (ux-guidelines.md#shared-component-patterns)"
 	},

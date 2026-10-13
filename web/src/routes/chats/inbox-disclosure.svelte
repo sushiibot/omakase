@@ -20,7 +20,7 @@
 	class="group/inbox min-w-0"
 >
 	<summary
-		class="flex min-h-12 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted/60"
+		class="flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted/60 any-pointer-coarse:min-h-11"
 	>
 		<ChevronDown
 			class="size-4 shrink-0 transition-transform group-open/inbox:rotate-180"

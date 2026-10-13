@@ -105,7 +105,7 @@
 				{#each boundary.memory.files as file}
 					<details class="group/file border-b border-border">
 						<summary
-							class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
+							class="flex min-h-8 cursor-pointer list-none items-center justify-between gap-3 focus-visible:outline-2 focus-visible:outline-ring any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
 						>
 							<span>{file.path}<span class="ml-2 text-muted-foreground">{file.change}</span></span>
 							<ChevronDown class="size-4 shrink-0 group-open/file:rotate-180" aria-hidden="true" />
@@ -133,7 +133,7 @@
 				{#each boundary.context.files as file}
 					<details class="group/file border-b border-border">
 						<summary
-							class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
+							class="flex min-h-8 cursor-pointer list-none items-center justify-between gap-3 focus-visible:outline-2 focus-visible:outline-ring any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
 						>
 							{file.path}<ChevronDown
 								class="size-4 shrink-0 group-open/file:rotate-180"

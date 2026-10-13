@@ -92,7 +92,7 @@
 	</dl>
 	<details class="group/exact mt-1">
 		<summary
-			class="flex min-h-12 cursor-pointer list-none items-center gap-1.5 text-meta text-muted-foreground [&::-webkit-details-marker]:hidden"
+			class="flex min-h-8 cursor-pointer list-none items-center gap-1.5 text-meta text-muted-foreground any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
 			>Exact input<ChevronDown
 				class="size-3.5 transition-transform group-open/exact:rotate-180 motion-reduce:transition-none"
 				aria-hidden="true"

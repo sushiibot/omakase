@@ -291,7 +291,7 @@ test('an answered legacy auto-mode question collapses while retaining command de
 	const card = page.locator('[data-surface="ask"]');
 	await expect(card.locator(':scope > summary')).toContainText('Answered Yes');
 	await expect(card.getByRole('group', { name: 'bash command' })).not.toBeVisible();
-	expect((await card.locator(':scope > summary').boundingBox())!.height).toBeGreaterThanOrEqual(48);
+	expect((await card.locator(':scope > summary').boundingBox())!.height).toBeGreaterThanOrEqual(44);
 	await card.locator(':scope > summary').click();
 	await expect(card.getByText('The agent asked:')).toBeVisible();
 	await expect(card.getByRole('group', { name: 'bash command' })).toContainText(

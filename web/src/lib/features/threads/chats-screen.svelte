@@ -136,7 +136,7 @@
 		<section aria-label="Archived conversations">
 			<details class="group">
 				<summary
-					class="flex min-h-12 cursor-pointer list-none items-center gap-2 px-1 text-sm font-medium text-muted-foreground"
+					class="flex min-h-8 cursor-pointer list-none items-center gap-2 px-1 text-sm font-medium text-muted-foreground any-pointer-coarse:min-h-11"
 				>
 					<ChevronDown class="size-4 -rotate-90 group-open:rotate-0" aria-hidden="true" />Archived
 					<span class="tabular-nums">{archived.length}</span>

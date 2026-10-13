@@ -54,7 +54,8 @@
 				<p class="font-medium">{push.destination}</p>
 				<p class="text-body">{push.summary}</p>
 				<details class="group/commit">
-					<summary class="flex min-h-12 cursor-pointer items-center text-meta text-muted-foreground"
+					<summary
+						class="flex min-h-8 cursor-pointer items-center text-meta text-muted-foreground any-pointer-coarse:min-h-11"
 						>Commit {push.commit.slice(0, 7)}</summary
 					>
 					<p class="pb-2 font-mono text-code">{push.commit}</p>

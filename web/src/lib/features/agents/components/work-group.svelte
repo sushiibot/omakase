@@ -80,7 +80,7 @@
 				{#if item.kind === 'command'}
 					<details class="group/item min-w-0">
 						<summary
-							class="flex min-h-8 cursor-pointer list-none items-center gap-2 any-pointer-coarse:min-h-12 [&::-webkit-details-marker]:hidden"
+							class="flex min-h-8 cursor-pointer list-none items-center gap-2 any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
 						>
 							<Terminal class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
 							<code class="min-w-0 flex-1 truncate font-mono text-code">{item.command}</code>
@@ -128,7 +128,7 @@
 				{:else if item.kind === 'tool'}
 					<details class="min-w-0">
 						<summary
-							class="flex min-h-8 cursor-pointer list-none items-center gap-2 any-pointer-coarse:min-h-12 [&::-webkit-details-marker]:hidden"
+							class="flex min-h-8 cursor-pointer list-none items-center gap-2 any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
 						>
 							<Wrench class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
 							<span class="min-w-0 flex-1 truncate"

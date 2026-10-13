@@ -9,6 +9,7 @@
 	import type { ChannelActivity } from '../activity';
 	import { voiceTrait } from '../render/voice-traits';
 	import * as Sheet from '$lib/ui/sheet';
+	import * as NativeSelect from '$lib/ui/native-select';
 	import { Input } from '$lib/ui/input';
 	let {
 		models,
@@ -146,16 +147,16 @@
 				speech model reads the reply. Tap Stop speaking to interrupt.
 			</p>
 			<label for="turn-pause" class="text-sm font-medium">Pause before sending</label>
-			<select
+			<NativeSelect.Root
 				id="turn-pause"
-				class="h-12 w-full rounded-lg border bg-background px-3 text-base"
+				class="w-full"
 				value={turnPause}
 				disabled={active}
 				onchange={(e) => onpause?.(Number(e.currentTarget.value))}
 			>
-				<option value={800}>Quick · 0.8 seconds</option>
-				<option value={1200}>More time · 1.2 seconds</option>
-			</select>
+				<NativeSelect.Option value={800}>Quick · 0.8 seconds</NativeSelect.Option>
+				<NativeSelect.Option value={1200}>More time · 1.2 seconds</NativeSelect.Option>
+			</NativeSelect.Root>
 			{#if speech}
 				<div class="flex flex-col gap-2">
 					<h3 class="font-medium [overflow-wrap:anywhere]">{speech.name}</h3>
@@ -165,19 +166,19 @@
 					<p class="text-sm text-muted-foreground tabular-nums">{speechPrice(speech)}</p>
 					{#if speech.voices.length}
 						<label for="speech-voice" class="text-sm font-medium">Speaking voice</label>
-						<select
+						<NativeSelect.Root
 							id="speech-voice"
-							class="h-12 w-full rounded-lg border bg-background px-3 text-base"
+							class="w-full"
 							value={speechVoice}
 							disabled={active || loading}
 							onchange={(e) => onvoice?.(e.currentTarget.value)}
 						>
-							{#each speech.voices as name}<option value={name}
+							{#each speech.voices as name}<NativeSelect.Option value={name}
 									>{name}{voiceTrait(speech.id, name)
 										? ` · ${voiceTrait(speech.id, name)}`
-										: ''}</option
+										: ''}</NativeSelect.Option
 								>{/each}
-						</select>
+						</NativeSelect.Root>
 					{:else}<p class="text-sm text-muted-foreground">
 							This model chooses its default voice.
 						</p>{/if}
@@ -241,7 +242,8 @@
 				{/each}
 			</section>
 			<details>
-				<summary class="min-h-12 cursor-pointer py-3 font-medium"
+				<summary
+					class="min-h-8 cursor-pointer py-1.5 font-medium any-pointer-coarse:min-h-11 any-pointer-coarse:py-3"
 					>Browse all OpenRouter speech models</summary
 				>
 				<div class="flex flex-col gap-2">
@@ -287,22 +289,24 @@
 			</p>
 			<div class="flex flex-col gap-2">
 				<label for="voice-provider" class="text-sm font-medium">Voice model</label>
-				<select
+				<NativeSelect.Root
 					id="voice-provider"
-					class="h-12 w-full rounded-lg border bg-background px-3 text-base"
+					class="w-full"
 					value={provider}
 					disabled={active || loading}
 					onchange={(event) => onprovider(event.currentTarget.value)}
 				>
-					{#if !provider}<option value="">Choose a configured model</option>{/if}
+					{#if !provider}<NativeSelect.Option value=""
+							>Choose a configured model</NativeSelect.Option
+						>{/if}
 					{#each models as model}
-						<option value={model.id} disabled={!model.configured}
+						<NativeSelect.Option value={model.id} disabled={!model.configured}
 							>{model.name} · {voiceProvider(model.provider).name}{model.configured
 								? ''
-								: ' (not configured)'}</option
+								: ' (not configured)'}</NativeSelect.Option
 						>
 					{/each}
-				</select>
+				</NativeSelect.Root>
 				{#if selected}
 					<p class="text-sm text-muted-foreground">{selected.description}</p>
 					<p class="text-sm text-muted-foreground">

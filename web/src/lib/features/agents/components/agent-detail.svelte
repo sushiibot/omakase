@@ -275,7 +275,8 @@
 				{/each}
 			{:else if session}
 				<details class="min-w-0" open>
-					<summary class="flex min-h-12 cursor-pointer items-center text-ui text-muted-foreground"
+					<summary
+						class="flex min-h-8 cursor-pointer items-center text-ui text-muted-foreground any-pointer-coarse:min-h-11"
 						>Activity</summary
 					>
 					{#if session.output}<pre

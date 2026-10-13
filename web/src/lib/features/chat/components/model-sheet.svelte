@@ -301,7 +301,10 @@
 	{/if}
 
 	<details class="mx-2 border-t pt-2">
-		<summary class="min-h-12 cursor-pointer py-3 font-medium">How context works</summary>
+		<summary
+			class="min-h-8 cursor-pointer py-1.5 font-medium any-pointer-coarse:min-h-11 any-pointer-coarse:py-3"
+			>How context works</summary
+		>
 		<p class="pb-3 text-sm text-muted-foreground">
 			Context is what the agent carries into its next reply. Compaction summarizes older messages
 			and keeps recent messages. Your history and shared memory stay available.
@@ -310,7 +313,10 @@
 
 	{#if usage}
 		<details class="mx-2 border-t pt-2">
-			<summary class="min-h-12 cursor-pointer py-3 font-medium">Last reply usage</summary>
+			<summary
+				class="min-h-8 cursor-pointer py-1.5 font-medium any-pointer-coarse:min-h-11 any-pointer-coarse:py-3"
+				>Last reply usage</summary
+			>
 			<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
 				{#each usageRows(usage).filter(([k]) => k !== 'Context used') as [k, v] (k)}
 					<dt class="text-muted-foreground">{k}</dt>

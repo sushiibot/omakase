@@ -81,7 +81,7 @@
 {:else if parts.action && !live}
 	<details data-surface="ask" class="group/question min-w-0 text-ui text-muted-foreground">
 		<summary
-			class="flex min-h-12 cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden"
+			class="flex min-h-8 cursor-pointer list-none items-center gap-2 any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
 		>
 			<ToolIcon kind={toolCategory(parts.action.tool).kind} />
 			<span class="min-w-0 flex-1 truncate"

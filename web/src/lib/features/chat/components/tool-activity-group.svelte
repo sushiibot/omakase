@@ -34,7 +34,7 @@
 			open = !open;
 		}}
 		aria-label={label}
-		class="flex min-h-12 cursor-pointer list-none items-center gap-2 py-1 [&::-webkit-details-marker]:hidden"
+		class="flex min-h-8 cursor-pointer list-none items-center gap-2 py-1 any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
 	>
 		<span class="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
 			{#each categories.slice(0, 2) as category (category.key)}

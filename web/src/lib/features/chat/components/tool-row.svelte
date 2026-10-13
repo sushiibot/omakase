@@ -60,7 +60,7 @@
 				event.preventDefault();
 				open = !open;
 			}}
-			class="flex min-h-12 cursor-pointer list-none items-center gap-2 py-1 [&::-webkit-details-marker]:hidden"
+			class="flex min-h-8 cursor-pointer list-none items-center gap-2 py-1 any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
 		>
 			<ToolIcon kind={toolCategory(step.tool).kind} />
 			{#if step.state === 'failed'}<CircleX

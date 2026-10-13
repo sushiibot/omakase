@@ -143,6 +143,7 @@ describe('screens', () => {
 				'<svelte:head><title>x</title></svelte:head>\n<TaskWorkspace /><ClearNotifications /><BranchSheet />'
 			)
 		).toEqual([]);
+		expect(rules('src/routes/agents/[id]/+page.svelte', '<AgentPage id="a" />')).toEqual([]);
 		expect(one('src/routes/runs/[id]/+page.svelte', '<main><RunScreen /></main>')).toContain(
 			'route does not render a feature screen'
 		);
