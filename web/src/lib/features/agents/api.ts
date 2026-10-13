@@ -37,7 +37,7 @@ export interface RequestDetail {
 	host?: string;
 	protocol?: string;
 	grantRoot?: string;
-	files?: { path: string; change: string }[];
+	files?: { path: string; change: 'add' | 'delete' | 'update'; movePath?: string }[];
 	diff?: string;
 	permissions?: string;
 	reason?: string;
@@ -118,7 +118,9 @@ export function requestView(r: AgentRequest): { title: string; exact?: string } 
 		d.host ? `${d.protocol ? `${d.protocol} ` : ''}${d.host}` : '',
 		d.command ?? '',
 		d.grantRoot ? `Write access: ${d.grantRoot}` : '',
-		d.files?.map((f) => `${f.change} ${f.path}`).join('\n') ?? '',
+		d.files
+			?.map((f) => `${f.change} ${f.path}${f.movePath ? ` → ${f.movePath}` : ''}`)
+			.join('\n') ?? '',
 		d.diff ?? '',
 		d.permissions ?? ''
 	]

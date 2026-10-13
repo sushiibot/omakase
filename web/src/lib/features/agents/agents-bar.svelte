@@ -103,7 +103,8 @@
 		focused = true;
 		void tick().then(() => {
 			region?.scrollIntoView({ block: 'nearest' });
-			region?.querySelector<HTMLElement>('[data-decision="accept"]')?.focus();
+			// The approval itself takes focus, not Approve: a stray Enter must not answer it.
+			region?.querySelector<HTMLElement>('[data-approval] h3')?.focus();
 		});
 	});
 
@@ -190,7 +191,7 @@
 						{@const view = requestView(approval)}
 						{@const key = requestKey(approval.id)}
 						<div class="flex flex-col gap-2 border-t pt-3" data-approval>
-							<h3 class="text-sm font-semibold">{view.title}</h3>
+							<h3 class="text-sm font-semibold" tabindex="-1">{view.title}</h3>
 							{#if view.exact}
 								<p class="text-sm text-muted-foreground">Exact input</p>
 								<pre

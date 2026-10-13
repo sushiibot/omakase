@@ -61,7 +61,8 @@ for (const width of [320, 1280]) {
 		// A notification link opens the agent with its approval in view.
 		await page.goto('/chat?agent=a-login');
 		const approve = page.getByRole('button', { name: 'Approve', exact: true });
-		await expect(approve).toBeFocused();
+		await expect(page.getByRole('heading', { name: 'Run a command' })).toBeFocused();
+		await expect(approve).not.toBeFocused();
 		await expect(page.getByRole('button', { name: /Codex agent on Desktop/ })).toContainText(
 			'Needs approval'
 		);

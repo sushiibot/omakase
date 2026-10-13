@@ -312,7 +312,8 @@ export interface ChatEventMap {
 	};
 	/** `after` is outside the retained range: drop the local tail and reload history. */
 	reset: { headSeq: number; workspace: WorkspaceState; pending: PendingState };
-	user: { key: string; text: string; uploadIds: string[]; at: string };
+	/** `byAgent`: posted by the gateway for the agent, such as the message that starts a task. */
+	user: { key: string; text: string; uploadIds: string[]; at: string; byAgent?: true };
 	status: { clientId: string; state: 'accepted' | 'steer' | 'queued' | 'stopped' | 'newSession' };
 	reply: { key: string; turnId?: string; text: string; usage?: ChatUsage; files: UploadRef[] };
 	proactive: { key: string; turnId?: string; text: string; usage?: ChatUsage; files: UploadRef[] };
