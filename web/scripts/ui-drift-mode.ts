@@ -1,4 +1,4 @@
-// The UI drift rules warn until the tree is migrated; UI_DRIFT_STRICT=1 makes them fail the lint.
+// The UI drift rules warn by default; UI_DRIFT_STRICT=1 makes them fail the lint.
 export interface DriftViolation {
 	where: string;
 	rule: string;

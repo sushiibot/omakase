@@ -59,6 +59,8 @@ describe('screens', () => {
 	});
 
 	test('a feature screen rooted in markup or the bare Screen is flagged', () => {
+		expect(rules(screen, '<DetailScreen />\n<RoutedSheet open={x}>y</RoutedSheet>')).toEqual([]);
+		expect(one(screen, '<RoutedSheet open={x}>y</RoutedSheet>')).toContain('screen root');
 		expect(one(screen, '<div class="flex"><ListScreen /></div>')).toContain('screen root');
 		expect(one(screen, '<Screen title="x" />')).toContain('screen root');
 		expect(one(screen, '{#if x}<ListScreen />{:else}<p>none</p>{/if}')).toContain('screen root');

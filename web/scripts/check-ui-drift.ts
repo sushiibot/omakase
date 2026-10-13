@@ -46,6 +46,8 @@ export const RAW_CONTROL_FILES = new Set([
 	'src/lib/features/chat/components/composer.svelte'
 ]);
 
+/** Sheets portal out of the layout, so they may sit beside the screen root. */
+const isOverlay = (name: string) => /Sheet(\.Root)?$/.test(name);
 /** ListScreen, DetailScreen, TabbedScreen, or another feature's screen; never the bare Screen. */
 const isScreenRoot = (name: string) =>
 	/^Page(\.|$)/.test(name) || (/Screen$/.test(name) && name !== 'Screen');
@@ -148,8 +150,9 @@ export function checkSvelte(file: string, source: string): Violation[] {
 
 	const top = roots(ast.fragment.nodes as unknown as Node[]);
 	if (inFeature && file.endsWith('-screen.svelte')) {
-		const bad = top.find((n) => !(n.type === 'Component' && isScreenRoot(n.name ?? '')));
-		if (bad || !top.length) add(bad?.start ?? 0, RULE.screenRoot);
+		const layout = top.filter((n) => !(n.type === 'Component' && isOverlay(n.name ?? '')));
+		const bad = layout.find((n) => !(n.type === 'Component' && isScreenRoot(n.name ?? '')));
+		if (bad || !layout.length) add(bad?.start ?? 0, RULE.screenRoot);
 	}
 	if (/^src\/routes\/(.+\/)?\+page\.svelte$/.test(file)) {
 		const bad = top.find((n) => n.type !== 'Component');

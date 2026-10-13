@@ -9,7 +9,7 @@
 	},
 	"item": { "drift": "none" },
 	"radio-group": {
-		"drift": "card and segment variants sized for touch (ux-guidelines.md#reach-and-touch-targets)"
+		"drift": "segmented layout and a choice-card part used by settings (ux-guidelines.md#shared-component-patterns)"
 	},
 	"separator": { "drift": "none" },
 	"sheet": {
