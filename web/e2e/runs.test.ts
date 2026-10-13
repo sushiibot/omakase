@@ -187,7 +187,9 @@ test('a finished run shows the host status, evidence and a collapsed timeline', 
 }) => {
 	await server(context);
 	await page.goto(`/runs/${RUN.expenses}`);
-	await expect(page.getByText('Draft the quarterly expenses summary')).toBeVisible();
+	await expect(
+		page.getByRole('main').getByText('Draft the quarterly expenses summary')
+	).toBeVisible();
 	await page.getByRole('tab', { name: 'Results', exact: true }).click();
 	await expect(page.getByRole('heading', { name: 'Result', exact: true })).toBeVisible();
 	await expect(
@@ -410,7 +412,7 @@ test('a long brief stays in Details while the heading and tabs remain compact', 
 		})
 	);
 	await page.goto(`/runs/${RUN.expenses}`);
-	await expect(page.getByText('writer task', { exact: true })).toBeVisible();
+	await expect(page.getByRole('main').getByText('writer task', { exact: true })).toBeVisible();
 	await expect(page.locator('[data-tab-panel="overview"]')).toHaveAttribute('aria-hidden', 'true');
 	const tabs = await page.getByRole('tablist', { name: 'Activity sections' }).boundingBox();
 	expect(tabs!.y).toBeLessThan(300);
