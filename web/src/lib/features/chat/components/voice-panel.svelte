@@ -229,7 +229,7 @@
 				{#each speechModels.filter((m) => m.curated) as model (model.id)}
 					<Button
 						variant="ghost"
-						class="h-auto w-full flex-col items-start gap-1 px-3 py-2 text-left whitespace-normal aria-pressed:bg-muted any-pointer-coarse:after:hidden"
+						class="h-auto w-full flex-col items-start gap-1 px-3 py-2 text-left whitespace-normal transition-none aria-pressed:bg-muted any-pointer-coarse:after:hidden"
 						aria-pressed={speechModel === model.id}
 						disabled={active || loading}
 						onclick={() => onspeech?.(model.id)}
@@ -258,7 +258,7 @@
 					{#each found as model (model.id)}
 						<Button
 							variant="ghost"
-							class="h-auto w-full flex-col items-start gap-1 px-3 py-2 text-left whitespace-normal aria-pressed:bg-muted any-pointer-coarse:after:hidden"
+							class="h-auto w-full flex-col items-start gap-1 px-3 py-2 text-left whitespace-normal transition-none aria-pressed:bg-muted any-pointer-coarse:after:hidden"
 							aria-pressed={speechModel === model.id}
 							disabled={active || loading}
 							onclick={() => onspeech?.(model.id)}
