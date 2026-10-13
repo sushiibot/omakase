@@ -139,25 +139,20 @@
 					<p class="tabular-nums">{nextRunLine(job, now)}</p>
 				{/snippet}
 			</PageIntro>
-			<Field.Label for="{uid}-enabled">
-				<Field.Field orientation="horizontal">
-					<Field.Content>
-						<Field.Title id="{uid}-enabled-label">Runs on its schedule</Field.Title>
-						<Field.Description id="{uid}-enabled-description"
-							>{job.enabled
-								? 'On.'
-								: 'Paused. It won’t run until you turn it on.'}</Field.Description
-						>
-					</Field.Content>
-					<Switch
-						id="{uid}-enabled"
-						aria-labelledby="{uid}-enabled-label"
-						aria-describedby="{uid}-enabled-description"
-						bind:checked={() => job.enabled, (v) => ontoggle?.(v)}
-						disabled={busy || !online}
-					/>
-				</Field.Field>
-			</Field.Label>
+			<Field.Field orientation="horizontal">
+				<Field.Content>
+					<Field.Label for="{uid}-enabled">Runs on its schedule</Field.Label>
+					<Field.Description id="{uid}-enabled-description"
+						>{job.enabled ? 'On.' : 'Paused. It won’t run until you turn it on.'}</Field.Description
+					>
+				</Field.Content>
+				<Switch
+					id="{uid}-enabled"
+					aria-describedby="{uid}-enabled-description"
+					bind:checked={() => job.enabled, (v) => ontoggle?.(v)}
+					disabled={busy || !online}
+				/>
+			</Field.Field>
 			{#if error}<p role="alert" class="text-sm text-failed">Couldn't change it. {error}</p>{/if}
 			<Section title="What it asks the agent">
 				<p class="rounded-xl bg-muted px-3 py-2.5 text-sm [overflow-wrap:anywhere]">{job.prompt}</p>

@@ -5,7 +5,8 @@
 	import X from '@lucide/svelte/icons/x';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { Button } from '$lib/ui/button';
-	import { SwitchRow } from '$lib/ui/switch';
+	import * as Field from '$lib/ui/field';
+	import { Switch } from '$lib/ui/switch';
 	import { revealInvisible } from '$lib/ui/format/reveal';
 	import { choices, requestKey, requestRisk, requestView } from '../model';
 	import type { AgentRecord, AgentRequest, Decision } from '../types';
@@ -86,15 +87,21 @@
 	{#if risk}<p class="flex items-start gap-2 text-meta text-taint">
 			<TriangleAlert class="mt-0.5 size-4 shrink-0" aria-hidden="true" />{risk}
 		</p>{/if}
-	{#if forTurn}<SwitchRow
-			checked={wholeTurn}
-			disabled={busy}
-			onchange={(next) => (wholeTurn = next)}
-			class="rounded-lg px-0 py-1.5"
-			><span class="text-ui">Also allow matching requests until this turn ends</span><span
-				class="text-meta text-muted-foreground">Off: this request only.</span
-			></SwitchRow
-		>{/if}
+	{#if forTurn}
+		<Field.Field orientation="horizontal">
+			<Field.Content>
+				<Field.Label for="{uid}-turn">Also allow matching requests until this turn ends</Field.Label
+				>
+				<Field.Description id="{uid}-turn-description">Off: this request only.</Field.Description>
+			</Field.Content>
+			<Switch
+				id="{uid}-turn"
+				aria-describedby="{uid}-turn-description"
+				bind:checked={wholeTurn}
+				disabled={busy}
+			/>
+		</Field.Field>
+	{/if}
 	<div class="flex gap-2 any-pointer-coarse:gap-4">
 		{#each options as choice (choice.decision)}
 			<Button

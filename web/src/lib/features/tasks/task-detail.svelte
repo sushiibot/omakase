@@ -4,7 +4,8 @@
 	import Play from '@lucide/svelte/icons/play';
 	import Square from '@lucide/svelte/icons/square';
 	import { Button } from '$lib/ui/button';
-	import ChecklistCheckbox from '$lib/ui/checklist-checkbox.svelte';
+	import { Checkbox } from '$lib/ui/checkbox';
+	import { Label } from '$lib/ui/label';
 	import * as Field from '$lib/ui/field';
 	import { Input } from '$lib/ui/input';
 	import * as InputGroup from '$lib/ui/input-group';
@@ -136,23 +137,22 @@
 					>{task.checklist.filter((c) => c.done).length}/{task.checklist.length} done</span
 				>{/snippet}
 			<Section title="Checklist" aside={task.checklist.length ? progress : undefined}>
-				{#each task.checklist as item (item.id)}<div
-						class="flex min-h-12 items-center gap-1 border-b"
+				{#each task.checklist as item (item.id)}<Label
+						class="min-h-10 gap-3 border-b px-1 py-2 leading-snug font-normal any-pointer-coarse:min-h-11"
 					>
-						<ChecklistCheckbox
+						<Checkbox
 							checked={item.done}
 							disabled={busy}
-							label={item.title}
-							onchange={() =>
+							onCheckedChange={() =>
 								void onupdate({
 									checklist: task.checklist.map((c) =>
 										c.id === item.id ? { ...c, done: !c.done } : c
 									)
 								})}
-						/><span class="text-ui [overflow-wrap:anywhere]" class:line-through={item.done}
+						/><span class="[overflow-wrap:anywhere]" class:line-through={item.done}
 							>{item.title}</span
 						>
-					</div>{/each}
+					</Label>{/each}
 				<form
 					onsubmit={(e) => {
 						e.preventDefault();

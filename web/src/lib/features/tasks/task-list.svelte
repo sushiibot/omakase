@@ -3,7 +3,7 @@
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import { Button } from '$lib/ui/button';
-	import ChecklistCheckbox from '$lib/ui/checklist-checkbox.svelte';
+	import { Checkbox } from '$lib/ui/checkbox';
 	import * as Empty from '$lib/ui/empty';
 	import * as InputGroup from '$lib/ui/input-group';
 	import * as Item from '$lib/ui/item';
@@ -43,12 +43,13 @@
 {#snippet rows(section: TaskRecord[], id?: string, hidden = false)}
 	<Item.Group {id} {hidden} class="gap-0">
 		{#each section as task (task.id)}
-			<div role="listitem" class="flex min-w-0 items-center gap-1">
-				<ChecklistCheckbox
+			<!-- gap-3 matches the checkbox's 12px side reach, so it ends where the row button starts. -->
+			<div role="listitem" class="flex min-w-0 items-center gap-3 ps-2">
+				<Checkbox
 					checked={task.status === 'done'}
 					disabled={busy}
-					label={`Mark ${task.title} ${task.status === 'done' ? 'to do' : 'done'}`}
-					onchange={() => ontoggle(task)}
+					aria-label={`Mark ${task.title} ${task.status === 'done' ? 'to do' : 'done'}`}
+					onCheckedChange={() => ontoggle(task)}
 				/>
 				<Button
 					variant="ghost"
