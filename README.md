@@ -5,6 +5,14 @@ The goal is an everyday assistant in the spirit of Dots, Muse, and Grokbot, buil
 You control its memory, instructions, tools, model choices, and the agent harness that runs it.
 The workspace persists across conversations, so the agent can build on previous work.
 
+<p>
+  <img src="docs/screenshots/mobile-chat.png" width="250" alt="Mobile chat about a trip, with tool activity and saved memories" />
+  <img src="docs/screenshots/mobile-tasks.png" width="250" alt="Mobile task list with active tasks and checklists" />
+  <img src="docs/screenshots/mobile-memory.png" width="250" alt="Mobile memory browser with saved preferences and notes" />
+</p>
+
+Chat, tasks, and memory on mobile. These screenshots use fictional data from the development preview.
+
 Omakase stores conversations, files, and memory on your infrastructure.
 You can inspect that data and change how the agent uses it.
 It still uses external LLM providers, including through OpenRouter, which receive the prompts and context sent to their models.
