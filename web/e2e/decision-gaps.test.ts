@@ -38,11 +38,64 @@ async function gapOwners(first: Locator, second: Locator) {
 	);
 }
 
+/**
+ * The same sweep with real touchscreen taps, which Chromium's touch adjustment carries a few px past
+ * any hit area. A capture listener records whose click each tap became and swallows it, so no handler
+ * runs and the surface stays put between taps.
+ */
+async function tapOwners(first: Locator, second: Locator) {
+	const page = first.page();
+	await first.scrollIntoViewIfNeeded();
+	const a = await first.elementHandle();
+	const b = await second.elementHandle();
+	await page.evaluate(
+		([a, b]) => {
+			const w = window as unknown as { tapOwner: string; stopTaps: () => void };
+			const record = (e: MouseEvent) => {
+				const t = e.target as Node;
+				w.tapOwner = a!.contains(t) ? 'first' : b!.contains(t) ? 'second' : 'other';
+				e.preventDefault();
+				e.stopImmediatePropagation();
+			};
+			window.addEventListener('click', record, true);
+			w.stopTaps = () => window.removeEventListener('click', record, true);
+		},
+		[a, b] as const
+	);
+	const ra = (await first.boundingBox())!;
+	const rb = (await second.boundingBox())!;
+	const across = rb.x >= ra.x + ra.width;
+	const tap = async (x: number, y: number) => {
+		await page.evaluate(() => ((window as unknown as { tapOwner: string }).tapOwner = 'none'));
+		await page.touchscreen.tap(x, y);
+		return page.evaluate(() => (window as unknown as { tapOwner: string }).tapOwner);
+	};
+	const fromFirst: string[] = [];
+	const fromSecond: string[] = [];
+	// Touch points land on whole CSS px, so stop short of the midpoint where two 8px reaches meet.
+	for (let d = 1; d <= 6; d++) {
+		if (across) {
+			const y = (Math.max(ra.y, rb.y) + Math.min(ra.y + ra.height, rb.y + rb.height)) / 2;
+			fromFirst.push(await tap(ra.x + ra.width + d, y));
+			fromSecond.push(await tap(rb.x - d, y));
+		} else {
+			const x = (Math.max(ra.x, rb.x) + Math.min(ra.x + ra.width, rb.x + rb.width)) / 2;
+			fromFirst.push(await tap(x, ra.y + ra.height + d));
+			fromSecond.push(await tap(x, rb.y - d));
+		}
+	}
+	await page.evaluate(() => (window as unknown as { stopTaps: () => void }).stopTaps());
+	return { fromFirst, fromSecond };
+}
+
 /** Taps next to one control never land on the other, whichever side they start from. */
 async function expectNearerOrNothing(first: Locator, second: Locator) {
 	const { fromFirst, fromSecond } = await gapOwners(first, second);
 	expect(fromFirst, 'taps past the first control').not.toContain('second');
 	expect(fromSecond, 'taps past the second control').not.toContain('first');
+	const taps = await tapOwners(first, second);
+	expect(taps.fromFirst, 'real taps past the first control').not.toContain('second');
+	expect(taps.fromSecond, 'real taps past the second control').not.toContain('first');
 }
 
 async function surfaces(page: Page) {
@@ -271,4 +324,109 @@ test('real taps in the agent transcript never reach the header Stop', async ({ p
 		Array.from({ length: 16 }, (_, n) => ({ x, y: header.y + header.height + 0.5 + n }))
 	);
 	expect(posts.filter((p) => p.endsWith('/stop'))).toEqual([]);
+});
+
+test('the approval tray keeps Details, Deny and Approve apart on touch', async ({ page }) => {
+	await surfaces(page);
+	await page.evaluate(() => {
+		const { h } = window as unknown as {
+			h: { step(fn: () => void): void; api: { setTray(n: string[]): void } };
+		};
+		h.step(() => h.api.setTray(['TRAYTRAYTRAYTRAY']));
+	});
+	const tray = page.locator('#tray');
+	const deny = tray.getByRole('button', { name: /^Deny/ });
+	const approve = tray.getByRole('button', { name: /^Approve/ });
+	await expect(approve).toBeEnabled();
+	await expectNearerOrNothing(deny, approve);
+	await expectNearerOrNothing(tray.getByRole('button', { name: 'Show details' }), approve);
+});
+
+test('file store rows keep Remove apart from its neighbours on touch', async ({
+	page,
+	context
+}) => {
+	const store = {
+		id: '12345678-1234-4234-8234-123456789abc',
+		revision: 1,
+		name: 'Property documents',
+		endpoint: 'https://fileserver:5006',
+		folders: [
+			{ path: '/public/Property', writable: false },
+			{ path: '/public/Scans', writable: true }
+		],
+		username: 'property-agent',
+		certificateSha256: '',
+		enabled: true
+	};
+	await stubStream(context);
+	await context.route('**/api/**', (route) => {
+		const path = new URL(route.request().url()).pathname;
+		if (path === '/api/channels') return route.fulfill({ json: { channels: [] } });
+		if (path === '/api/me') return route.fulfill({ json: { login: 'owner@example.test' } });
+		if (path === '/api/file-stores') return route.fulfill({ json: { stores: [store] } });
+		return route.fulfill({ status: 404, json: { error: 'Not found' } });
+	});
+	await page.goto('/file-stores');
+	const row = page.getByRole('listitem').filter({ hasText: 'Property documents' });
+	const edit = row.getByRole('button', { name: 'Edit', exact: true });
+	const remove = row.getByRole('button', { name: 'Remove', exact: true });
+	await expectNearerOrNothing(edit, remove);
+	await remove.click();
+	await expectNearerOrNothing(
+		row.getByRole('button', { name: 'Remove connection' }),
+		row.getByRole('button', { name: 'Keep connection' })
+	);
+	await row.getByRole('button', { name: 'Keep connection' }).click();
+	await edit.click();
+	await expectNearerOrNothing(
+		page.getByRole('switch', { name: 'Allow writes for folder 1' }),
+		page.getByRole('button', { name: 'Remove folder 1' })
+	);
+	await expectNearerOrNothing(
+		page.getByRole('button', { name: 'Remove folder 2' }),
+		page.getByRole('button', { name: 'Add folder' })
+	);
+});
+
+test('the archive sheet keeps Archive apart from Keep current on touch', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await page.goto('/chats/oct-trip');
+	await page.getByRole('button', { name: 'Chat commands', exact: true }).click();
+	await page.getByRole('button', { name: 'Archive conversation', exact: true }).click();
+	const archive = page.getByRole('dialog', { name: 'Archive conversation' });
+	await expect(archive).toBeVisible();
+	await expectNearerOrNothing(
+		archive.getByRole('button', { name: 'Archive conversation', exact: true }),
+		archive.getByRole('button', { name: 'Keep current' })
+	);
+});
+
+test('the branch sheet keeps Start conversation apart from Cancel on touch', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context, {
+		history: [
+			{
+				type: 'assistant',
+				id: 'a1',
+				at: new Date().toISOString(),
+				text: 'Three hotels fit.',
+				tools: [],
+				files: []
+			}
+		]
+	});
+	await page.goto('/chat');
+	await page.getByRole('button', { name: 'Start a conversation from here' }).click();
+	const branch = page.getByRole('dialog', { name: 'Start a conversation' });
+	await branch.getByRole('textbox', { name: 'Conversation name' }).fill('Hotel choice');
+	await expectNearerOrNothing(
+		branch.getByRole('button', { name: 'Start conversation' }),
+		branch.getByRole('button', { name: 'Cancel', exact: true })
+	);
 });
