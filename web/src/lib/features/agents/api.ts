@@ -12,8 +12,8 @@ export interface AgentRecord {
 	rootId: string;
 	/** Working folder relative to the root; absent means the root itself. */
 	path?: string;
-	/** `<root name>/<path>`: where the agent works. */
-	folder: string;
+	/** `<root name>/<path>`: where the agent works; the list carries it. */
+	folder?: string;
 	provider: 'codex' | 'claude';
 	title: string;
 	conversationId: string;

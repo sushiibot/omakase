@@ -112,6 +112,7 @@ test("session changes arrive as notifications and as a snapshot; an older daemon
   expect(closed).toBe(false);
   expect(hub.list()[0]!.connected).toBe(true);
   expect(hub.supportsEvents("pc")).toBe(false);
+  expect(hub.supportsSessionPath("pc")).toBe(false);
   hub.stop();
 });
 test("a snapshot that fails for a reason other than an older daemon is retried", async () => {

@@ -154,9 +154,10 @@
 				<span class="flex min-w-0 flex-1 flex-col py-1"
 					><span class="truncate font-medium">{agentName(agent)}</span><span
 						class="truncate text-muted-foreground">{agent.title}</span
-					><span class="truncate font-mono text-muted-foreground" title={agent.folder}
-						>{agent.folder}</span
-					></span
+					>{#if agent.folder}<span
+							class="truncate font-mono text-muted-foreground"
+							title={agent.folder}>{agent.folder}</span
+						>{/if}</span
 				>
 				<StatePill of={state.of} label={state.label} />
 			</button>
@@ -176,6 +177,9 @@
 							onclick={() => void act(() => api.stop(current.id), 'Could not stop this agent.')}
 							>Stop agent</Button
 						>{/if}
+					{#if current.folder}<p class="text-sm [overflow-wrap:anywhere]">
+							Folder: <span class="font-mono">{current.folder}</span>
+						</p>{/if}
 					<p class="text-sm text-muted-foreground">
 						Attempt {session.attempts}{session.stalled ? ' · No output for a while' : ''}
 					</p>

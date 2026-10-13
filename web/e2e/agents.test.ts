@@ -71,6 +71,7 @@ for (const width of [320, 1280]) {
 		await expect(page.getByRole('button', { name: /Codex agent on Desktop/ })).toContainText(
 			'Code/omakase/web'
 		);
+		await expect(page.getByText('Folder: Code/omakase/web')).toBeVisible();
 		await expect(page.getByLabel('Agent output')).toContainText('Inspecting the login redirect');
 		await expect(page.getByLabel('Exact input')).toHaveText('bun test');
 		await expect(page.getByText("Agent's explanation: To check the login change")).toBeVisible();
