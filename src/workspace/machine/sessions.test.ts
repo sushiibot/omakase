@@ -232,12 +232,32 @@ test("an approval shows the approved thing whole and first; a model-written reas
   expect(stdin.description.startsWith("Write to a running terminal: y")).toBe(true);
 });
 
-test("a file change approval lists the files and diff Codex announced", async () => {
+test("a file change approval lists every file, with a move's destination; anything it cannot show declines", async () => {
   const { sessions } = setup();
   await start(sessions, "s1", "codex", "filechange");
   const change = (await until(get(sessions, "s1"), (r) => r.status === "needs-you")).requests[0]!;
-  expect(change.detail).toMatchObject({ kind: "fileChange", files: [{ path: "src/a.ts", change: "update" }], diff: "-a\n+b" });
+  expect(change.detail).toMatchObject({
+    kind: "fileChange",
+    files: [
+      { path: "src/a.ts", change: "update" },
+      { path: "src/old.ts", change: "update", movePath: "src/new.ts" },
+      { path: "src/n.ts", change: "add" },
+    ],
+    diff: "-a\n+b\n\n+n",
+  });
+  expect(change.description).toContain("update src/old.ts → src/new.ts");
   expect(change.decisions).toContain("accept");
+
+  await start(sessions, "s2", "codex", "filechange odd");
+  const odd = (await until(get(sessions, "s2"), (r) => r.status === "needs-you")).requests[0]!;
+  // An unknown change shape is not shown as approvable, even with a write root named.
+  expect(odd.decisions).toEqual(["decline"]);
+  expect(odd.detail?.files).toBeUndefined();
+
+  await start(sessions, "s3", "codex", "grantonly");
+  const grant = (await until(get(sessions, "s3"), (r) => r.status === "needs-you")).requests[0]!;
+  expect(grant.decisions).toEqual(["decline"]);
+  expect(grant.description).toContain("Write access to: /etc");
 });
 
 test("a slow approval is not a stall, and cancelling an approval reads as the owner's stop", async () => {
@@ -286,4 +306,15 @@ test("finished sessions beyond the newest few are pruned; live ones never are", 
   await until(get(sessions, "s3"), (r) => r.status === "completed");
   await start(sessions, "s4", "codex", "four");
   expect(sessions.summaries().map((s) => s.sessionId).sort()).toEqual(["s2", "s3", "s4"]);
+});
+
+test("waiting for one agent's provider to exit never holds up another agent", async () => {
+  const { sessions } = setup();
+  await start(sessions, "c1", "claude", "linger");
+  await until(get(sessions, "c1"), (r) => r.status === "completed");
+  const followUp = sessions.request({ action: "message", sessionId: "c1", requestId: "m1", text: "again", origin: "owner" });
+  const began = Date.now();
+  await start(sessions, "s1", "codex", "quick");
+  expect(Date.now() - began).toBeLessThan(1500);
+  await followUp;
 });

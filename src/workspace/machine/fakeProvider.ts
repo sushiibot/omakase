@@ -67,9 +67,18 @@ if (process.argv.includes('-p')) {
     if (text.includes('nocommand')) return ask('item/commandExecution/requestApproval', { reason: 'Trust me, it is fine' });
     if (text.includes('network')) return ask('item/commandExecution/requestApproval', { networkApprovalContext: { host: 'example.com', protocol: 'https' }, reason: 'download' });
     if (text.includes('stdin')) return ask('item/commandExecution/requestApproval', { kind: 'writeStdin', command: 'y' });
+    if (text.includes('grantonly')) return ask('item/fileChange/requestApproval', { itemId: 'none', grantRoot: '/etc' });
     if (text.includes('filechange')) {
-      send({ method: 'item/started', params: { item: { type: 'fileChange', id: 'f1', changes: [{ path: 'src/a.ts', kind: { type: 'update', move_path: null }, diff: '-a\n+b' }], status: 'inProgress' } } });
-      return ask('item/fileChange/requestApproval', { itemId: 'f1', reason: 'edit' });
+      const odd = text.includes('odd');
+      const changes = odd
+        ? [{ path: 'src/a.ts', kind: { type: 'rename', to: 'x' }, diff: '' }]
+        : [
+            { path: 'src/a.ts', kind: { type: 'update', move_path: null }, diff: '-a\n+b' },
+            { path: 'src/old.ts', kind: { type: 'update', move_path: 'src/new.ts' }, diff: '' },
+            { path: 'src/n.ts', kind: { type: 'add' }, diff: '+n' },
+          ];
+      send({ method: 'item/started', params: { item: { type: 'fileChange', id: 'f1', changes, status: 'inProgress' } } });
+      return ask('item/fileChange/requestApproval', { itemId: 'f1', reason: 'edit', grantRoot: odd ? '/p' : null });
     }
     if (text.includes('approval')) return ask('item/commandExecution/requestApproval', { command: 'bun test', cwd: '/p' });
     if (text.includes('permission')) return ask('item/permissions/requestApproval', { reason: 'needs network', permissions: { network: { enabled: true }, fileSystem: null } });

@@ -30,6 +30,8 @@ interface Active {
   pending: Map<string, { method: string; params: any }>;
   finalPhase?: string;
   turnDone?: () => void;
+  /** The turn the owner cancelled through an approval; its interruption is the owner's stop. */
+  cancelledTurn?: string;
   lastEventAt: number;
   /** File changes Codex announced, by item id, so their approval can show what it changes. */
   files: Map<string, FileChanges>;
@@ -44,7 +46,22 @@ const FINAL_MAX = 4000;
 const KEEP_FINISHED = 200;
 const COMMAND_MAX = 8000;
 const REASON_MAX = 300;
-type FileChanges = { path: string; change: string; diff: string }[];
+/** One announced file change; `change` is null when Codex used a shape this daemon does not know. */
+type FileChanges = { path: string; change: "add" | "delete" | "update" | null; movePath?: string; diff: string }[];
+const fileLine = (c: FileChanges[number]) =>
+  `${c.change ?? "unknown change to"} ${c.path}${c.movePath ? ` → ${c.movePath}` : ""}`;
+/** Codex 0.162 PatchChangeKind: {type:"add"} | {type:"delete"} | {type:"update", move_path: string|null}. */
+function parseChange(raw: any): FileChanges[number] {
+  const path = typeof raw?.path === "string" ? raw.path : "";
+  const kind = raw?.kind;
+  const diff = typeof raw?.diff === "string" ? raw.diff : "";
+  if (kind?.type === "add" || kind?.type === "delete") return { path, change: kind.type, diff };
+  if (kind?.type === "update" && (kind.move_path === null || kind.move_path === undefined))
+    return { path, change: "update", diff };
+  if (kind?.type === "update" && typeof kind.move_path === "string" && kind.move_path)
+    return { path, change: "update", movePath: kind.move_path, diff };
+  return { path, change: null, diff };
+}
 const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
 const cut = (v: string | undefined, n: number) =>
   v && v.length > n ? `${v.slice(0, n - 1)}…` : v;
@@ -99,14 +116,17 @@ function codexRequest(
     const changes = files.get(String(params?.itemId)) ?? [];
     const grantRoot = str(params?.grantRoot);
     const diff = changes.map((c) => c.diff).join("\n");
-    const shown = (changes.length > 0 && changes.length <= 100 && diff.length <= 8000) || !!grantRoot;
+    // Approving means seeing every change: an unknown change shape, an unnamed file or an oversize list declines.
+    const shown =
+      changes.length > 0 &&
+      changes.length <= 100 &&
+      diff.length <= 8000 &&
+      changes.every((c) => c.change !== null && c.path && c.path.length <= 2000 && (c.movePath ?? "").length <= 2000);
     return {
       description: describe(
         [
           grantRoot ? `Write access to: ${grantRoot}` : undefined,
-          changes.length
-            ? `Change files: ${changes.map((c) => `${c.change} ${c.path}`).join(", ")}`
-            : undefined,
+          changes.length ? `Change files: ${changes.map(fileLine).join(", ")}` : undefined,
         ],
         "Codex requests permission for a file change it did not describe.",
       ),
@@ -114,10 +134,16 @@ function codexRequest(
       detail: {
         kind: "fileChange",
         ...(grantRoot ? { grantRoot: grantRoot.slice(0, 2000) } : {}),
-        ...(changes.length && changes.length <= 100
-          ? { files: changes.map((c) => ({ path: c.path.slice(0, 2000), change: c.change.slice(0, 20) })) }
+        ...(shown
+          ? {
+              files: changes.map((c) => ({
+                path: c.path,
+                change: c.change!,
+                ...(c.movePath ? { movePath: c.movePath } : {}),
+              })),
+              ...(diff ? { diff } : {}),
+            }
           : {}),
-        ...(diff && diff.length <= 8000 ? { diff } : {}),
         ...(reason ? { reason } : {}),
       },
     };
@@ -432,8 +458,8 @@ export class MachineSessions {
         ),
       });
       active.pending.delete(String(request.id));
-      // Cancel ends Codex's turn: the owner chose that, so it reads as a stop, not an interruption.
-      if (p.decision === "cancel") active.stopped = true;
+      // Cancel ends Codex's turn: the owner chose that, so that turn's interruption reads as a stop.
+      if (p.decision === "cancel") active.cancelledTurn = active.turnId;
       record.requests = record.requests.filter((r) => r !== request);
       record.status = record.requests.length ? "needs-you" : "running";
       // The wait was the owner's, not a silent provider.
@@ -565,6 +591,8 @@ export class MachineSessions {
       });
       return structuredClone(record);
     };
+    // Waiting out a previous process happens before the lock, so it never holds up other agents.
+    if (p.action !== "start") await this.exits.get(p.sessionId);
     const next = this.mutation.then(run, run);
     this.mutation = next.catch(() => {});
     return next;
@@ -609,11 +637,7 @@ export class MachineSessions {
         )
           active.files.set(
             String(msg.params.item.id),
-            msg.params.item.changes.slice(0, 101).map((c: any) => ({
-              path: String(c?.path ?? ""),
-              change: String(c?.kind?.type ?? "update"),
-              diff: String(c?.diff ?? ""),
-            })),
+            msg.params.item.changes.slice(0, 101).map(parseChange),
           );
         if (msg.params?.item?.type === "commandExecution")
           this.append(
@@ -662,7 +686,10 @@ export class MachineSessions {
         return;
       case "turn/completed": {
         const status = msg.params?.turn?.status;
-        const stopped = active?.stopped === true;
+        const turnId = msg.params?.turn?.id ?? active?.turnId;
+        const stopped =
+          active?.stopped === true ||
+          (status === "interrupted" && !!active?.cancelledTurn && active.cancelledTurn === turnId);
         record.status =
           status === "completed"
             ? "completed"

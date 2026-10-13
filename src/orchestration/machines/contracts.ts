@@ -62,7 +62,15 @@ export const requestDetail = z
     protocol: z.string().max(50).optional(),
     grantRoot: z.string().max(2000).optional(),
     files: z
-      .array(z.object({ path: z.string().max(2000), change: z.string().max(20) }).strict())
+      .array(
+        z
+          .object({
+            path: z.string().max(2000),
+            change: z.enum(["add", "delete", "update"]),
+            movePath: z.string().max(2000).optional(),
+          })
+          .strict(),
+      )
       .max(100)
       .optional(),
     diff: z.string().max(8000).optional(),
