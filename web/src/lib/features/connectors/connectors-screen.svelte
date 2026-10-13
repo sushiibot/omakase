@@ -1,6 +1,10 @@
 <script lang="ts">
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Plus from '@lucide/svelte/icons/plus';
+	import Plug from '@lucide/svelte/icons/plug';
+	import CircleAlert from '@lucide/svelte/icons/circle-alert';
+	import CircleDashed from '@lucide/svelte/icons/circle-dashed';
+	import KeyRound from '@lucide/svelte/icons/key-round';
 	import { Button } from '$lib/ui/button';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import Screen from '$lib/ui/screen/screen.svelte';
@@ -8,7 +12,6 @@
 	import ScreenState from '$lib/ui/screen/screen-state.svelte';
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
-	import StatePill from '$lib/ui/status/state-pill.svelte';
 	import type { McpServerSummary } from './types';
 
 	let {
@@ -70,42 +73,59 @@
 	<p role="status" class="sr-only">Loading connectors…</p>
 {/snippet}
 
+{#snippet connectionStatus(s: McpServerSummary)}
+	{#if s.enabled === false}
+		<span class="inline-flex items-center gap-1.5 text-muted-foreground">
+			<Plug class="size-3.5 shrink-0" aria-hidden="true" />Disconnected
+		</span>
+	{:else if s.status === 'error'}
+		<span class="inline-flex items-center gap-1.5 text-failed">
+			<CircleAlert class="size-3.5 shrink-0" aria-hidden="true" />Not working
+		</span>
+	{:else if s.status === 'signed-out'}
+		<span class="inline-flex items-center gap-1.5 text-waiting">
+			<KeyRound class="size-3.5 shrink-0" aria-hidden="true" />Sign in again
+		</span>
+	{:else if s.changed}
+		<span class="inline-flex items-center gap-1.5 text-muted-foreground">
+			<CircleDashed class="size-3.5 shrink-0" aria-hidden="true" />Tools changed
+		</span>
+	{/if}
+{/snippet}
+
 {#snippet row(s: McpServerSummary)}
 	<a
 		href={serverHref(s.id)}
-		class="flex min-h-16 items-center gap-3 rounded-md px-2 py-3 transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-14 md:py-2"
+		class="group grid min-h-16 grid-cols-[1.25rem_minmax(0,1fr)_auto_1rem] items-center gap-x-3 gap-y-1 rounded-md px-2 py-2.5 transition-colors duration-100 hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none @2xl:min-h-14 @2xl:grid-cols-[1.25rem_minmax(0,1fr)_14rem_1rem] @2xl:py-2"
 	>
-		<span
-			class="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-sm font-medium"
-			aria-hidden="true">{s.name[0]}</span
-		>
-		<span class="flex min-w-0 flex-1 flex-col gap-1">
-			<span class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-				<span class="min-w-0 text-sm font-medium [overflow-wrap:anywhere]">{s.name}</span>
-				{#if s.enabled === false}<StatePill of="quiet" label="Disconnected" />
-				{:else if s.status === 'error'}<StatePill of="failed" label="Not working" />
-				{:else if s.status === 'signed-out'}<StatePill of="waiting" label="Sign in again" />
-				{:else if s.changed}<StatePill of="quiet" label="Tools changed" />{/if}
-			</span>
-			<span class="flex min-w-0 items-center justify-between gap-3 text-meta text-muted-foreground">
-				<span class="truncate">{hostname(s.url)}</span>
-				<span class="shrink-0 tabular-nums">{s.tools} {s.tools === 1 ? 'tool' : 'tools'}</span>
-			</span>
+		<Plug class="size-4 text-muted-foreground" aria-hidden="true" />
+		<span class="flex min-w-0 flex-col gap-0.5">
+			<span class="text-sm font-medium [overflow-wrap:anywhere]">{s.name}</span>
+			<span class="truncate text-meta text-muted-foreground">{hostname(s.url)}</span>
 		</span>
-		<ChevronRight class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+		<span
+			class="flex flex-col items-end gap-1 text-meta @2xl:grid @2xl:grid-cols-[4rem_1fr] @2xl:items-center @2xl:gap-x-5"
+		>
+			<span class="text-muted-foreground tabular-nums"
+				>{s.tools} {s.tools === 1 ? 'tool' : 'tools'}</span
+			>
+			<span class="order-first empty:hidden @2xl:order-last">{@render connectionStatus(s)}</span>
+		</span>
+		<ChevronRight class="size-3.5 text-muted-foreground" aria-hidden="true" />
 	</a>
 {/snippet}
 
 <Screen title="Connectors" {back} {banner}>
 	<ManagementContent>
-		<div class="flex flex-col gap-6">
-			<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+		<div class="flex flex-col gap-5">
+			<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b pb-3">
 				<p class="text-sm text-muted-foreground">Tools available to your agent.</p>
 				<Button href={addHref} size="compact" variant="outline" aria-label="Add a server by URL">
 					<Plus class="size-4" aria-hidden="true" />Add server
 				</Button>
 			</div>
 			<ScreenState
+				compact
 				{remote}
 				isEmpty={servers.length === 0}
 				offline={!online}
@@ -119,17 +139,20 @@
 			>
 				{#each sections as section, i (section.label)}
 					{#if section.items.length}
-						<section aria-labelledby="{uid}-section-{i}" class="flex flex-col gap-2">
-							<h2 id="{uid}-section-{i}" class="flex items-center gap-2 text-sm font-medium">
+						<section aria-labelledby="{uid}-section-{i}" class="flex flex-col gap-1">
+							<h2
+								id="{uid}-section-{i}"
+								class="flex items-center gap-2 px-2 text-meta font-medium text-muted-foreground"
+							>
 								{section.label}<span
 									aria-hidden="true"
 									class="font-normal text-muted-foreground tabular-nums"
 									>{section.items.length}</span
 								>
 							</h2>
-							<div class="divide-y border-y">
-								{#each section.items as s (s.id)}{@render row(s)}{/each}
-							</div>
+							<ul class="flex flex-col">
+								{#each section.items as s (s.id)}<li>{@render row(s)}</li>{/each}
+							</ul>
 						</section>
 					{/if}
 				{/each}

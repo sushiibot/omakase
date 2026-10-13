@@ -23,7 +23,7 @@
 			},
 			size: {
 				// A real touch target surrounds a smaller painted face.
-				compact: 'h-12 min-w-12 p-0 desktop-pointer:h-9 desktop-pointer:min-w-9',
+				compact: 'h-12 min-w-12 p-0 desktop-pointer:h-8 desktop-pointer:min-w-8',
 				// Management actions stay touch-friendly and become denser for desktop pointers.
 				action:
 					'h-12 min-w-12 gap-2 px-4 text-sm font-medium desktop-pointer:h-9 desktop-pointer:min-w-9 desktop-pointer:px-3',
@@ -71,7 +71,11 @@
 
 	const controlClass = $derived(
 		size === 'compact'
-			? cn(buttonBase, 'h-12 min-w-12 p-0 desktop-pointer:h-9 desktop-pointer:min-w-9', className)
+			? cn(
+					buttonBase,
+					'h-12 min-w-12 rounded-sm border-0 p-0 transition-colors duration-(--duration-short) focus-visible:ring-2 active:not-aria-[haspopup]:translate-y-0 motion-reduce:transition-none desktop-pointer:h-8 desktop-pointer:min-w-8',
+					className
+				)
 			: cn(buttonVariants({ variant, size }), className)
 	);
 	const compactHover = {
@@ -91,7 +95,7 @@
 			data-slot="button-face"
 			class={cn(
 				buttonVariants({ variant, size: 'action' }),
-				'justify-[inherit] pointer-events-none h-10 w-full min-w-12 px-3 desktop-pointer:h-9 desktop-pointer:min-w-9',
+				'justify-[inherit] pointer-events-none h-9 w-full min-w-12 rounded-sm px-3 transition-colors duration-(--duration-short) motion-reduce:transition-none desktop-pointer:h-8 desktop-pointer:min-w-8',
 				compactHover[variant]
 			)}
 		>

@@ -23,6 +23,7 @@
 
 	let {
 		remote,
+		compact = false,
 		isEmpty = false,
 		empty,
 		offline = false,
@@ -32,6 +33,8 @@
 		children
 	}: {
 		remote: RemoteLike;
+		/** Match compact management controls in empty and recovery states. */
+		compact?: boolean;
 		/** Loaded, but nothing to show. */
 		isEmpty?: boolean;
 		empty?: EmptyState;
@@ -53,7 +56,9 @@
 		</Empty.Header>
 		{#if empty.action}
 			<Empty.Content>
-				<Button onclick={empty.action.onclick}>{empty.action.label}</Button>
+				<Button size={compact ? 'compact' : 'default'} onclick={empty.action.onclick}
+					>{empty.action.label}</Button
+				>
 			</Empty.Content>
 		{/if}
 	</Empty.Root>
@@ -73,7 +78,9 @@
 			</p>
 		{/if}
 		{#if onretry}
-			<Button variant="outline" onclick={onretry}><RotateCcw />Try again</Button>
+			<Button size={compact ? 'compact' : 'default'} variant="outline" onclick={onretry}
+				><RotateCcw />Try again</Button
+			>
 		{/if}
 	</div>
 {:else if remote.slow}

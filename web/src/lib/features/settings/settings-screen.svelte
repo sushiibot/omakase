@@ -124,26 +124,31 @@
 
 <DetailScreen title="Settings" {back} {banner} toast={updateReady ? toast : undefined}>
 	<ManagementContent>
-		<div class="flex max-w-3xl flex-col gap-7">
-			<section aria-labelledby="account" class="flex flex-col gap-2">
+		<div class="flex max-w-3xl flex-col gap-6">
+			<section aria-labelledby="account" class="flex flex-col gap-1">
 				<h2 id="account" class="text-sm font-semibold">Account</h2>
-				<div class="border-t py-4">
+				<div class="py-3">
 					<ScreenState
+						compact
 						remote={me}
 						errorTitle="Couldn't load your account."
 						onretry={onretryme}
 						skeleton={accountLoading}
 					>
 						{#if me.data}
-							<p class="text-sm text-muted-foreground">Signed in as</p>
-							<p class="mt-1 text-sm font-medium [overflow-wrap:anywhere]" data-testid="login">
-								{me.data.displayName ?? me.data.login}
-							</p>
-							{#if me.data.displayName}
-								<p class="text-sm [overflow-wrap:anywhere] text-muted-foreground">
-									{me.data.login}
-								</p>
-							{/if}
+							<div class="flex items-start justify-between gap-6 text-sm">
+								<p class="shrink-0 text-muted-foreground">Signed in as</p>
+								<div class="min-w-0 text-right">
+									<p class="font-medium [overflow-wrap:anywhere]" data-testid="login">
+										{me.data.displayName ?? me.data.login}
+									</p>
+									{#if me.data.displayName}
+										<p class="text-xs [overflow-wrap:anywhere] text-muted-foreground">
+											{me.data.login}
+										</p>
+									{/if}
+								</div>
+							</div>
 						{/if}
 					</ScreenState>
 				</div>
@@ -161,32 +166,34 @@
 				{/if}
 			</section>
 
-			<section aria-labelledby="appearance" class="flex flex-col gap-2">
+			<section aria-labelledby="appearance" class="flex flex-col gap-1">
 				<h2 id="appearance" class="text-sm font-semibold">Appearance</h2>
-				<div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t py-3">
+				<div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 py-1">
 					<p class="text-sm text-muted-foreground">Theme</p>
 					<RadioGroup.Root
 						aria-labelledby="appearance"
 						orientation="horizontal"
 						onkeydowncapture={themeKeydown}
-						class="flex w-auto gap-2"
+						class="relative isolate flex w-auto gap-0 before:absolute before:inset-x-0 before:inset-y-2 before:-z-10 before:rounded-lg before:bg-muted"
 						bind:value={() => theme, (v) => onchoosetheme?.(v as ThemeChoice)}
 					>
 						{#each themes as t (t.id)}
 							<RadioGroup.Card
 								value={t.id}
 								compact
-								class="[&>span]:h-9 [&>span]:rounded-md [&>span]:px-4">{t.label}</RadioGroup.Card
+								class="px-0.5 [&>span]:h-7 [&>span]:min-w-16 [&>span]:rounded-md [&>span]:border-0 [&>span]:bg-transparent [&>span]:px-3 data-checked:[&>span]:bg-background data-checked:[&>span]:shadow-sm"
+								>{t.label}</RadioGroup.Card
 							>
 						{/each}
 					</RadioGroup.Root>
 				</div>
 			</section>
 
-			<section aria-labelledby="notifications" class="flex flex-col gap-2">
+			<section aria-labelledby="notifications" class="flex flex-col gap-1">
 				<h2 id="notifications" class="text-sm font-semibold">Notifications</h2>
-				<div class="flex flex-col border-t">
+				<div class="flex flex-col">
 					<SwitchRow
+						compact
 						checked={push === 'on'}
 						disabled={pushToggleDisabled}
 						describedby="push-state"
@@ -202,8 +209,8 @@
 							{/if}
 						</span>
 					</SwitchRow>
-					<div class="flex flex-col items-start gap-2 pb-2">
-						<p class="text-sm text-muted-foreground">
+					<div class="flex flex-col items-start gap-2 pb-1">
+						<p class="max-w-prose text-sm text-muted-foreground">
 							Only when the agent needs you, a run fails, or something you asked about finishes.
 						</p>
 						<Button
@@ -252,18 +259,18 @@
 				{/if}
 			</section>
 
-			<section aria-labelledby="app" class="flex flex-col gap-2">
+			<section aria-labelledby="app" class="flex flex-col gap-1">
 				<h2 id="app" class="text-sm font-semibold">App</h2>
-				<dl class="flex flex-col divide-y border-t text-sm">
-					<div class="flex min-h-12 items-center justify-between gap-4 py-3">
+				<dl class="flex flex-col text-sm">
+					<div class="flex min-h-10 items-center justify-between gap-4 py-2">
 						<dt class="text-muted-foreground">Version</dt>
 						<dd class="font-mono text-xs [overflow-wrap:anywhere]" data-testid="version">
 							{version}
 						</dd>
 					</div>
-					<div class="flex min-h-12 items-center justify-between gap-4 py-3">
+					<div class="flex min-h-10 items-center justify-between gap-4 py-2">
 						<dt class="text-muted-foreground">Installed</dt>
-						<dd>{standalone ? 'Yes' : 'No, running in the browser'}</dd>
+						<dd class="text-right">{standalone ? 'Yes' : 'No, running in the browser'}</dd>
 					</div>
 				</dl>
 				<div class="flex flex-wrap gap-2">

@@ -121,7 +121,7 @@
 						autocomplete="off"
 						autocapitalize="off"
 						spellcheck={false}
-						class="h-12 font-mono text-base"
+						class="h-12 rounded-sm font-mono text-base desktop-pointer:h-9 desktop-pointer:text-sm"
 					/>
 					<p id="{uid}-url-help" class="text-sm text-muted-foreground">
 						An https:// address for a Streamable HTTP MCP server. Leave the token blank to sign in
@@ -143,7 +143,7 @@
 						oninput={(e) => ontoken?.(e.currentTarget.value)}
 						autocomplete="off"
 						spellcheck={false}
-						class="h-12 text-base"
+						class="h-12 rounded-sm text-base desktop-pointer:h-9 desktop-pointer:text-sm"
 					/>
 					<p id="{uid}-token-help" class="text-sm text-muted-foreground">
 						For Fastmail, use https://api.fastmail.com/mcp and create an MCP token with only “Read
@@ -156,7 +156,7 @@
 						<span class="font-medium">{add.name}</span> uses a sign-in. Open this link on any device and
 						approve.
 					</p>
-					<div class="flex items-start gap-2 rounded-xl border bg-muted/50 p-3">
+					<div class="flex items-start gap-2 rounded-md border bg-muted/50 p-3">
 						<Link2 class="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
 						<code class="min-w-0 flex-1 font-mono text-meta break-all select-text"
 							>{add.authUrl}</code
@@ -196,7 +196,7 @@
 						autocomplete="off"
 						autocapitalize="off"
 						spellcheck={false}
-						class="h-12 font-mono text-base"
+						class="h-12 rounded-sm font-mono text-base desktop-pointer:h-9 desktop-pointer:text-sm"
 					/>
 					<p id="{uid}-redirect-help" class="text-sm text-muted-foreground">
 						Copy the whole localhost callback address, including its code and state.

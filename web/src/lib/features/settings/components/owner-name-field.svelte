@@ -83,19 +83,17 @@
 	</p>
 {/snippet}
 
-<div class="py-4">
-	<ScreenState {remote} errorTitle="Couldn't load your name." {onretry} skeleton={loading}>
+<div class="py-2">
+	<ScreenState compact {remote} errorTitle="Couldn't load your name." {onretry} skeleton={loading}>
 		{#if !editing}
 			<div class="flex items-center justify-between gap-4">
-				<div class="min-w-0">
-					<p class="text-sm font-medium">Your name</p>
-					<p
-						class="mt-1 text-sm [overflow-wrap:anywhere] text-muted-foreground"
-						data-testid="owner-name"
-					>
-						{current || 'Not set'}
-					</p>
-				</div>
+				<p class="shrink-0 text-sm text-muted-foreground">Your name</p>
+				<p
+					class="min-w-0 flex-1 text-right text-sm [overflow-wrap:anywhere]"
+					data-testid="owner-name"
+				>
+					{current || 'Not set'}
+				</p>
 				<Button
 					id="{uid}-edit"
 					variant="outline"
