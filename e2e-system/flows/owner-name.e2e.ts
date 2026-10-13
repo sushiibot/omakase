@@ -16,7 +16,8 @@ test("a name saved in Settings reaches the agent's next turn, and clearing it re
   const tag = nonce();
   const name = `Tester ${tag}`;
   await page.goto("/settings");
-  const field = page.getByLabel("Your name");
+  await page.getByRole("button", { name: "Edit your name" }).click();
+  const field = page.getByRole("textbox", { name: "Your name", exact: true });
   await expect(field).toBeEnabled();
   await field.fill(name);
   await page.getByRole("button", { name: "Save name" }).click();
@@ -32,6 +33,7 @@ test("a name saved in Settings reaches the agent's next turn, and clearing it re
   expect(named.ownerName).toBe(name);
 
   await page.goto("/settings");
+  await page.getByRole("button", { name: "Edit your name" }).click();
   await page.getByRole("button", { name: "Clear name" }).click();
   await expect(page.getByText("Cleared.", { exact: false })).toBeVisible();
   expect(await stack.query("SELECT value FROM kv WHERE key = 'owner:name'")).toEqual([]);
