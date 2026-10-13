@@ -43,29 +43,25 @@ The primary mobile device is an Android phone running the installed PWA (Chrome 
 
 ### Reach and touch targets
 
-- **Every touch target is at least 48x48 CSS px, including padding.** Why: Android and Material specify 48dp as the minimum for reliable touch ([Android API defaults](https://developer.android.com/develop/ui/compose/accessibility/api-defaults), [Android accessibility help](https://support.google.com/accessibility/android/answer/7101858)); 1 CSS px = 1dp on Android Chrome. Check: `pw` bounding-box assertion (below). axe does NOT cover this: its `target-size` rule tests the WCAG 2.5.8 floor of 24px (`minSize: 24` in axe-core 4.13).
-- **Keep visible size separate from touch size.** The shared `Button` default paints a 36px face inside a real 48px touch target. Desktop fine pointers use 32px for both. Mixed-input devices retain touch sizing. See [Shared component patterns](#shared-component-patterns) for deliberate exceptions. Do not reduce the hit area with local height classes. Check: `pw` measures the control and its `data-slot="button-face"` separately.
-- **Separate action controls have at least 8px between their hit areas.** Why: Material spacing guidance; mis-taps on approve/deny rows are costly. Repeated channel navigation is a deliberate exception: contiguous full-width rows retain 48px touch targets, with shallow highlights inset inside them. Separate project groups with space; do not separate every channel like an action button. WCAG does not require a gap when targets meet its size minimum. Check: `shot`, `pw`.
-- **Inline text links inside prose are exempt from the 48px rule, but nothing important is reachable only through one.** Why: WCAG 2.5.8 exempts inline links because they are small and easy to miss. Check: `review`.
+- **Paint stock sizes; extend hit areas invisibly on touch.** The shared `Button` paints shadcn-svelte nova sizes (`sm` 28px, default 32px, `lg` 36px); Input and sidebar rows are 32px. On any coarse pointer, an invisible `::after` (`relative any-pointer-coarse:after:absolute any-pointer-coarse:after:-inset-*`) extends each separate control's hit area toward 48px. Layout uses the painted size, so the hit area never moves anything. Do not grow a target with local height classes. Why: WCAG 2.5.8 AA requires 24px; Apple's minimum is 28pt and its default 44pt; Android recommends 48dp and allows the visible element to be smaller than its target ([Android API defaults](https://developer.android.com/develop/ui/compose/accessibility/api-defaults), [Android accessibility help](https://support.google.com/accessibility/android/answer/7101858)); 1 CSS px = 1dp on Android Chrome. Layout-sized 48px controls bloat every screen. Check: `pw` hit probe (below). axe's `target-size` rule covers only the WCAG floor of 24px (`minSize: 24` in axe-core 4.13).
+- **Hit areas may extend into gaps, never over another control's painted face.** Separate controls keep the stock `gap-2`; under it, each control keeps at least 40px of its own target along the row and 48px across it. Decision rows (approve/deny, destructive next to primary) use `gap-2 any-pointer-coarse:gap-4`, so each keeps a full 48px. Why: a covered face sends the tap to the wrong control; Android asks for 8dp separation, and a mis-tap on a decision is costly. Check: hit probe at each face edge resolves to that face's control; decision rows also probe toward their neighbors.
+- **Contiguous rows size their own box.** Navigation rows, list `Item` rows and tabs get no `after:` hit area, because it would cover the neighboring row. Navigation rows are `h-8` with `any-pointer-coarse:h-11` (44px); list `Item` rows keep stock padding; line-variant tab triggers add `any-pointer-coarse:h-10`. Separate project groups with space; do not space every channel like an action button. Why: overlapping row targets steal taps; 44pt is Apple's default control size. Check: `pw` row height per input type.
+- **Inline text links inside prose are exempt from the hit-area rules, but nothing important is reachable only through one.** Why: WCAG 2.5.8 exempts inline links because they are small and easy to miss. Check: `review`.
 - **Keep frequent phone actions within reach.** Place composer actions and sheet decisions near the bottom. Keep list creation actions beside their list. Do not stretch short pages to force every action below a fixed coordinate. Why: thumb reach matters alongside context ([Hoober, How do users really hold mobile devices](https://www.uxmatters.com/mt/archives/2013/02/how-do-users-really-hold-mobile-devices.php)). Check: `shot`, `phone` with the keyboard open and closed.
 - **The top bar holds title, back and secondary actions only. The general chat defaults to Sushii until the owner renames it, with no static subtitle; activity belongs beside the conversation.** Why: nothing there should need reaching for mid-task. Check: `review`.
 - **Destructive or outward actions (Deny, Delete, Send now) are never the largest target and never sit where a mis-tap from the primary lands.** Why: Fitts's law works against you for dangerous actions. Check: `shot`.
 - **Section swipes follow the visible tab order and stop at each end.** On touch screens, Runs filters, run details, History days, Memory and MCP details support left/right swipes in the content area. Vertical scrolling, text controls, selection and horizontal code/table scrolling keep their normal behavior. The left edge stays available to the drawer and the outer edges stay available to system navigation. Panels follow the finger continuously and snap on release; tapping a tab on phones animates the same pager, with its selected label and underline updating immediately. Desktop tabs switch panels instantly. During a held swipe the underline tracks the panel position, then marks the destination on release. Keep headers fixed and preserve each panel’s scroll and expanded content. Tabs remain the tap and keyboard alternatives. Check: `pw` (`e2e/tab-swipe.test.ts`).
 - **No gesture-only actions. Every swipe or long-press has a visible button alternative.** Why: WCAG 2.5.7 Dragging Movements; gestures are undiscoverable. Check: `review`.
-  - Per-message actions are visible icon buttons in a row under the message (Copy, and Share where the browser has `navigator.share`), never a gesture or a hijacked menu: the app does not intercept `contextmenu`, long-press or middle-click, so the browser's own menu, text selection and autoscroll work in the chat. The row is always shown under the newest reply and on touch screens; on hover-capable devices older rows are transparent until hover or `:focus-within`, keeping their height so nothing moves. Icons are 16px inside 48px buttons, each with an `aria-label` and a `title`. The row never holds anything approval-like. Check: `pw` (`e2e/message-actions.test.ts`).
+  - Per-message actions are visible icon buttons in a row under the message (Copy, and Share where the browser has `navigator.share`), never a gesture or a hijacked menu: the app does not intercept `contextmenu`, long-press or middle-click, so the browser's own menu, text selection and autoscroll work in the chat. The row is always shown under the newest reply and on touch screens; on hover-capable devices older rows are transparent until hover or `:focus-within`, keeping their height so nothing moves. Icons are 16px inside `Button size="icon-sm"` controls with the coarse-pointer hit area, each with an `aria-label` and a `title`. The row never holds anything approval-like. Check: `pw` (`e2e/message-actions.test.ts`).
+
+The hit probe is `probeHitArea` in `e2e/hit-probe.ts`; `expectHitArea` asserts that no point fails. For each control it calls `document.elementFromPoint` at the center, 1px inside each face edge, and 23px from the center on every side in `freeSides` (default: all four), and requires the hit element to be the control or a descendant. Pass only the sides without an adjacent control as `freeSides`; decision rows add `neighborSides` to probe toward the neighbor too. Run it in a touch context on real screens, not only on a controls fixture: `overflow-hidden` and scrolling ancestors clip `::after` hit areas, so a control flush against a clipping edge needs the parent's padding (`p-2`, `p-4`) to leave room.
 
 ```ts
-// Run in a touch context. Review inline-link exceptions before applying globally.
-const small = await page.$$eval(
-	'a, button, [role=button], input, textarea, [role=tab], summary',
-	(els) =>
-		els
-			.filter((e) => !(e.tagName === 'A' && e.closest('p'))) // inline prose links are exempt
-			.map((e) => ({ e, r: e.getBoundingClientRect() }))
-			.filter(({ r }) => r.width > 0 && (r.width < 48 || r.height < 48))
-			.map(({ e }) => e.outerHTML.slice(0, 80))
-);
-expect(small).toEqual([]);
+// Approve sits left of Deny in a decision row.
+await expectHitArea(page, approve, {
+	freeSides: ['top', 'bottom', 'left'],
+	neighborSides: ['right']
+});
 ```
 
 ### Viewport, keyboard and system bars
@@ -85,7 +81,7 @@ expect(small).toEqual([]);
 - **Keep the `--kb` visualViewport fallback for iOS, where `interactive-widget` has not shipped.** Why: iOS overlays the keyboard; the layout does not resize. Check: `review` (the shell and sheets read `--kb`, defined in `app.css`).
 - **The app root uses `100dvh` or `inset: 0`, never `100vh`.** Why: `100vh` ignores the dynamic browser UI and the keyboard. Check: `rg -n -g '!src/proto-routes/**' '100vh|h-screen' src` returns nothing (`h-screen`, `min-h-screen` and `max-h-screen` compile to `100vh`).
 - **Anything pinned to the top or bottom pads with `env(safe-area-inset-*)`: the header and the drawer add `--safe-top`, the composer and the drawer add `--safe-bottom`.** Why: edge-to-edge content otherwise sits under the status bar and the gesture bar. Check: `phone` with gesture navigation on; nothing tappable overlaps the gesture pill.
-- **Touch inputs use a font size of at least 16px.** Why: iOS zooms the page on focus below 16px; the same size reads well on Android. Desktop fine-pointer inputs can use 14px. Check: `pw` computed style on `textarea, input` in both input contexts.
+- **Inputs use the stock Input and Textarea text sizes: 16px below `md`, 14px above (`text-base md:text-sm`).** This is a legibility size kept from stock, not a target size. Why: iOS zooms the page on focus below 16px; the same size reads well on Android. Check: `pw` computed style on `textarea, input` at 412px.
 - **`theme-color` matches `--background` in both themes, via two `<meta name="theme-color" media="(prefers-color-scheme: ...)">` tags or a script that follows the theme toggle.** Why: a white status bar over a dark app looks broken. Check: `phone` in light and dark.
 - **`overscroll-behavior: none` on the document, `contain` on scroll regions.** Why: stops pull-to-refresh from reloading the app mid-chat and stops scroll chaining into the page. Check: `phone`: pull down at the top of a chat; the app does not reload.
 
@@ -224,7 +220,7 @@ await expect(page.getByRole('button', { name: /new messages/i })).toBeVisible();
 ### Long content on narrow screens
 
 - **No horizontal page scroll at 320px, whatever the content.** Why: WCAG 1.4.10 Reflow. Check: `pw` reflow assertion at 320 and 412.
-- **Code blocks scroll horizontally inside their own box, keep a Copy button (48px) in view, and never wrap code silently.** Why: wrapped code is wrong code; page-level overflow breaks the layout. Check: `shot` with a 200-column line.
+- **Code blocks scroll horizontally inside their own box, keep a Copy button (`icon-sm` with the coarse-pointer hit area) in view, and never wrap code silently.** Why: wrapped code is wrong code; page-level overflow breaks the layout. Check: `shot` with a 200-column line.
 - **Long URLs, paths, message-ids and hashes use `break-all` or `overflow-wrap: anywhere`.** Why: one long token otherwise widens the page. Check: `pw` reflow with the long-content fixture.
 - **Tables in replies scroll inside a wrapper, with the first column sticky if it's wider than the screen.** Why: tables can't reflow. Check: `shot`.
 - **Messages over about 40 lines collapse with "Show all (N lines)".** Why: one giant reply shouldn't push the conversation off-screen. Check: `shot`.
@@ -292,27 +288,42 @@ The push payload is `{ title, body, url, tag? }`; the service worker shows it, a
 
 ### Type scale
 
-| Role         | Size / line height | Use                             |
-| ------------ | ------------------ | ------------------------------- |
-| Screen title | 16px / semibold    | Header `h1`                     |
-| Message body | 15px / 1.5         | Chat text, approval body        |
-| UI text      | 14px               | List rows, buttons, form labels |
-| Meta         | 12px               | Timestamps, captions, pills     |
-| Code         | 12–13px mono       | Code blocks, ids, tool names    |
-| Small label  | 11px / semibold    | Photo states, file chips        |
+| Role             | Class                                       | Use                                                 |
+| ---------------- | ------------------------------------------- | --------------------------------------------------- |
+| Page title       | `text-base font-medium`                     | `Page.Header` `h1` (dashboard-01)                   |
+| Section heading  | `text-sm font-medium`                       | `Section`                                           |
+| Group/list label | `text-xs font-medium text-muted-foreground` | `Section tone="list"`, `SidebarGroupLabel`          |
+| Description      | `text-sm text-muted-foreground`             | `Page.Intro`, `FieldDescription`, `CardDescription` |
+| Sheet title      | `text-base font-medium`                     | `Sheet.Title` (stock)                               |
+| UI text          | `text-sm`                                   | Rows, buttons, form labels                          |
+| Meta             | `text-xs`                                   | Timestamps, captions, badges                        |
+| Message body     | `text-body` (15px / 1.5)                    | Chat transcript only                                |
+| Code             | `text-code`                                 | Code blocks, ids, tool names                        |
 
-- **Nothing below 11px; body text never below 14px; touch inputs at least 16px.** Why: legibility at arm's length. Check: `review`.
-- **Text sizes come from the type-scale tokens in `src/app.css` (`text-body`, `text-ui`, `text-meta`, `text-tab`, `text-code`) or Tailwind's rem sizes.** `scripts/check-tokens.ts` rejects `text-[Npx]`.
+- **Nothing below 12px (`text-xs`); body text never below 14px.** `text-lg` and larger are reserved for markdown headings and empty-state lines. Why: legibility at arm's length, and one heading scale across screens. Check: `review`.
+- **Text sizes use Tailwind's stock sizes (`text-xs`, `text-sm`, `text-base`) or the transcript tokens in `src/app.css` (`text-body`, `text-code`).** Stock class names let copied shadcn-svelte code work unchanged. `scripts/check-tokens.ts` rejects `text-[Npx]`.
 - **Text sizes use `rem`, never `px`.** Why: with `<meta name="text-scale" content="scale">` (already in `app.html`) the root font size follows the OS text-size setting in browsers that support it, but only `rem`/`em` text scales ([MDN text-scale](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/text-scale)); WCAG 1.4.4 Resize Text. Check: `phone` at the largest system font size; nothing clips or overlaps.
 - **Sentence case everywhere; no Title Case, no ALL CAPS labels.** Why: easier to read, and matches the rest of the app. Check: `review`.
 
 ### Spacing and density
 
-- **Use a 4px spacing grid.** Shared screen content owns 16px phone gutters and its desktop measure. Interactive touch rows retain 48px targets. Chat keeps 16px between messages. Why: compact painted controls do not require small hit areas. Check: `shot`.
+- **Use the block rhythm on a 4px grid.** `Page.Body` owns `p-4 md:p-6` and `gap-4 md:gap-6`. Content is centered at `max-w-3xl` (`reading`, the default); dense lists opt into `full`. Sections use `gap-2` between heading and content. Chat keeps 16px between messages. Why: this matches shadcn-svelte sidebar-10/15 and dashboard-01, so copied block code needs no translation. Check: `shot` at 412 and 1280.
+- **Headers share one height.** The navigation, inset and inspector headers use `h-(--header-height)` (56px, defined in `src/app.css`). Why: header bottoms align into one line across panes. Check: `shot` at 1280 with the inspector open.
 - **Use one content column on phones.** Desktop uses the shell's container-based pane layout and aligned metadata columns where useful. Why: each layout supports its available space. Check: `shot` at 412 and 1280.
 - **Keep layout dimensions in shared components.** Why: per-screen widths and gutters drift when each caller repeats them. Check: `review`, `shot`: screen wrappers own sizing and scroll policy; content does not add competing outer widths or gutters.
 - **Align visible content edges.** Why: a header or back control with unexplained inset looks detached from its content. Check: `shot` at 320px, 412px, and desktop: compare text and icon edges, not only control bounding boxes.
 - **Line length of chat text at most ~70 characters on desktop.** Why: long lines are hard to track. Check: `shot` at 1280.
+
+### Breakpoints
+
+| Decision              | Rule                                       | Source                       |
+| --------------------- | ------------------------------------------ | ---------------------------- |
+| Persistent navigation | Docked left navigation at 768px and wider  | `md`, `MOBILE_BREAKPOINT`    |
+| Persistent inspector  | Docked right inspector at 1024px and wider | `lg`, `INSPECTOR_BREAKPOINT` |
+| Input sizing          | Hit areas and navigation row heights       | `any-pointer-coarse:`        |
+
+- **Never use width for input sizing; never use pointer for layout.** Width breakpoints decide which panes are docked; `any-pointer-coarse:` decides hit areas and row heights. Any coarse pointer keeps touch sizing, including on mixed-input devices. Why: a narrow desktop window still has a mouse, and a wide tablet still has touch. Check: `review`; `pw` with a narrow fine-pointer context and a wide touch context.
+- **Scripts read breakpoints from `src/lib/ui/breakpoints.ts`.** CSS uses Tailwind's `md` and `lg`, which have the same values. Why: one source for every width decision made in code. Check: `review`.
 
 ### Dark and light
 
@@ -327,7 +338,7 @@ The push payload is `{ title, body, url, tag? }`; the service worker shows it, a
 
 ### Shared component patterns
 
-Use the existing primitive before adding feature-specific styles. Linear informs density, alignment, and restraint. It does not supply a pixel specification for this app.
+Reference first: check the shadcn-svelte nova component in `$lib/ui` (added with the CLI) and the named block on [shadcn-svelte blocks](https://shadcn-svelte.com/blocks) (sidebar-07, sidebar-10, sidebar-15, sidebar-16, dashboard-01) before writing layout. shadcn-svelte nova supplies the pixel specification. Linear informs restraint, alignment, and density. Use the existing primitive before adding feature-specific styles.
 
 #### Linear patterns we follow
 
@@ -348,40 +359,35 @@ Where the app departs:
 - **No gesture- or key-only actions.** Space-to-peek and swipe-to-delete need a visible control here. Rule: "No gesture-only actions".
 - **No single-key decisions on approvals.** Focus lands on the request heading, never on Approve. Rule: approval cards.
 
-| Intent                 | Shared implementation                                                         | Caller responsibility                                                                                                                    |
-| ---------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Normal action          | [Button](../src/lib/ui/button/button.svelte)                                  | Choose the action, variant, accessible name, and disabled/pending state. Use intrinsic width.                                            |
-| Prominent decision     | `Button size="lg"`                                                            | Reserve the larger face for a deliberate approval, composer, or sheet action. Do not use it for routine Add, Edit, Retry, or pagination. |
-| Screen geometry        | [ScreenContent](../src/lib/ui/screen/screen-content.svelte)                   | Choose `measure="management"` (default), `reading`, or `wide`. Use `embedded` inside an existing content region.                         |
-| Repeated collections   | [ListScreen](../src/lib/ui/screen/list-screen.svelte)                         | Supply sections, row content, search, state, and actions. Let the wrapper own outer spacing.                                             |
-| Remote state           | [ScreenState](../src/lib/ui/screen/screen-state.svelte)                       | Distinguish initial loading, empty collections, no matches, and cached refresh failures.                                                 |
-| Tabbed content         | [TabbedScreen](../src/lib/ui/screen/tabbed-screen.svelte)                     | Supply unpadded content. Preserve the pager's scroll ownership.                                                                          |
-| Section heading        | [Section](../src/lib/ui/section/section.svelte)                               | Supply the heading and optional supporting content. Do not repeat local heading typography and spacing.                                  |
-| Preference value       | [PreferenceRow](../src/lib/ui/preference/preference-row.svelte)               | Supply `label`, value/control children, and optional `actions`. Name each interactive control explicitly.                                |
-| Toggle preference      | [SwitchRow](../src/lib/ui/switch/switch-row.svelte)                           | Supply a clear label and current value. The whole row remains the touch target.                                                          |
-| Short exclusive choice | `RadioGroup.Root layout="segmented"` with `RadioGroup.Card variant="segment"` | Supply stable values and labels. Use radio semantics for a preference, not for navigation.                                               |
-| Secondary commands     | [ActionMenu](../src/lib/ui/menu/action-menu.svelte)                           | Group related actions. Open an editor only after the owner selects Edit or Rename.                                                       |
+| Intent                 | Shared implementation                                                      | Caller responsibility                                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Normal action          | [Button](../src/lib/ui/button/button.svelte)                               | Choose the action, variant, accessible name, and disabled/pending state. Use intrinsic width.                                                  |
+| Prominent decision     | `Button size="lg"`                                                         | Reserve the larger face for sheet and approval decisions. Do not use it for routine Add, Edit, Retry, or pagination.                           |
+| Page anatomy           | `Page.Header`, `Page.Intro`, `Page.Body`                                   | Header: the `h1` title and `ms-auto` actions at `--header-height`. Intro: an optional description. Body: choose `reading` (default) or `full`. |
+| Repeated collections   | [ListScreen](../src/lib/ui/screen/list-screen.svelte)                      | Supply sections, row content, search, state, and actions. Let the wrapper own outer spacing.                                                   |
+| Remote state           | [ScreenState](../src/lib/ui/screen/screen-state.svelte)                    | Distinguish initial loading, empty collections, no matches, and cached refresh failures.                                                       |
+| Tabbed content         | [TabbedScreen](../src/lib/ui/screen/tabbed-screen.svelte)                  | Supply unpadded content. Preserve the pager's scroll ownership.                                                                                |
+| Section heading        | [Section](../src/lib/ui/section/section.svelte)                            | Supply the heading and optional supporting content. Do not repeat local heading typography and spacing.                                        |
+| List row               | [Item](../src/lib/ui/item)                                                 | Fill its media, title, description, and actions slots. Use `size="sm"` for dense lists.                                                        |
+| Form field             | `Field` with `FieldLabel`, `FieldDescription`, `FieldError`                | Keep the label visible and attach errors to their field.                                                                                       |
+| Preference value       | `Field orientation="horizontal"`                                           | Supply the label, value or control, and optional actions. Name each interactive control explicitly.                                            |
+| Toggle preference      | `FieldLabel` wrapping `Field orientation="horizontal"` with stock `Switch` | Supply a clear label and current value. The label row receives the tap.                                                                        |
+| Short exclusive choice | `ToggleGroup`                                                              | Supply stable values and labels. Use it for a preference, not for navigation.                                                                  |
+| Navigation             | `Sidebar` (`SidebarMenuButton`, `SidebarGroupLabel`, `SidebarMenuAction`)  | Follow the shell geometry in the [channel rules](channel-interaction-rules.md#shell-sizing-rules).                                             |
+| Secondary commands     | [ActionMenu](../src/lib/ui/menu/action-menu.svelte)                        | Group related actions. Open an editor only after the owner selects Edit or Rename.                                                             |
 
-`ScreenContent` uses left-aligned `max-w-4xl` content for `management`.
-The `reading` and `wide` measures center their content at `max-w-2xl` and `max-w-3xl`.
+`Page.Body` centers content at `max-w-3xl` for `reading` and spans the inset for `full`.
 It owns gutters and section rhythm. Embedded content adds no competing outer geometry.
 Chat transcripts, the workspace shell, and tab pagers retain their specialized scrolling layouts.
 
 The normal button uses 14px medium labels, shared corners, a short color transition, and a stationary press state.
-Its non-interactive face never owns focus or events. The outer control owns the full hit area, semantics, disabled state, and focus ring.
-`size="action"` and `size="compact"` remain aliases for the default treatment. New callers can omit the size.
-The `desktop-pointer` variant requires a wide viewport, hover, a fine primary pointer, and no coarse pointer.
-Do not substitute a width breakpoint for this input check.
-
-Use the default compact switch treatment for preferences. Its visible track is 36×20px inside an accessible row.
-Keep mobile input text at least 16px and input targets at least 48px.
-The shared `Input` uses 48px height and 16px text for touch, then 32px height and 14px text for desktop fine pointers.
+Button sizes are stock: `xs` 24px, `sm` 28px, default 32px, `lg` 36px; icon sizes are 24, 28, 32 and 36px.
+Input, Textarea and Switch are stock nova. Input is `h-8`, with 16px text below `md`.
+Every control size carries an `any-pointer-coarse:after:` hit box reaching 48px.
 Small icon glyphs do not justify small touch targets. Label every icon-only action.
-`Button size="icon-lg"` retains a 48px target on all inputs for search and sheet-close controls.
-Its painted face remains compact. Shell navigation retains its documented geometry in the channel rules.
 
-Use `PreferenceRow` to align labels, values, and optional actions.
-Its label is display text, not an automatic form label. Give its input or radio group an accessible name.
+Use a horizontal `Field` to align labels, values, and optional actions.
+Give each input or option group an accessible name through `FieldLabel` or `aria-label`.
 Use `Section title="…"` for related content, with optional `description`, `icon`, `count`, or `aside`.
 Use `tone="list"` for quieter collection headings. Section counts are decorative, not a replacement for meaningful text.
 Use on-demand editors with Save and Cancel for routine preferences.
@@ -395,14 +401,15 @@ Workspace destinations use global navigation. Detail and creation pages link bac
 
 Before extracting another primitive:
 
+1. Check whether shadcn-svelte ships it (the component list and the blocks). Add it with the CLI first.
 1. Find repeated intent in existing callers. Do not abstract a single unusual layout.
-2. Put domain-free geometry, states, and interaction defaults in `ui/`.
-3. Keep data fetching, domain labels, and mutations in the feature.
-4. Migrate the matching callers and remove their repeated classes.
-5. Document the contract here and add regression coverage for behavior that can break.
+1. Put domain-free geometry, states, and interaction defaults in `ui/`.
+1. Keep data fetching, domain labels, and mutations in the feature.
+1. Migrate the matching callers and remove their repeated classes.
+1. Document the contract here and add regression coverage for behavior that can break.
 
 Check: `review` rejects repeated outer gutters, per-page button heights, descendant-selector styling of shared controls, and unexplained full-width actions.
-Check: `pw` measures the actual target and `data-slot="button-face"` separately, including a click in the unpainted touch padding.
+Check: `pw` hit probe (`e2e/hit-probe.ts`) on every changed control in a touch context.
 
 ### Tabs, swipes, and scroll ownership
 
@@ -414,7 +421,7 @@ Check: `pw` measures the actual target and `data-slot="button-face"` separately,
 - **Keep content stable during motion.** Commit filter requests after the destination panel settles. Keep loaded panels mounted during background refreshes. Do not rebuild the pager when text, content height, or keyboard height changes.
 - **Recover interrupted gestures.** When the app loses focus or becomes hidden, release the gesture and align the committed panel. Do not leave the pager between tabs after an interrupted touch.
 - **Keep focus within its intended area.** Reveal selected tabs through the tab bar's scroll offset. Do not use `scrollIntoView()` to move ancestor containers. Use `preventScroll` when keyboard navigation moves focus.
-- **Keep spacing consistent.** `TabbedScreen` applies 16px content gutters and 16px space below the tab border. Supply lead and panel content without outer padding. Use `wide` for detailed desktop content. Keep padding inside cards.
+- **Keep spacing consistent.** `TabbedScreen` uses the `Page.Body` padding and the stock Tabs `gap-2` between the tab list and its content. Line-variant triggers keep the stock height, plus `any-pointer-coarse:h-10`. Supply lead and panel content without outer padding. Use `full` for detailed desktop content. Keep padding inside cards.
 - **Keep secondary buttons within content.** Give pagination and optional tracking buttons their content width. Keep optional MCP tracking controls below the Tools list. Do not change panel height through a footer that appears on one tab.
 - **Keep other gestures available.** Preserve vertical scrolling, text selection, text input, and horizontal code scrolling. Reserve the screen edges for the drawer and system navigation.
 
@@ -460,22 +467,22 @@ Verification covers row positions before and after delayed refreshes. It also co
 
 Target: WCAG 2.2 AA. The criteria that matter for this app, and how each is checked:
 
-| Criterion                               | Where it bites here                                        | Check                          |
-| --------------------------------------- | ---------------------------------------------------------- | ------------------------------ |
-| 1.1.1 Non-text Content (A)              | Icon-only buttons (send, back, copy, overflow) need a name | `axe`, `check`                 |
-| 1.3.1 Info and Relationships (A)        | Message list is a list; approval card is a labeled region  | `axe`, `review`                |
-| 1.4.1 Use of Color (A)                  | Status pills, diff lines                                   | `review`                       |
-| 1.4.3 / 1.4.11 Contrast (AA)            | Muted text, `*-soft` pills, borders, both themes           | `axe` light + dark             |
-| 1.4.4 Resize Text (AA)                  | Android font scaling                                       | `phone`                        |
-| 1.4.10 Reflow (AA)                      | Code, long URLs, tables at 320px                           | `pw` reflow                    |
-| 2.1.1 Keyboard (A)                      | Approval tabs, tool rows, sheets on desktop                | `review`, manual keyboard pass |
-| 2.2.1 Timing Adjustable (A)             | Approval cards and toasts that need action never expire    | `review`                       |
-| 2.4.3 Focus Order / 2.4.7 Focus Visible | Sheets trap and return focus; `:focus-visible` ring stays  | manual keyboard pass           |
-| 2.4.11 Focus Not Obscured (AA)          | Sticky composer vs focused items                           | `phone`, `scroll-padding`      |
-| 2.5.7 Dragging Movements (AA)           | Swipe actions need a button alternative                    | `review`                       |
-| 2.5.8 Target Size (AA)                  | 24px floor; this app uses 48px for touch                   | `axe` + `pw` 48px assertion    |
-| 4.1.2 Name, Role, Value (A)             | Custom tabs, `div` dialogs, switches                       | `axe`, `check`                 |
-| 4.1.3 Status Messages (AA)              | Delivery states, "Reconnecting", "Agent replied"           | `review` of `role="status"`    |
+| Criterion                               | Where it bites here                                                                                                    | Check                                |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| 1.1.1 Non-text Content (A)              | Icon-only buttons (send, back, copy, overflow) need a name                                                             | `axe`, `check`                       |
+| 1.3.1 Info and Relationships (A)        | Message list is a list; approval card is a labeled region                                                              | `axe`, `review`                      |
+| 1.4.1 Use of Color (A)                  | Status pills, diff lines                                                                                               | `review`                             |
+| 1.4.3 / 1.4.11 Contrast (AA)            | Muted text, `*-soft` pills, borders, both themes                                                                       | `axe` light + dark                   |
+| 1.4.4 Resize Text (AA)                  | Android font scaling                                                                                                   | `phone`                              |
+| 1.4.10 Reflow (AA)                      | Code, long URLs, tables at 320px                                                                                       | `pw` reflow                          |
+| 2.1.1 Keyboard (A)                      | Approval tabs, tool rows, sheets on desktop                                                                            | `review`, manual keyboard pass       |
+| 2.2.1 Timing Adjustable (A)             | Approval cards and toasts that need action never expire                                                                | `review`                             |
+| 2.4.3 Focus Order / 2.4.7 Focus Visible | Sheets trap and return focus; `:focus-visible` ring stays                                                              | manual keyboard pass                 |
+| 2.4.11 Focus Not Obscured (AA)          | Sticky composer vs focused items                                                                                       | `phone`, `scroll-padding`            |
+| 2.5.7 Dragging Movements (AA)           | Swipe actions need a button alternative                                                                                | `review`                             |
+| 2.5.8 Target Size (AA)                  | 24px floor; invisible 48px coarse-pointer hit boxes (at least 40px exclusive in stock-gap rows, 48px in decision rows) | `axe` `target-size` + `pw` hit probe |
+| 4.1.2 Name, Role, Value (A)             | Custom tabs, `div` dialogs, switches                                                                                   | `axe`, `check`                       |
+| 4.1.3 Status Messages (AA)              | Delivery states, "Reconnecting", "Agent replied"                                                                       | `review` of `role="status"`          |
 
 ### axe setup
 
@@ -529,7 +536,7 @@ Capture each screen that changed in every state that applies, at 412x915 unless 
 
 A UX bug blocks when any of these is true:
 
-- A check in this doc fails (axe violation, a touch target under 48px without a documented exception, overflow at 320px, the scroll-jank test).
+- A check in this doc fails (axe violation, a target under 24px anywhere or a coarse-pointer hit area under 44px without a documented exception, overflow at 320px, the scroll-jank test).
 - Data loss: a typed message, a draft edit, or a pending approval can disappear without the user choosing it.
 - A blocking wait, failure, or required action has no visible feedback. Cached background refreshes can remain quiet.
 - Back does the wrong thing (exits the app, skips a screen, leaves an overlay open).
@@ -567,6 +574,7 @@ Record untested device behavior explicitly. Do not describe an automated pass as
 
 ## Sources
 
+- Targets: [WCAG 2.5.8 Target Size (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html), [Apple HIG accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility), [Tailwind pointer variants](https://tailwindcss.com/docs/hover-focus-and-other-states#pointer-and-any-pointer), [shadcn-svelte blocks](https://shadcn-svelte.com/blocks)
 - Android: [API defaults, 48dp targets](https://developer.android.com/develop/ui/compose/accessibility/api-defaults), [Touch target size](https://support.google.com/accessibility/android/answer/7101858)
 - Loading: [Apple loading guidance](https://developer.apple.com/design/human-interface-guidelines/loading), [NN/g skeleton and progress guidance](https://www.nngroup.com/articles/skeleton-screens/), [SWR first-load and refresh states](https://swr.vercel.app/docs/advanced/understanding)
 - Material 3: [Easing and duration tokens](https://m3.material.io/styles/motion/easing-and-duration/tokens-specs)
