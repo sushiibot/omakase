@@ -20,6 +20,26 @@ test('connector tool changes are informational and the tracking snapshot is opti
 	await expect(page.getByText('Snapshot of 5 tools saved by you.')).toBeVisible();
 });
 
+test('connector rows prioritize recovery and keep full addresses in details', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await page.goto('/connectors');
+	const attention = page.getByRole('region', { name: 'Needs attention', exact: true });
+	await expect(attention.getByRole('link', { name: /Calendar/ })).toBeVisible();
+	await expect(attention).not.toContainText('Code host');
+	const calendar = attention.getByRole('link', { name: /Calendar/ });
+	await expect(calendar).toContainText('mcp.calendar.example');
+	await expect(calendar).not.toContainText('https://');
+	await calendar.click();
+	await expect(page.getByText('https://mcp.calendar.example/mcp', { exact: true })).toBeVisible();
+	await page.getByRole('link', { name: 'Sign in', exact: true }).click();
+	await expect(page.getByRole('textbox', { name: 'Server address' })).toHaveValue(
+		'https://mcp.calendar.example/mcp'
+	);
+});
+
 test('adding a server by URL walks address, sign-in and paste-back', async ({ page, context }) => {
 	await fixtureApp(context);
 	await page.goto('/connectors');
@@ -113,7 +133,7 @@ test('Fastmail token connection can disconnect, reconnect and remove its credent
 	await expect(page.getByText('Connected. The agent can use these tools')).toBeVisible();
 	await page.getByRole('button', { name: 'Connection actions', exact: true }).click();
 	await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
-	await expect(page.getByText('Sign in again', { exact: true })).toBeVisible();
+	await expect(page.getByText('Disconnected', { exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Connection actions', exact: true }).click();
 	await expect(page.getByRole('button', { name: 'Disconnect', exact: true })).toHaveCount(0);
 	await page.getByRole('button', { name: 'Reconnect', exact: true }).click();
@@ -336,7 +356,12 @@ for (const hasTouch of [false, true]) {
 			const bounds = await add.boundingBox();
 			expect(bounds!.width).toBeLessThan(260);
 			expect(bounds!.height).toBe(hasTouch ? 48 : 36);
-			await add.click();
+			await expect(add.locator('[data-slot="button-face"]')).toHaveCSS(
+				'height',
+				hasTouch ? '40px' : '36px'
+			);
+			// The invisible touch padding must activate the control too.
+			await add.click(hasTouch ? { position: { x: 12, y: 2 } } : undefined);
 			await expect(page.getByRole('link', { name: 'Back to Connectors' })).toBeVisible();
 			const next = await page.getByRole('button', { name: 'Continue', exact: true }).boundingBox();
 			expect(next!.width).toBeLessThan(200);

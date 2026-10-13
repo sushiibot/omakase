@@ -443,7 +443,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 			await page.goto(path);
 			if (path === '/settings') {
 				await expect(page.getByTestId('login')).toBeVisible();
-				await expect(page.getByLabel('Your name')).toHaveValue('Sam');
+				await expect(page.getByTestId('owner-name')).toHaveText('Sam');
 			} else await expect(page.getByText('Say hi to your agent.')).toBeVisible();
 
 			expect(await axe(page)).toEqual([]);
@@ -461,7 +461,8 @@ test('settings saves and clears the name the agent calls you', async ({ page, co
 	const { calls } = await mockApi(context);
 	await stubPush(page);
 	await page.goto('/settings');
-	const field = page.getByLabel('Your name');
+	await page.getByRole('button', { name: 'Edit your name' }).click();
+	const field = page.getByLabel('Your name', { exact: true });
 	await expect(field).toHaveValue('Sam');
 	const save = page.getByRole('button', { name: 'Save name' });
 	await expect(save).toBeDisabled();
@@ -473,21 +474,82 @@ test('settings saves and clears the name the agent calls you', async ({ page, co
 		calls.filter((c) => c.method === 'POST' && c.path === '/api/settings/owner-name');
 	expect(JSON.parse(posts().at(-1)!.body!)).toEqual({ name: 'Alex' });
 	expect(posts().at(-1)!.contentType).toBe('application/json');
+	await expect(field).toHaveCount(0);
+	await expect(page.getByTestId('owner-name')).toHaveText('Alex');
+	await expect(page.getByRole('button', { name: 'Edit your name' })).toBeFocused();
+	await page.getByRole('button', { name: 'Edit your name' }).click();
 	await expect(field).toHaveValue('Alex');
 	await expect(save).toBeDisabled();
 
 	await page.getByRole('button', { name: 'Clear name' }).click();
 	await expect(page.getByText('Cleared. The agent calls you “the user”.')).toBeVisible();
 	expect(JSON.parse(posts().at(-1)!.body!)).toEqual({ name: null });
-	await expect(field).toHaveValue('');
+	await expect(field).toHaveCount(0);
+	await expect(page.getByTestId('owner-name')).toHaveText('Not set');
 	await expect(page.getByRole('button', { name: 'Clear name' })).toHaveCount(0);
 });
+
+test('name editing is disclosed on request and cancel does not save', async ({ page, context }) => {
+	const { calls } = await mockApi(context);
+	await stubPush(page);
+	await page.goto('/settings');
+	await expect(page.getByTestId('owner-name')).toHaveText('Sam');
+	await expect(page.getByRole('textbox', { name: 'Your name' })).toHaveCount(0);
+	const edit = page.getByRole('button', { name: 'Edit your name' });
+	await edit.click();
+	const field = page.getByRole('textbox', { name: 'Your name' });
+	await expect(field).toBeFocused();
+	await field.fill('Uncommitted name');
+	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(edit).toBeFocused();
+	await expect(page.getByTestId('owner-name')).toHaveText('Sam');
+	expect(calls.filter((c) => c.method === 'POST' && c.path === '/api/settings/owner-name')).toEqual(
+		[]
+	);
+	await edit.click();
+	await expect(field).toHaveValue('Sam');
+	for (const width of [412, 320]) {
+		await page.setViewportSize({ width, height: 800 });
+		expect(await horizontalOverflow(page)).toEqual([]);
+		expect(await smallTargets(page)).toEqual([]);
+	}
+	expect(await axe(page)).toEqual([]);
+});
+
+for (const action of ['Save name', 'Clear name']) {
+	test(`a delayed ${action} preserves a newer draft`, async ({ page, context }) => {
+		await mockApi(context);
+		await stubPush(page);
+		let release!: () => void;
+		const responseReady = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await context.route('**/api/settings/owner-name', async (route) => {
+			if (route.request().method() !== 'POST') return route.fallback();
+			const { name } = route.request().postDataJSON();
+			await responseReady;
+			await route.fulfill({ json: { name } });
+		});
+		await page.goto('/settings');
+		await page.getByRole('button', { name: 'Edit your name' }).click();
+		const field = page.getByRole('textbox', { name: 'Your name' });
+		await field.fill('First draft');
+		await page.getByRole('button', { name: action, exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+		await field.fill('Newer draft');
+		release();
+		await expect(page.getByRole('button', { name: 'Save name', exact: true })).toBeEnabled();
+		await expect(field).toHaveValue('Newer draft');
+		await expect(page.getByRole('button', { name: 'Edit your name' })).toHaveCount(0);
+	});
+}
 
 test('a refused name keeps what you typed and says why', async ({ page, context }) => {
 	await mockApi(context, { nameStatus: 422 });
 	await stubPush(page);
 	await page.goto('/settings');
-	const field = page.getByLabel('Your name');
+	await page.getByRole('button', { name: 'Edit your name' }).click();
+	const field = page.getByLabel('Your name', { exact: true });
 	await expect(field).toHaveValue('Sam');
 	await field.fill('Alex');
 	await page.getByRole('button', { name: 'Save name' }).click();
@@ -503,7 +565,8 @@ test('a failed clear keeps the saved name in the field', async ({ page, context 
 	await mockApi(context, { nameStatus: 500 });
 	await stubPush(page);
 	await page.goto('/settings');
-	const field = page.getByLabel('Your name');
+	await page.getByRole('button', { name: 'Edit your name' }).click();
+	const field = page.getByLabel('Your name', { exact: true });
 	await expect(field).toHaveValue('Sam');
 	await page.getByRole('button', { name: 'Clear name' }).click();
 	await expect(page.getByRole('alert')).toContainText("Couldn't save your name.");

@@ -3,8 +3,11 @@
 	import { cn, tv, type WithElementRef } from '$lib/utils.js';
 	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
 
+	const buttonBase =
+		"focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 rounded-lg border border-transparent bg-clip-padding text-sm font-medium focus-visible:ring-3 aria-invalid:ring-3 active:not-aria-[haspopup]:translate-y-px [&_svg:not([class*='size-'])]:size-4 group/button inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-all outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0";
+
 	export const buttonVariants = tv({
-		base: "focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 rounded-lg border border-transparent bg-clip-padding text-sm font-medium focus-visible:ring-3 aria-invalid:ring-3 active:not-aria-[haspopup]:translate-y-px [&_svg:not([class*='size-'])]:size-4 group/button inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-all outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+		base: buttonBase,
 		variants: {
 			variant: {
 				default: 'bg-primary text-primary-foreground hover:bg-primary/80',
@@ -19,6 +22,8 @@
 				link: 'text-primary underline-offset-4 hover:underline'
 			},
 			size: {
+				// A real touch target surrounds a smaller painted face.
+				compact: 'h-12 min-w-12 p-0 desktop-pointer:h-9 desktop-pointer:min-w-9',
 				// Management actions stay touch-friendly and become denser for desktop pointers.
 				action:
 					'h-12 min-w-12 gap-2 px-4 text-sm font-medium desktop-pointer:h-9 desktop-pointer:min-w-9 desktop-pointer:px-3',
@@ -63,30 +68,55 @@
 		children,
 		...restProps
 	}: ButtonProps = $props();
+
+	const controlClass = $derived(
+		size === 'compact'
+			? cn(buttonBase, 'h-12 min-w-12 p-0 desktop-pointer:h-9 desktop-pointer:min-w-9', className)
+			: cn(buttonVariants({ variant, size }), className)
+	);
+	const compactHover = {
+		default: 'group-hover/button:bg-primary/80',
+		outline:
+			'group-hover/button:bg-muted group-hover/button:text-foreground dark:group-hover/button:bg-input/50',
+		secondary: 'group-hover/button:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]',
+		ghost: 'group-hover/button:bg-muted dark:group-hover/button:bg-muted/50',
+		destructive: 'group-hover/button:bg-destructive/20 dark:group-hover/button:bg-destructive/30',
+		link: 'group-hover/button:underline'
+	};
 </script>
+
+{#snippet content()}
+	{#if size === 'compact'}
+		<span
+			data-slot="button-face"
+			class={cn(
+				buttonVariants({ variant, size: 'action' }),
+				'justify-[inherit] pointer-events-none h-10 w-full min-w-12 px-3 desktop-pointer:h-9 desktop-pointer:min-w-9',
+				compactHover[variant]
+			)}
+		>
+			{@render children?.()}
+		</span>
+	{:else}
+		{@render children?.()}
+	{/if}
+{/snippet}
 
 {#if href}
 	<a
 		bind:this={ref}
 		data-slot="button"
-		class={cn(buttonVariants({ variant, size }), className)}
+		class={controlClass}
 		href={disabled ? undefined : href}
 		aria-disabled={disabled}
 		role={disabled ? 'link' : undefined}
 		tabindex={disabled ? -1 : undefined}
 		{...restProps}
 	>
-		{@render children?.()}
+		{@render content()}
 	</a>
 {:else}
-	<button
-		bind:this={ref}
-		data-slot="button"
-		class={cn(buttonVariants({ variant, size }), className)}
-		{type}
-		{disabled}
-		{...restProps}
-	>
-		{@render children?.()}
+	<button bind:this={ref} data-slot="button" class={controlClass} {type} {disabled} {...restProps}>
+		{@render content()}
 	</button>
 {/if}
