@@ -50,7 +50,9 @@
 			<span class="text-meta text-muted-foreground">Approval needed</span>
 		</div>
 		{#if push}
-			<div class="my-3 flex min-w-0 flex-col gap-2 [overflow-wrap:anywhere]">
+			<div
+				class="my-3 flex min-w-0 flex-col gap-2 [overflow-wrap:anywhere] any-pointer-coarse:mb-6"
+			>
 				<p class="font-medium">{push.destination}</p>
 				<p class="text-body">{push.summary}</p>
 				<details class="group/commit">

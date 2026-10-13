@@ -142,7 +142,7 @@
 					<p role="status" class="text-sm text-muted-foreground">Sending your answer…</p>
 				{:else}
 					<form
-						class="flex gap-2 any-pointer-coarse:mt-1"
+						class="flex gap-2 any-pointer-coarse:mt-6 any-pointer-coarse:gap-6"
 						onsubmit={(e) => {
 							e.preventDefault();
 							if (text.trim()) onanswer?.(text.trim());

@@ -36,6 +36,7 @@
 		state: 'pending'
 	});
 	const confirmation = { tool: 'bash', input: 'rm -rf build' };
+	const pushInput = `owner/repo → main\n${'abc1234'.padEnd(40, '0')}\nFix the login redirect`;
 </script>
 
 <div class="flex flex-col gap-6 p-4">
@@ -74,6 +75,13 @@
 			onstop={log('voice:end')}
 			ondetails={log('voice:details')}
 			oninterrupt={log('voice:interrupt')}
+		/>
+	</div>
+	<div data-surface-probe="push">
+		<ToolConfirmation
+			ask={ask('p1', ['No', 'Yes'])}
+			confirmation={{ tool: 'github_push', input: pushInput }}
+			onanswer={(a) => fired.push(`push:${a}`)}
 		/>
 	</div>
 	<div data-surface-probe="ask">

@@ -180,3 +180,95 @@ test('an unsent message keeps Delete and Retry send apart on touch', async ({ pa
 	await expectNearerOrNothing(copy, remove);
 	await expectNearerOrNothing(remove, retry);
 });
+
+/** Real touchscreen taps, which Chromium's touch adjustment carries a few px past any hit area. */
+async function tapAll(page: Page, points: { x: number; y: number }[], reset?: () => Promise<void>) {
+	for (const p of points) {
+		await page.touchscreen.tap(p.x, p.y);
+		await reset?.();
+	}
+}
+
+const closeDetails = (page: Page, probe: string) => () =>
+	page
+		.locator(`[data-surface-probe="${probe}"] details`)
+		.evaluateAll((all) => all.forEach((d) => ((d as HTMLDetailsElement).open = false)));
+
+test('real taps on and just below a disclosure never fire the decision under it', async ({
+	page
+}) => {
+	await surfaces(page);
+	for (const [probe, decision, fired] of [
+		['push', /^Deny$/, 'push:'],
+		['inline', /^Deny/, 'inline:']
+	] as const) {
+		const surface = page.locator(`[data-surface-probe="${probe}"]`);
+		const summary = surface.locator('summary').first();
+		await summary.scrollIntoViewIfNeeded();
+		const s = (await summary.boundingBox())!;
+		const d = (await surface.getByRole('button', { name: decision }).boundingBox())!;
+		const x = d.x + d.width / 2;
+		const ys = Array.from({ length: 12 }, (_, i) => s.y + s.height - 4 + i);
+		await tapAll(
+			page,
+			ys.map((y) => ({ x, y })),
+			closeDetails(page, probe)
+		);
+		await expect(page.locator('[data-fired]')).not.toContainText(fired);
+	}
+});
+
+test('real taps on the ask card answer field never send it or pick a chip', async ({ page }) => {
+	await surfaces(page);
+	const card = page.locator('[data-surface-probe="ask"]');
+	const input = card.getByRole('textbox', { name: 'Your own answer' });
+	await input.fill('Friday');
+	await input.scrollIntoViewIfNeeded();
+	const i = (await input.boundingBox())!;
+	const chip = (await card.getByRole('button', { name: 'Later this month' }).boundingBox())!;
+	const cy = i.y + i.height / 2;
+	// Inside the field near Send, and across the gap up to its middle.
+	const beside = Array.from({ length: 12 }, (_, n) => ({ x: i.x + i.width - 5 + n, y: cy }));
+	// Inside the field near the chips, and up to 16px above it.
+	const above = Array.from({ length: 18 }, (_, n) => ({
+		x: chip.x + chip.width / 2,
+		y: i.y + 1 - n
+	}));
+	await tapAll(page, [...beside, ...above]);
+	await expect(page.locator('[data-fired]')).not.toContainText('ask:');
+});
+
+test('real taps in the agent transcript never reach the header Stop', async ({ page, context }) => {
+	await fixtureApp(context);
+	const posts: string[] = [];
+	const agent = {
+		id: 'a-run',
+		machineId: 'pc',
+		machineName: 'Desktop',
+		rootId: 'code',
+		provider: 'codex',
+		title: 'Fix the login redirect',
+		conversationId: 'main',
+		remoteStatus: 'running',
+		createdAt: new Date().toISOString(),
+		updatedAt: new Date().toISOString()
+	};
+	const session = { status: 'running', attempts: 1, output: 'working', requests: [] };
+	await context.route('**/api/agents**', async (route) => {
+		const path = new URL(route.request().url()).pathname;
+		if (route.request().method() === 'POST') posts.push(path);
+		if (path === '/api/agents') return route.fulfill({ json: { agents: [agent] } });
+		return route.fulfill({ json: { agent, session } });
+	});
+	await page.goto('/agents/a-run');
+	const stop = page.getByRole('button', { name: 'Stop', exact: true });
+	await expect(stop).toBeVisible();
+	const header = (await page.locator('[data-slot="page-header"]').boundingBox())!;
+	const b = (await stop.boundingBox())!;
+	const x = b.x + b.width / 2;
+	await tapAll(
+		page,
+		Array.from({ length: 16 }, (_, n) => ({ x, y: header.y + header.height + 0.5 + n }))
+	);
+	expect(posts.filter((p) => p.endsWith('/stop'))).toEqual([]);
+});

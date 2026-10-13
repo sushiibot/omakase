@@ -189,8 +189,11 @@
 			</span>
 		{/snippet}
 		{#snippet actions()}
-			{#if live}<Button variant="outline" disabled={busy} onclick={() => void stop()}
-					><Square class="fill-current text-failed" />Stop</Button
+			{#if live}<Button
+					variant="outline"
+					class="any-pointer-coarse:after:bottom-0"
+					disabled={busy}
+					onclick={() => void stop()}><Square class="fill-current text-failed" />Stop</Button
 				>{/if}
 			<ActionMenu label="Agent actions">
 				{#snippet children(close)}
