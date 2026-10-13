@@ -7,6 +7,7 @@
 	let {
 		title,
 		level = 1,
+		media,
 		subtitle,
 		leading,
 		leadingClass,
@@ -17,6 +18,8 @@
 		title: string;
 		/** 2 for a pane header beside the page's own, such as an inspector. */
 		level?: 1 | 2;
+		/** Before the title, such as an avatar or status dot; the heading text stays `title`. */
+		media?: Snippet;
 		subtitle?: Snippet;
 		/** A drawer button or back link, followed by a separator. */
 		leading?: Snippet;
@@ -43,6 +46,9 @@
 			{@render leading()}
 			<Separator orientation="vertical" class="me-2 data-vertical:h-4 data-vertical:self-auto" />
 		</div>
+	{/if}
+	{#if media}
+		<div class="flex shrink-0 items-center">{@render media()}</div>
 	{/if}
 	<div class={cn('flex min-w-0 flex-col', breadcrumb && 'md:contents')}>
 		{#if level === 2}

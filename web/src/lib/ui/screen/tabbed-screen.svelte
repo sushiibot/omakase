@@ -29,6 +29,7 @@
 		| 'back'
 		| 'breadcrumb'
 		| 'level'
+		| 'media'
 		| 'headerClass'
 		| 'actions'
 		| 'banner'

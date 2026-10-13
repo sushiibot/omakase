@@ -13,6 +13,7 @@
 		back,
 		breadcrumb,
 		level,
+		media,
 		headerClass,
 		actions,
 		banner,
@@ -32,6 +33,7 @@
 		back?: ScreenBack;
 		breadcrumb?: Snippet;
 		level?: HeaderProps['level'];
+		media?: Snippet;
 		headerClass?: string;
 		actions?: Snippet;
 		/** Under the header, outside the scroll. */
@@ -66,6 +68,10 @@
 	});
 	// Footers that predate ScreenFooter bring their own border-t and px-4; the bar replaces both.
 	const legacyFooter = $derived(footerLayout === 'page' && !footerClaimed);
+	// Page layouts line toasts up with the body, like the footer.
+	const pageFrame = $derived(
+		footerLayout === 'page' ? cn('px-4 md:px-6', measureClass[measure]) : undefined
+	);
 </script>
 
 <ScreenHeader
@@ -75,11 +81,12 @@
 	{channelNavigation}
 	{breadcrumb}
 	{level}
+	{media}
 	{actions}
 	class={headerClass}
 />
 {#if toast && toastPosition === 'top'}
-	<div class="shrink-0 px-3 pt-3 @3xl:px-6">
+	<div class={pageFrame ? cn('shrink-0 pt-3', pageFrame) : 'shrink-0 px-3 pt-3 @3xl:px-6'}>
 		<div
 			role="status"
 			class="flex items-center gap-3 rounded-xl bg-foreground px-4 py-3 text-sm [overflow-wrap:anywhere] text-background shadow-lg"
@@ -109,12 +116,25 @@
 	)}
 >
 	{#if toast && toastPosition === 'bottom'}
-		<div
-			role="status"
-			class="absolute inset-x-3 bottom-full mb-3 flex items-center gap-3 rounded-xl bg-foreground px-4 py-3 text-sm [overflow-wrap:anywhere] text-background shadow-lg @3xl:right-auto @3xl:left-6 @3xl:w-96"
-		>
-			{@render toast()}
-		</div>
+		{#if pageFrame}
+			<div class="pointer-events-none absolute inset-x-0 bottom-full mb-3">
+				<div class={pageFrame}>
+					<div
+						role="status"
+						class="pointer-events-auto flex items-center gap-3 rounded-xl bg-foreground px-4 py-3 text-sm [overflow-wrap:anywhere] text-background shadow-lg md:w-96"
+					>
+						{@render toast()}
+					</div>
+				</div>
+			</div>
+		{:else}
+			<div
+				role="status"
+				class="absolute inset-x-3 bottom-full mb-3 flex items-center gap-3 rounded-xl bg-foreground px-4 py-3 text-sm [overflow-wrap:anywhere] text-background shadow-lg @3xl:right-auto @3xl:left-6 @3xl:w-96"
+			>
+				{@render toast()}
+			</div>
+		{/if}
 	{/if}
 	{#if footer && footerLayout === 'page'}
 		<!-- Classes only, never a branch: swapping branches would remount the footer that claimed it. -->
