@@ -42,7 +42,7 @@
 		"drift": "text-base below md like stock Input, so iOS does not zoom on focus (ux-guidelines.md#breakpoints)"
 	},
 	"radio-group": {
-		"drift": "segmented layout, a choice-card part used by settings, a coarse-pointer hit area on the item (taller only in horizontal groups), and aria-labelledby pointing at its labels because axe-core skips label text inside a role=group Field (ux-guidelines.md#shared-component-patterns)"
+		"drift": "segmented layout, a coarse-pointer hit area on the item (taller only in horizontal groups), and aria-labelledby pointing at its labels because axe-core skips label text inside a role=group Field (ux-guidelines.md#shared-component-patterns)"
 	},
 	"separator": {
 		"drift": "none"

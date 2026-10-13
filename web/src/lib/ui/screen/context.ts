@@ -13,8 +13,6 @@ const KEY = Symbol('screen');
 
 export interface ScreenContext {
 	readonly measure: PageMeasure;
-	/** A ScreenFooter lays itself out; returns the release for unmount. */
-	claimFooter(): () => void;
 }
 
 export function setScreenContext(ctx: ScreenContext) {

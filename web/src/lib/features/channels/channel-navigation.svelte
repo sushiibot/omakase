@@ -138,7 +138,7 @@
 					{#if !pending && channel.activity.running}<Spinner
 							role="img"
 							aria-label="Agent working"
-							class="text-muted-foreground motion-reduce:animate-none"
+							class="text-muted-foreground"
 						/>{/if}
 				</a>
 			{/snippet}

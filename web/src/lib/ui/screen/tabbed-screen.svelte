@@ -19,8 +19,6 @@
 		state,
 		hasContent = false,
 		children: panelContent,
-		// Accepted for old callers, never forwarded to Screen.
-		wide: _wide,
 		...screenProps
 	}: Pick<
 		ScreenProps,
@@ -40,8 +38,6 @@
 		label: string;
 		onchange?: (value: string) => void;
 		lead?: Snippet;
-		/** @deprecated Centers like `reading`; use `measure`. */
-		wide?: boolean;
 		measure?: PageMeasure;
 		state?: StateProps;
 		/** Keep the pager mounted while existing content refreshes. */

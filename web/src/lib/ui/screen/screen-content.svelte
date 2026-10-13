@@ -4,12 +4,6 @@
 	import { cn } from '$lib/utils';
 	import { getScreenContext } from './context';
 
-	type LegacyMeasure =
-		/** @deprecated Centers like `reading`. */
-		| 'management'
-		/** @deprecated Centers like `reading`. */
-		| 'wide';
-
 	const screen = getScreenContext();
 
 	let {
@@ -20,7 +14,7 @@
 	}: {
 		children: Snippet;
 		/** Defaults to the enclosing Screen's measure. */
-		measure?: PageMeasure | LegacyMeasure;
+		measure?: PageMeasure;
 		/** The containing screen already owns width and gutters. */
 		embedded?: boolean;
 		class?: string;
@@ -32,7 +26,7 @@
 		{@render children()}
 	</div>
 {:else}
-	<PageBody measure={measure === 'full' ? 'full' : 'reading'} class={cn('antialiased', className)}>
+	<PageBody {measure} class={cn('antialiased', className)}>
 		{@render children()}
 	</PageBody>
 {/if}

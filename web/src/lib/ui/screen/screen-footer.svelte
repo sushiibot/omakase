@@ -8,7 +8,6 @@
 	let { class: className, children }: { class?: string; children: Snippet } = $props();
 
 	const screen = getScreenContext();
-	$effect(() => screen?.claimFooter());
 </script>
 
 <div data-slot="screen-footer" class="border-t">

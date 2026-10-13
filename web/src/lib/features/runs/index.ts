@@ -14,4 +14,3 @@ export type {
 	RunStep,
 	RunSummary
 } from './types';
-export { default as BackgroundAgents } from './background-agents.svelte';

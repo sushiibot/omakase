@@ -56,18 +56,11 @@
 		children: Snippet;
 	} = $props();
 
-	let footerClaimed = $state(false);
 	setScreenContext({
 		get measure() {
 			return measure;
-		},
-		claimFooter() {
-			footerClaimed = true;
-			return () => (footerClaimed = false);
 		}
 	});
-	// Footers that predate ScreenFooter bring their own border-t and px-4; the bar replaces both.
-	const legacyFooter = $derived(footerLayout === 'page' && !footerClaimed);
 	// Page layouts line toasts up with the body, like the footer.
 	const pageFrame = $derived(
 		footerLayout === 'page' ? cn('px-4 md:px-6', measureClass[measure]) : undefined
@@ -109,12 +102,7 @@
 	<div class={stickToBottom ? 'shrink-0' : 'h-full'}>{@render children()}</div>
 </main>
 
-<div
-	class={cn(
-		'relative shrink-0 bg-background pb-(--safe-bottom) @3xl:pb-0 kb:pb-0',
-		legacyFooter && 'has-[[data-slot=screen-footer-legacy]>*]:border-t'
-	)}
->
+<div class="relative shrink-0 bg-background pb-(--safe-bottom) @3xl:pb-0 kb:pb-0">
 	{#if toast && toastPosition === 'bottom'}
 		{#if pageFrame}
 			<div class="pointer-events-none absolute inset-x-0 bottom-full mb-3">
@@ -136,17 +124,5 @@
 			</div>
 		{/if}
 	{/if}
-	{#if footer && footerLayout === 'page'}
-		<!-- Classes only, never a branch: swapping branches would remount the footer that claimed it. -->
-		<div
-			data-slot="screen-footer-legacy"
-			class={legacyFooter
-				? cn('px-4 *:border-t-0! *:px-0! md:px-6', measureClass[measure])
-				: undefined}
-		>
-			{@render footer()}
-		</div>
-	{:else}
-		{@render footer?.()}
-	{/if}
+	{@render footer?.()}
 </div>
