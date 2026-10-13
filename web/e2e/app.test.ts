@@ -347,12 +347,12 @@ test('denying the prompt shows the blocked help, and allowing it later re-enable
 	await toggle.click();
 	await expect(page.getByText('Turn notifications back on')).toBeVisible();
 	await expect(toggle).toBeDisabled();
-	await expect(toggle).toContainText('Blocked');
+	await expect(toggle).toHaveAccessibleDescription(/Blocked/);
 
 	await context.grantPermissions(['notifications']);
 	await expect(toggle).toBeEnabled();
 	await expect(page.getByText('Turn notifications back on')).toBeHidden();
-	await expect(toggle).toContainText('Off for this device');
+	await expect(toggle).toHaveAccessibleDescription(/Off for this device/);
 });
 
 test('without permission change events, coming back to the app re-checks the block', async ({
@@ -367,7 +367,7 @@ test('without permission change events, coming back to the app re-checks the blo
 	await page.goto('/settings');
 	const toggle = toggleOf(page);
 	await toggle.click();
-	await expect(toggle).toContainText('Blocked');
+	await expect(toggle).toHaveAccessibleDescription(/Blocked/);
 	await expect(toggle).toBeDisabled();
 
 	await context.grantPermissions(['notifications']);

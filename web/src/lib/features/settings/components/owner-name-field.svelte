@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { Button } from '$lib/ui/button';
+	import * as Field from '$lib/ui/field';
 	import { Input } from '$lib/ui/input';
-	import PreferenceRow from '$lib/ui/preference/preference-row.svelte';
 	import ScreenState, { type RemoteLike } from '$lib/ui/screen/screen-state.svelte';
+	import { Spinner } from '$lib/ui/spinner';
 	import { OWNER_NAME_MAX } from '../types';
 
 	let {
@@ -79,34 +79,34 @@
 
 {#snippet loading()}
 	<p class="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-		<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+		<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
 		Loading your name…
 	</p>
 {/snippet}
 
-<div class="py-2">
-	<ScreenState {remote} errorTitle="Couldn't load your name." {onretry} skeleton={loading}>
-		{#if !editing}
-			<PreferenceRow label="Your name">
-				<p class="text-sm [overflow-wrap:anywhere]" data-testid="owner-name">
+<ScreenState {remote} errorTitle="Couldn't load your name." {onretry} skeleton={loading}>
+	{#if !editing}
+		<Field.Field orientation="horizontal">
+			<Field.Content>
+				<Field.Title>Your name</Field.Title>
+				<Field.Description class="[overflow-wrap:anywhere]" data-testid="owner-name">
 					{current || 'Not set'}
-				</p>
-				{#snippet actions()}
-					<Button id="{uid}-edit" variant="outline" aria-label="Edit your name" onclick={openEditor}
-						>Edit</Button
-					>
-				{/snippet}
-			</PreferenceRow>
-		{:else}
-			<form
-				class="flex max-w-lg flex-col gap-3"
-				onsubmit={(e) => {
-					e.preventDefault();
-					if (dirty && !saving) submit(draft.trim() || null);
-				}}
+				</Field.Description>
+			</Field.Content>
+			<Button id="{uid}-edit" variant="outline" aria-label="Edit your name" onclick={openEditor}
+				>Edit</Button
 			>
-				<div class="flex flex-col gap-2">
-					<label for="{uid}-name" class="text-sm font-medium">Your name</label>
+		</Field.Field>
+	{:else}
+		<form
+			onsubmit={(e) => {
+				e.preventDefault();
+				if (dirty && !saving) submit(draft.trim() || null);
+			}}
+		>
+			<Field.Group>
+				<Field.Field data-invalid={failed || undefined}>
+					<Field.Label for="{uid}-name">Your name</Field.Label>
 					<Input
 						id="{uid}-name"
 						bind:value={draft}
@@ -117,15 +117,20 @@
 						aria-invalid={failed || undefined}
 						aria-describedby="{uid}-help{failed ? ` ${uid}-error` : ''}"
 					/>
-					<p id="{uid}-help" class="text-sm text-muted-foreground">
+					<Field.Description id="{uid}-help">
 						The agent calls you this from its next conversation. Leave it empty to be called “the
 						user”.
-					</p>
-				</div>
-				<div class="flex flex-wrap items-center gap-2">
+					</Field.Description>
+					{#if failed}
+						<p id="{uid}-error" role="alert" class="text-sm text-failed">
+							Couldn't save your name. {error}
+						</p>
+					{/if}
+				</Field.Field>
+				<Field.Field orientation="horizontal" class="flex-wrap">
 					<Button type="submit" disabled={!dirty || saving}>
 						{#if saving}
-							<LoaderCircle class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+							<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
 							Saving…
 						{:else}
 							Save name
@@ -153,18 +158,13 @@
 							Clear name
 						</Button>
 					{/if}
-				</div>
-				{#if failed}
-					<p id="{uid}-error" role="alert" class="text-sm text-failed">
-						Couldn't save your name. {error}
-					</p>
-				{/if}
-			</form>
-		{/if}
-		{#if save === 'saved' && !dirty}
-			<p role="status" class="text-sm text-muted-foreground">
-				{current ? 'Saved.' : 'Cleared. The agent calls you “the user”.'}
-			</p>
-		{/if}
-	</ScreenState>
-</div>
+				</Field.Field>
+			</Field.Group>
+		</form>
+	{/if}
+	{#if save === 'saved' && !dirty}
+		<p role="status" class="text-sm text-muted-foreground">
+			{current ? 'Saved.' : 'Cleared. The agent calls you “the user”.'}
+		</p>
+	{/if}
+</ScreenState>
