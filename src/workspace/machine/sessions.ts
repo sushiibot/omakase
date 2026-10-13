@@ -12,6 +12,7 @@ import {
   sessionRequest,
   SESSION_EVENT_FIELDS,
   type AnswerDecision,
+  type RequestDetail,
   type SessionRecord,
   type SessionSummary,
 } from "../../orchestration/machines/contracts.ts";
@@ -30,6 +31,8 @@ interface Active {
   finalPhase?: string;
   turnDone?: () => void;
   lastEventAt: number;
+  /** File changes Codex announced, by item id, so their approval can show what it changes. */
+  files: Map<string, FileChanges>;
 }
 const APPROVAL_DECISIONS: AnswerDecision[] = [
   "accept",
@@ -38,56 +41,112 @@ const APPROVAL_DECISIONS: AnswerDecision[] = [
   "cancel",
 ];
 const FINAL_MAX = 4000;
-/** Codex server requests that wait on the owner; anything else is refused. */
+const KEEP_FINISHED = 200;
+const COMMAND_MAX = 8000;
+const REASON_MAX = 300;
+type FileChanges = { path: string; change: string; diff: string }[];
+const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+const cut = (v: string | undefined, n: number) =>
+  v && v.length > n ? `${v.slice(0, n - 1)}…` : v;
+/**
+ * Codex server requests that wait on the owner; anything else is refused. The approved thing (command,
+ * host, files) leads and is kept whole; the model's own reason is cut short and labelled. When the
+ * approved thing is missing or too long to show, the only answer offered is to decline.
+ */
 function codexRequest(
   method: string,
   params: any,
-): { description: string; decisions: AnswerDecision[] } | undefined {
-  const text = (parts: unknown[], fallback: string) =>
-    parts
-      .filter((p) => typeof p === "string" && p)
+  files: Map<string, FileChanges>,
+):
+  | { description: string; decisions: AnswerDecision[]; detail: RequestDetail }
+  | undefined {
+  const reason = cut(str(params?.reason), REASON_MAX);
+  const describe = (lines: (string | undefined)[], fallback: string) =>
+    [...lines, reason ? `Agent's explanation: ${reason}` : undefined]
+      .filter(Boolean)
       .join("\n")
       .slice(0, 2000) || fallback;
-  if (
-    method === "item/commandExecution/requestApproval" ||
-    method === "item/fileChange/requestApproval"
-  )
+  if (method === "item/commandExecution/requestApproval") {
+    const kind = params?.kind === "writeStdin" ? "writeStdin" : "command";
+    const command = str(params?.command);
+    const host = str(params?.networkApprovalContext?.host);
+    const protocol = str(params?.networkApprovalContext?.protocol);
+    const cwd = str(params?.cwd);
+    const shown = (!!command && command.length <= COMMAND_MAX) || (!command && !!host);
     return {
-      description: text(
+      description: describe(
         [
-          params?.reason,
-          params?.command,
-          params?.cwd ? `Working folder: ${params.cwd}` : undefined,
-          params?.grantRoot
-            ? `Requested write access: ${params.grantRoot}`
+          host ? `Network access: ${host}${protocol ? ` (${protocol})` : ""}` : undefined,
+          command
+            ? `${kind === "writeStdin" ? "Write to a running terminal" : "Run"}: ${command}`
+            : undefined,
+          cwd ? `Working folder: ${cwd}` : undefined,
+        ],
+        "Codex requests permission for an action it did not describe.",
+      ),
+      decisions: shown ? APPROVAL_DECISIONS : ["decline"],
+      detail: {
+        kind,
+        ...(command && command.length <= COMMAND_MAX ? { command } : {}),
+        ...(cwd ? { cwd: cwd.slice(0, 2000) } : {}),
+        ...(host ? { host: host.slice(0, 500) } : {}),
+        ...(protocol ? { protocol: protocol.slice(0, 50) } : {}),
+        ...(reason ? { reason } : {}),
+      },
+    };
+  }
+  if (method === "item/fileChange/requestApproval") {
+    const changes = files.get(String(params?.itemId)) ?? [];
+    const grantRoot = str(params?.grantRoot);
+    const diff = changes.map((c) => c.diff).join("\n");
+    const shown = (changes.length > 0 && changes.length <= 100 && diff.length <= 8000) || !!grantRoot;
+    return {
+      description: describe(
+        [
+          grantRoot ? `Write access to: ${grantRoot}` : undefined,
+          changes.length
+            ? `Change files: ${changes.map((c) => `${c.change} ${c.path}`).join(", ")}`
             : undefined,
         ],
-        "Codex requests permission for this operation.",
+        "Codex requests permission for a file change it did not describe.",
       ),
-      decisions: APPROVAL_DECISIONS,
+      decisions: shown ? APPROVAL_DECISIONS : ["decline"],
+      detail: {
+        kind: "fileChange",
+        ...(grantRoot ? { grantRoot: grantRoot.slice(0, 2000) } : {}),
+        ...(changes.length && changes.length <= 100
+          ? { files: changes.map((c) => ({ path: c.path.slice(0, 2000), change: c.change.slice(0, 20) })) }
+          : {}),
+        ...(diff && diff.length <= 8000 ? { diff } : {}),
+        ...(reason ? { reason } : {}),
+      },
     };
-  if (method === "item/permissions/requestApproval")
+  }
+  if (method === "item/permissions/requestApproval") {
+    const permissions = params?.permissions ? JSON.stringify(params.permissions) : undefined;
+    const shown = !!permissions && permissions.length <= 4000;
     return {
-      description: text(
-        [
-          params?.reason,
-          params?.permissions
-            ? `Requested permissions: ${JSON.stringify(params.permissions)}`
-            : undefined,
-        ],
-        "Codex requests additional permissions.",
+      description: describe(
+        [permissions ? `Grant permissions: ${permissions}` : undefined],
+        "Codex requests permissions it did not describe.",
       ),
-      decisions: ["accept", "acceptForSession", "decline"],
+      decisions: shown ? ["accept", "acceptForSession", "decline"] : ["decline"],
+      detail: {
+        kind: "permissions",
+        ...(shown ? { permissions } : {}),
+        ...(reason ? { reason } : {}),
+      },
     };
+  }
   if (method === "item/tool/requestUserInput")
     return {
       // Answers need free text the app cannot collect yet, so declining is the only reply.
-      description: text(
+      description: describe(
         (Array.isArray(params?.questions) ? params.questions : []).map(
           (q: any) =>
             [
-              q?.header,
-              q?.question,
+              str(q?.header),
+              str(q?.question),
               Array.isArray(q?.options)
                 ? `Options: ${q.options.map((o: any) => o?.label ?? o).join(", ")}`
                 : undefined,
@@ -98,18 +157,20 @@ function codexRequest(
         "Codex asks a question.",
       ),
       decisions: ["decline"],
+      detail: { kind: "question" },
     };
   if (method === "mcpServer/elicitation/request")
     return {
-      description: text(
+      description: describe(
         [
-          params?.serverName ? `${params.serverName} asks:` : undefined,
-          params?.message,
-          params?.url ? `Link: ${params.url}` : undefined,
+          str(params?.serverName) ? `${params.serverName} asks:` : undefined,
+          str(params?.message),
+          str(params?.url) ? `Link: ${params.url}` : undefined,
         ],
         "An MCP server asks for input.",
       ),
       decisions: ["decline", "cancel"],
+      detail: { kind: "elicitation" },
     };
   return undefined;
 }
@@ -160,7 +221,10 @@ export function wireRecord(record: SessionRecord, events: boolean) {
   const copy = structuredClone(record);
   if (events) return copy;
   for (const key of SESSION_EVENT_FIELDS) delete copy[key];
-  for (const r of copy.requests) delete r.decisions;
+  for (const r of copy.requests) {
+    delete r.decisions;
+    delete r.detail;
+  }
   return copy;
 }
 export class MachineSessions {
@@ -180,6 +244,7 @@ export class MachineSessions {
       stopGraceMs?: number;
       /** No provider output for this long marks a running session stalled. */
       stallMs?: number;
+      keepFinished?: number;
     } = {},
   ) {
     mkdirSync(stateDir, { recursive: true, mode: 0o700 });
@@ -214,6 +279,17 @@ export class MachineSessions {
     this.stallTimer.unref?.();
   }
   private stallTimer: ReturnType<typeof setInterval>;
+  /** Per session: resolves once its last provider process has exited. */
+  private exits = new Map<string, Promise<void>>();
+  private closing(id: string, process: JsonProcess) {
+    const exited = process.exited
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => process.child.once("close", () => resolve()));
+    this.exits.set(id, exited);
+    void exited.then(() => {
+      if (this.exits.get(id) === exited) this.exits.delete(id);
+    });
+  }
   private checkStalls(stallMs: number) {
     const now = Date.now();
     for (const [id, active] of this.active) {
@@ -255,6 +331,16 @@ export class MachineSessions {
     const record = this.records.find((r) => r.id === id);
     if (!record) throw new Error("Remote session not found.");
     return record;
+  }
+  /** Keeps every live session and the newest finished ones, so the store never fills up with history. */
+  private prune(keepFinished = this.opts.keepFinished ?? KEEP_FINISHED) {
+    const finished = this.records
+      .filter((r) => !this.active.has(r.id) && r.status !== "running" && r.status !== "needs-you")
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    if (finished.length <= keepFinished) return;
+    const drop = new Set(finished.slice(keepFinished).map((r) => r.id));
+    this.records = this.records.filter((r) => !drop.has(r.id));
+    this.persist();
   }
   summaries(): SessionSummary[] {
     return this.records.map(sessionSummaryOf);
@@ -346,8 +432,12 @@ export class MachineSessions {
         ),
       });
       active.pending.delete(String(request.id));
+      // Cancel ends Codex's turn: the owner chose that, so it reads as a stop, not an interruption.
+      if (p.decision === "cancel") active.stopped = true;
       record.requests = record.requests.filter((r) => r !== request);
       record.status = record.requests.length ? "needs-you" : "running";
+      // The wait was the owner's, not a silent provider.
+      active.lastEventAt = Date.now();
       this.bump(record);
       return structuredClone(record);
     }
@@ -362,28 +452,29 @@ export class MachineSessions {
       if (active && record.provider === "codex") {
         if (!active.turnId)
           throw new Error("This session is still starting. Try again shortly.");
-        await active.process.request("turn/steer", {
-          threadId: record.threadId,
-          input: [{ type: "text", text: p.text, text_elements: [] }],
-          expectedTurnId: active.turnId,
-        });
-        record.promptIds = [...record.promptIds, p.requestId].slice(-100);
-        record.output = (record.output + `\nYou: ${p.text}\n\n`).slice(-64000);
-        this.note(record, p.origin, "steer", p.text);
-        this.alive(record, active);
-        this.dirty(record);
-        return structuredClone(record);
-      }
-      if (active) {
+        try {
+          await active.process.request("turn/steer", {
+            threadId: record.threadId,
+            input: [{ type: "text", text: p.text, text_elements: [] }],
+            expectedTurnId: active.turnId,
+          });
+          record.promptIds = [...record.promptIds, p.requestId].slice(-100);
+          record.output = (record.output + `\nYou: ${p.text}\n\n`).slice(-64000);
+          this.note(record, p.origin, "steer", p.text);
+          this.alive(record, active);
+          // The request id guards against a repeat, so it is persisted at once.
+          record.updatedAt = new Date().toISOString();
+          this.persist();
+          return structuredClone(record);
+        } catch (err) {
+          // The turn ended while the steer was in flight: resume the transcript with the message instead.
+          if (this.active.get(record.id) === active) throw err;
+        }
+      } else if (active) {
         // Claude Code -p takes no input mid-turn: SIGINT ends the turn cleanly, then the transcript resumes.
         active.stopped = true;
         this.active.delete(record.id);
-        const closed = new Promise<void>((resolve) => {
-          if (active.process.exited) resolve();
-          else active.process.child.once("close", () => resolve());
-        });
         active.process.interrupt(this.opts.stopGraceMs ?? 5000);
-        await closed;
       }
     }
     const run = async () => {
@@ -401,6 +492,7 @@ export class MachineSessions {
             );
           return structuredClone(existing); // Idempotent start: a timeout never creates duplicate work.
         }
+        this.prune();
         if (this.records.length >= 1000)
           throw new Error("Remote session storage is full.");
         record = {
@@ -429,6 +521,8 @@ export class MachineSessions {
             "This session is working. Stop it or wait before sending a follow-up.",
           );
       }
+      // A previous provider process for this session may still be exiting; two must never share a transcript.
+      await this.exits.get(record.id);
       const cwd = await this.files.path(record.rootId, ".", true);
       const command = this.commands[record.provider];
       if (!command?.length)
@@ -479,7 +573,9 @@ export class MachineSessions {
     const active = this.active.get(record.id);
     if (active?.process === process) this.alive(record, active);
     if (msg.id !== undefined && msg.method) {
-      const request = codexRequest(msg.method, msg.params);
+      const request = active
+        ? codexRequest(msg.method, msg.params, active.files)
+        : undefined;
       if (!request || !active || record.requests.length >= 20) {
         process.send({
           id: msg.id,
@@ -505,6 +601,20 @@ export class MachineSessions {
         this.append(record, String(msg.params?.delta ?? ""));
         return;
       case "item/started":
+        if (
+          msg.params?.item?.type === "fileChange" &&
+          active &&
+          Array.isArray(msg.params.item.changes) &&
+          active.files.size < 200
+        )
+          active.files.set(
+            String(msg.params.item.id),
+            msg.params.item.changes.slice(0, 101).map((c: any) => ({
+              path: String(c?.path ?? ""),
+              change: String(c?.kind?.type ?? "update"),
+              diff: String(c?.diff ?? ""),
+            })),
+          );
         if (msg.params?.item?.type === "commandExecution")
           this.append(
             record,
@@ -572,10 +682,10 @@ export class MachineSessions {
         this.endTurn(record);
         if (active) {
           active.turnDone?.();
-          if (!stopped) this.active.delete(record.id);
+          if (this.active.get(record.id) === active) this.active.delete(record.id);
         }
         this.bump(record);
-        if (!stopped) process.kill();
+        process.kill();
         return;
       }
     }
@@ -709,11 +819,13 @@ export class MachineSessions {
         this.bump(record);
       },
     );
+    this.closing(record.id, process);
     this.active.set(record.id, {
       process,
       stopped: false,
       pending: new Map(),
       lastEventAt: Date.now(),
+      files: new Map(),
     });
     if (record.provider === "codex") {
       await process.request("initialize", {

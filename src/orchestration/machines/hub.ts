@@ -47,6 +47,7 @@ export class MachineHub {
   private peers = new Map<string, Peer>();
   private nextId = 1;
   private onSession: SessionListener = () => {};
+  snapshotRetryMs = 1000;
   /** Receives every session change a daemon reports, live or from its snapshot on connect. */
   setSessionListener(listener: SessionListener) {
     this.onSession = listener;
@@ -94,10 +95,20 @@ export class MachineHub {
   /** Events between connections were missed, so every session is reconciled against its latest state. */
   private async snapshot(id: string, peer: Peer) {
     let raw: unknown;
-    try {
-      raw = await this.request(id, MACHINE_SESSIONS, {});
-    } catch {
-      return; // An older daemon has no snapshot; tasks still sync when read.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        raw = await this.request(id, MACHINE_SESSIONS, {});
+        break;
+      } catch (err) {
+        // An older daemon has no snapshot; anything else (busy, timeout) is retried with backoff.
+        if (
+          this.peers.get(id) !== peer ||
+          attempt >= 5 ||
+          (err instanceof Error && err.message === "Unknown machine operation.")
+        )
+          return;
+        await Bun.sleep(this.snapshotRetryMs * 2 ** attempt);
+      }
     }
     if (this.peers.get(id) !== peer || !Array.isArray(raw)) return;
     peer.events = true;

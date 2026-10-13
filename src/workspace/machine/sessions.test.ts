@@ -17,7 +17,7 @@ afterEach(async () => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-function setup(opts: { stallMs?: number; dir?: string } = {}) {
+function setup(opts: { stallMs?: number; dir?: string; keepFinished?: number } = {}) {
   const dir = opts.dir ?? mkdtempSync(join(tmpdir(), "machine-sessions-"));
   if (!opts.dir) dirs.push(dir);
   const root = join(dir, "project");
@@ -29,7 +29,12 @@ function setup(opts: { stallMs?: number; dir?: string } = {}) {
     files,
     join(dir, "state"),
     { codex: [process.execPath, fake], claude: [process.execPath, fake] },
-    { persistDelayMs: 20, stopGraceMs: 2000, ...(opts.stallMs ? { stallMs: opts.stallMs } : {}) },
+    {
+      persistDelayMs: 20,
+      stopGraceMs: 2000,
+      ...(opts.stallMs ? { stallMs: opts.stallMs } : {}),
+      ...(opts.keepFinished !== undefined ? { keepFinished: opts.keepFinished } : {}),
+    },
   );
   live.push(sessions);
   const changes: SessionSummary[] = [];
@@ -198,4 +203,87 @@ test("a restart marks working sessions interrupted with a new version; old gatew
   const legacy = wireRecord(after, false);
   expect(Object.keys(legacy)).not.toContain("stateVersion");
   expect(Object.keys(legacy)).not.toContain("turn");
+});
+
+test("an approval shows the approved thing whole and first; a model-written reason cannot hide it", async () => {
+  const { sessions } = setup();
+  await start(sessions, "s1", "codex", "longreason");
+  const long = (await until(get(sessions, "s1"), (r) => r.status === "needs-you")).requests[0]!;
+  expect(long.description.startsWith("Run: rm -rf build")).toBe(true);
+  expect(long.detail).toMatchObject({ kind: "command", command: "rm -rf build", cwd: "/p" });
+  expect(long.detail!.reason!.length).toBeLessThanOrEqual(300);
+  expect(long.decisions).toContain("accept");
+
+  await start(sessions, "s2", "codex", "nocommand");
+  const blind = (await until(get(sessions, "s2"), (r) => r.status === "needs-you")).requests[0]!;
+  // Nothing to inspect, so nothing to approve.
+  expect(blind.decisions).toEqual(["decline"]);
+  expect(blind.description).toContain("Agent's explanation: Trust me");
+
+  await start(sessions, "s3", "codex", "network");
+  const net = (await until(get(sessions, "s3"), (r) => r.status === "needs-you")).requests[0]!;
+  expect(net.detail).toMatchObject({ kind: "command", host: "example.com", protocol: "https" });
+  expect(net.description.startsWith("Network access: example.com (https)")).toBe(true);
+  expect(net.decisions).toContain("accept");
+
+  await start(sessions, "s4", "codex", "stdin");
+  const stdin = (await until(get(sessions, "s4"), (r) => r.status === "needs-you")).requests[0]!;
+  expect(stdin.detail).toMatchObject({ kind: "writeStdin", command: "y" });
+  expect(stdin.description.startsWith("Write to a running terminal: y")).toBe(true);
+});
+
+test("a file change approval lists the files and diff Codex announced", async () => {
+  const { sessions } = setup();
+  await start(sessions, "s1", "codex", "filechange");
+  const change = (await until(get(sessions, "s1"), (r) => r.status === "needs-you")).requests[0]!;
+  expect(change.detail).toMatchObject({ kind: "fileChange", files: [{ path: "src/a.ts", change: "update" }], diff: "-a\n+b" });
+  expect(change.decisions).toContain("accept");
+});
+
+test("a slow approval is not a stall, and cancelling an approval reads as the owner's stop", async () => {
+  const { sessions } = setup({ stallMs: 150 });
+  await start(sessions, "s1", "codex", "approval");
+  const asked = await until(get(sessions, "s1"), (r) => r.status === "needs-you");
+  await Bun.sleep(400);
+  await sessions.request({ action: "answer", sessionId: "s1", requestId: asked.requests[0]!.id, decision: "accept" });
+  const done = await until(get(sessions, "s1"), (r) => r.status === "completed");
+  expect(done.stalled).toBeUndefined();
+
+  await start(sessions, "s2", "codex", "wait approval");
+  const pending = await until(get(sessions, "s2"), (r) => r.status === "needs-you");
+  await sessions.request({ action: "answer", sessionId: "s2", requestId: pending.requests[0]!.id, decision: "cancel" });
+  expect((await until(get(sessions, "s2"), (r) => r.status !== "running" && r.status !== "needs-you")).status).toBe("stopped");
+  // The cancelled turn released the session: it takes a message again.
+  await sessions.request({ action: "message", sessionId: "s2", requestId: "m1", text: "go on", origin: "owner" });
+  expect((await until(get(sessions, "s2"), (r) => r.attempts === 2 && r.status === "completed")).final).toBe("Final: go on");
+});
+
+test("a steer that loses the race with the turn's end resumes the transcript instead", async () => {
+  const { sessions } = setup();
+  await start(sessions, "s1", "codex", "wait");
+  await until(get(sessions, "s1"), (r) => r.turn?.id === "turn-1");
+  await sessions.request({ action: "message", sessionId: "s1", requestId: "m1", text: "too late", origin: "agent" });
+  const resumed = await until(get(sessions, "s1"), (r) => r.status === "completed" && r.attempts === 2);
+  expect(resumed.final).toBe("Final: too late");
+});
+
+test("a Claude follow-up waits for the previous process to exit, so two never share a transcript", async () => {
+  const { root, sessions } = setup();
+  await start(sessions, "c1", "claude", "linger");
+  await until(get(sessions, "c1"), (r) => r.status === "completed");
+  await sessions.request({ action: "message", sessionId: "c1", requestId: "m1", text: "again", origin: "owner" });
+  await until(get(sessions, "c1"), (r) => r.status === "completed" && r.attempts === 2);
+  expect(existsSync(join(root, "overlap.txt"))).toBe(false);
+});
+
+test("finished sessions beyond the newest few are pruned; live ones never are", async () => {
+  const { sessions } = setup({ keepFinished: 1 });
+  await start(sessions, "s1", "codex", "one");
+  await until(get(sessions, "s1"), (r) => r.status === "completed");
+  await start(sessions, "s2", "codex", "wait");
+  await Bun.sleep(20);
+  await start(sessions, "s3", "codex", "three");
+  await until(get(sessions, "s3"), (r) => r.status === "completed");
+  await start(sessions, "s4", "codex", "four");
+  expect(sessions.summaries().map((s) => s.sessionId).sort()).toEqual(["s2", "s3", "s4"]);
 });

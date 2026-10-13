@@ -1,11 +1,16 @@
 /** A stand-in for `codex app-server` and `claude -p` in tests: behaviour is chosen by words in the prompt. */
 export const FAKE_PROVIDER = String.raw`
 import { createInterface } from 'node:readline';
-import { writeFileSync } from 'node:fs';
+import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
 const send = (m) => process.stdout.write(JSON.stringify(m) + '\n');
 if (process.argv.includes('-p')) {
   let prompt = '';
   process.stdin.on('data', (s) => (prompt += s));
+  // Two provider processes must never work on one transcript at once.
+  if (existsSync('claude-live')) writeFileSync('overlap.txt', 'yes');
+  writeFileSync('claude-live', String(process.pid));
+  process.on('exit', () => { try { unlinkSync('claude-live'); } catch {} });
+  process.on('SIGTERM', () => process.exit(0));
   process.stdin.on('end', () => {
     const resumed = process.argv.includes('--resume');
     send({ type: 'system', subtype: 'init', session_id: 'claude-one' });
@@ -38,6 +43,7 @@ if (process.argv.includes('-p')) {
   createInterface({ input: process.stdin }).on('line', (line) => {
     const m = JSON.parse(line);
     if (!m.method) {
+      if (m.id === pending && m.result?.decision === 'cancel') return complete('interrupted');
       if (m.id === pending) finish('Answer: ' + JSON.stringify(m.result ?? m.error));
       return;
     }
@@ -46,6 +52,7 @@ if (process.argv.includes('-p')) {
     if (m.method === 'thread/start' || m.method === 'thread/resume') return send({ id: m.id, result: { thread: { id: 'thread-one' } } });
     if (m.method === 'turn/interrupt') { send({ id: m.id, result: {} }); return complete('interrupted'); }
     if (m.method === 'turn/steer') {
+      if (m.params.input[0].text.includes('late')) { complete(); return send({ id: m.id, error: { message: 'no active turn' } }); }
       if (m.params.expectedTurnId !== 'turn-' + turn) return send({ id: m.id, error: { message: 'wrong turn' } });
       send({ id: m.id, result: { turnId: 'turn-' + turn } });
       return finish('Steered: ' + m.params.input[0].text);
@@ -56,6 +63,14 @@ if (process.argv.includes('-p')) {
     send({ id: m.id, result: { turn: { id: 'turn-' + turn } } });
     send({ method: 'turn/started', params: { turn: { id: 'turn-' + turn } } });
     const ask = (method, params) => { pending = 'req-' + turn; send({ id: pending, method, params }); };
+    if (text.includes('longreason')) return ask('item/commandExecution/requestApproval', { command: 'rm -rf build', reason: 'x'.repeat(5000), cwd: '/p' });
+    if (text.includes('nocommand')) return ask('item/commandExecution/requestApproval', { reason: 'Trust me, it is fine' });
+    if (text.includes('network')) return ask('item/commandExecution/requestApproval', { networkApprovalContext: { host: 'example.com', protocol: 'https' }, reason: 'download' });
+    if (text.includes('stdin')) return ask('item/commandExecution/requestApproval', { kind: 'writeStdin', command: 'y' });
+    if (text.includes('filechange')) {
+      send({ method: 'item/started', params: { item: { type: 'fileChange', id: 'f1', changes: [{ path: 'src/a.ts', kind: { type: 'update', move_path: null }, diff: '-a\n+b' }], status: 'inProgress' } } });
+      return ask('item/fileChange/requestApproval', { itemId: 'f1', reason: 'edit' });
+    }
     if (text.includes('approval')) return ask('item/commandExecution/requestApproval', { command: 'bun test', cwd: '/p' });
     if (text.includes('permission')) return ask('item/permissions/requestApproval', { reason: 'needs network', permissions: { network: { enabled: true }, fileSystem: null } });
     if (text.includes('question')) return ask('item/tool/requestUserInput', { questions: [{ id: 'q', header: 'Pick', question: 'Which DB?', options: [{ label: 'pg' }] }] });

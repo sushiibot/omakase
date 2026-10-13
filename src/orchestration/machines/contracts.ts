@@ -46,6 +46,32 @@ export const answerDecision = z.enum([
 ]);
 export type AnswerDecision = z.infer<typeof answerDecision>;
 export const actionOrigin = z.enum(["owner", "agent"]);
+export const requestDetail = z
+  .object({
+    kind: z.enum([
+      "command",
+      "writeStdin",
+      "fileChange",
+      "permissions",
+      "question",
+      "elicitation",
+    ]),
+    command: z.string().max(8000).optional(),
+    cwd: z.string().max(2000).optional(),
+    host: z.string().max(500).optional(),
+    protocol: z.string().max(50).optional(),
+    grantRoot: z.string().max(2000).optional(),
+    files: z
+      .array(z.object({ path: z.string().max(2000), change: z.string().max(20) }).strict())
+      .max(100)
+      .optional(),
+    diff: z.string().max(8000).optional(),
+    permissions: z.string().max(4000).optional(),
+    /** The provider's own explanation, written by the model: context, never the thing approved. */
+    reason: z.string().max(300).optional(),
+  })
+  .strict();
+export type RequestDetail = z.infer<typeof requestDetail>;
 export const sessionRequest = z.discriminatedUnion("action", [
   z
     .object({
@@ -106,6 +132,8 @@ export const sessionRecord = z
           description: z.string().max(2000),
           /** Answers this request accepts; absent means accept or decline. */
           decisions: z.array(answerDecision).max(4).optional(),
+          /** Exactly what an approval allows, shown in full before any decision. */
+          detail: requestDetail.optional(),
         }),
       )
       .max(20),

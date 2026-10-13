@@ -114,3 +114,19 @@ test("session changes arrive as notifications and as a snapshot; an older daemon
   expect(hub.supportsEvents("pc")).toBe(false);
   hub.stop();
 });
+test("a snapshot that fails for a reason other than an older daemon is retried", async () => {
+  const hub = new MachineHub([{ id: "pc", name: "PC", token }]);
+  hub.snapshotRetryMs = 5;
+  const sent: any[] = [];
+  const socket = { send: (s: string) => sent.push(JSON.parse(s)), close: () => {} };
+  hub.open("pc", socket);
+  hub.message("pc", socket, JSON.stringify({ jsonrpc: "2.0", id: sent[0].id, result: { name: "PC", roots: [], providers: [] } }));
+  await Bun.sleep(0);
+  hub.message("pc", socket, JSON.stringify({ jsonrpc: "2.0", id: sent[1].id, error: { code: -32000, message: "Machine is busy" } }));
+  await Bun.sleep(30);
+  expect(sent[2]).toMatchObject({ method: "machine/sessions" });
+  hub.message("pc", socket, JSON.stringify({ jsonrpc: "2.0", id: sent[2].id, result: [] }));
+  await Bun.sleep(0);
+  expect(hub.supportsEvents("pc")).toBe(true);
+  hub.stop();
+});
