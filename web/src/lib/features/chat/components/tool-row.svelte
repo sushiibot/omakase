@@ -70,9 +70,8 @@
 			<span class="min-w-0 flex-1 truncate">{readable}</span>
 			<span class="flex shrink-0 items-center gap-1 text-right text-meta"
 				>{#if step.state === 'running'}<Spinner
-						role="presentation"
-						aria-hidden="true"
-						class="size-3.5 text-running motion-reduce:animate-none"
+						decorative
+						class="size-3.5 text-running"
 					/>{/if}{#if approval && !executionUnknown}{labels[approval.outcome]} ·
 				{/if}{executionUnknown && approval
 					? labels[approval.outcome]

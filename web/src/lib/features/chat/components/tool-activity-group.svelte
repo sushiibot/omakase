@@ -48,11 +48,7 @@
 				>{/if}
 		</span>
 		{#if running}<span class="flex shrink-0 items-center gap-1 text-meta text-running"
-				><Spinner
-					role="presentation"
-					aria-hidden="true"
-					class="size-3.5 motion-reduce:animate-none"
-				/><span>Running</span></span
+				><Spinner decorative class="size-3.5" /><span>Running</span></span
 			>{/if}
 		<ChevronDown
 			class="size-3.5 shrink-0 transition-transform group-open/activity:rotate-180 motion-reduce:transition-none"

@@ -131,13 +131,9 @@
 			aria-label="Approve {view.tool}"
 			onclick={approve}
 		>
-			{#if submitting || locating}<Spinner
-					role="presentation"
-					aria-hidden="true"
-					class="motion-reduce:animate-none"
-				/>{locating ? 'Getting location…' : 'Submitting…'}{:else}<Check />{location
-					? 'Share location'
-					: 'Approve'}{/if}
+			{#if submitting || locating}<Spinner decorative />{locating
+					? 'Getting location…'
+					: 'Submitting…'}{:else}<Check />{location ? 'Share location' : 'Approve'}{/if}
 		</Button>
 	</div>
 </section>

@@ -167,7 +167,7 @@
 {#snippet after()}
 	{#if partLoading}
 		<p role="status" class="flex items-center gap-2 px-1 text-sm text-muted-foreground">
-			<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
+			<Spinner decorative />
 			Loading failed and running work…
 		</p>
 	{:else if partError}

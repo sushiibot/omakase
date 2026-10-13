@@ -134,11 +134,7 @@
 							disabled={ask.state === 'answering'}
 							onclick={() => onanswer?.(choice, index)}
 						>
-							{#if picked}<Spinner
-									role="presentation"
-									aria-hidden="true"
-									class="motion-reduce:animate-none"
-								/>{/if}{choice}
+							{#if picked}<Spinner decorative />{/if}{choice}
 						</Button>
 					{/each}
 				</div>

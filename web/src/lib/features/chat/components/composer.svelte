@@ -160,7 +160,7 @@
 	{#if dictation?.state === 'recording'}
 		<Square class="size-3.5 fill-current" aria-hidden="true" />
 	{:else if dictation?.state === 'transcribing' || dictation?.state === 'starting'}
-		<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
+		<Spinner decorative />
 	{:else}
 		<Mic class="size-5" aria-hidden="true" />
 	{/if}
@@ -168,7 +168,7 @@
 {#snippet attachIcon()}<Plus class="size-5" aria-hidden="true" />{/snippet}
 {#snippet stopIcon()}
 	{#if stopping}
-		<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
+		<Spinner decorative />
 	{:else}
 		<Square class="size-3.5 fill-current" aria-hidden="true" />
 	{/if}
@@ -243,11 +243,7 @@
 							<span
 								class="absolute inset-0 flex flex-col items-center justify-center gap-0.5 rounded-xl text-tab font-semibold text-foreground"
 							>
-								<Spinner
-									role="presentation"
-									aria-hidden="true"
-									class="motion-reduce:animate-none"
-								/>
+								<Spinner decorative />
 								{photo.state === 'preparing' ? 'Preparing' : `Uploading ${photo.progress ?? 0}%`}
 							</span>
 							{#if photo.state === 'uploading'}

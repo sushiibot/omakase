@@ -785,11 +785,8 @@
 			{#if hasOlder && !olderError}
 				<div bind:this={older} class="flex justify-center px-4 pt-2">
 					<Button variant="ghost" disabled={olderLoading} onclick={() => onloadolder?.()}>
-						{#if olderLoading}<Spinner
-								role="presentation"
-								aria-hidden="true"
-								class="motion-reduce:animate-none"
-							/>Loading earlier messages…{:else}<ChevronUp />Show earlier messages{/if}
+						{#if olderLoading}<Spinner decorative />Loading earlier messages…{:else}<ChevronUp
+							/>Show earlier messages{/if}
 					</Button>
 				</div>
 			{/if}

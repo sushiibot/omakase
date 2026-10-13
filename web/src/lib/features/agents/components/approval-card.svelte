@@ -110,9 +110,7 @@
 				}}
 			>
 				{#if submitting && sent === choice.decision}<Spinner
-						role="presentation"
-						aria-hidden="true"
-						class="motion-reduce:animate-none"
+						decorative
 					/>Submitting…{:else if choice.primary}<Check />{choice.label}{:else}<X
 					/>{choice.label}{/if}
 			</Button>

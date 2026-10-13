@@ -59,9 +59,8 @@
 		class="w-full min-w-0 shrink justify-start gap-2 px-0 text-left font-normal text-muted-foreground hover:bg-transparent hover:text-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground dark:hover:bg-transparent"
 	>
 		{#if !turn.end}<Spinner
-				role="presentation"
-				aria-hidden="true"
-				class="shrink-0 text-running motion-reduce:animate-none"
+				decorative
+				class="shrink-0 text-running"
 			/>{:else if summary.failed}<CircleX
 				class="size-4 shrink-0 text-failed"
 				aria-hidden="true"
@@ -87,11 +86,7 @@
 							<code class="min-w-0 flex-1 truncate font-mono text-code">{item.command}</code>
 							{#if runningCommand(item, index)}<span
 									class="flex shrink-0 items-center gap-1 text-meta text-running"
-									><Spinner
-										role="presentation"
-										aria-hidden="true"
-										class="size-3.5 motion-reduce:animate-none"
-									/>Running</span
+									><Spinner decorative class="size-3.5" />Running</span
 								>{:else if item.exitCode !== undefined}<span
 									class={cn(
 										'shrink-0 text-meta tabular-nums',

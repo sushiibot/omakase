@@ -132,11 +132,7 @@
 						>
 					</span>
 					{#if picking === r.key}
-						<Spinner
-							role="img"
-							aria-label="Switching"
-							class="shrink-0 text-muted-foreground motion-reduce:animate-none"
-						/>
+						<Spinner role="img" aria-label="Switching" class="shrink-0 text-muted-foreground" />
 					{:else if r.current}
 						<Check class="shrink-0" aria-label="Current" />
 					{/if}

@@ -62,7 +62,7 @@
 			class="rounded-full text-muted-foreground"
 		>
 			{#if a.loading}
-				<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
+				<Spinner decorative />
 			{:else}
 				<a.icon aria-hidden="true" />
 			{/if}

@@ -85,10 +85,10 @@
 </script>
 
 {#snippet writeList(items: MemoryWrite[])}
-	<Item.Group class="gap-0 overflow-hidden rounded-xl border has-data-[size=sm]:gap-0">
+	<Item.Group variant="bordered">
 		{#each items as w (w.id)}
-			<div role="listitem" class="not-first:border-t">
-				<Item.Root size="sm" class="rounded-none">
+			<div role="listitem">
+				<Item.Root size="sm">
 					{#snippet child({ props })}
 						<a href={writeHref(w.id)} {...props}>
 							<Item.Content class="min-w-0">
@@ -239,11 +239,7 @@
 			</p>{/if}
 		<Sheet.Footer class="any-pointer-coarse:gap-4">
 			<Button disabled={busy} onclick={onclose}>
-				{#if busy}<Spinner
-						role="presentation"
-						aria-hidden="true"
-						class="motion-reduce:animate-none"
-					/>Archiving…{:else}<Archive />Archive conversation{/if}
+				{#if busy}<Spinner decorative />Archiving…{:else}<Archive />Archive conversation{/if}
 			</Button>
 			<Button variant="ghost" onclick={() => onclosesheet?.()}>Keep current</Button>
 		</Sheet.Footer>

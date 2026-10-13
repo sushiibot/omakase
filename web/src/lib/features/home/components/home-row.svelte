@@ -198,11 +198,7 @@
 				{:else if item.group === 'failed'}
 					<CircleX class="size-4" aria-label="Failed run" />
 				{:else if item.group === 'running'}
-					<Spinner
-						role="img"
-						aria-label="Running"
-						class="[animation-duration:2s] motion-reduce:animate-none"
-					/>
+					<Spinner role="img" aria-label="Running" class="[animation-duration:2s]" />
 				{:else if item.kind === 'message'}
 					<CalendarClock class="size-4" aria-label="Scheduled job message" />
 				{:else}

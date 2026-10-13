@@ -140,22 +140,14 @@
 		<Sheet.Footer class={confirmArchive || renaming ? 'any-pointer-coarse:gap-4' : undefined}>
 			{#if confirmArchive}
 				<Button size="lg" disabled={busy} onclick={onarchive}>
-					{#if busy}<Spinner
-							role="presentation"
-							aria-hidden="true"
-							class="motion-reduce:animate-none"
-						/>{:else}<Archive />{/if}Archive conversation
+					{#if busy}<Spinner decorative />{:else}<Archive />{/if}Archive conversation
 				</Button>
 				<Button variant="ghost" size="lg" disabled={busy} onclick={() => (confirmArchive = false)}
 					>Keep current</Button
 				>
 			{:else if renaming}
 				<Button type="submit" size="lg" disabled={!ready}>
-					{#if busy}<Spinner
-							role="presentation"
-							aria-hidden="true"
-							class="motion-reduce:animate-none"
-						/>Saving…{:else}<Pencil />Save name{/if}
+					{#if busy}<Spinner decorative />Saving…{:else}<Pencil />Save name{/if}
 				</Button>
 				<Button variant="ghost" size="lg" disabled={busy} onclick={() => (renaming = false)}
 					>Back to options</Button

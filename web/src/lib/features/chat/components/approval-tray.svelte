@@ -279,7 +279,7 @@
 
 			{#if phase === 'submitting' || locating}
 				<p role="status" class="flex h-12 items-center gap-2 text-sm font-medium">
-					<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
+					<Spinner decorative />
 					{locating
 						? 'Waiting for browser location permission…'
 						: isLocation
