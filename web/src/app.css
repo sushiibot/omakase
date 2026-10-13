@@ -175,7 +175,8 @@
 }
 
 /* Transcript tokens from docs/ux-guidelines.md (text-body, text-code), in rem so text follows the
-   OS text size. ui, meta and tab are older aliases of text-sm and text-xs: nothing goes below 12px. */
+   OS text size. ui, meta and tab match text-sm and text-xs in size but set no line height, so they
+   inherit theirs; nothing goes below 12px. Only body carries a line height. */
 @theme {
 	--text-body: 0.9375rem;
 	--text-body--line-height: 1.5;

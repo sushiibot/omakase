@@ -19,7 +19,7 @@
 
 <div data-slot="page-intro" class={cn('flex items-start justify-between gap-4', className)}>
 	<div class="flex min-w-0 flex-col gap-1">
-		{#if title}<p class="text-base font-medium">{title}</p>{/if}
+		{#if title}<h2 class="text-base font-medium">{title}</h2>{/if}
 		{#if typeof description === 'string'}
 			<p class="text-sm text-muted-foreground">{description}</p>
 		{:else if description}

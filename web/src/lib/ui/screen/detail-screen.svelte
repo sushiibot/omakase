@@ -7,26 +7,17 @@
 	type StateProps = ComponentProps<typeof ScreenState>;
 
 	let {
-		title,
-		subtitle,
-		back,
-		actions,
-		banner,
-		toast,
-		footer,
-		measure = 'reading',
-		scrollable = true,
 		state,
-		children
-	}: Omit<ScreenProps, 'back' | 'children' | 'stickToBottom' | 'scroller'> & {
-		back?: ScreenProps['back'];
+		children,
+		...screenProps
+	}: Omit<ScreenProps, 'children' | 'stickToBottom' | 'scroller' | 'footerLayout'> & {
 		/** Leave out for a screen whose content is always there. */
 		state?: Omit<StateProps, 'children'>;
 		children: Snippet;
 	} = $props();
 </script>
 
-<Screen {title} {subtitle} {back} {actions} {banner} {toast} {footer} {measure} {scrollable}>
+<Screen {...screenProps} footerLayout="page">
 	{#if state}
 		<ScreenState {...state}>{@render children()}</ScreenState>
 	{:else}

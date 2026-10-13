@@ -2,16 +2,25 @@
 	import type { Snippet } from 'svelte';
 	import { PageBody, type PageMeasure } from '$lib/ui/page';
 	import { cn } from '$lib/utils';
+	import { getScreenContext } from './context';
+
+	type LegacyMeasure =
+		/** @deprecated Centers like `reading`. */
+		| 'management'
+		/** @deprecated Centers like `reading`. */
+		| 'wide';
+
+	const screen = getScreenContext();
 
 	let {
 		children,
-		measure = 'reading',
+		measure = screen?.measure ?? 'reading',
 		embedded = false,
 		class: className
 	}: {
 		children: Snippet;
-		/** `management` and `wide` are older names that now center like `reading`. */
-		measure?: PageMeasure | 'management' | 'wide';
+		/** Defaults to the enclosing Screen's measure. */
+		measure?: PageMeasure | LegacyMeasure;
 		/** The containing screen already owns width and gutters. */
 		embedded?: boolean;
 		class?: string;

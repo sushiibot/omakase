@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { ComponentProps, Snippet } from 'svelte';
-	import { measureClass } from '$lib/ui/page';
+	import { measureClass, type PageMeasure } from '$lib/ui/page';
 	import { cn } from '$lib/utils';
 	import Screen from './screen.svelte';
 	import ScreenState from './screen-state.svelte';
@@ -10,28 +10,38 @@
 	type StateProps = Omit<ComponentProps<typeof ScreenState>, 'children'>;
 
 	let {
-		title,
-		subtitle,
-		back,
-		actions,
-		banner,
-		toast,
 		tabs,
 		value = $bindable(''),
 		label,
 		onchange,
 		lead: leadContent,
+		measure = 'reading',
 		state,
 		hasContent = false,
-		children: panelContent
-	}: Pick<ScreenProps, 'title' | 'subtitle' | 'back' | 'actions' | 'banner' | 'toast'> & {
+		children: panelContent,
+		// Accepted for old callers, never forwarded to Screen.
+		wide: _wide,
+		...screenProps
+	}: Pick<
+		ScreenProps,
+		| 'title'
+		| 'subtitle'
+		| 'back'
+		| 'breadcrumb'
+		| 'level'
+		| 'headerClass'
+		| 'actions'
+		| 'banner'
+		| 'toast'
+	> & {
 		tabs: readonly SwipeableTab[];
 		value?: string;
 		label: string;
 		onchange?: (value: string) => void;
 		lead?: Snippet;
-		/** Kept for callers; every tabbed screen now uses the reading measure. */
+		/** @deprecated Centers like `reading`; use `measure`. */
 		wide?: boolean;
+		measure?: PageMeasure;
 		state?: StateProps;
 		/** Keep the pager mounted while existing content refreshes. */
 		hasContent?: boolean;
@@ -53,8 +63,8 @@
 	);
 </script>
 
-<Screen {title} {subtitle} {back} {actions} {banner} {toast} scrollable={false}>
-	<div data-tabbed-screen class={cn('flex h-full min-h-0 min-w-0 flex-col', measureClass.reading)}>
+<Screen {...screenProps} {measure} scrollable={false}>
+	<div data-tabbed-screen class={cn('flex h-full min-h-0 min-w-0 flex-col', measureClass[measure])}>
 		{#if showPager}
 			<SwipeableTabs {tabs} bind:value {label} {onchange}>
 				{#snippet lead()}

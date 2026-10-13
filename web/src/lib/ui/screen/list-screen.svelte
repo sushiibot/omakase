@@ -29,13 +29,6 @@
 	let {
 		embedded = false,
 		measure = 'reading',
-		title,
-		subtitle,
-		back,
-		actions,
-		banner,
-		toast,
-		footer,
 		state,
 		sections,
 		search = $bindable(),
@@ -46,8 +39,9 @@
 		tail,
 		isEmpty: emptyOverride,
 		key,
-		row
-	}: Omit<ScreenProps, 'children' | 'stickToBottom' | 'scroller'> & {
+		row,
+		...screenProps
+	}: Omit<ScreenProps, 'children' | 'stickToBottom' | 'scroller' | 'footerLayout' | 'measure'> & {
 		/** Render inside an existing screen without a header or scroll container. */
 		embedded?: boolean;
 		measure?: PageMeasure;
@@ -111,7 +105,7 @@
 {#if embedded}
 	{@render content()}
 {:else}
-	<Screen {title} {subtitle} {back} {actions} {banner} {toast} {footer} {measure}>
+	<Screen {...screenProps} {measure} footerLayout="page">
 		{@render content()}
 	</Screen>
 {/if}

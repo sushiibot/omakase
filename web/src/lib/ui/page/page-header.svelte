@@ -6,6 +6,7 @@
 
 	let {
 		title,
+		level = 1,
 		subtitle,
 		leading,
 		leadingClass,
@@ -14,16 +15,20 @@
 		class: className
 	}: {
 		title: string;
+		/** 2 for a pane header beside the page's own, such as an inspector. */
+		level?: 1 | 2;
 		subtitle?: Snippet;
 		/** A drawer button or back link, followed by a separator. */
 		leading?: Snippet;
 		/** Classes for the leading group, such as hiding it where the sidebar already leads there. */
 		leadingClass?: string;
-		/** Replaces the visible title from `md` up; the h1 stays for assistive tech. */
+		/** Replaces the visible title from `md` up; the heading stays for assistive tech. */
 		breadcrumb?: Snippet;
 		actions?: Snippet;
 		class?: string;
 	} = $props();
+
+	const titleClass = $derived(cn('truncate text-base font-medium', breadcrumb && 'md:sr-only'));
 </script>
 
 <header
@@ -40,7 +45,11 @@
 		</div>
 	{/if}
 	<div class={cn('flex min-w-0 flex-col', breadcrumb && 'md:contents')}>
-		<h1 class={cn('truncate text-base font-medium', breadcrumb && 'md:sr-only')}>{title}</h1>
+		{#if level === 2}
+			<h2 class={titleClass}>{title}</h2>
+		{:else}
+			<h1 class={titleClass}>{title}</h1>
+		{/if}
 		{#if subtitle}
 			<div class={cn('truncate text-xs text-muted-foreground', breadcrumb && 'md:hidden')}>
 				{@render subtitle()}

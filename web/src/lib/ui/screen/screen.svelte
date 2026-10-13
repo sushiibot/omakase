@@ -1,22 +1,26 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
-	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
-	import Menu from '@lucide/svelte/icons/menu';
-	import { Button } from '$lib/ui/button';
-	import { measureClass, PageHeader, type PageMeasure } from '$lib/ui/page';
+	import type { ComponentProps, Snippet } from 'svelte';
+	import { measureClass, type PageMeasure } from '$lib/ui/page';
 	import { cn } from '$lib/utils';
-	import { getDrawer } from '../shell/drawer';
+	import { setScreenContext, type ScreenBack } from './context';
+	import ScreenHeader from './screen-header.svelte';
+
+	type HeaderProps = ComponentProps<typeof ScreenHeader>;
 
 	let {
 		title,
 		subtitle,
 		back,
+		breadcrumb,
+		level,
+		headerClass,
 		actions,
 		banner,
 		toast,
 		toastPosition = 'bottom',
 		footer,
-		measure,
+		measure = 'reading',
+		footerLayout = 'raw',
 		stickToBottom = false,
 		channelNavigation = false,
 		scrollable = true,
@@ -25,8 +29,10 @@
 	}: {
 		title: string;
 		subtitle?: Snippet;
-		/** `desktop: false` hides it where the sidebar already leads there. */
-		back?: { href: string; label: string; onclick?: (e: MouseEvent) => void; desktop?: boolean };
+		back?: ScreenBack;
+		breadcrumb?: Snippet;
+		level?: HeaderProps['level'];
+		headerClass?: string;
 		actions?: Snippet;
 		/** Under the header, outside the scroll. */
 		banner?: Snippet;
@@ -34,8 +40,10 @@
 		toast?: Snippet;
 		toastPosition?: 'top' | 'bottom';
 		footer?: Snippet;
-		/** Lines the footer up with the body; leave out when the footer lays itself out, as chat does. */
+		/** The body's measure; ScreenContent and ScreenFooter inherit it. */
 		measure?: PageMeasure;
+		/** `page` lines the footer up with the body; `raw` leaves its layout to the caller, as chat does. */
+		footerLayout?: 'page' | 'raw';
 		/** Disable when the content owns its vertical scroll, such as a tab pager. */
 		scrollable?: boolean;
 		/** Keep the newest content in view, for chats. */
@@ -46,50 +54,29 @@
 		children: Snippet;
 	} = $props();
 
-	// A screen without a back chevron is a drawer destination; on a phone its header opens the drawer.
-	const drawer = getDrawer();
-	const showBack = $derived(!!back && !(channelNavigation && drawer?.channels));
-	const showMenu = $derived(!showBack && !!drawer && !drawer.persistent);
+	let footerClaimed = $state(false);
+	setScreenContext({
+		get measure() {
+			return measure;
+		},
+		claimFooter() {
+			footerClaimed = true;
+			return () => (footerClaimed = false);
+		}
+	});
+	// Footers that predate ScreenFooter bring their own border-t and px-4; the bar replaces both.
+	const legacyFooter = $derived(footerLayout === 'page' && !footerClaimed);
 </script>
 
-{#snippet leading()}
-	{#if showBack && back}
-		<Button
-			href={back.href}
-			onclick={back.onclick}
-			variant="ghost"
-			size="sm"
-			class="-ms-1.5 px-1.5 text-muted-foreground"
-		>
-			<ChevronLeft aria-hidden="true" /><span class="sr-only @3xl:not-sr-only">{back.label}</span>
-		</Button>
-	{:else if showMenu && drawer}
-		<Button
-			variant="ghost"
-			size="icon-sm"
-			class="-ms-1 text-muted-foreground"
-			aria-label={drawer.badge
-				? `Menu, ${typeof drawer.badge === 'number' ? `${drawer.badge} need you` : 'something new'}`
-				: 'Menu'}
-			onclick={() => drawer.open()}
-		>
-			<Menu aria-hidden="true" />
-			{#if drawer.badge}
-				<span
-					class="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background bg-waiting"
-					aria-hidden="true"
-				></span>
-			{/if}
-		</Button>
-	{/if}
-{/snippet}
-
-<PageHeader
+<ScreenHeader
 	{title}
 	{subtitle}
+	{back}
+	{channelNavigation}
+	{breadcrumb}
+	{level}
 	{actions}
-	leading={showBack || showMenu ? leading : undefined}
-	leadingClass={showBack && back?.desktop === false ? '@3xl:hidden' : undefined}
+	class={headerClass}
 />
 {#if toast && toastPosition === 'top'}
 	<div class="shrink-0 px-3 pt-3 @3xl:px-6">
@@ -118,7 +105,7 @@
 <div
 	class={cn(
 		'relative shrink-0 bg-background pb-(--safe-bottom) @3xl:pb-0 kb:pb-0',
-		measure && 'has-[[data-slot=screen-footer]>*]:border-t'
+		legacyFooter && 'has-[[data-slot=screen-footer-legacy]>*]:border-t'
 	)}
 >
 	{#if toast && toastPosition === 'bottom'}
@@ -129,11 +116,13 @@
 			{@render toast()}
 		</div>
 	{/if}
-	{#if footer && measure}
-		<!-- The bar owns the full-bleed border and the body's gutters, so children drop their own. -->
+	{#if footer && footerLayout === 'page'}
+		<!-- Classes only, never a branch: swapping branches would remount the footer that claimed it. -->
 		<div
-			data-slot="screen-footer"
-			class={cn('px-4 *:border-t-0! *:px-0! md:px-6', measureClass[measure])}
+			data-slot="screen-footer-legacy"
+			class={legacyFooter
+				? cn('px-4 *:border-t-0! *:px-0! md:px-6', measureClass[measure])
+				: undefined}
 		>
 			{@render footer()}
 		</div>
