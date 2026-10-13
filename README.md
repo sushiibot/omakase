@@ -1,7 +1,14 @@
 # omakase
 
 A self-hosted personal agent with a web app for chat, tasks, voice, and access to your machines.
-The agent runs in a persistent workspace with its own files, memory, and scheduled jobs.
+The goal is an everyday assistant in the spirit of Dots, Muse, and Grokbot, built around your own habits and preferences.
+You control its memory, instructions, tools, model choices, and the agent harness that runs it.
+The workspace persists across conversations, so the agent can build on previous work.
+
+Omakase stores conversations, files, and memory on your infrastructure.
+You can inspect that data and change how the agent uses it.
+It still uses external LLM providers, including through OpenRouter, which receive the prompts and context sent to their models.
+Self-hosting gives you control over the app and its stored data, but does not make model inference local.
 
 Omakase serves one owner on a private network, such as a tailnet.
 An authenticated reverse proxy controls access to the app.
