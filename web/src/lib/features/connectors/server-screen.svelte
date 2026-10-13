@@ -1,9 +1,10 @@
 <script lang="ts">
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import Check from '@lucide/svelte/icons/check';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Plug from '@lucide/svelte/icons/plug';
+	import * as Breadcrumb from '$lib/ui/breadcrumb';
 	import { Button } from '$lib/ui/button';
+	import * as Item from '$lib/ui/item';
 	import ActionMenu from '$lib/ui/menu/action-menu.svelte';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import { ago } from '$lib/ui/format/time';
@@ -11,6 +12,7 @@
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
 	import Section from '$lib/ui/section/section.svelte';
+	import { Spinner } from '$lib/ui/spinner';
 	import StatePill from '$lib/ui/status/state-pill.svelte';
 	import { cn } from '$lib/utils';
 	import type { ConnectorOperation, McpServer } from './types';
@@ -26,6 +28,7 @@
 		operation,
 		errorOperation,
 		error = null,
+		listHref = '/connectors',
 		runHref = (id) => `/runs/${id}`,
 		onaccept,
 		onreconnect,
@@ -45,6 +48,7 @@
 		operation?: ConnectorOperation;
 		errorOperation?: ConnectorOperation;
 		error?: string | null;
+		listHref?: string;
 		runHref?: (id: string) => string;
 		onreconnect?: () => void;
 		ondisconnect?: () => void;
@@ -83,12 +87,13 @@
 	{#if server?.changed}
 		<div class="mt-6 flex flex-col gap-2 border-t pt-4">
 			<Button class="self-start" variant="outline" disabled={busy || !online} onclick={onaccept}>
-				{#if operation === 'snapshot'}<LoaderCircle
-						class="animate-spin motion-reduce:animate-none"
+				{#if operation === 'snapshot'}<Spinner
+						role="presentation"
 						aria-hidden="true"
+						class="motion-reduce:animate-none"
 					/>Saving…{:else}<Check />Save tracking snapshot{/if}
 			</Button>
-			<p class="text-meta text-muted-foreground">
+			<p class="text-xs text-muted-foreground">
 				Optional: reset the tool comparison. Current tools are already available to the agent.
 			</p>
 		</div>
@@ -150,7 +155,7 @@
 					tools from its next turn.
 				</p>
 			{/if}
-			<header class="flex flex-col gap-2">
+			<div class="flex flex-col gap-2">
 				<span class="flex flex-wrap items-center gap-2">
 					{#if operation && operation !== 'snapshot'}<StatePill
 							of="running"
@@ -165,7 +170,7 @@
 					{:else if server.status === 'signed-out'}<StatePill of="waiting" label="Sign in again" />
 					{:else}<StatePill of="failed" label="Not working" />{/if}
 				</span>
-				<code class="font-mono text-meta [overflow-wrap:anywhere] text-muted-foreground"
+				<code class="font-mono text-xs [overflow-wrap:anywhere] text-muted-foreground"
 					>{server.url}</code
 				>
 				{#if server.problem}<p class="text-sm">{server.problem}</p>{/if}
@@ -219,14 +224,29 @@
 										: ''}
 						{error}
 					</p>{/if}
-			</header>
+			</div>
 		</div>
 	{/if}
 {/snippet}
 
+{#snippet breadcrumb()}
+	<Breadcrumb.Root>
+		<Breadcrumb.List>
+			<Breadcrumb.Item>
+				<Breadcrumb.Link href={listHref}>Connectors</Breadcrumb.Link>
+			</Breadcrumb.Item>
+			<Breadcrumb.Separator />
+			<Breadcrumb.Item>
+				<Breadcrumb.Page>{server?.name ?? 'Server'}</Breadcrumb.Page>
+			</Breadcrumb.Item>
+		</Breadcrumb.List>
+	</Breadcrumb.Root>
+{/snippet}
+
 <TabbedScreen
 	title={server?.name ?? 'Server'}
-	{back}
+	back={{ ...back, desktop: false }}
+	{breadcrumb}
 	{banner}
 	{actions}
 	state={{
@@ -278,7 +298,7 @@
 											>{t.name}</code
 										>
 										{#if t.change}
-											<span class="text-meta font-medium"
+											<span class="text-xs font-medium"
 												>{t.change === 'added'
 													? 'New on the server'
 													: t.change === 'changed'
@@ -308,7 +328,7 @@
 					<ol class="flex flex-col gap-2.5 border-l pl-4 text-sm">
 						{#each server.history as h (h.at + h.event)}
 							<li>
-								<span class="text-meta text-muted-foreground">{ago(h.at, now)}</span>
+								<span class="text-xs text-muted-foreground">{ago(h.at, now)}</span>
 								<p class="[overflow-wrap:anywhere]">{h.event}</p>
 							</li>
 						{/each}
@@ -322,23 +342,32 @@
 					class="gap-2"
 				>
 					{#if server.usedBy.length}
-						<ul class="flex flex-col divide-y rounded-xl border text-sm">
+						<Item.Group class="gap-0 rounded-xl border">
 							{#each server.usedBy as u (u.runId + u.tool)}
-								<li>
-									<a
-										href={runHref(u.runId)}
-										class="flex min-h-12 flex-col justify-center px-3 py-2 hover:bg-muted/60"
-									>
-										<span class="flex items-center gap-1 font-medium [overflow-wrap:anywhere]"
-											>{u.title}<ArrowUpRight class="size-3.5 shrink-0" aria-hidden="true" /></span
-										>
-										<span class="text-meta text-muted-foreground"
-											><code class="font-mono">{u.tool}</code> · {ago(u.at, now)}</span
-										>
-									</a>
-								</li>
+								<div role="listitem" class="not-first:border-t">
+									<Item.Root size="sm" class="rounded-none">
+										{#snippet child({ props })}
+											<a href={runHref(u.runId)} {...props}>
+												<Item.Content class="min-w-0">
+													<Item.Title class="[overflow-wrap:anywhere]"
+														>{u.title}<ArrowUpRight
+															class="size-3.5 shrink-0"
+															aria-hidden="true"
+														/></Item.Title
+													>
+													<Item.Description class="text-xs"
+														><code class="font-mono">{u.tool}</code> · {ago(
+															u.at,
+															now
+														)}</Item.Description
+													>
+												</Item.Content>
+											</a>
+										{/snippet}
+									</Item.Root>
+								</div>
 							{/each}
-						</ul>
+						</Item.Group>
 					{:else}
 						<p class="text-sm text-muted-foreground">No runs have used it yet.</p>
 					{/if}
