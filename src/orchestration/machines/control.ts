@@ -5,7 +5,7 @@ import {
   type Provider,
   type SessionRecord,
 } from "./contracts.ts";
-import { MachineUncertainError, type MachineHub } from "./hub.ts";
+import { MachineRefusedError, type MachineHub } from "./hub.ts";
 import type { CodingAgentRecord, CodingAgentStore } from "./agents.ts";
 /** Who asked the gateway to act on a coding agent. */
 export type ActionOrigin = "owner" | "agent";
@@ -107,14 +107,16 @@ export class MachineControl {
         text: input.prompt,
       });
     } catch (err) {
-      // A refused start (missing folder, busy machine) left no work behind; an uncertain one may have.
-      if (!(err instanceof MachineUncertainError)) this.agents.forget(agent.id);
+      // Only a refusal proves no work started; after a timeout or a bad reply the agent may be running.
+      if (err instanceof MachineRefusedError) this.agents.forget(agent.id);
       throw err;
     }
-    // The daemon's resolved folder is the one the agent works in.
+    // The daemon's resolved folder is the one the agent works in; a symlink may resolve to the root itself.
     const started = this.agents.get(agent.id);
-    if (started && record.path !== undefined && record.path !== started.path)
-      this.agents.put({ ...started, path: record.path });
+    if (started && agent.path && record.path !== started.path) {
+      const { path: _requested, ...rest } = started;
+      this.agents.put({ ...rest, ...(record.path ? { path: record.path } : {}) });
+    }
     this.observer?.noteAction(agent.conversationId, origin);
     return this.agents.get(agent.id) ?? agent;
   }

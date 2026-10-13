@@ -508,21 +508,22 @@ export class MachineSessions {
       let record: SessionRecord;
       let cwd: string;
       if (p.action === "start") {
-        const dir = await this.files.codingDir(p.rootId, p.path);
-        cwd = dir.cwd;
         const existing = this.records.find((r) => r.id === p.sessionId);
         if (existing) {
           if (
             existing.taskId !== p.taskId ||
             existing.rootId !== p.rootId ||
-            existing.path !== dir.path ||
-            existing.provider !== p.provider
+            existing.provider !== p.provider ||
+            (p.path !== existing.path &&
+              (await this.files.codingDir(p.rootId, p.path).then((d) => d.path, () => null)) !== existing.path)
           )
             throw new Error(
               "Session ID is already used by another assignment.",
             );
           return structuredClone(existing); // Idempotent start: a timeout never creates duplicate work.
         }
+        const dir = await this.files.codingDir(p.rootId, p.path);
+        cwd = dir.cwd;
         this.prune();
         if (this.records.length >= 1000)
           throw new Error("Remote session storage is full.");

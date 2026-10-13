@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { MachineControl } from "./control.ts";
 import { Check } from "typebox/schema";
 import { agentFolder, codingAgentManifest, CodingAgents, CodingAgentStore, type CodingAgentRecord } from "./agents.ts";
-import { MachineUncertainError, type MachineHub } from "./hub.ts";
+import { MachineRefusedError, type MachineHub } from "./hub.ts";
 import { MemoryJsonState } from "../../db/jsonState.ts";
 
 test("an agent starts only on a daemon that reports its status, so its result can reach the conversation", async () => {
@@ -76,6 +76,9 @@ test("an agent in a subfolder needs a daemon that supports it; a refused start l
   const requests: Record<string, unknown>[] = [];
   let paths = false;
   let refuse: Error | undefined;
+  let garbled = false;
+  /** undefined echoes the requested path; null answers with the root. */
+  let resolved: string | null | undefined;
   const hub = {
     list: () => [{ id: "pc", name: "Desktop", connected: true, providers: ["codex"], roots: [{ id: "code", name: "Code", coding: true }] }],
     supportsEvents: () => true,
@@ -83,7 +86,9 @@ test("an agent in a subfolder needs a daemon that supports it; a refused start l
     request: async (_m: string, _method: string, p: { sessionId: string; path?: string }) => {
       requests.push(p);
       if (refuse) throw refuse;
-      return { id: p.sessionId, taskId: "", rootId: "code", ...(p.path ? { path: p.path } : {}), provider: "codex", status: "running", output: "", updatedAt: new Date().toISOString(), attempts: 1, requests: [], promptIds: [], stateVersion: 1 };
+      if (garbled) return { id: p.sessionId, status: "launched" };
+      const path = resolved === null ? undefined : p.path;
+      return { id: p.sessionId, taskId: "", rootId: "code", ...(path ? { path } : {}), provider: "codex", status: "running", output: "", updatedAt: new Date().toISOString(), attempts: 1, requests: [], promptIds: [], stateVersion: 1 };
     },
   } as unknown as MachineHub;
   const agents = new CodingAgents(new MachineControl(hub, store));
@@ -106,13 +111,25 @@ test("an agent in a subfolder needs a daemon that supports it; a refused start l
   const listed = (await agents.action({ action: "list" })) as { agents: CodingAgentRecord[] };
   expect(listed.agents.map((a) => a.path ?? null).sort()).toEqual([null, "repo/web"]);
 
-  refuse = new Error("Folder missing does not exist in this coding folder.");
+  refuse = new MachineRefusedError("Folder missing does not exist in this coding folder.");
   await expect(start("missing")).rejects.toThrow("does not exist");
   expect(store.list()).toHaveLength(2);
   // A timeout may have started work, so that agent is kept.
-  refuse = new MachineUncertainError("Machine request timed out; check its session before retrying.");
+  refuse = new Error("Machine request timed out; check its session before retrying.");
   await expect(start("slow")).rejects.toThrow("timed out");
   expect(store.list().map((a) => a.path)).toContain("slow");
+  // So may a start the daemon accepted whose reply the gateway cannot read.
+  refuse = undefined;
+  garbled = true;
+  await expect(start("garbled")).rejects.toThrow();
+  expect(store.list().map((a) => a.path)).toContain("garbled");
+  garbled = false;
+  // A path that resolves to the root itself (a symlink) shows as the root.
+  resolved = null;
+  const { agent: atRoot } = (await start("link")) as { agent: CodingAgentRecord };
+  expect(atRoot).not.toHaveProperty("path");
+  expect(agentFolder(atRoot)).toBe("Code");
+  resolved = undefined;
 
   for (const path of ["../x", "a/../../b", "/etc", "C:\\x"])
     await expect(start(path)).rejects.toThrow();

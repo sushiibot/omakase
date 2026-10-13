@@ -106,5 +106,10 @@ describe("shared machine files", () => {
     await expect(files.codingDir("code", "repo/README.md")).rejects.toThrow("not a folder");
     await expect(files.codingDir("code", "missing")).rejects.toThrow("does not exist");
     await expect(files.codingDir("docs", "repo")).rejects.toThrow("not shared");
+    // A short symlink can name a folder whose path from the root is too long to record.
+    const deep = join(root, ...Array.from({ length: 9 }, (_, i) => `${i}`.repeat(240)));
+    await mkdir(deep, { recursive: true });
+    await symlink(deep, join(root, "deep"));
+    await expect(files.codingDir("code", "deep")).rejects.toThrow("too long");
   });
 });

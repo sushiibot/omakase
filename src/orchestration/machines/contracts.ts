@@ -43,9 +43,8 @@ export const fileRequest = z
 /** A folder relative to a coding root: no absolute path, drive letter or `..` segment. */
 export const agentPath = z
   .string()
-  .trim()
-  .min(1)
   .max(2000)
+  .refine((p) => p.trim().length > 0, "The folder path is empty.")
   .refine((p) => !/^([\\/]|[A-Za-z]:)/.test(p), "Use a folder path relative to the coding folder.")
   .refine((p) => !p.split(/[\\/]/).includes(".."), "The folder path cannot contain '..'.");
 export const answerDecision = z.enum([

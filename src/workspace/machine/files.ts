@@ -48,6 +48,7 @@ export class SharedFiles {
     }
     if (!(await stat(cwd)).isDirectory()) throw new Error(`${path} is a file, not a folder.`);
     const rel = relative(base, cwd).split(sep).join("/");
+    if (rel.length > 2000) throw new Error("The folder path is too long.");
     return { cwd, path: rel || undefined };
   }
   private async text(path: string, offset: number, base: string) {

@@ -21,8 +21,8 @@ export const machineGrants = z
       .strict(),
   )
   .max(32);
-/** The request may have reached the daemon: it may or may not have acted on it. */
-export class MachineUncertainError extends Error {}
+/** The daemon answered with an error, or the request was never sent: the daemon did not act on it. */
+export class MachineRefusedError extends Error {}
 export type MachineGrant = z.infer<typeof machineGrants>[number];
 export interface MachineSocket {
   send(data: string): unknown;
@@ -137,7 +137,7 @@ export class MachineHub {
     for (const call of peer.pending.values()) {
       clearTimeout(call.timer);
       call.reject(
-        new MachineUncertainError("Machine disconnected; check its session before retrying."),
+        new Error("Machine disconnected; check its session before retrying."),
       );
     }
     peer.pending.clear();
@@ -166,7 +166,7 @@ export class MachineHub {
       clearTimeout(call.timer);
       if (p.error)
         call.reject(
-          new Error(
+          new MachineRefusedError(
             typeof p.error.message === "string"
               ? p.error.message.slice(0, 1000)
               : "Machine request failed.",
@@ -179,15 +179,15 @@ export class MachineHub {
   }
   request(id: string, method: string, params: unknown): Promise<unknown> {
     const peer = this.peers.get(id);
-    if (!peer) return Promise.reject(new Error("Machine is offline."));
+    if (!peer) return Promise.reject(new MachineRefusedError("Machine is offline."));
     if (peer.pending.size >= 64)
-      return Promise.reject(new Error("Machine is busy; retry shortly."));
+      return Promise.reject(new MachineRefusedError("Machine is busy; retry shortly."));
     const requestId = this.nextId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         peer.pending.delete(requestId);
         reject(
-          new MachineUncertainError(
+          new Error(
             "Machine request timed out; check its session before retrying.",
           ),
         );
@@ -200,7 +200,7 @@ export class MachineHub {
       } catch {
         peer.pending.delete(requestId);
         clearTimeout(timer);
-        reject(new MachineUncertainError("Machine disconnected."));
+        reject(new Error("Machine disconnected."));
       }
     });
   }
