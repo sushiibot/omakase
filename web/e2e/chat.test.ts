@@ -2138,6 +2138,10 @@ test('another-device decision with a long command reflows at 320px', async ({ pa
 	await expect(summary).toContainText('Approved on another device');
 	await expect(summary).toContainText('Running');
 	expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+	// A long outcome truncates beside the tool's name instead of squeezing it out.
+	expect((await summary.locator('[data-tool-label]').boundingBox())!.width).toBeGreaterThanOrEqual(
+		64
+	);
 	expect(
 		await page.evaluate(
 			() => document.documentElement.scrollWidth <= document.documentElement.clientWidth

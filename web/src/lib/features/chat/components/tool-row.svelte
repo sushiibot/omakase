@@ -67,19 +67,21 @@
 					class="size-4 shrink-0 text-failed"
 					aria-hidden="true"
 				/>{/if}
-			<span class="min-w-0 flex-1 truncate">{readable}</span>
-			<span class="flex shrink-0 items-center gap-1 text-right text-meta"
+			<span class="min-w-16 flex-1 truncate" data-tool-label>{readable}</span>
+			<span class="flex min-w-0 items-center gap-1 text-right text-meta"
 				>{#if step.state === 'running'}<Spinner
 						decorative
 						class="size-3.5 text-running"
-					/>{/if}{#if approval && !executionUnknown}{labels[approval.outcome]} ·
-				{/if}{executionUnknown && approval
-					? labels[approval.outcome]
-					: step.state === 'running'
-						? 'Running'
-						: step.state === 'failed'
-							? 'Failed'
-							: 'Finished'}</span
+					/>{/if}<span class="truncate"
+					>{#if approval && !executionUnknown}{labels[approval.outcome]} ·
+					{/if}{executionUnknown && approval
+						? labels[approval.outcome]
+						: step.state === 'running'
+							? 'Running'
+							: step.state === 'failed'
+								? 'Failed'
+								: 'Finished'}</span
+				></span
 			>
 			<ChevronDown
 				class="size-3.5 shrink-0 transition-transform group-open/tool:rotate-180 motion-reduce:transition-none"

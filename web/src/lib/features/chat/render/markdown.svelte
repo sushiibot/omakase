@@ -156,7 +156,7 @@
 		{:else if node.kind === 'code'}
 			<div class="relative">
 				<pre
-					class="min-h-12 overflow-x-auto rounded-lg bg-muted py-2 pr-12 pl-3 font-mono text-code leading-relaxed"
+					class="min-h-11 overflow-x-auto rounded-lg bg-muted py-2 pr-10 pl-3 font-mono text-code leading-relaxed"
 					data-lang={node.lang}><code
 						>{node.text}{#if node === caretAt}{@render caret()}{/if}</code
 					></pre>

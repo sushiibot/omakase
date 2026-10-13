@@ -166,6 +166,7 @@
 		class={cn(
 			'h-auto w-full items-start justify-start gap-3 rounded-xl bg-background px-2 py-2.5 text-left font-normal whitespace-normal hover:bg-muted/60 dark:hover:bg-muted/60 any-pointer-coarse:after:hidden',
 			ondone && 'touch-pan-y',
+			'transition-none',
 			!dragging && 'motion-safe:transition-transform',
 			selected && 'bg-muted/60',
 			gone && 'opacity-0'

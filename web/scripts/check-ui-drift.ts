@@ -83,7 +83,7 @@ export const ROUTE_ROOT_ALLOWED = new Set([
 	'TaskWorkspace',
 	// Renders nothing; it clears shown notifications while the chat is visible.
 	'ClearNotifications',
-	// An agent's transcript, like chat, owns its scroller and composer footer, which the shared screens drop.
+	// Renders AgentDetail, which also docks in the side panel, where a Screen's drawer header does not belong.
 	'AgentPage'
 ]);
 

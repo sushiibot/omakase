@@ -562,7 +562,7 @@
 
 	const sheetLabels: Record<ChatSheet, string> = {
 		commands: 'Chat commands',
-		new: 'Reset conversation context',
+		new: 'Reset conversation context?',
 		viewer: 'Image',
 		model: 'Model and context',
 		context: 'Model and context',
@@ -575,12 +575,12 @@
 		<Sheet.Header>
 			<Sheet.Title>Chat commands</Sheet.Title>
 		</Sheet.Header>
-		<div class="flex flex-col gap-2 px-2 pb-4">
+		<div class="flex flex-col gap-2 px-1 pb-4">
 			{@render commandActions?.()}
 			{#if commandsOffline}
 				<p
 					role="status"
-					class="mx-2 flex items-start gap-2 rounded-lg bg-waiting-soft px-3 py-2 text-sm text-waiting"
+					class="mx-3 flex items-start gap-2 rounded-lg bg-waiting-soft px-3 py-2 text-sm text-waiting"
 				>
 					<ServerOff class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
 					Can't run commands while the agent is offline.

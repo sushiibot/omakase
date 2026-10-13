@@ -81,7 +81,9 @@
 				</Item.Media>
 				<Item.Content class="min-w-0 gap-0.5">
 					<span class="flex items-baseline justify-between gap-3">
-						<span class="truncate font-medium">{title}</span>
+						<span class={cn('truncate', main ? 'text-base font-semibold' : 'font-medium')}
+							>{title}</span
+						>
 						{#if showActivity}<span class="shrink-0 text-xs text-muted-foreground tabular-nums"
 								>{ago(row.lastActivity, now)}</span
 							>{/if}

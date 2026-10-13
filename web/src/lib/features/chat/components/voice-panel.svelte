@@ -118,6 +118,7 @@
 
 <div class="flex flex-col gap-4 p-4">
 	<div class="flex items-center justify-between gap-2">
+		<!-- Sheet.Title needs the dialog root of the RoutedSheet this panel lives in. -->
 		<Sheet.Title>Voice chat</Sheet.Title>
 		<Button variant="ghost" onclick={onclose}>Back to chat</Button>
 	</div>

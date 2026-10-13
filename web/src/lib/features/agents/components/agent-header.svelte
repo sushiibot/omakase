@@ -32,4 +32,7 @@
 	>
 {/snippet}
 
-<PageHeader {title} {level} {leading} {subtitle} {actions} />
+<!-- The title attribute shows a truncated agent title in full on hover. -->
+<div class="contents" {title}>
+	<PageHeader {title} {level} {leading} {subtitle} {actions} />
+</div>

@@ -40,7 +40,7 @@
 	];
 </script>
 
-<div class="flex flex-col gap-5 px-2 py-4 text-base" data-agent-list>
+<div class="flex flex-col gap-5 px-2 py-4" data-agent-list>
 	{#if scope && onscope}<div class="flex px-2">
 			<Button
 				variant="ghost"

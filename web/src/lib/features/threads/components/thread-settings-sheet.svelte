@@ -74,8 +74,8 @@
 		<Sheet.Header>
 			<Sheet.Title>Conversation settings</Sheet.Title>
 			{#if confirmArchive}
-				<p class="pt-2 text-sm">Archive {thread?.title}?</p>
 				<Sheet.Description>
+					<span class="block text-foreground">Archive {thread?.title}?</span>
 					Its history stays available. Send a message to continue later.
 				</Sheet.Description>
 			{/if}
@@ -139,21 +139,21 @@
 			</p>{/if}
 		<Sheet.Footer class={confirmArchive || renaming ? 'any-pointer-coarse:gap-4' : undefined}>
 			{#if confirmArchive}
-				<Button size="lg" disabled={busy} onclick={onarchive}>
+				<Button disabled={busy} onclick={onarchive}>
 					{#if busy}<Spinner decorative />{:else}<Archive />{/if}Archive conversation
 				</Button>
-				<Button variant="ghost" size="lg" disabled={busy} onclick={() => (confirmArchive = false)}
+				<Button variant="ghost" disabled={busy} onclick={() => (confirmArchive = false)}
 					>Keep current</Button
 				>
 			{:else if renaming}
-				<Button type="submit" size="lg" disabled={!ready}>
+				<Button type="submit" disabled={!ready}>
 					{#if busy}<Spinner decorative />Saving…{:else}<Pencil />Save name{/if}
 				</Button>
-				<Button variant="ghost" size="lg" disabled={busy} onclick={() => (renaming = false)}
+				<Button variant="ghost" disabled={busy} onclick={() => (renaming = false)}
 					>Back to options</Button
 				>
 			{/if}
-			<Button variant="ghost" size="lg" disabled={busy} onclick={onclose}>Close</Button>
+			<Button variant="ghost" disabled={busy} onclick={onclose}>Close</Button>
 		</Sheet.Footer>
 	</form>
 </RoutedSheet>

@@ -12,7 +12,7 @@ import { fixtureRoutes, type FixtureFeature, type FixtureRoutes } from './fixtur
  */
 export async function smallTargets(page: Page) {
 	return page.$$eval(
-		'a, button, [role=button], [role=switch], [role=radio], input, textarea, summary',
+		'a, button, [role=button], [role=switch], [role=radio], input, select, textarea, summary',
 		(els) => {
 			const control =
 				'a, button, [role=button], [role=switch], [role=radio], input, select, textarea, summary, label';
@@ -124,6 +124,7 @@ export async function smallTargets(page: Page) {
 						if (!m) return false;
 						const field =
 							e.tagName === 'TEXTAREA' ||
+							e.tagName === 'SELECT' ||
 							(e instanceof HTMLInputElement && !['checkbox', 'radio'].includes(e.type));
 						if (field) return m.w < 48 || m.h < 32;
 						if (m.kind === 'in-field') return m.h < 31.5;

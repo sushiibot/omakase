@@ -131,14 +131,16 @@
 	<div class="flex flex-col border-b pb-2">
 		<Button
 			variant="ghost"
-			class="justify-start any-pointer-coarse:h-11 any-pointer-coarse:after:hidden"
-			onclick={() => onopensheet?.('thread-settings')}><Pencil />Rename conversation</Button
+			class="h-auto w-full justify-start gap-3 px-3 py-2.5 text-left any-pointer-coarse:after:hidden"
+			onclick={() => onopensheet?.('thread-settings')}
+			><Pencil class="text-muted-foreground" />Rename conversation</Button
 		>
 		{#if !archived}
 			<Button
 				variant="ghost"
-				class="justify-start any-pointer-coarse:h-11 any-pointer-coarse:after:hidden"
-				onclick={() => onopensheet?.('thread-close')}><Archive />Archive conversation</Button
+				class="h-auto w-full justify-start gap-3 px-3 py-2.5 text-left any-pointer-coarse:after:hidden"
+				onclick={() => onopensheet?.('thread-close')}
+				><Archive class="text-muted-foreground" />Archive conversation</Button
 			>
 		{/if}
 	</div>

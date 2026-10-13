@@ -259,7 +259,7 @@
 					aria-pressed={role === value}
 					onclick={() => onrole?.(value)}
 					class={cn(
-						'text-muted-foreground',
+						'text-muted-foreground transition-none',
 						role === value && 'bg-background text-foreground shadow-sm hover:bg-background'
 					)}>{label}</Button
 				>

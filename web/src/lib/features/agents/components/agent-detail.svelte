@@ -180,7 +180,7 @@
 	);
 </script>
 
-<div class="flex min-h-0 min-w-0 flex-1 flex-col text-base" data-agent-detail={agent.id}>
+<div class="flex min-h-0 min-w-0 flex-1 flex-col" data-agent-detail={agent.id}>
 	<AgentHeader title={agent.title} {level} {backLabel} {onback}>
 		{#snippet subtitle()}
 			<span class="flex items-center gap-2">
@@ -218,16 +218,18 @@
 	<p class="sr-only" role="status">{announcement}</p>
 	<div
 		bind:this={scroller}
-		class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"
+		class="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4"
 		data-agent-scroll
 	>
+		<p class={cn('px-4 pb-4 text-xs break-all text-muted-foreground', measureClass.reading)}>
+			{agentMeta(agent)}
+		</p>
 		<div
 			role="log"
 			aria-live="off"
 			aria-label="{agent.title} transcript"
-			class={cn('flex w-full min-w-0 flex-col gap-4', measureClass.reading)}
+			class={cn('flex min-w-0 flex-col gap-4 px-4', measureClass.reading)}
 		>
-			<p class="text-xs break-all text-muted-foreground">{agentMeta(agent)}</p>
 			{#if !session && unavailable}<p class="text-sm text-muted-foreground">{unavailable}</p>{/if}
 			{#if !session && !unavailable}<p role="status" class="text-sm text-muted-foreground">
 					Loading this agent…

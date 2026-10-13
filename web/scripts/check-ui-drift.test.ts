@@ -129,6 +129,9 @@ describe('screens', () => {
 		expect(one(screen, '<div class="flex"><ListScreen /></div>')).toContain('screen root');
 		expect(one(screen, '<Screen title="x" />')).toContain('screen root');
 		expect(rules('src/lib/features/chat/chat-screen.svelte', '<Screen title="x" />')).toEqual([]);
+		expect(
+			one('src/lib/features/chat/chat-screen.svelte', '<div><Screen title="x" /></div>')
+		).toContain('screen root');
 		expect(one(screen, '{#if x}<ListScreen />{:else}<p>none</p>{/if}')).toContain('screen root');
 		// A toast beside the screen is drift: it belongs inside the screen or in a shared toast.
 		expect(one(screen, '<ListScreen />\n<div role="status">Undone</div>')).toContain('screen root');

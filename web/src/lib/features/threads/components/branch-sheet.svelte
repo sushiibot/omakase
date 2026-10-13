@@ -62,10 +62,10 @@
 			{/if}
 		</div>
 		<Sheet.Footer class="any-pointer-coarse:gap-4">
-			<Button size="lg" type="submit" disabled={!ready}>
+			<Button type="submit" disabled={!ready}>
 				{#if busy}<Spinner decorative />Starting the conversation…{:else}<Split />Start conversation{/if}
 			</Button>
-			<Button size="lg" variant="ghost" onclick={onclose}>Cancel</Button>
+			<Button variant="ghost" onclick={onclose}>Cancel</Button>
 		</Sheet.Footer>
 	</form>
 </RoutedSheet>
