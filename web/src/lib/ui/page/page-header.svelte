@@ -57,7 +57,13 @@
 			<h1 class={titleClass}>{title}</h1>
 		{/if}
 		{#if subtitle}
-			<div class={cn('truncate text-xs text-muted-foreground', breadcrumb && 'md:hidden')}>
+			<!-- Clipped sideways only, so a control here keeps its coarse-pointer hit area. -->
+			<div
+				class={cn(
+					'overflow-x-clip text-xs text-ellipsis whitespace-nowrap text-muted-foreground',
+					breadcrumb && 'md:hidden'
+				)}
+			>
 				{@render subtitle()}
 			</div>
 		{/if}
