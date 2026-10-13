@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'bun:test';
 import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { checkFile, resolveSpecifier, specifiers } from './check-boundaries';
+import { checkDrift, checkFile, resolveSpecifier, specifiers } from './check-boundaries';
 
 const FILES = new Set([
 	'src/lib/utils.ts',
@@ -94,6 +94,18 @@ describe('the layer rules', () => {
 			)
 		).toEqual([]);
 		expect(rules('src/lib/ui/screen/tabbed-screen.svelte', imp(engine))).toEqual([]);
+	});
+
+	test('features reach bits-ui only through lib/ui, as a drift warning', () => {
+		const file = 'src/lib/features/browser/components/browser-preview.svelte';
+		const source = svelte("import { Dialog } from 'bits-ui';");
+		expect(checkDrift(file, source).map((v) => v.rule)).toEqual([
+			'features use bits-ui through lib/ui'
+		]);
+		expect(checkDrift(file, svelte("import X from 'bits-ui/dist/x';"))).toHaveLength(1);
+		expect(rules(file, source)).toEqual([]);
+		expect(checkDrift('src/lib/ui/sheet/sheet.svelte', source)).toEqual([]);
+		expect(checkDrift(file, svelte("import { cn } from '$lib/utils';"))).toEqual([]);
 	});
 
 	test('ui imports only ui, utils and packages', () => {
