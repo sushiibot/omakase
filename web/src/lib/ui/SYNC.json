@@ -33,13 +33,13 @@
 		"drift": "none"
 	},
 	"item": {
-		"drift": "none"
+		"drift": "outline variant on ItemGroup for flush bordered row lists (ux-guidelines.md#shared-component-patterns)"
 	},
 	"label": {
 		"drift": "none"
 	},
 	"radio-group": {
-		"drift": "segmented layout and a choice-card part used by settings (ux-guidelines.md#shared-component-patterns)"
+		"drift": "segmented layout, a choice-card part used by settings, and a coarse-pointer hit area on the item (ux-guidelines.md#shared-component-patterns)"
 	},
 	"separator": {
 		"drift": "none"
@@ -54,10 +54,10 @@
 		"drift": "none"
 	},
 	"spinner": {
-		"drift": "forwards icon color props only when set so the icon keeps currentColor (ux-guidelines.md#tokens)"
+		"drift": "forwards icon color props only when set so the icon keeps currentColor (ux-guidelines.md#tokens); decorative prop and reduced-motion stop (ux-guidelines.md#shared-component-patterns)"
 	},
 	"switch": {
-		"drift": "none"
+		"drift": "coarse-pointer hit area (ux-guidelines.md#shared-component-patterns)"
 	},
 	"tabs": {
 		"drift": "swipe pager beside the stock parts; index re-exports raw bits-ui parts under the stock names (ux-guidelines.md#tabs-swipes-and-scroll-ownership)"

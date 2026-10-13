@@ -57,7 +57,7 @@
 {/snippet}
 
 {#snippet busySpinner()}
-	<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
+	<Spinner decorative />
 {/snippet}
 
 {#snippet footer()}

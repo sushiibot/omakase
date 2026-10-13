@@ -74,7 +74,7 @@
 					<Item.Content>
 						{#if test.state === 'running'}
 							<p class="flex items-center gap-2 text-running">
-								<Spinner class="motion-reduce:animate-none" aria-hidden="true" />{test.step}…
+								<Spinner decorative />{test.step}…
 							</p>
 						{:else if test.state === 'done'}
 							<span class="flex flex-wrap items-center gap-2"
@@ -155,7 +155,6 @@
 						aria-describedby="{uid}-enabled-description"
 						bind:checked={() => job.enabled, (v) => ontoggle?.(v)}
 						disabled={busy || !online}
-						class="any-pointer-coarse:after:-inset-y-4"
 					/>
 				</Field.Field>
 			</Field.Label>
@@ -165,12 +164,11 @@
 			</Section>
 			<Section title="Recent runs">
 				{#if job.runs.length}
-					<Item.Group class="overflow-hidden rounded-xl border has-data-[size=sm]:gap-0">
-						{#each job.runs as r, i (r.at)}
+					<Item.Group variant="outline">
+						{#each job.runs as r (r.at)}
 							<div role="listitem">
-								{#if i}<Item.Separator class="my-0" />{/if}
 								{#if r.runId}
-									<Item.Root size="sm" class="rounded-none any-pointer-coarse:min-h-12">
+									<Item.Root size="sm" class="any-pointer-coarse:min-h-11">
 										{#snippet child({ props })}
 											<a href={runHref(r.runId!)} {...props}>
 												{@render runLine(r)}
@@ -181,7 +179,7 @@
 										{/snippet}
 									</Item.Root>
 								{:else}
-									<Item.Root size="sm" class="rounded-none any-pointer-coarse:min-h-12"
+									<Item.Root size="sm" class="any-pointer-coarse:min-h-11"
 										>{@render runLine(r)}</Item.Root
 									>
 								{/if}

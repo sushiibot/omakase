@@ -141,8 +141,7 @@
 	{/snippet}
 	{#if loading}
 		<p role="status" class="flex items-center gap-2 text-sm text-muted-foreground">
-			<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />Loading
-			file stores…
+			<Spinner decorative />Loading file stores…
 		</p>
 	{:else if stores.length === 0 && !form && !error}
 		<p class="text-sm text-muted-foreground">
@@ -231,7 +230,6 @@
 										id={`store-folder-${index}-writes`}
 										disabled={!!busy}
 										bind:checked={folder.writable}
-										class="any-pointer-coarse:after:-inset-y-3.5"
 									/>
 								</Field.Field>
 								{#if form.folders.length > 1}<Button
@@ -325,12 +323,7 @@
 					</Collapsible.Root>
 					<Field.Field orientation="horizontal">
 						<Field.Label for="store-enabled">Available to the assistant</Field.Label>
-						<Switch
-							id="store-enabled"
-							disabled={!!busy}
-							bind:checked={form.enabled}
-							class="any-pointer-coarse:after:-inset-y-3.5"
-						/>
+						<Switch id="store-enabled" disabled={!!busy} bind:checked={form.enabled} />
 					</Field.Field>
 					<Field.Field orientation="horizontal" class="flex-wrap">
 						<Button type="submit" disabled={!!busy}

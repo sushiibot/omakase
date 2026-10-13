@@ -65,7 +65,7 @@
 {#snippet skeleton()}
 	<div class="flex flex-col gap-3" aria-hidden="true">
 		{#each [0, 1, 2] as i (i)}
-			<div class="flex items-center gap-3 px-2 py-3">
+			<div class="flex items-center gap-3 px-3 py-3">
 				<Skeleton class="size-9 rounded-lg" />
 				<div class="flex flex-1 flex-col gap-2">
 					<Skeleton class="h-4 w-1/3" />
@@ -99,7 +99,7 @@
 
 {#snippet row(s: McpServerSummary)}
 	<div role="listitem">
-		<Item.Root size="sm" class="px-2">
+		<Item.Root size="sm">
 			{#snippet child({ props })}
 				<a href={serverHref(s.id)} {...props}>
 					<Item.Media variant="icon">

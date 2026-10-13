@@ -89,10 +89,7 @@
 					disabled={busy || !online}
 					onclick={onrestore}
 				>
-					{#if busy}<Spinner
-							class="motion-reduce:animate-none"
-							aria-hidden="true"
-						/>Restoring…{:else}<Redo2 />Restore this change{/if}
+					{#if busy}<Spinner decorative />Restoring…{:else}<Redo2 />Restore this change{/if}
 				</Button>
 			{:else}
 				<Button
@@ -102,10 +99,7 @@
 					disabled={busy || !online}
 					onclick={onrevert}
 				>
-					{#if busy}<Spinner
-							class="motion-reduce:animate-none"
-							aria-hidden="true"
-						/>Reverting…{:else}<Undo2 />Revert this change{/if}
+					{#if busy}<Spinner decorative />Reverting…{:else}<Undo2 />Revert this change{/if}
 				</Button>
 			{/if}
 			{#if !online}

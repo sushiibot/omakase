@@ -36,7 +36,7 @@
 		<div
 			class={cn(
 				'flex flex-wrap items-center justify-between gap-x-4 gap-y-1',
-				tone === 'list' && 'min-h-8 px-2'
+				tone === 'list' && 'min-h-8 px-3'
 			)}
 		>
 			<h2

@@ -133,7 +133,7 @@
 	{#if hasOlder}
 		<Button variant="outline" disabled={olderLoading} onclick={() => onloadolder?.()}>
 			{#if olderLoading}
-				<Spinner class="motion-reduce:animate-none" aria-hidden="true" />Loading older days…
+				<Spinner decorative />Loading older days…
 			{:else}
 				<ChevronDown />Show older days
 			{/if}

@@ -79,7 +79,7 @@
 
 {#snippet loading()}
 	<p class="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-		<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
+		<Spinner decorative />
 		Loading your name…
 	</p>
 {/snippet}
@@ -130,7 +130,7 @@
 				<Field.Field orientation="horizontal" class="flex-wrap">
 					<Button type="submit" disabled={!dirty || saving}>
 						{#if saving}
-							<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
+							<Spinner decorative />
 							Saving…
 						{:else}
 							Save name

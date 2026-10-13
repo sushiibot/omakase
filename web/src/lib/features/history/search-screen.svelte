@@ -76,7 +76,7 @@
 {#snippet after()}
 	{#if status === 'loading' && slow && result}
 		<p role="status" class="flex items-center gap-2 text-sm text-muted-foreground">
-			<Spinner class="motion-reduce:animate-none" aria-hidden="true" />
+			<Spinner decorative />
 			Searching…
 		</p>
 	{/if}

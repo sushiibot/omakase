@@ -41,19 +41,21 @@ export async function smallTargets(page: Page) {
 					const f = input.getBoundingClientRect();
 					return f.top <= r.top && f.bottom >= r.bottom && f.left <= r.left && f.right >= r.right;
 				});
-				// A Button whose hit area is switched off, or a sidebar row, is a contiguous row and
-				// sizes its own box. Sidebar rows are promised 44px on touch.
+				// A Button whose hit area is switched off, a sidebar row or an Item in a group is a contiguous
+				// row and sizes its own box. Sidebar and list Item rows are promised 44px on touch.
 				const coarse = matchMedia('(any-pointer: coarse)').matches;
 				const sidebarRow =
 					coarse && ['menu-button', 'group-label'].includes(e.getAttribute('data-sidebar') ?? '');
 				const row =
 					sidebarRow ||
 					(coarse && e.getAttribute('data-slot') === 'button' && after.display === 'none');
+				const itemRow =
+					e.getAttribute('data-slot') === 'item' && !!e.closest('[data-slot=item-group]');
 				if (!extended || after.display === 'none')
 					return {
 						w: r.width,
 						h: r.height,
-						kind: sidebarRow ? 'sidebar-row' : row ? 'row' : 'box',
+						kind: sidebarRow ? 'sidebar-row' : itemRow ? 'item-row' : row ? 'row' : 'box',
 						covered: false,
 						lost: [] as string[]
 					};
@@ -108,7 +110,7 @@ export async function smallTargets(page: Page) {
 					.map((e) => ({ e, m: measure(e) }))
 					// A text field is its own wide target at the stock 32px height, and so is a control
 					// inside one. A hit area keeps at least 40px in the axis where a neighbour owns the gap
-					// and about 48px in the other; contiguous rows are at least 40px tall.
+					// and about 48px in the other; contiguous rows are at least 40px tall, sidebar and list Item rows 44px.
 					.filter(({ e, m }) => {
 						if (!m) return false;
 						const field =
@@ -118,7 +120,7 @@ export async function smallTargets(page: Page) {
 						if (m.kind === 'in-field') return m.h < 31.5;
 						if (m.covered) return true;
 						if (m.kind === 'row') return m.w < 47.5 || m.h < 39.5;
-						if (m.kind === 'sidebar-row') return m.w < 47.5 || m.h < 43.5;
+						if (m.kind === 'sidebar-row' || m.kind === 'item-row') return m.w < 47.5 || m.h < 43.5;
 						if (m.kind === 'extended')
 							return Math.min(m.w, m.h) < 39.5 || Math.max(m.w, m.h) < 46.5;
 						return m.w < 47.5 || m.h < 47.5;

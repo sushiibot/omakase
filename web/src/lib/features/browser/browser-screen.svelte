@@ -70,10 +70,8 @@
 			{#if error}<p role="alert" class="text-sm text-failed">{error}</p>{/if}
 			{#if status.holder === 'agent'}
 				<Button size="lg" class="md:self-end" disabled={!!pending || !online} onclick={ontakeover}>
-					{#if pending === 'taking'}<Spinner
-							class="motion-reduce:animate-none"
-							aria-hidden="true"
-						/>Waiting for the agent to let go…{:else}<Hand />Take over the browser{/if}
+					{#if pending === 'taking'}<Spinner decorative />Waiting for the agent to let go…{:else}<Hand
+						/>Take over the browser{/if}
 				</Button>
 				<p class="text-center text-xs text-muted-foreground md:text-right">
 					The agent pauses and can't touch the browser until you hand it back.
@@ -86,10 +84,8 @@
 					disabled={!!pending || !online}
 					onclick={onhandback}
 				>
-					{#if pending === 'handing'}<Spinner
-							class="motion-reduce:animate-none"
-							aria-hidden="true"
-						/>Handing back…{:else}<Undo2 />Hand back to the agent{/if}
+					{#if pending === 'handing'}<Spinner decorative />Handing back…{:else}<Undo2 />Hand back to
+						the agent{/if}
 				</Button>
 			{/if}
 		</ScreenFooter>

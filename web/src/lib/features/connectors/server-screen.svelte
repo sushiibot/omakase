@@ -87,11 +87,8 @@
 	{#if server?.changed}
 		<div class="mt-6 flex flex-col gap-2 border-t pt-4">
 			<Button class="self-start" variant="outline" disabled={busy || !online} onclick={onaccept}>
-				{#if operation === 'snapshot'}<Spinner
-						role="presentation"
-						aria-hidden="true"
-						class="motion-reduce:animate-none"
-					/>Saving…{:else}<Check />Save tracking snapshot{/if}
+				{#if operation === 'snapshot'}<Spinner decorative />Saving…{:else}<Check />Save tracking
+					snapshot{/if}
 			</Button>
 			<p class="text-xs text-muted-foreground">
 				Optional: reset the tool comparison. Current tools are already available to the agent.
@@ -342,10 +339,10 @@
 					class="gap-2"
 				>
 					{#if server.usedBy.length}
-						<Item.Group class="gap-0 overflow-hidden rounded-xl border has-data-[size=sm]:gap-0">
+						<Item.Group variant="outline">
 							{#each server.usedBy as u (u.runId + u.tool)}
-								<div role="listitem" class="not-first:border-t">
-									<Item.Root size="sm" class="rounded-none">
+								<div role="listitem">
+									<Item.Root size="sm">
 										{#snippet child({ props })}
 											<a href={runHref(u.runId)} {...props}>
 												<Item.Content class="min-w-0">

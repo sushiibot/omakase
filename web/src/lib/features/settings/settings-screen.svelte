@@ -120,7 +120,7 @@
 
 {#snippet accountLoading()}
 	<p class="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-		<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
+		<Spinner decorative />
 		Loading your account…
 	</p>
 {/snippet}
@@ -182,13 +182,8 @@
 							class="any-pointer-coarse:*:data-[slot=field]:px-3.5 any-pointer-coarse:*:data-[slot=field]:py-4"
 						>
 							<Field.Field orientation="horizontal">
-								<RadioGroup.Item
-									value={t.id}
-									id="{uid}-theme-{t.id}"
-									aria-labelledby="{uid}-theme-{t.id}-label"
-									class="any-pointer-coarse:after:-inset-x-3.5 any-pointer-coarse:after:-inset-y-4.5"
-								/>
-								<Field.Title id="{uid}-theme-{t.id}-label">{t.label}</Field.Title>
+								<RadioGroup.Item value={t.id} id="{uid}-theme-{t.id}" />
+								<Field.Title>{t.label}</Field.Title>
 							</Field.Field>
 						</Field.Label>
 					{/each}
@@ -213,7 +208,6 @@
 							bind:checked={() => push === 'on', () => ontogglepush?.()}
 							disabled={pushToggleDisabled}
 							aria-describedby="{uid}-push-state {uid}-push-help"
-							class="any-pointer-coarse:after:-inset-y-3.5"
 						/>
 					</Field.Field>
 					<div class="flex flex-col items-start gap-2">
@@ -226,11 +220,7 @@
 							onclick={() => ontest?.()}
 						>
 							{#if testBusy}
-								<Spinner
-									role="presentation"
-									aria-hidden="true"
-									class="motion-reduce:animate-none"
-								/>
+								<Spinner decorative />
 								Sending…
 							{:else}
 								<BellRing aria-hidden="true" />Send test notification
