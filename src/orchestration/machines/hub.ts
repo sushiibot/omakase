@@ -8,6 +8,7 @@ import {
   MACHINE_SESSION_CHANGED,
   SESSION_EVENTS_FEATURE,
   SESSION_PATH_FEATURE,
+  SESSION_TRANSCRIPT_FEATURE,
   type SessionSummary,
 } from "./contracts.ts";
 export const machineGrants = z
@@ -82,7 +83,7 @@ export class MachineHub {
       previous.socket.close(4003, "Machine reconnected");
     }
     void this.request(id, "machine/info", {
-      features: [SESSION_EVENTS_FEATURE, SESSION_PATH_FEATURE],
+      features: [SESSION_EVENTS_FEATURE, SESSION_PATH_FEATURE, SESSION_TRANSCRIPT_FEATURE],
     })
       .then((info) => {
         if (this.peers.get(id) !== peer) return false;
@@ -210,6 +211,10 @@ export class MachineHub {
   /** The daemon starts agents in a folder below a coding root. */
   supportsSessionPath(id: string): boolean {
     return this.peers.get(id)?.info?.features?.includes(SESSION_PATH_FEATURE) === true;
+  }
+  /** The daemon keeps a structured transcript and takes a start prompt's origin. */
+  supportsTranscript(id: string): boolean {
+    return this.peers.get(id)?.info?.features?.includes(SESSION_TRANSCRIPT_FEATURE) === true;
   }
   list() {
     return this.grants.map((g) => ({

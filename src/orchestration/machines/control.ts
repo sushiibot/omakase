@@ -105,6 +105,7 @@ export class MachineControl {
         ...(agent.path ? { path: agent.path } : {}),
         provider: agent.provider,
         text: input.prompt,
+        ...(this.hub.supportsTranscript(agent.machineId) ? { origin } : {}),
       });
     } catch (err) {
       // Only a refusal proves no work started; after a timeout or a bad reply the agent may be running.

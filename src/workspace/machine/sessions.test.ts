@@ -375,3 +375,101 @@ test("a gateway that did not ask about session paths never sees one", () => {
   expect(Object.keys(wireRecord(record, true))).not.toContain("path");
   expect(wireRecord(record, true, true).path).toBe("repo");
 });
+
+const kinds = (r: SessionRecord) => (r.transcript ?? []).map((i) => i.kind);
+
+test("Codex: the transcript holds prompts by origin, messages, finished commands, file changes and tools", async () => {
+  const { sessions } = setup();
+  await sessions.request({ action: "start", sessionId: "s1", taskId: "", rootId: "code", provider: "codex", text: "commands", origin: "agent" });
+  const done = await until(get(sessions, "s1"), (r) => r.status === "completed");
+  expect(kinds(done)).toEqual(["prompt", "command", "fileChange", "tool", "message", "turnEnd"]);
+  const [prompt, command, files, tool, message, end] = done.transcript!;
+  expect(prompt).toMatchObject({ kind: "prompt", origin: "agent", text: "commands" });
+  // The finished command updates the item its start created, with only the end of its output.
+  expect(command).toMatchObject({ kind: "command", id: "c1", command: "bun test", exitCode: 1 });
+  expect(command!.kind === "command" && command.outputTail!.length).toBe(2000);
+  expect(command!.kind === "command" && command.outputTail!.endsWith("1 fail")).toBe(true);
+  expect(files).toMatchObject({ files: [{ path: "src/a.ts", change: "update" }, { path: "src/n.ts", change: "add" }] });
+  expect(tool).toMatchObject({ kind: "tool", name: "docs · search", detail: '{"q":"redirect"}' });
+  expect(message).toMatchObject({ kind: "message", text: "Fixed it.", final: true });
+  expect(end).toMatchObject({ kind: "turnEnd", status: "completed" });
+
+  await sessions.request({ action: "message", sessionId: "s1", text: "and the docs", requestId: "p-1", origin: "owner" });
+  const again = await until(get(sessions, "s1"), (r) => r.status === "completed" && r.attempts === 2);
+  expect(again.transcript!.filter((i) => i.kind === "prompt").map((i) => i.kind === "prompt" && i.origin)).toEqual(["agent", "owner"]);
+});
+
+test("the answer is marked final: Codex's final_answer over later commentary, otherwise the turn's last message", async () => {
+  const { sessions } = setup();
+  await start(sessions, "s1", "codex", "hello");
+  const done = await until(get(sessions, "s1"), (r) => r.status === "completed");
+  const messages = done.transcript!.filter((i) => i.kind === "message");
+  expect(messages.map((m) => m.kind === "message" && [m.text, !!m.final])).toEqual([
+    ["Thinking", false],
+    ["Final: hello", true],
+    ["Afterthought", false],
+  ]);
+  await start(sessions, "c1", "claude", "tools");
+  const claude = await until(get(sessions, "c1"), (r) => r.status === "completed");
+  const answers = claude.transcript!.filter((i) => i.kind === "message");
+  expect(answers[0]).not.toHaveProperty("final");
+  expect(answers[1]).toMatchObject({ text: "Fixed the login test.", final: true });
+});
+
+test("Codex: an approval is recorded pending, then with the owner's decision; one left open is withdrawn", async () => {
+  const { sessions } = setup();
+  await start(sessions, "s1", "codex", "approval");
+  const asked = await until(get(sessions, "s1"), (r) => r.status === "needs-you");
+  expect(asked.transcript!.at(-1)).toMatchObject({ kind: "approval", requestId: asked.requests[0]!.id, status: "pending", title: "Run: bun test" });
+  // A gateway that did not negotiate a start origin leaves the prompt unattributed.
+  expect(asked.transcript![0]).not.toHaveProperty("origin");
+  await sessions.request({ action: "answer", sessionId: "s1", requestId: asked.requests[0]!.id, decision: "acceptForSession" });
+  const done = await until(get(sessions, "s1"), (r) => r.status === "completed");
+  expect(done.transcript!.find((i) => i.kind === "approval")).toMatchObject({ status: "accepted" });
+
+  await start(sessions, "s2", "codex", "approval");
+  await until(get(sessions, "s2"), (r) => r.status === "needs-you");
+  const stopped = (await sessions.request({ action: "stop", sessionId: "s2" })) as SessionRecord;
+  expect(stopped.transcript!.find((i) => i.kind === "approval")).toMatchObject({ status: "withdrawn" });
+  expect(stopped.transcript!.at(-1)).toMatchObject({ kind: "turnEnd", status: "stopped" });
+});
+
+test("Claude: text, Bash, edits and other tools become transcript items, with each result on its call", async () => {
+  const { sessions } = setup();
+  await start(sessions, "c1", "claude", "tools");
+  const done = await until(get(sessions, "c1"), (r) => r.status === "completed");
+  expect(kinds(done)).toEqual(["prompt", "message", "command", "fileChange", "tool", "message", "turnEnd"]);
+  const t = done.transcript!;
+  expect(t[2]).toMatchObject({ kind: "command", command: "bun test", outputTail: "3 pass\n1 fail", failed: true });
+  expect(t[3]).toMatchObject({ kind: "fileChange", files: [{ path: "src/a.ts", change: "update" }] });
+  expect(t[4]).toMatchObject({ kind: "tool", name: "Grep", detail: "login", outputTail: "src/login.ts" });
+
+  // A result that no message carried still shows, as the turn's answer.
+  await start(sessions, "c2", "claude", "deny");
+  const partly = await until(get(sessions, "c2"), (r) => r.status === "completed");
+  expect(partly.transcript!.filter((i) => i.kind === "message").at(-1)).toMatchObject({ text: "Partly done", final: true });
+});
+
+test("the transcript stays within its item and size caps, dropping the oldest items", async () => {
+  const { sessions } = setup();
+  await start(sessions, "s1", "codex", "hello");
+  await until(get(sessions, "s1"), (r) => r.status === "completed");
+  for (let i = 0; i < 40; i++) {
+    await sessions.request({ action: "message", sessionId: "s1", text: `${i} ${"y".repeat(5000)}`, requestId: `p-${i}`, origin: "owner" });
+    await until(get(sessions, "s1"), (r) => r.status === "completed" && r.attempts === i + 2);
+  }
+  const record = (await get(sessions, "s1")()) as SessionRecord;
+  expect(record.transcript!.length).toBeLessThanOrEqual(300);
+  expect(JSON.stringify(record.transcript).length).toBeLessThanOrEqual(64000);
+  const prompts = record.transcript!.filter((i) => i.kind === "prompt");
+  expect(prompts.at(-1)!.kind === "prompt" && prompts.at(-1)!.text.startsWith("39 ")).toBe(true);
+  expect(prompts.every((p) => p.kind === "prompt" && p.text.length <= 4000)).toBe(true);
+  expect(prompts.some((p) => p.kind === "prompt" && p.text.startsWith("0 "))).toBe(false);
+});
+
+test("only a gateway that negotiated transcripts gets one, and never without session events", () => {
+  const record = { id: "s1", taskId: "", rootId: "code", provider: "codex", status: "completed", output: "", updatedAt: "", attempts: 1, requests: [], promptIds: [], transcript: [{ kind: "message", text: "hi", at: "" }] } satisfies SessionRecord;
+  expect(Object.keys(wireRecord(record, true, true))).not.toContain("transcript");
+  expect(Object.keys(wireRecord(record, false, true, true))).not.toContain("transcript");
+  expect(wireRecord(record, true, false, true).transcript).toEqual(record.transcript);
+});

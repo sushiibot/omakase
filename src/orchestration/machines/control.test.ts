@@ -12,6 +12,7 @@ test("an agent starts only on a daemon that reports its status, so its result ca
   const hub = {
     list: () => [{ id: "pc", name: "Desktop", connected: true, providers: ["codex"], roots: [{ id: "code", name: "Code", coding: true }] }],
     supportsEvents: () => events,
+    supportsTranscript: () => events,
     request: async (_m: string, _method: string, p: { sessionId: string }) => {
       requests.push(p);
       return { id: p.sessionId, taskId: "", rootId: "code", provider: "codex", status: "running", output: "", updatedAt: new Date().toISOString(), attempts: 1, requests: [], promptIds: [], stateVersion: 1 };
@@ -25,7 +26,23 @@ test("an agent starts only on a daemon that reports its status, so its result ca
   events = true;
   const agent = await control.startAgent(input, "agent");
   expect(agent).toMatchObject({ machineId: "pc", conversationId: "main", remoteStatus: "running", stateVersion: 1 });
-  expect(requests).toEqual([expect.objectContaining({ action: "start", sessionId: agent.id, taskId: "" })]);
+  // A daemon that keeps a transcript learns who wrote the start prompt.
+  expect(requests).toEqual([expect.objectContaining({ action: "start", sessionId: agent.id, taskId: "", origin: "agent" })]);
+});
+
+test("the app's view of a session carries its transcript; the agent's view never does", async () => {
+  const store = new CodingAgentStore(new MemoryJsonState());
+  const transcript = [{ kind: "message", text: "Done", at: "2026-10-12T00:00:00Z" }];
+  const hub = {
+    list: () => [{ id: "pc", name: "Desktop", connected: true, providers: ["codex"], roots: [{ id: "code", name: "Code", coding: true }] }],
+    supportsEvents: () => true,
+    supportsTranscript: () => true,
+    request: async (_m: string, _method: string, p: { sessionId: string }) => ({ id: p.sessionId, taskId: "", rootId: "code", provider: "codex", status: "completed", output: "x", final: "Done", updatedAt: new Date().toISOString(), attempts: 1, requests: [], promptIds: [], stateVersion: 1, transcript }),
+  } as unknown as MachineHub;
+  const agents = new CodingAgents(new MachineControl(hub, store));
+  const { agent } = (await agents.action({ action: "start", machineId: "pc", rootId: "code", provider: "codex", prompt: "Fix it" })) as { agent: CodingAgentRecord };
+  expect(((await agents.action({ action: "get", id: agent.id })) as { session: object }).session).not.toHaveProperty("transcript");
+  expect(((await agents.get(agent.id, { transcript: true })) as { session?: object }).session).toMatchObject({ transcript, final: "Done" });
 });
 
 test("agents that finished over 30 days ago are forgotten with their bookkeeping; live ones stay", () => {
@@ -48,6 +65,7 @@ test("a paused conversation refuses its agent's start and message, never the own
   const hub = {
     list: () => [{ id: "pc", name: "Desktop", connected: true, providers: ["codex"], roots: [{ id: "code", name: "Code", coding: true }] }],
     supportsEvents: () => true,
+    supportsTranscript: () => false,
     request: async (_m: string, _method: string, p: { sessionId: string }) => {
       requests.push(p);
       return { id: p.sessionId, taskId: "", rootId: "code", provider: "codex", status: "running", output: "", updatedAt: new Date().toISOString(), attempts: 1, requests: [], promptIds: [], stateVersion: 1 };
@@ -83,6 +101,7 @@ test("an agent in a subfolder needs a daemon that supports it; a refused start l
     list: () => [{ id: "pc", name: "Desktop", connected: true, providers: ["codex"], roots: [{ id: "code", name: "Code", coding: true }] }],
     supportsEvents: () => true,
     supportsSessionPath: () => paths,
+    supportsTranscript: () => false,
     request: async (_m: string, _method: string, p: { sessionId: string; path?: string }) => {
       requests.push(p);
       if (refuse) throw refuse;

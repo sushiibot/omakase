@@ -11,10 +11,12 @@ import {
   sessionRecord,
   sessionRequest,
   SESSION_EVENT_FIELDS,
+  TRANSCRIPT_LIMITS,
   type AnswerDecision,
   type RequestDetail,
   type SessionRecord,
   type SessionSummary,
+  type TranscriptItem,
 } from "../../orchestration/machines/contracts.ts";
 import { SharedFiles } from "./files.ts";
 import { JsonProcess } from "./process.ts";
@@ -35,6 +37,8 @@ interface Active {
   lastEventAt: number;
   /** File changes Codex announced, by item id, so their approval can show what it changes. */
   files: Map<string, FileChanges>;
+  /** Claude tool calls by tool_use id, so their result lands on the item that started them. */
+  tools: Map<string, true>;
 }
 const APPROVAL_DECISIONS: AnswerDecision[] = [
   "accept",
@@ -65,6 +69,33 @@ function parseChange(raw: any): FileChanges[number] {
 const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
 const cut = (v: string | undefined, n: number) =>
   v && v.length > n ? `${v.slice(0, n - 1)}…` : v;
+const tail = (v: string, n: number) => (v.length > n ? `…${v.slice(-(n - 1))}` : v);
+const now = () => new Date().toISOString();
+function lastIndex<T>(items: readonly T[], ok: (item: T) => boolean) {
+  for (let i = items.length - 1; i >= 0; i--) if (ok(items[i]!)) return i;
+  return -1;
+}
+/** Claude tool_result content: a string or text blocks. */
+function resultText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((c) => (c?.type === "text" && typeof c.text === "string" ? c.text : ""))
+    .filter(Boolean)
+    .join("\n");
+}
+const CLAUDE_FILE_TOOLS: Record<string, "add" | "update"> = {
+  Write: "add",
+  Edit: "update",
+  MultiEdit: "update",
+  NotebookEdit: "update",
+};
+/** The one input field that says what a Claude tool call does. */
+function claudeToolDetail(input: any): string | undefined {
+  for (const key of ["file_path", "path", "pattern", "url", "query", "description", "prompt"])
+    if (typeof input?.[key] === "string" && input[key]) return input[key];
+  return undefined;
+}
 /**
  * Codex server requests that wait on the owner; anything else is refused. The approved thing (command,
  * host, files) leads and is kept whole; the model's own reason is cut short and labelled. When the
@@ -243,9 +274,10 @@ export function sessionSummaryOf(record: SessionRecord): SessionSummary {
   };
 }
 /** A record as a gateway parses it: an older gateway rejects the event fields and the path. */
-export function wireRecord(record: SessionRecord, events: boolean, paths = false) {
+export function wireRecord(record: SessionRecord, events: boolean, paths = false, transcript = false) {
   const copy = structuredClone(record);
   if (!paths) delete copy.path;
+  if (!transcript || !events) delete copy.transcript;
   if (events) return copy;
   for (const key of SESSION_EVENT_FIELDS) delete copy[key];
   for (const r of copy.requests) {
@@ -291,6 +323,8 @@ export class MachineSessions {
           "Daemon restarted; send a follow-up to resume this session.";
         if (record.turn && !record.turn.endedAt)
           record.turn.endedAt = new Date().toISOString();
+        this.settleApprovals(record);
+        this.record(record, { kind: "turnEnd", status: "interrupted", error: record.error, at: now() });
         record.stalled = undefined;
         record.stalledAt = undefined;
         record.stateVersion++;
@@ -395,9 +429,70 @@ export class MachineSessions {
     record.output = (record.output + text).slice(-64000);
     this.dirty(record);
   }
+  /** Appends to the capped transcript: oldest items go first when it exceeds its count or size. */
+  private record(record: SessionRecord, item: TranscriptItem) {
+    const items = [...(record.transcript ?? []), item];
+    let size = JSON.stringify(items).length;
+    while (items.length > 1 && (items.length > TRANSCRIPT_LIMITS.items || size > TRANSCRIPT_LIMITS.chars))
+      size -= JSON.stringify(items.shift()).length + 1;
+    record.transcript = items;
+    this.dirty(record);
+  }
+  private findItem<K extends TranscriptItem["kind"]>(record: SessionRecord, kind: K, id: string) {
+    const items = record.transcript ?? [];
+    return items[lastIndex(items, (i) => i.kind === kind && "id" in i && i.id === id)] as
+      | Extract<TranscriptItem, { kind: K }>
+      | undefined;
+  }
+  private prompt(record: SessionRecord, text: string, origin?: "owner" | "agent") {
+    this.record(record, {
+      kind: "prompt",
+      ...(origin ? { origin } : {}),
+      text: cut(text, TRANSCRIPT_LIMITS.prompt)!,
+      at: now(),
+    });
+  }
+  private message(record: SessionRecord, text: string, final = false) {
+    if (text.trim())
+      this.record(record, {
+        kind: "message",
+        text: tail(text, TRANSCRIPT_LIMITS.message),
+        ...(final ? { final: true } : {}),
+        at: now(),
+      });
+  }
+  private approval(record: SessionRecord, requestId: string | number, status: "accepted" | "declined" | "cancelled" | "withdrawn") {
+    const items = record.transcript ?? [];
+    const item = items[lastIndex(items, (i) => i.kind === "approval" && String(i.requestId) === String(requestId))];
+    if (item?.kind === "approval" && item.status === "pending") {
+      item.status = status;
+      this.dirty(record);
+    }
+  }
+  /** Approvals still open when their turn ends can no longer be answered. */
+  private settleApprovals(record: SessionRecord) {
+    for (const item of record.transcript ?? [])
+      if (item.kind === "approval" && item.status === "pending") item.status = "withdrawn";
+  }
   private endTurn(record: SessionRecord) {
     if (record.turn && !record.turn.endedAt)
       record.turn.endedAt = new Date().toISOString();
+    this.settleApprovals(record);
+    // Without a marked answer, the turn's last message is its answer.
+    const items = record.transcript ?? [];
+    const turn = items.slice(lastIndex(items, (i) => i.kind === "prompt") + 1);
+    if (!turn.some((i) => i.kind === "message" && i.final)) {
+      const last = turn[lastIndex(turn, (i) => i.kind === "message")];
+      if (last?.kind === "message") last.final = true;
+    }
+    this.record(record, {
+      kind: "turnEnd",
+      status: record.status,
+      ...(record.error && record.status !== "completed" && record.status !== "stopped"
+        ? { error: record.error }
+        : {}),
+      at: now(),
+    });
     record.requests = [];
     record.stalled = undefined;
     record.stalledAt = undefined;
@@ -461,6 +556,15 @@ export class MachineSessions {
       active.pending.delete(String(request.id));
       // Cancel ends Codex's turn: the owner chose that, so that turn's interruption reads as a stop.
       if (p.decision === "cancel") active.cancelledTurn = active.turnId;
+      this.approval(
+        record,
+        request.id,
+        p.decision === "accept" || p.decision === "acceptForSession"
+          ? "accepted"
+          : p.decision === "cancel"
+            ? "cancelled"
+            : "declined",
+      );
       record.requests = record.requests.filter((r) => r !== request);
       record.status = record.requests.length ? "needs-you" : "running";
       // The wait was the owner's, not a silent provider.
@@ -488,6 +592,7 @@ export class MachineSessions {
           record.promptIds = [...record.promptIds, p.requestId].slice(-100);
           record.output = (record.output + `\nYou: ${p.text}\n\n`).slice(-64000);
           this.note(record, p.origin, "steer", p.text);
+          this.prompt(record, p.text, p.origin);
           this.alive(record, active);
           // The request id guards against a repeat, so it is persisted at once.
           record.updatedAt = new Date().toISOString();
@@ -584,6 +689,7 @@ export class MachineSessions {
       record.requests = [];
       record.turn = { startedAt: new Date().toISOString() };
       record.output = (record.output + `\nYou: ${p.text}\n\n`).slice(-64000);
+      this.prompt(record, p.text, p.action === "prompt" ? undefined : p.origin);
       this.bump(record);
       void this.launch(record, command, cwd, p.text).catch((err) => {
         const active = this.active.get(record.id);
@@ -628,6 +734,13 @@ export class MachineSessions {
         params: msg.params,
       });
       record.requests.push({ id: msg.id, method: msg.method, ...request });
+      this.record(record, {
+        kind: "approval",
+        requestId: msg.id,
+        title: cut(request.description.split("\n")[0], TRANSCRIPT_LIMITS.summary),
+        status: "pending",
+        at: now(),
+      });
       record.status = "needs-you";
       this.bump(record);
       return;
@@ -647,16 +760,28 @@ export class MachineSessions {
             String(msg.params.item.id),
             msg.params.item.changes.slice(0, 101).map(parseChange),
           );
-        if (msg.params?.item?.type === "commandExecution")
+        if (msg.params?.item?.type === "commandExecution") {
           this.append(
             record,
             `\n$ ${String(msg.params.item.command).slice(0, 2000)}\n`,
           );
+          this.record(record, {
+            kind: "command",
+            ...(str(msg.params.item.id) ? { id: cut(msg.params.item.id, 200) } : {}),
+            command: cut(String(msg.params.item.command ?? ""), TRANSCRIPT_LIMITS.command)!,
+            at: now(),
+          });
+        }
         return;
       case "item/completed": {
         const item = msg.params?.item;
+        if (item && item.type !== "agentMessage") {
+          this.codexItem(record, item);
+          return;
+        }
         if (item?.type !== "agentMessage" || typeof item.text !== "string")
           return;
+        this.message(record, item.text, item.phase === "final_answer");
         // A final_answer outranks later commentary; without phases the last message is the answer.
         if (
           active?.finalPhase === "final_answer" &&
@@ -674,6 +799,7 @@ export class MachineSessions {
         record.requests = record.requests.filter((r) => String(r.id) !== id);
         active?.pending.delete(id);
         if (record.requests.length === before) return;
+        this.approval(record, id, "withdrawn");
         if (record.status === "needs-you" && !record.requests.length)
           record.status = "running";
         this.bump(record);
@@ -725,6 +851,62 @@ export class MachineSessions {
       }
     }
   }
+  /** A finished Codex command, file change or tool call, as one transcript item. */
+  private codexItem(record: SessionRecord, item: any) {
+    const failed = item.status === "failed" || item.status === "declined" ? { failed: true } : {};
+    if (item.type === "commandExecution") {
+      const output = typeof item.aggregatedOutput === "string" && item.aggregatedOutput.trim()
+        ? { outputTail: tail(item.aggregatedOutput, TRANSCRIPT_LIMITS.outputTail) }
+        : {};
+      const exit = Number.isInteger(item.exitCode) ? { exitCode: item.exitCode as number } : {};
+      const existing = str(item.id) ? this.findItem(record, "command", cut(item.id, 200)!) : undefined;
+      if (existing) {
+        Object.assign(existing, exit, output, failed);
+        this.dirty(record);
+      } else
+        this.record(record, {
+          kind: "command",
+          command: cut(String(item.command ?? ""), TRANSCRIPT_LIMITS.command)!,
+          ...exit,
+          ...output,
+          ...failed,
+          at: now(),
+        });
+      return;
+    }
+    if (item.type === "fileChange" && Array.isArray(item.changes)) {
+      const files = item.changes
+        .map(parseChange)
+        .filter((c: FileChanges[number]) => c.path)
+        .map((c: FileChanges[number]) => ({
+          path: cut(c.path, 2000)!,
+          change: c.change ?? "update",
+          ...(c.movePath ? { movePath: cut(c.movePath, 2000)! } : {}),
+        }));
+      if (!files.length) return;
+      this.record(record, {
+        kind: "fileChange",
+        files: files.slice(0, TRANSCRIPT_LIMITS.files),
+        ...(files.length > TRANSCRIPT_LIMITS.files ? { more: files.length - TRANSCRIPT_LIMITS.files } : {}),
+        ...failed,
+        at: now(),
+      });
+      return;
+    }
+    if (item.type === "mcpToolCall" || item.type === "webSearch") {
+      const name = item.type === "webSearch"
+        ? "Web search"
+        : [str(item.server), str(item.tool)].filter(Boolean).join(" · ") || "Tool";
+      const detail = str(item.query) ?? (item.arguments ? JSON.stringify(item.arguments) : undefined);
+      this.record(record, {
+        kind: "tool",
+        name: cut(name, 200)!,
+        ...(detail ? { detail: cut(detail, TRANSCRIPT_LIMITS.summary)! } : {}),
+        ...(item.error ? { failed: true } : failed),
+        at: now(),
+      });
+    }
+  }
   private claudeEvent(
     record: SessionRecord,
     process: JsonProcess,
@@ -749,10 +931,20 @@ export class MachineSessions {
     }
     if (msg.type === "assistant") {
       for (const item of msg.message?.content ?? []) {
-        if (item.type === "text") this.append(record, item.text);
-        else if (item.type === "tool_use")
+        if (item.type === "text") {
+          this.append(record, item.text);
+          if (typeof item.text === "string") this.message(record, item.text);
+        } else if (item.type === "tool_use") {
           this.append(record, `\n${item.name}\n`);
+          this.claudeTool(record, item, active);
+        }
       }
+      return;
+    }
+    if (msg.type === "user") {
+      for (const item of Array.isArray(msg.message?.content) ? msg.message.content : [])
+        if (item?.type === "tool_result" && typeof item.tool_use_id === "string")
+          this.claudeResult(record, item, active);
       return;
     }
     if (msg.type !== "result") return;
@@ -788,6 +980,14 @@ export class MachineSessions {
     if (typeof msg.result === "string" && msg.result) {
       if (!failed) record.final = msg.result.slice(-FINAL_MAX);
       if (!record.output.trim()) record.output = msg.result.slice(-64000);
+      // The result is the turn's answer: it marks the matching message, or is added when no message carried it.
+      const items = record.transcript ?? [];
+      const turn = items.slice(lastIndex(items, (i) => i.kind === "prompt") + 1);
+      const last = turn[lastIndex(turn, (i) => i.kind === "message")];
+      if (!failed) {
+        if (last?.kind === "message" && last.text.trim() === msg.result.trim()) last.final = true;
+        else this.message(record, msg.result, true);
+      }
     }
     this.endTurn(record);
     // The turn is over: a follow-up may start while this process finishes exiting.
@@ -796,6 +996,49 @@ export class MachineSessions {
     const exitTimer = setTimeout(() => process.kill(), 10000);
     exitTimer.unref();
     process.child.once("close", () => clearTimeout(exitTimer));
+  }
+  private claudeTool(record: SessionRecord, item: any, active: Active | undefined) {
+    const id = str(item.id) ? cut(item.id, 200)! : undefined;
+    const name = String(item.name ?? "Tool");
+    const input = item.input ?? {};
+    if (id && active && active.tools.size < 1000) active.tools.set(id, true);
+    const file = CLAUDE_FILE_TOOLS[name];
+    if (file && typeof (input.file_path ?? input.notebook_path) === "string") {
+      this.record(record, {
+        kind: "fileChange",
+        files: [{ path: cut(input.file_path ?? input.notebook_path, 2000)!, change: file }],
+        at: now(),
+      });
+      return;
+    }
+    if (name === "Bash" && typeof input.command === "string") {
+      this.record(record, {
+        kind: "command",
+        ...(id ? { id } : {}),
+        command: cut(input.command, TRANSCRIPT_LIMITS.command)!,
+        at: now(),
+      });
+      return;
+    }
+    const detail = claudeToolDetail(input);
+    this.record(record, {
+      kind: "tool",
+      ...(id ? { id } : {}),
+      name: cut(name, 200)!,
+      ...(detail ? { detail: cut(detail, TRANSCRIPT_LIMITS.summary)! } : {}),
+      at: now(),
+    });
+  }
+  /** A Claude tool result fills in the command or tool item it answers; file edits stay as they were. */
+  private claudeResult(record: SessionRecord, item: any, active: Active | undefined) {
+    const id = cut(item.tool_use_id, 200)!;
+    if (active && !active.tools.has(id)) return;
+    const target = this.findItem(record, "command", id) ?? this.findItem(record, "tool", id);
+    if (!target) return;
+    const text = resultText(item.content);
+    if (text.trim()) target.outputTail = tail(text, TRANSCRIPT_LIMITS.outputTail);
+    if (item.is_error === true) target.failed = true;
+    this.dirty(record);
   }
   private deny(record: SessionRecord, tools: unknown[]) {
     const names = tools
@@ -861,6 +1104,7 @@ export class MachineSessions {
       pending: new Map(),
       lastEventAt: Date.now(),
       files: new Map(),
+      tools: new Map(),
     });
     if (record.provider === "codex") {
       await process.request("initialize", {

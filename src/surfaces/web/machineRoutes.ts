@@ -38,7 +38,7 @@ export class MachineRoutes {
       const match = /^\/api\/agents\/([a-z0-9][a-z0-9-]{0,63})(?:\/(answer|message|stop))?$/.exec(path);
       if (!match) return json({ error: "Not found." }, 404);
       const agent = this.agents.require(match[1]!);
-      if (!match[2] && req.method === "GET") return json(await this.agents.get(agent.id));
+      if (!match[2] && req.method === "GET") return json(await this.agents.get(agent.id, { transcript: true }));
       if (!match[2] || req.method !== "POST") return json({ error: "Method not allowed." }, 405);
       const raw = await readJson(req, 20000);
       if (raw instanceof Response) return raw;
@@ -54,7 +54,7 @@ export class MachineRoutes {
         this.control.observer?.noteAction(agent.conversationId, "owner");
         session = await this.control.stopSession(agent.machineId, agent.id);
       }
-      return json({ agent: this.agents.require(agent.id), session: agentSessionView(session) });
+      return json({ agent: this.agents.require(agent.id), session: agentSessionView(session, { transcript: true }) });
     } catch (err) {
       return json(
         { error: err instanceof Error ? err.message : "Machine request failed." },

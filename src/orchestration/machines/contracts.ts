@@ -100,6 +100,8 @@ export const sessionRequest = z.discriminatedUnion("action", [
       text: z.string().trim().min(1).max(60000),
       /** Working folder relative to the root; only sent to a daemon that negotiated sessionPath. */
       path: agentPath.optional(),
+      /** Who wrote the start prompt; only sent to a daemon that negotiated sessionTranscript. */
+      origin: actionOrigin.optional(),
     })
     .strict(),
   z
@@ -131,6 +133,98 @@ export const sessionRequest = z.discriminatedUnion("action", [
     })
     .strict(),
 ]);
+const at = z.string().max(40);
+const transcriptFile = z
+  .object({
+    path: z.string().max(2000),
+    change: z.enum(["add", "delete", "update"]),
+    movePath: z.string().max(2000).optional(),
+  })
+  .strict();
+/** Caps for one transcript item's text fields; the whole transcript is also capped by item count and size. */
+export const TRANSCRIPT_LIMITS = {
+  items: 300,
+  chars: 64000,
+  prompt: 4000,
+  message: 8000,
+  command: 2000,
+  outputTail: 2000,
+  files: 50,
+  summary: 500,
+} as const;
+/** One step of a session as the app shows it: prompts, the agent's messages and its tool work. */
+export const transcriptItem = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("prompt"),
+      /** Absent when the gateway that sent it did not say who wrote it. */
+      origin: actionOrigin.optional(),
+      text: z.string().max(TRANSCRIPT_LIMITS.prompt),
+      at,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("message"),
+      text: z.string().max(TRANSCRIPT_LIMITS.message),
+      /** The turn's answer, as opposed to commentary while it worked. */
+      final: z.boolean().optional(),
+      at,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("command"),
+      /** The provider's item id, so a finished command updates the item it started. */
+      id: z.string().max(200).optional(),
+      command: z.string().max(TRANSCRIPT_LIMITS.command),
+      exitCode: z.number().int().optional(),
+      outputTail: z.string().max(TRANSCRIPT_LIMITS.outputTail).optional(),
+      failed: z.boolean().optional(),
+      at,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("tool"),
+      id: z.string().max(200).optional(),
+      name: z.string().max(200),
+      detail: z.string().max(TRANSCRIPT_LIMITS.summary).optional(),
+      outputTail: z.string().max(TRANSCRIPT_LIMITS.outputTail).optional(),
+      failed: z.boolean().optional(),
+      at,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("fileChange"),
+      files: z.array(transcriptFile).max(TRANSCRIPT_LIMITS.files),
+      /** More files changed than the item lists. */
+      more: z.number().int().min(1).optional(),
+      failed: z.boolean().optional(),
+      at,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("approval"),
+      requestId: z.union([z.string().max(200), z.number()]),
+      title: z.string().max(TRANSCRIPT_LIMITS.summary).optional(),
+      /** accepted covers approval for the rest of the turn; withdrawn means the turn ended or the provider resolved it. */
+      status: z.enum(["pending", "accepted", "declined", "cancelled", "withdrawn"]),
+      at,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("turnEnd"),
+      status: sessionStatus,
+      error: z.string().max(1000).optional(),
+      at,
+    })
+    .strict(),
+]);
+export type TranscriptItem = z.infer<typeof transcriptItem>;
 export const sessionRecord = z
   .object({
     id: machineId,
@@ -190,6 +284,8 @@ export const sessionRecord = z
       )
       .max(20)
       .optional(),
+    /** Structured history for the app; only sent to a gateway that negotiated sessionTranscript. */
+    transcript: z.array(transcriptItem).max(TRANSCRIPT_LIMITS.items).optional(),
   })
   .strict();
 export type SessionRecord = z.infer<typeof sessionRecord>;
@@ -206,6 +302,8 @@ export const SESSION_EVENT_FIELDS = [
 export const SESSION_EVENTS_FEATURE = "sessionEvents";
 /** The daemon starts sessions in a folder below the coding root. */
 export const SESSION_PATH_FEATURE = "sessionPath";
+/** The daemon keeps a structured transcript per session and takes a start prompt's origin. */
+export const SESSION_TRANSCRIPT_FEATURE = "sessionTranscript";
 export const MACHINE_SESSIONS = "machine/sessions";
 export const MACHINE_SESSION_CHANGED = "machine/sessionChanged";
 export const sessionSummary = z

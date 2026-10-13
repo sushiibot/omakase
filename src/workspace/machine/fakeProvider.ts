@@ -26,6 +26,20 @@ if (process.argv.includes('-p')) {
       setInterval(() => {}, 1000);
       return;
     }
+    if (prompt.includes('tools')) {
+      send({ type: 'assistant', session_id: 'claude-one', message: { content: [
+        { type: 'text', text: 'Checking the tests.' },
+        { type: 'tool_use', id: 't-bash', name: 'Bash', input: { command: 'bun test', description: 'Run tests' } },
+        { type: 'tool_use', id: 't-edit', name: 'Edit', input: { file_path: 'src/a.ts', old_string: 'a', new_string: 'b' } },
+        { type: 'tool_use', id: 't-grep', name: 'Grep', input: { pattern: 'login' } },
+      ] } });
+      send({ type: 'user', session_id: 'claude-one', message: { content: [
+        { type: 'tool_result', tool_use_id: 't-bash', content: [{ type: 'text', text: '3 pass\n1 fail' }], is_error: true },
+        { type: 'tool_result', tool_use_id: 't-grep', content: 'src/login.ts' },
+      ] } });
+      send({ type: 'result', subtype: 'success', is_error: false, result: 'Fixed the login test.', session_id: 'claude-one', result_index: 0 });
+      return;
+    }
     send({ type: 'assistant', session_id: 'claude-one', message: { content: [{ type: 'text', text: (resumed ? 'Resumed: ' : 'Claude reply: ') + prompt }] } });
     if (prompt.includes('deny')) {
       send({ type: 'system', subtype: 'permission_denied', tool_name: 'Bash', tool_use_id: 't1', message: 'denied', session_id: 'claude-one' });
@@ -92,6 +106,13 @@ if (process.argv.includes('-p')) {
       ask('item/commandExecution/requestApproval', { command: 'ls' });
       setTimeout(() => { send({ method: 'serverRequest/resolved', params: { threadId: 'thread-one', requestId: pending } }); pending = null; finish('Resolved elsewhere'); }, 100);
       return;
+    }
+    if (text.includes('commands')) {
+      send({ method: 'item/started', params: { item: { type: 'commandExecution', id: 'c1', command: 'bun test', status: 'inProgress' } } });
+      send({ method: 'item/completed', params: { item: { type: 'commandExecution', id: 'c1', command: 'bun test', status: 'completed', exitCode: 1, aggregatedOutput: 'x'.repeat(3000) + '\n1 fail' } } });
+      send({ method: 'item/completed', params: { item: { type: 'fileChange', id: 'f2', status: 'completed', changes: [{ path: 'src/a.ts', kind: { type: 'update', move_path: null }, diff: '' }, { path: 'src/n.ts', kind: { type: 'add' }, diff: '' }] } } });
+      send({ method: 'item/completed', params: { item: { type: 'mcpToolCall', id: 't1', server: 'docs', tool: 'search', status: 'completed', arguments: { q: 'redirect' } } } });
+      return finish('Fixed it.');
     }
     if (text.includes('fail')) {
       send({ method: 'error', params: { error: { message: 'rate limited' }, willRetry: true } });

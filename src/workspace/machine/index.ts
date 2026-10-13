@@ -7,6 +7,7 @@ import {
   MACHINE_SESSION_CHANGED,
   SESSION_EVENTS_FEATURE,
   SESSION_PATH_FEATURE,
+  SESSION_TRANSCRIPT_FEATURE,
   type SessionRecord,
 } from "../../orchestration/machines/contracts.ts";
 import { SharedFiles } from "./files.ts";
@@ -65,6 +66,8 @@ let socket: WebSocket | undefined;
 let events = false;
 // Set once the gateway asks about session paths; an older gateway rejects the info and record keys.
 let paths = false;
+// Set once the gateway asks about transcripts; an older gateway rejects the record key and the start origin.
+let transcript = false;
 sessions.onChange = (summary) => {
   if (events && socket?.readyState === WebSocket.OPEN)
     socket.send(
@@ -92,6 +95,7 @@ function connect() {
   socket = ws;
   events = false;
   paths = false;
+  transcript = false;
   const heartbeat = setInterval(() => {
     if (ws.readyState === WebSocket.OPEN)
       ws.send(JSON.stringify({ jsonrpc: "2.0", method: "machine/heartbeat" }));
@@ -114,9 +118,15 @@ function connect() {
           message.params.features.includes(SESSION_EVENTS_FEATURE)
         )
           events = true;
-        paths =
-          Array.isArray(message.params?.features) &&
-          message.params.features.includes(SESSION_PATH_FEATURE);
+        const asked: unknown[] = Array.isArray(message.params?.features)
+          ? message.params.features
+          : [];
+        paths = asked.includes(SESSION_PATH_FEATURE);
+        transcript = asked.includes(SESSION_TRANSCRIPT_FEATURE);
+        const features = [
+          ...(paths ? [SESSION_PATH_FEATURE] : []),
+          ...(transcript ? [SESSION_TRANSCRIPT_FEATURE] : []),
+        ];
         result = {
           name: config.name,
           roots: config.roots.map(({ id, name, coding }) => ({
@@ -125,7 +135,7 @@ function connect() {
             coding,
           })),
           providers: Object.keys(config.providers),
-          ...(paths ? { features: [SESSION_PATH_FEATURE] } : {}),
+          ...(features.length ? { features } : {}),
         };
       } else if (message.method === MACHINE_SESSIONS) {
         events = true;
@@ -137,6 +147,7 @@ function connect() {
           (await sessions.request(message.params)) as SessionRecord,
           events,
           paths,
+          transcript,
         );
       else throw new Error("Unknown machine operation.");
       if (ws.readyState === WebSocket.OPEN)
