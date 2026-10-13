@@ -47,7 +47,7 @@ The standalone Browser takeover screen remains a development preview.
 Connectors is available automatically in the owner web app.
 The workspace stores connections and credentials outside the browser.
 The screen supports token or OAuth authentication, tool-list review, reconnection, disconnection, and removal.
-See the root README for Fastmail setup and protocol limits.
+See [MCP connections](../README.md#mcp-connections) for setup, protocol limits, and tool access.
 
 ## UI and UX guidance
 
