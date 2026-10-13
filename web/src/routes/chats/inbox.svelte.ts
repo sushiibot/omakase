@@ -1,41 +1,27 @@
-<script lang="ts" module>
-	const inboxDisclosure = $state({ expanded: false });
-</script>
+import { onMount, tick, untrack } from 'svelte';
+import { goto, replaceState } from '$app/navigation';
+import { resolve } from '$app/paths';
+import { page } from '$app/state';
+import { returnTo } from '$lib/core/nav/back';
+import { leaveSheet, routedSheet } from '$lib/core/nav/sheet';
+import { closeShownNotifications } from '$lib/core/pwa/notifications';
+import { pwa } from '$lib/core/pwa/pwa.svelte';
+import { hub } from '$lib/core/realtime/hub.svelte';
+import { threadsStore } from '$lib/features/threads';
+import { chatStore } from '$lib/features/chat';
+import {
+	deepLinkItem,
+	messagePreview,
+	needsYou,
+	type HomeItem,
+	type HomePeek
+} from '$lib/features/home';
+import type { ConnectionState } from '$lib/ui/connection-banner.svelte';
 
-<script lang="ts">
-	import type { Snippet } from 'svelte';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import { onMount, tick, untrack } from 'svelte';
-	import { goto, replaceState } from '$app/navigation';
-	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
-	import { returnTo } from '$lib/core/nav/back';
-	import { leaveSheet, routedSheet } from '$lib/core/nav/sheet';
-	import { closeShownNotifications } from '$lib/core/pwa/notifications';
-	import { pwa } from '$lib/core/pwa/pwa.svelte';
-	import { hub } from '$lib/core/realtime/hub.svelte';
-	import { threadsStore } from '$lib/features/threads';
-	import { chatStore } from '$lib/features/chat';
-	import {
-		DiscussionPicker,
-		inboxConversation,
-		deepLinkItem,
-		HomeScreen,
-		messagePreview,
-		needsYou,
-		type HomeItem,
-		type HomePeek
-	} from '$lib/features/home';
-	import type { ConnectionState } from '$lib/ui/connection-banner.svelte';
+export const inboxDisclosure = $state({ expanded: false });
 
-	let {
-		threads,
-		children
-	}: {
-		threads: { id: string; title: string }[];
-		children: Snippet<[Snippet, Snippet]>;
-	} = $props();
-
+/** Home's records, peek sheet and discussion flow for the Channels inbox; call during component init. */
+export function createInbox() {
 	const home = needsYou();
 	home.open();
 	const sheet = routedSheet('peek');
@@ -249,124 +235,45 @@
 			discussionBusy = false;
 		}
 	}
-</script>
 
-{#snippet inbox()}
-	{@const groups = { ...home.groups, waiting: [] }}
-	{@const total = Object.values(groups).reduce((count, items) => count + items.length, 0)}
-	<details
-		open={inboxDisclosure.expanded}
-		ontoggle={(event) => {
-			inboxDisclosure.expanded = event.currentTarget.open;
-		}}
-		data-inbox="shared"
-		aria-label="Inbox"
-		class="group/inbox min-w-0"
-	>
-		<summary
-			class="flex min-h-12 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted/60"
-		>
-			<ChevronDown
-				class="size-4 shrink-0 transition-transform group-open/inbox:rotate-180"
-				aria-hidden="true"
-			/>
-			<span>Inbox{total ? ` · ${total}` : ' · No updates'}</span>
-		</summary>
-		<div class="px-2 pt-2 pb-3">
-			<HomeScreen
-				embedded
-				hideSheet
-				{groups}
-				{remote}
-				{now}
-				partError={greeted && data.status === 'error' ? data.error : null}
-				partLoading={greeted && data.status === 'loading' && data.slow}
-				workspace={data.data?.workspace.state ?? 'online'}
-				onopen={(id) => {
-					home.clearResult(id);
-					sheet.openWith(id);
-				}}
-				onretry={() => void data.refetch()}
-				ondone={done}
-			/>
-		</div>
-	</details>
-{/snippet}
-
-{#snippet discussion()}
-	<DiscussionPicker
-		conversations={threads}
-		busy={discussionBusy}
-		error={discussionError}
-		onchoose={(id) => void chooseConversation(id)}
-		oncreate={(title) => void chooseConversation('', title)}
-		onback={() => {
+	return {
+		home,
+		sheet,
+		data,
+		get now() {
+			return now;
+		},
+		get connection() {
+			return connection;
+		},
+		get greeted() {
+			return greeted;
+		},
+		get remote() {
+			return remote;
+		},
+		get peek() {
+			return peek;
+		},
+		get discussing() {
+			return discussing;
+		},
+		get discussionBusy() {
+			return discussionBusy;
+		},
+		get discussionError() {
+			return discussionError;
+		},
+		stopDiscussing() {
 			discussing = undefined;
 			discussionError = null;
-		}}
-	/>
-{/snippet}
+		},
+		leaveTo,
+		openChat,
+		done,
+		discuss,
+		chooseConversation
+	};
+}
 
-{#snippet attention()}
-	{#if home.groups.waiting.length}
-		<section aria-label="Needs you" class="flex flex-col gap-2">
-			<h2 class="px-1 text-base font-semibold">Needs you</h2>
-			<HomeScreen
-				embedded
-				hideSheet
-				compact
-				groups={{ waiting: home.groups.waiting, failed: [], running: [], review: [] }}
-				remote={{ status: 'ready' }}
-				{now}
-				itemContext={(item) => {
-					const id = inboxConversation(item, home.groups);
-					return id === 'main'
-						? 'Main chat'
-						: (threads.find((thread) => thread.id === id)?.title ?? 'Other activity');
-				}}
-				onopen={(id) => {
-					home.clearResult(id);
-					sheet.openWith(id);
-				}}
-			/>
-		</section>
-	{/if}
-{/snippet}
-
-{@render children(inbox, attention)}
-
-<HomeScreen
-	embedded
-	sheetOnly
-	groups={home.groups}
-	{remote}
-	partError={greeted && data.status === 'error' ? data.error : null}
-	partLoading={greeted && data.status === 'loading' && data.slow}
-	workspace={data.data?.workspace.state ?? 'online'}
-	{connection}
-	{now}
-	{peek}
-	peekContent={discussing ? discussion : undefined}
-	peekLabel={discussing ? 'Discuss in a conversation' : undefined}
-	updateReady={!!pwa.waiting}
-	onopen={(id) => {
-		home.clearResult(id);
-		sheet.openWith(id);
-	}}
-	onclose={() => sheet.close()}
-	onretry={() => void data.refetch()}
-	ondecide={(nonce, d, location) => void home.decide(nonce, d, location)}
-	onanswer={(askId, answer, index) => void home.answer(askId, answer, index)}
-	ondismiss={(id) => {
-		void home.dismiss(id);
-		sheet.close();
-	}}
-	ondone={done}
-	onreply={discuss}
-	undo={home.undoable}
-	onundo={() => void home.undo()}
-	onopenrun={(id) => void leaveTo(resolve('/runs/[id]', { id }))}
-	onopenchat={openChat}
-	onaskagent={discuss}
-	onreload={() => pwa.reload()}
-/>
+export type Inbox = ReturnType<typeof createInbox>;

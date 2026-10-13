@@ -1,12 +1,14 @@
 <script lang="ts">
+	import { Spinner } from '$lib/ui/spinner';
 	import { untrack } from 'svelte';
 	import Archive from '@lucide/svelte/icons/archive';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import ArchiveRestore from '@lucide/svelte/icons/archive-restore';
 	import Pencil from '@lucide/svelte/icons/pencil';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { Button } from '$lib/ui/button';
 	import { Input } from '$lib/ui/input';
+	import * as Field from '$lib/ui/field';
+	import * as Sheet from '$lib/ui/sheet';
 	import RoutedSheet from '$lib/ui/sheet/routed-sheet.svelte';
 	import type { ThreadSummary } from '../types';
 
@@ -63,92 +65,103 @@
 
 <RoutedSheet {open} label="Conversation settings" {onclose}>
 	<form
-		class="flex flex-col gap-4 px-5 pt-2 pb-5"
+		class="flex flex-col"
 		onsubmit={(e) => {
 			e.preventDefault();
 			if (ready && renaming && !confirmArchive) onrename?.(title.trim());
 		}}
 	>
-		<h2 class="text-lg font-semibold">Conversation settings</h2>
-		{#if confirmArchive}
-			<p class="text-body">Archive {thread?.title}?</p>
-			<p class="text-sm text-muted-foreground">
-				Its history stays available. Send a message to continue later.
-			</p>
-			<Button size="lg" disabled={busy} onclick={onarchive}>
-				{#if busy}<LoaderCircle
-						class="animate-spin motion-reduce:animate-none"
-						aria-hidden="true"
-					/>{:else}<Archive />{/if}Archive conversation
-			</Button>
-			<Button variant="ghost" size="lg" disabled={busy} onclick={() => (confirmArchive = false)}
-				>Keep current</Button
-			>
-		{:else if renaming}
-			<div class="flex flex-col gap-2">
-				<label for="{uid}-name" class="text-sm font-medium">Conversation name</label>
+		<Sheet.Header>
+			<Sheet.Title>Conversation settings</Sheet.Title>
+			{#if confirmArchive}
+				<p class="pt-2 text-sm">Archive {thread?.title}?</p>
+				<Sheet.Description>
+					Its history stays available. Send a message to continue later.
+				</Sheet.Description>
+			{/if}
+		</Sheet.Header>
+		{#if renaming && !confirmArchive}
+			<Field.Field class="px-4">
+				<Field.Label for="{uid}-name">Conversation name</Field.Label>
 				<Input
 					id="{uid}-name"
 					bind:ref={nameInput}
 					bind:value={title}
 					maxlength={120}
 					required
-					class="h-12 text-base"
 					data-autofocus
 				/>
+			</Field.Field>
+		{:else if !confirmArchive}
+			<div class="flex flex-col px-2">
+				{#if href}<Button
+						variant="ghost"
+						class="justify-start any-pointer-coarse:h-11 any-pointer-coarse:after:hidden"
+						{href}
+						onclick={(event) => {
+							if (
+								!onopen ||
+								event.button !== 0 ||
+								event.metaKey ||
+								event.ctrlKey ||
+								event.shiftKey ||
+								event.altKey
+							)
+								return;
+							event.preventDefault();
+							onopen(href);
+						}}><MessageSquare />Open conversation</Button
+					>{/if}
+				{#if onrename}<Button
+						variant="ghost"
+						class="justify-start any-pointer-coarse:h-11 any-pointer-coarse:after:hidden"
+						onclick={() => (renaming = true)}><Pencil />Rename conversation</Button
+					>{/if}
+				{#if thread?.id !== 'main' && thread?.state !== 'archived' && onarchive}
+					<Button
+						variant="ghost"
+						class="justify-start any-pointer-coarse:h-11 any-pointer-coarse:after:hidden"
+						disabled={busy}
+						onclick={() => (confirmArchive = true)}><Archive />Archive conversation</Button
+					>
+				{:else if thread?.state === 'archived' && onreopen}
+					<Button
+						variant="ghost"
+						class="justify-start any-pointer-coarse:h-11 any-pointer-coarse:after:hidden"
+						disabled={busy}
+						onclick={onreopen}><ArchiveRestore />Restore conversation</Button
+					>
+				{/if}
 			</div>
-			<Button type="submit" size="lg" disabled={!ready}>
-				{#if busy}<LoaderCircle
-						class="animate-spin motion-reduce:animate-none"
-						aria-hidden="true"
-					/>Saving…{:else}<Pencil />Save name{/if}
-			</Button>
-			<Button variant="ghost" size="lg" disabled={busy} onclick={() => (renaming = false)}
-				>Back to options</Button
-			>
-		{:else}
-			{#if href}<Button
-					variant="ghost"
-					size="lg"
-					class="justify-start"
-					{href}
-					onclick={(event) => {
-						if (
-							!onopen ||
-							event.button !== 0 ||
-							event.metaKey ||
-							event.ctrlKey ||
-							event.shiftKey ||
-							event.altKey
-						)
-							return;
-						event.preventDefault();
-						onopen(href);
-					}}><MessageSquare />Open conversation</Button
-				>{/if}
-			{#if onrename}<Button
-					variant="ghost"
-					size="lg"
-					class="justify-start"
-					onclick={() => (renaming = true)}><Pencil />Rename conversation</Button
-				>{/if}
-			{#if thread?.id !== 'main' && thread?.state !== 'archived' && onarchive}
-				<Button
-					variant="ghost"
-					size="lg"
-					class="justify-start"
-					disabled={busy}
-					onclick={() => (confirmArchive = true)}><Archive />Archive conversation</Button
-				>
-			{:else if thread?.state === 'archived' && onreopen}
-				<Button variant="ghost" size="lg" class="justify-start" disabled={busy} onclick={onreopen}
-					><ArchiveRestore />Restore conversation</Button
-				>
-			{/if}
 		{/if}
-		{#if error}<p role="alert" class="text-sm text-failed">
+		{#if error}<p role="alert" class="px-4 pt-4 text-sm text-failed">
 				Couldn't update the conversation. {error}
 			</p>{/if}
-		<Button variant="ghost" size="lg" disabled={busy} onclick={onclose}>Close</Button>
+		<Sheet.Footer class={confirmArchive || renaming ? 'any-pointer-coarse:gap-4' : undefined}>
+			{#if confirmArchive}
+				<Button size="lg" disabled={busy} onclick={onarchive}>
+					{#if busy}<Spinner
+							role="presentation"
+							aria-hidden="true"
+							class="motion-reduce:animate-none"
+						/>{:else}<Archive />{/if}Archive conversation
+				</Button>
+				<Button variant="ghost" size="lg" disabled={busy} onclick={() => (confirmArchive = false)}
+					>Keep current</Button
+				>
+			{:else if renaming}
+				<Button type="submit" size="lg" disabled={!ready}>
+					{#if busy}<Spinner
+							role="presentation"
+							aria-hidden="true"
+							class="motion-reduce:animate-none"
+						/>Saving…{:else}<Pencil />Save name{/if}
+				</Button>
+				<Button variant="ghost" size="lg" disabled={busy} onclick={() => (renaming = false)}
+					>Back to options</Button
+				>
+			{/if}
+			<Button variant="ghost" size="lg" disabled={busy} onclick={onclose}>Close</Button>
+		</Sheet.Footer>
 	</form>
 </RoutedSheet>

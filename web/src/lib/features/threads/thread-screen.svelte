@@ -1,15 +1,17 @@
 <script lang="ts">
+	import { Spinner } from '$lib/ui/spinner';
 	import type { ComponentProps } from 'svelte';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import ThreadSettingsSheet from './components/thread-settings-sheet.svelte';
 	import Archive from '@lucide/svelte/icons/archive';
 	import BookMarked from '@lucide/svelte/icons/book-marked';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { ChatScreen } from '$lib/features/chat';
 	import { Button } from '$lib/ui/button';
 	import DetailScreen from '$lib/ui/screen/detail-screen.svelte';
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
+	import * as Item from '$lib/ui/item';
+	import * as Sheet from '$lib/ui/sheet';
 	import RoutedSheet from '$lib/ui/sheet/routed-sheet.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
 	import type { MemoryWrite, ThreadDetail, ThreadSheet } from './types';
@@ -83,41 +85,45 @@
 </script>
 
 {#snippet writeList(items: MemoryWrite[])}
-	<ul class="flex flex-col divide-y rounded-xl border">
+	<Item.Group class="gap-0 overflow-hidden rounded-xl border has-data-[size=sm]:gap-0">
 		{#each items as w (w.id)}
-			<li>
-				<a
-					href={writeHref(w.id)}
-					class="flex min-h-12 items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted/50"
-				>
-					<span class="flex min-w-0 flex-col gap-0.5">
-						<span class="[overflow-wrap:anywhere]">{w.summary}</span>
-						<span class="font-mono text-meta [overflow-wrap:anywhere] text-muted-foreground"
-							>{w.file} · {w.when}</span
-						>
-					</span>
-					<ChevronRight class="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-				</a>
-			</li>
+			<div role="listitem" class="not-first:border-t">
+				<Item.Root size="sm" class="rounded-none">
+					{#snippet child({ props })}
+						<a href={writeHref(w.id)} {...props}>
+							<Item.Content class="min-w-0">
+								<Item.Title class="line-clamp-none font-normal [overflow-wrap:anywhere]"
+									>{w.summary}</Item.Title
+								>
+								<Item.Description class="font-mono text-xs [overflow-wrap:anywhere]"
+									>{w.file} · {w.when}</Item.Description
+								>
+							</Item.Content>
+							<ChevronRight class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+						</a>
+					{/snippet}
+				</Item.Root>
+			</div>
 		{/each}
-	</ul>
+	</Item.Group>
 {/snippet}
 
 {#snippet subtitle()}
 	{#if thread}
-		<button
-			type="button"
+		<Button
+			variant="link"
+			size="xs"
 			aria-haspopup="dialog"
 			onclick={() => onopensheet?.('thread-memory')}
-			class="-my-3 flex h-12 max-w-full items-center gap-1 self-start truncate text-left text-meta text-muted-foreground hover:text-foreground"
+			class="h-auto max-w-full min-w-0 shrink justify-start p-0 font-normal text-muted-foreground hover:text-foreground hover:no-underline"
 		>
-			<BookMarked class="size-3.5 shrink-0" aria-hidden="true" />
+			<BookMarked class="size-3.5" aria-hidden="true" />
 			<span class="truncate"
 				>{thread.memoryTracking === false
 					? 'Shares memory with Main'
 					: `Shares memory with Main · ${thread.writes} ${thread.writes === 1 ? 'write' : 'writes'}`}</span
 			>
-		</button>
+		</Button>
 	{/if}
 {/snippet}
 
@@ -193,16 +199,16 @@
 	onclose={() => onclosesheet?.()}
 >
 	{#if shown === 'thread-memory' && detail}
-		<div class="flex flex-col gap-4 px-5 pt-2 pb-5">
-			<div class="flex flex-col gap-1">
-				<h2 class="text-lg font-semibold">Shares memory with Main</h2>
-				<p class="text-sm text-muted-foreground">
-					This conversation has its own history but reads and writes the same memory as Main.
-					{#if thread?.memoryTracking !== false}Its writes are tagged with the conversation, so you
-						can check or undo them.{:else}Memory changes stay available after you archive the
-						conversation.{/if}
-				</p>
-			</div>
+		<Sheet.Header>
+			<Sheet.Title>Memory shared with Main</Sheet.Title>
+			<Sheet.Description>
+				This conversation has its own history but reads and writes the same memory as Main.
+				{#if thread?.memoryTracking !== false}Its writes are tagged with the conversation, so you
+					can check or undo them.{:else}Memory changes stay available after you archive the
+					conversation.{/if}
+			</Sheet.Description>
+		</Sheet.Header>
+		<div class={['flex flex-col gap-2 px-4', thread?.memoryTracking === false && 'pb-4']}>
 			{#if detail.writes.length}
 				<h3 class="text-sm font-medium">
 					{detail.writes.length}
@@ -214,30 +220,33 @@
 					Nothing written to memory from this conversation yet.
 				</p>
 			{/if}
-			{#if thread?.memoryTracking !== false}<Button variant="outline" href={memoryHref}
-					>All memory changes</Button
-				>{/if}
 		</div>
+		{#if thread?.memoryTracking !== false}
+			<Sheet.Footer>
+				<Button variant="outline" href={memoryHref}>All memory changes</Button>
+			</Sheet.Footer>
+		{/if}
 	{:else if shown === 'thread-close' && detail}
-		<div class="flex flex-col gap-4 px-5 pt-2 pb-5">
-			<div class="flex flex-col gap-1">
-				<h2 class="text-lg font-semibold">Archive {detail.summary.title}?</h2>
-				<p class="text-sm text-muted-foreground">
-					Move this conversation into the visible Archived section. Its history stays available;
-					send a message whenever you want to continue.
-				</p>
-			</div>
-			{#if error}<p role="alert" class="text-sm text-failed">Couldn't archive it. {error}</p>{/if}
-			<div class="flex flex-col gap-2 pt-1 any-pointer-coarse:gap-4">
-				<Button size="lg" disabled={busy} onclick={onclose}>
-					{#if busy}<LoaderCircle
-							class="animate-spin motion-reduce:animate-none"
-							aria-hidden="true"
-						/>Archiving…{:else}<Archive />Archive conversation{/if}
-				</Button>
-				<Button size="lg" variant="ghost" onclick={() => onclosesheet?.()}>Keep current</Button>
-			</div>
-		</div>
+		<Sheet.Header>
+			<Sheet.Title>Archive conversation</Sheet.Title>
+			<Sheet.Description>
+				{detail.summary.title} moves into the visible Archived section. Its history stays available; send
+				a message whenever you want to continue.
+			</Sheet.Description>
+		</Sheet.Header>
+		{#if error}<p role="alert" class="px-4 text-sm text-failed">
+				Couldn't archive it. {error}
+			</p>{/if}
+		<Sheet.Footer class="any-pointer-coarse:gap-4">
+			<Button disabled={busy} onclick={onclose}>
+				{#if busy}<Spinner
+						role="presentation"
+						aria-hidden="true"
+						class="motion-reduce:animate-none"
+					/>Archiving…{:else}<Archive />Archive conversation{/if}
+			</Button>
+			<Button variant="ghost" onclick={() => onclosesheet?.()}>Keep current</Button>
+		</Sheet.Footer>
 	{/if}
 </RoutedSheet>
 

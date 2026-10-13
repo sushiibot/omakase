@@ -1,8 +1,8 @@
 <script lang="ts">
+	import { Spinner } from '$lib/ui/spinner';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import Check from '@lucide/svelte/icons/check';
 	import X from '@lucide/svelte/icons/x';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { Button } from '$lib/ui/button';
 	import { SwitchRow } from '$lib/ui/switch';
@@ -42,7 +42,7 @@
 	aria-labelledby="{uid}-title"
 	class="flex min-w-0 scroll-mt-4 scroll-mb-24 flex-col gap-2 rounded-xl border border-approval/60 bg-approval-surface px-3 py-2"
 >
-	<header class="flex items-center gap-2">
+	<div class="flex items-center gap-2">
 		<ShieldCheck class="size-4 shrink-0 text-approval" aria-hidden="true" />
 		<h3
 			id="{uid}-title"
@@ -54,7 +54,7 @@
 		<span class="shrink-0 text-meta text-muted-foreground"
 			>{answerable ? 'Approval needed' : 'Needs you'}</span
 		>
-	</header>
+	</div>
 	{#if view.exact}
 		<div class="flex flex-col gap-1">
 			<p id="{uid}-exact" class="text-meta text-muted-foreground">Exact input</p>
@@ -109,8 +109,10 @@
 					);
 				}}
 			>
-				{#if submitting && sent === choice.decision}<LoaderCircle
-						class="animate-spin motion-reduce:animate-none"
+				{#if submitting && sent === choice.decision}<Spinner
+						role="presentation"
+						aria-hidden="true"
+						class="motion-reduce:animate-none"
 					/>Submitting…{:else if choice.primary}<Check />{choice.label}{:else}<X
 					/>{choice.label}{/if}
 			</Button>

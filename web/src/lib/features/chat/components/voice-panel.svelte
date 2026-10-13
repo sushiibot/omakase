@@ -8,6 +8,7 @@
 	import { voiceStatus } from '../render/voice-status';
 	import type { ChannelActivity } from '../activity';
 	import { voiceTrait } from '../render/voice-traits';
+	import * as Sheet from '$lib/ui/sheet';
 	import { Input } from '$lib/ui/input';
 	let {
 		models,
@@ -116,7 +117,7 @@
 
 <div class="flex flex-col gap-4 p-4">
 	<div class="flex items-center justify-between gap-2">
-		<h2 class="text-lg font-semibold">Voice chat</h2>
+		<Sheet.Title>Voice chat</Sheet.Title>
 		<Button variant="ghost" onclick={onclose}>Back to chat</Button>
 	</div>
 	<p class="text-sm text-muted-foreground">
@@ -225,9 +226,9 @@
 			<section aria-label="Curated speech models" class="flex flex-col gap-2">
 				<h3 class="text-sm font-medium">Suggested speech models</h3>
 				{#each speechModels.filter((m) => m.curated) as model (model.id)}
-					<button
-						type="button"
-						class="flex min-h-12 w-full flex-col gap-1 rounded-lg px-3 py-2 text-left hover:bg-muted disabled:opacity-50 aria-pressed:bg-muted"
+					<Button
+						variant="ghost"
+						class="h-auto w-full flex-col items-start gap-1 px-3 py-2 text-left whitespace-normal aria-pressed:bg-muted any-pointer-coarse:after:hidden"
 						aria-pressed={speechModel === model.id}
 						disabled={active || loading}
 						onclick={() => onspeech?.(model.id)}
@@ -236,7 +237,7 @@
 							>{model.name} · {model.curated}</span
 						>
 						<span class="text-sm text-muted-foreground tabular-nums">{speechPrice(model)}</span>
-					</button>
+					</Button>
 				{/each}
 			</section>
 			<details>
@@ -253,9 +254,9 @@
 						disabled={active || loading}
 					/>
 					{#each found as model (model.id)}
-						<button
-							type="button"
-							class="flex min-h-12 w-full flex-col gap-1 rounded-lg px-3 py-2 text-left hover:bg-muted disabled:opacity-50 aria-pressed:bg-muted"
+						<Button
+							variant="ghost"
+							class="h-auto w-full flex-col items-start gap-1 px-3 py-2 text-left whitespace-normal aria-pressed:bg-muted any-pointer-coarse:after:hidden"
 							aria-pressed={speechModel === model.id}
 							disabled={active || loading}
 							onclick={() => onspeech?.(model.id)}
@@ -263,7 +264,7 @@
 							<span class="text-sm font-medium [overflow-wrap:anywhere]">{model.name}</span>
 							<span class="text-sm [overflow-wrap:anywhere] text-muted-foreground">{model.id}</span>
 							<span class="text-sm text-muted-foreground tabular-nums">{speechPrice(model)}</span>
-						</button>
+						</Button>
 					{:else}{#if !loading}<p role="status" class="text-sm text-muted-foreground">
 								No speech models match this search.
 							</p>{/if}{/each}

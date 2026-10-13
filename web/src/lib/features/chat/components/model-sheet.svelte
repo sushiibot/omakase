@@ -1,12 +1,13 @@
 <script lang="ts">
+	import { Spinner } from '$lib/ui/spinner';
 	import Check from '@lucide/svelte/icons/check';
 	import X from '@lucide/svelte/icons/x';
 	import FoldVertical from '@lucide/svelte/icons/fold-vertical';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Search from '@lucide/svelte/icons/search';
 	import type { ChatUsage, ModelFacts, ModelsResponse } from '$lib/core/realtime/events';
 	import { Button } from '$lib/ui/button';
 	import { Input } from '$lib/ui/input';
+	import * as Sheet from '$lib/ui/sheet';
 	import { cn } from '$lib/utils';
 	import { aggregateCost, modelName, usageRows } from '../render/usage';
 
@@ -117,39 +118,42 @@
 	<ul class="flex flex-col" aria-label={label}>
 		{#each list as r (r.key)}
 			<li>
-				<button
-					type="button"
+				<Button
+					variant="ghost"
 					aria-pressed={r.current}
 					aria-disabled={!!picking}
 					onclick={() => (picking ? undefined : r.current ? onclose?.() : onpick?.(r.key, role))}
-					class="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-muted aria-disabled:cursor-progress"
+					class="h-auto w-full justify-start gap-3 px-3 py-2.5 text-left whitespace-normal aria-disabled:pointer-events-auto aria-disabled:cursor-progress aria-disabled:opacity-100 any-pointer-coarse:after:hidden"
 				>
 					<span class="flex min-w-0 flex-1 flex-col gap-0.5">
-						<span class="text-body font-medium [overflow-wrap:anywhere]">{r.title}</span>
-						<span class="text-sm [overflow-wrap:anywhere] text-muted-foreground">{r.detail}</span>
+						<span class="[overflow-wrap:anywhere]">{r.title}</span>
+						<span class="font-normal [overflow-wrap:anywhere] text-muted-foreground"
+							>{r.detail}</span
+						>
 					</span>
 					{#if picking === r.key}
-						<LoaderCircle
-							class="size-5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+						<Spinner
+							role="img"
 							aria-label="Switching"
+							class="shrink-0 text-muted-foreground motion-reduce:animate-none"
 						/>
 					{:else if r.current}
-						<Check class="size-5 shrink-0" aria-label="Current" />
+						<Check class="shrink-0" aria-label="Current" />
 					{/if}
-				</button>
+				</Button>
 			</li>
 		{/each}
 	</ul>
 {/snippet}
 
-<div
-	class="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-3 border-b bg-background px-5 py-2"
+<Sheet.Header
+	class="sticky top-0 z-10 flex-row items-center justify-between gap-3 border-b bg-background py-2"
 >
-	<h2 class="font-semibold">Model and context</h2>
+	<Sheet.Title>Model and context</Sheet.Title>
 	<Button variant="ghost" size="icon" aria-label="Close" onclick={onclose}
 		><X aria-hidden="true" /></Button
 	>
-</div>
+</Sheet.Header>
 <div class="flex flex-col gap-4 px-3 py-5">
 	<section aria-label="Current context" class="space-y-2 px-2">
 		<div class="flex items-baseline justify-between gap-3">
@@ -253,14 +257,15 @@
 			class="mx-2 grid grid-cols-2 gap-1 rounded-xl bg-muted p-1"
 		>
 			{#each [['main', 'Model'], ['fallback', 'Fallback']] as const as [value, label] (value)}
-				<button
-					type="button"
+				<Button
+					variant="ghost"
+					size="sm"
 					aria-pressed={role === value}
 					onclick={() => onrole?.(value)}
 					class={cn(
-						'h-12 rounded-lg text-sm font-medium text-muted-foreground',
-						role === value && 'bg-background text-foreground shadow-sm'
-					)}>{label}</button
+						'text-muted-foreground',
+						role === value && 'bg-background text-foreground shadow-sm hover:bg-background'
+					)}>{label}</Button
 				>
 			{/each}
 		</div>
@@ -283,7 +288,7 @@
 				value={query}
 				oninput={(e) => onquery?.(e.currentTarget.value)}
 				placeholder="Search OpenRouter models"
-				class="h-12 pl-9 text-base"
+				class="pl-9"
 			/>
 		</label>
 		{#if searching}

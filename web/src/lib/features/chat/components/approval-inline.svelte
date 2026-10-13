@@ -1,8 +1,8 @@
 <script lang="ts">
+	import { Spinner } from '$lib/ui/spinner';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import Check from '@lucide/svelte/icons/check';
 	import X from '@lucide/svelte/icons/x';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { Button } from '$lib/ui/button';
@@ -68,13 +68,13 @@
 	aria-labelledby="{uid}-title"
 	class="min-w-0 rounded-xl border border-approval/60 bg-approval-surface px-3 py-2"
 >
-	<header class="flex items-center gap-2">
+	<div class="flex items-center gap-2">
 		<ShieldCheck class="size-4 shrink-0 text-approval" aria-hidden="true" />
 		<h3 id="{uid}-title" class="min-w-0 flex-1 text-ui font-semibold [overflow-wrap:anywhere]">
 			{title}
 		</h3>
 		<span class="shrink-0 text-meta text-muted-foreground">Approval needed</span>
-	</header>
+	</div>
 	<dl class="mt-2 flex flex-col gap-1 text-ui">
 		{#each view.fields as field, i (i)}
 			<div class="flex min-w-0 gap-2">
@@ -131,8 +131,10 @@
 			aria-label="Approve {view.tool}"
 			onclick={approve}
 		>
-			{#if submitting || locating}<LoaderCircle
-					class="animate-spin motion-reduce:animate-none"
+			{#if submitting || locating}<Spinner
+					role="presentation"
+					aria-hidden="true"
+					class="motion-reduce:animate-none"
 				/>{locating ? 'Getting location…' : 'Submitting…'}{:else}<Check />{location
 					? 'Share location'
 					: 'Approve'}{/if}

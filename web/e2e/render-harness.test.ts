@@ -156,8 +156,7 @@ test.describe('markdown in V8', () => {
 		);
 		const copy = page.getByRole('button', { name: 'Copy code' });
 		const box = (await copy.boundingBox())!;
-		expect(box.width).toBeGreaterThanOrEqual(48);
-		expect(box.height).toBeGreaterThanOrEqual(48);
+		await expectHitArea(page, copy, { freeSides: ['top', 'bottom'] });
 		// Stays in view while the code scrolls sideways.
 		await page.locator('#solo pre').evaluate((el) => (el.scrollLeft = 10_000));
 		await expect(copy).toBeInViewport();

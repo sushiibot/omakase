@@ -3,6 +3,7 @@
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import X from '@lucide/svelte/icons/x';
 	import { Button } from '$lib/ui/button';
+	import * as Sheet from '$lib/ui/sheet';
 	import RoutedSheet from '$lib/ui/sheet/routed-sheet.svelte';
 	import type { SessionBoundary } from '$lib/core/realtime/events';
 	import Markdown from '../render/markdown.svelte';
@@ -39,31 +40,31 @@
 	);
 </script>
 
-<button
-	bind:this={trigger}
-	type="button"
+<Button
+	bind:ref={trigger}
+	variant="ghost"
 	data-context-divider
 	aria-haspopup="dialog"
 	aria-expanded={shown}
 	onclick={show}
-	class="flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+	class="w-full gap-3 px-0 text-muted-foreground hover:bg-transparent aria-expanded:bg-transparent dark:hover:bg-transparent"
 >
 	<span class="h-px flex-1 bg-border"></span>
-	<span class="flex items-center gap-1 font-medium">
-		{label}<ChevronRight class="size-3.5 shrink-0" aria-hidden="true" />
+	<span class="flex items-center gap-1">
+		{label}<ChevronRight class="size-3.5" aria-hidden="true" />
 	</span>
 	<span class="h-px flex-1 bg-border"></span>
-</button>
+</Button>
 <RoutedSheet open={shown} {label} returnFocus={trigger} onclose={close}>
-	<div
-		class="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-3 border-b bg-background px-5 py-2"
+	<Sheet.Header
+		class="sticky top-0 z-10 flex-row items-center justify-between gap-3 border-b bg-background py-2"
 	>
-		<h2 class="font-semibold">{label}</h2>
+		<Sheet.Title>{label}</Sheet.Title>
 		<Button variant="ghost" size="icon" aria-label="Close" onclick={close}>
 			<X aria-hidden="true" />
 		</Button>
-	</div>
-	<div class="space-y-6 px-5 py-5 text-sm [overflow-wrap:anywhere]" data-context-details>
+	</Sheet.Header>
+	<div class="space-y-6 p-4 text-sm [overflow-wrap:anywhere]" data-context-details>
 		<p class="text-muted-foreground">
 			{#if boundary.initialContext}
 				This conversation starts with the topic context below and shared workspace memory.

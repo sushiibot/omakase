@@ -1,6 +1,6 @@
 <script lang="ts">
+	import { Spinner } from '$lib/ui/spinner';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { Button } from '$lib/ui/button';
 	import ToolIcon from './tool-icon.svelte';
 	import ToolRow from './tool-row.svelte';
@@ -41,14 +41,14 @@
 		aria-labelledby="{uid}-title"
 		class="min-w-0 rounded-xl border border-approval/60 bg-approval-surface px-3 py-2 text-ui"
 	>
-		<header class="flex min-h-8 items-center gap-2">
+		<div class="flex min-h-8 items-center gap-2">
 			<ToolIcon kind={category.kind} />
 			<h3 id="{uid}-title" class="min-w-0 flex-1 font-semibold">
 				{push ? 'Push to GitHub?' : `Allow ${category.label.toLowerCase()}?`}
 			</h3>
 			<ShieldCheck class="size-4 shrink-0 text-approval" aria-hidden="true" />
 			<span class="text-meta text-muted-foreground">Approval needed</span>
-		</header>
+		</div>
 		{#if push}
 			<div class="my-3 flex min-w-0 flex-col gap-2 [overflow-wrap:anywhere]">
 				<p class="font-medium">{push.destination}</p>
@@ -74,9 +74,10 @@
 					disabled={ask.state === 'answering'}
 					onclick={() => onanswer?.(choice, index)}
 				>
-					{#if ask.state === 'answering' && ask.answer === choice}<LoaderCircle
-							class="animate-spin motion-reduce:animate-none"
+					{#if ask.state === 'answering' && ask.answer === choice}<Spinner
+							role="presentation"
 							aria-hidden="true"
+							class="motion-reduce:animate-none"
 						/>{/if}
 					{choiceLabel(choice)}
 				</Button>

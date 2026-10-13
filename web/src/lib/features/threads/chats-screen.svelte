@@ -14,6 +14,7 @@
 	let {
 		inbox,
 		attention,
+		notice,
 		remote,
 		data,
 		now,
@@ -29,6 +30,8 @@
 	}: {
 		inbox?: Snippet;
 		attention?: Snippet;
+		/** A transient line in the toast, shown in place of the update notice. */
+		notice?: Snippet;
 		remote: RemoteLike;
 		data?: ChatsData;
 		now: number;
@@ -161,7 +164,7 @@
 	title="Channels"
 	{banner}
 	{actions}
-	toast={updateReady ? toast : undefined}
+	toast={notice ?? (updateReady ? toast : undefined)}
 	bind:search={query}
 	searchLabel="Search channels"
 	state={{

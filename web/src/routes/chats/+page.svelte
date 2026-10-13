@@ -1,5 +1,4 @@
 <script lang="ts">
-	import InboxPanel from './inbox-panel.svelte';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -14,8 +13,14 @@
 		threadsStore,
 		type ThreadSummary
 	} from '$lib/features/threads';
+	import { UndoToast } from '$lib/features/home';
+	import { createInbox } from './inbox.svelte';
+	import InboxDisclosure from './inbox-disclosure.svelte';
+	import InboxSheet from './inbox-sheet.svelte';
+	import NeedsYouSection from './needs-you-section.svelte';
 
 	const threads = threadsStore();
+	const inbox = createInbox();
 	const list = threads.list;
 	const sheet = routedSheet('branch');
 	const settings = routedSheet('thread-settings');
@@ -56,33 +61,39 @@
 
 <svelte:head><title>Channels · sushii</title></svelte:head>
 
-<InboxPanel threads={list.data?.threads ?? []}>
-	{#snippet children(inbox, attention)}
-		<ChatsScreen
-			{inbox}
-			{attention}
-			remote={list}
-			data={list.data}
-			{now}
-			bind:query
-			online={pwa.online && !offlineBrowsing.unreachable}
-			updateReady={!!pwa.waiting}
-			mainHref={resolve('/chat')}
-			threadHref={(id) => resolve('/chats/[id]', { id })}
-			onretry={() => void list.refetch()}
-			onnew={() => {
-				threads.clearError();
-				sheet.openWith();
-			}}
-			onreload={() => pwa.reload()}
-			onoptions={(thread) => {
-				selected = thread;
-				threads.clearError();
-				settings.openWith(thread.id);
-			}}
-		/>
-	{/snippet}
-</InboxPanel>
+{#snippet inboxPanel()}<InboxDisclosure {inbox} />{/snippet}
+{#snippet attention()}<NeedsYouSection {inbox} threads={list.data?.threads ?? []} />{/snippet}
+{#snippet undo()}<UndoToast
+		label={inbox.home.undoable?.label ?? ''}
+		onundo={() => void inbox.home.undo()}
+	/>{/snippet}
+
+<ChatsScreen
+	inbox={inboxPanel}
+	{attention}
+	notice={inbox.home.undoable ? undo : undefined}
+	remote={list}
+	data={list.data}
+	{now}
+	bind:query
+	online={pwa.online && !offlineBrowsing.unreachable}
+	updateReady={!!pwa.waiting}
+	mainHref={resolve('/chat')}
+	threadHref={(id) => resolve('/chats/[id]', { id })}
+	onretry={() => void list.refetch()}
+	onnew={() => {
+		threads.clearError();
+		sheet.openWith();
+	}}
+	onreload={() => pwa.reload()}
+	onoptions={(thread) => {
+		selected = thread;
+		threads.clearError();
+		settings.openWith(thread.id);
+	}}
+/>
+
+<InboxSheet {inbox} threads={list.data?.threads ?? []} />
 
 <BranchSheet
 	open={sheet.open}

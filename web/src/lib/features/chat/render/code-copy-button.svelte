@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Copy from '@lucide/svelte/icons/copy';
 	import Check from '@lucide/svelte/icons/check';
+	import { Button } from '$lib/ui/button';
 
 	// The one control allowed inside agent markdown: it only copies the block's own text.
 	let { text, disabled = false }: { text: string; disabled?: boolean } = $props();
@@ -29,16 +30,14 @@
 	$effect(() => () => clearTimeout(reset));
 </script>
 
-<button
-	type="button"
+<Button
+	variant="ghost"
+	size="icon-sm"
 	aria-label="Copy code"
 	{disabled}
 	onclick={copy}
-	class="absolute top-0 right-0 grid size-12 place-items-center rounded-lg text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-40"
+	class="absolute top-2 right-2 text-muted-foreground"
 >
-	{#if copied}<Check class="size-4" aria-hidden="true" />{:else}<Copy
-			class="size-4"
-			aria-hidden="true"
-		/>{/if}
-</button>
+	{#if copied}<Check aria-hidden="true" />{:else}<Copy aria-hidden="true" />{/if}
+</Button>
 <span class="sr-only" aria-live="polite">{announcement}</span>

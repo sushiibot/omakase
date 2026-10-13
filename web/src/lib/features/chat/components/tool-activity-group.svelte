@@ -1,7 +1,7 @@
 <script lang="ts">
+	import { Spinner } from '$lib/ui/spinner';
 	import { untrack } from 'svelte';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import ToolIcon from './tool-icon.svelte';
 	import ToolRow from './tool-row.svelte';
 	import { activityCategories } from '../tool-activity';
@@ -48,9 +48,10 @@
 				>{/if}
 		</span>
 		{#if running}<span class="flex shrink-0 items-center gap-1 text-meta text-running"
-				><LoaderCircle
-					class="size-3.5 animate-spin motion-reduce:animate-none"
+				><Spinner
+					role="presentation"
 					aria-hidden="true"
+					class="size-3.5 motion-reduce:animate-none"
 				/><span>Running</span></span
 			>{/if}
 		<ChevronDown

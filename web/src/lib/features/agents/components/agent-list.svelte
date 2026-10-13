@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Bot from '@lucide/svelte/icons/bot';
 	import { Button } from '$lib/ui/button';
+	import * as Empty from '$lib/ui/empty';
 	import Section from '$lib/ui/section/section.svelte';
 	import AgentRow from './agent-row.svelte';
 	import { groupAgents, type AgentGroup } from '../model';
@@ -56,18 +57,18 @@
 	{#if loading && !agents.length}<p role="status" class="px-2 text-sm text-muted-foreground">
 			Loading agents…
 		</p>
-	{:else if !agents.length && !error}<div
-			class="flex flex-col items-center gap-3 px-4 py-12 text-center"
-		>
-			<Bot class="size-8 text-muted-foreground" aria-hidden="true" />
-			<p class="font-medium">
-				{scope === 'all' ? 'No coding agents yet' : 'No coding agents in this conversation'}
-			</p>
-			<p class="max-w-64 text-sm text-muted-foreground">
-				Ask Sushii to start a Codex or Claude Code agent on your computer. It shows here while it
-				works.
-			</p>
-		</div>{/if}
+	{:else if !agents.length && !error}<Empty.Root>
+			<Empty.Header>
+				<Empty.Media variant="icon"><Bot aria-hidden="true" /></Empty.Media>
+				<Empty.Title>
+					{scope === 'all' ? 'No coding agents yet' : 'No coding agents in this conversation'}
+				</Empty.Title>
+				<Empty.Description>
+					Ask Sushii to start a Codex or Claude Code agent on your computer. It shows here while it
+					works.
+				</Empty.Description>
+			</Empty.Header>
+		</Empty.Root>{/if}
 	{#each sections as { group, title } (group)}
 		{@const rows = group === 'finished' ? groups.finished.slice(0, finishedShown) : groups[group]}
 		{#if groups[group].length}

@@ -1,17 +1,18 @@
 <script lang="ts">
+	import { Spinner } from '$lib/ui/spinner';
 	import CalendarClock from '@lucide/svelte/icons/calendar-clock';
 	import CalendarX from '@lucide/svelte/icons/calendar-x';
 	import Check from '@lucide/svelte/icons/check';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import CircleX from '@lucide/svelte/icons/circle-x';
 	import KeyRound from '@lucide/svelte/icons/key-round';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import MessageSquareDot from '@lucide/svelte/icons/message-square-dot';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import { kindLabel } from '$lib/features/runs';
 	import { ago } from '$lib/ui/format/time';
+	import { Button } from '$lib/ui/button';
 	import { cn } from '$lib/utils';
 	import { messagePreview } from '../format';
 	import type { HomeItem } from '../types';
@@ -152,8 +153,8 @@
 			<Check class="size-5" />
 		</div>
 	{/if}
-	<button
-		type="button"
+	<Button
+		variant="ghost"
 		aria-haspopup="dialog"
 		aria-current={selected || undefined}
 		onclick={click}
@@ -161,9 +162,9 @@
 		onpointermove={move}
 		onpointerup={up}
 		onpointercancel={cancel}
-		style:transform={offset ? `translateX(${offset}px)` : undefined}
+		style={offset ? `transform: translateX(${offset}px)` : undefined}
 		class={cn(
-			'relative flex min-h-16 w-full items-start gap-3 rounded-xl bg-background px-2 py-2.5 text-left transition-colors hover:bg-muted/60',
+			'h-auto w-full items-start justify-start gap-3 rounded-xl bg-background px-2 py-2.5 text-left font-normal whitespace-normal hover:bg-muted/60 dark:hover:bg-muted/60 any-pointer-coarse:after:hidden',
 			ondone && 'touch-pan-y',
 			!dragging && 'motion-safe:transition-transform',
 			selected && 'bg-muted/60',
@@ -197,9 +198,10 @@
 				{:else if item.group === 'failed'}
 					<CircleX class="size-4" aria-label="Failed run" />
 				{:else if item.group === 'running'}
-					<LoaderCircle
-						class="size-4 animate-spin [animation-duration:2s] motion-reduce:animate-none"
+					<Spinner
+						role="img"
 						aria-label="Running"
+						class="[animation-duration:2s] motion-reduce:animate-none"
 					/>
 				{:else if item.kind === 'message'}
 					<CalendarClock class="size-4" aria-label="Scheduled job message" />
@@ -223,6 +225,6 @@
 				>{view.sub}</span
 			>
 		</span>
-		<ChevronRight class="mt-2 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-	</button>
+		<ChevronRight class="mt-2 shrink-0 text-muted-foreground" aria-hidden="true" />
+	</Button>
 </div>

@@ -11,7 +11,8 @@
 </script>
 
 <script lang="ts">
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import { Button } from '$lib/ui/button';
+	import { Spinner } from '$lib/ui/spinner';
 	import { cn } from '$lib/utils';
 
 	let {
@@ -41,8 +42,8 @@
 	aria-label={label}
 	class={cn(
 		// Pulled up into the gap above, so the icons sit right under the text.
-		'-mt-2 flex h-12 items-center',
-		align === 'end' ? '-mr-4 justify-end self-end' : '-ml-4',
+		'-mt-2 flex h-12 items-center gap-2',
+		align === 'end' ? '-mr-1.5 justify-end self-end' : '-ml-1.5',
 		!always &&
 			'transition-opacity duration-(--duration-short) group-focus-within/msg:opacity-100 group-hover/msg:opacity-100 [@media(hover:hover)]:opacity-0',
 		pending && 'invisible',
@@ -51,19 +52,20 @@
 	)}
 >
 	{#each actions as a (a.id)}
-		<button
-			type="button"
+		<Button
+			variant="ghost"
+			size="icon-sm"
 			aria-label={a.label}
 			title={a.label}
 			onclick={a.onclick}
 			data-loading={a.loading || undefined}
-			class="grid size-12 place-items-center rounded-full text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+			class="rounded-full text-muted-foreground"
 		>
 			{#if a.loading}
-				<LoaderCircle class="size-4 motion-safe:animate-spin" aria-hidden="true" />
+				<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
 			{:else}
-				<a.icon class="size-4" aria-hidden="true" />
+				<a.icon aria-hidden="true" />
 			{/if}
-		</button>
+		</Button>
 	{/each}
 </div>

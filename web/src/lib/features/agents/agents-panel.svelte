@@ -38,6 +38,7 @@
 {#if selected && docked}
 	{#key selected}<AgentViewContainer
 			id={selected}
+			level={2}
 			focusRequest
 			pageHref={`/agents/${encodeURIComponent(selected)}`}
 			onback={() => (selected = undefined)}

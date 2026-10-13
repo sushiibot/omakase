@@ -369,10 +369,10 @@
 								>
 							{:else if onstartthread}
 								<div class="flex flex-wrap gap-2 any-pointer-coarse:gap-4">
-									<Button size="lg" onclick={() => onstartthread(message.id)}
+									<Button onclick={() => onstartthread(message.id)}
 										><Split />Start conversation</Button
 									>
-									<Button size="lg" variant="ghost" onclick={() => onkeephere?.(message.id)}
+									<Button variant="ghost" onclick={() => onkeephere?.(message.id)}
 										>Keep it here</Button
 									>
 								</div>

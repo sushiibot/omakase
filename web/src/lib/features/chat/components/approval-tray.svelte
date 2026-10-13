@@ -1,10 +1,10 @@
 <script lang="ts">
+	import { Spinner } from '$lib/ui/spinner';
 	import { currentLocation, type LocationReply } from '../location';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import Check from '@lucide/svelte/icons/check';
 	import X from '@lucide/svelte/icons/x';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import TimerOff from '@lucide/svelte/icons/timer-off';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { untrack } from 'svelte';
@@ -173,7 +173,7 @@
 				'mb-4 shadow-[0_6px_0_-2px_var(--approval-surface),0_6px_0_0_color-mix(in_oklch,var(--approval)_45%,transparent)]'
 		)}
 	>
-		<header class="flex items-center gap-2.5">
+		<div class="flex items-center gap-2.5">
 			<span
 				class="grid size-8 shrink-0 place-items-center rounded-full bg-approval text-approval-surface"
 			>
@@ -218,7 +218,7 @@
 					/>
 				</Button>
 			{/if}
-		</header>
+		</div>
 
 		{#if timedOut}
 			<p role="status" class="flex items-start gap-2 text-sm">
@@ -279,7 +279,7 @@
 
 			{#if phase === 'submitting' || locating}
 				<p role="status" class="flex h-12 items-center gap-2 text-sm font-medium">
-					<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+					<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
 					{locating
 						? 'Waiting for browser location permission…'
 						: isLocation

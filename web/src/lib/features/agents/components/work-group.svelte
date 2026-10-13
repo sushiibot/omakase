@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { Button } from '$lib/ui/button';
+	import { Spinner } from '$lib/ui/spinner';
 	import { untrack } from 'svelte';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import CircleX from '@lucide/svelte/icons/circle-x';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Terminal from '@lucide/svelte/icons/terminal';
 	import FilePen from '@lucide/svelte/icons/file-pen';
 	import Wrench from '@lucide/svelte/icons/wrench';
@@ -48,18 +49,19 @@
 		class="max-h-60 overflow-auto rounded-lg border bg-muted/30 p-2 font-mono text-code whitespace-pre">{text}</pre>
 {/snippet}
 
-<div class="flex min-w-0 flex-col" data-work-group>
-	<button
-		type="button"
+<div class="flex min-w-0 flex-col gap-2" data-work-group>
+	<Button
+		variant="ghost"
 		aria-expanded={open}
 		aria-controls="{uid}-work"
 		aria-label="Turn {number} work: {summary.text}"
 		onclick={() => (open = !open)}
-		class="flex min-h-8 w-full min-w-0 items-center gap-2 rounded-lg text-left text-ui text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 any-pointer-coarse:min-h-12"
+		class="w-full min-w-0 shrink justify-start gap-2 px-0 text-left font-normal text-muted-foreground hover:bg-transparent hover:text-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground dark:hover:bg-transparent"
 	>
-		{#if !turn.end}<LoaderCircle
-				class="size-4 shrink-0 animate-spin text-running motion-reduce:animate-none"
+		{#if !turn.end}<Spinner
+				role="presentation"
 				aria-hidden="true"
+				class="shrink-0 text-running motion-reduce:animate-none"
 			/>{:else if summary.failed}<CircleX
 				class="size-4 shrink-0 text-failed"
 				aria-hidden="true"
@@ -72,7 +74,7 @@
 			)}
 			aria-hidden="true"
 		/>
-	</button>
+	</Button>
 	<ol id="{uid}-work" hidden={!open} class="flex min-w-0 flex-col gap-1 border-l pl-3">
 		{#each turn.work as item, index (index)}
 			<li class="min-w-0 text-ui">
@@ -85,9 +87,10 @@
 							<code class="min-w-0 flex-1 truncate font-mono text-code">{item.command}</code>
 							{#if runningCommand(item, index)}<span
 									class="flex shrink-0 items-center gap-1 text-meta text-running"
-									><LoaderCircle
-										class="size-3.5 animate-spin motion-reduce:animate-none"
+									><Spinner
+										role="presentation"
 										aria-hidden="true"
+										class="size-3.5 motion-reduce:animate-none"
 									/>Running</span
 								>{:else if item.exitCode !== undefined}<span
 									class={cn(

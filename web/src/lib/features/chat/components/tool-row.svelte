@@ -1,5 +1,5 @@
 <script lang="ts">
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import { Spinner } from '$lib/ui/spinner';
 	import ToolIcon from './tool-icon.svelte';
 	import ToolDiff from './tool-diff.svelte';
 	import { toolCategory } from '../tool-activity';
@@ -68,10 +68,11 @@
 					aria-hidden="true"
 				/>{/if}
 			<span class="min-w-0 flex-1 truncate">{readable}</span>
-			<span class="flex max-w-[65%] shrink-0 items-center gap-1 text-right text-meta"
-				>{#if step.state === 'running'}<LoaderCircle
-						class="size-3.5 animate-spin text-running motion-reduce:animate-none"
+			<span class="flex shrink-0 items-center gap-1 text-right text-meta"
+				>{#if step.state === 'running'}<Spinner
+						role="presentation"
 						aria-hidden="true"
+						class="size-3.5 text-running motion-reduce:animate-none"
 					/>{/if}{#if approval && !executionUnknown}{labels[approval.outcome]} ·
 				{/if}{executionUnknown && approval
 					? labels[approval.outcome]

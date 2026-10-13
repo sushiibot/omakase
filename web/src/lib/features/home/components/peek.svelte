@@ -4,6 +4,7 @@
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import { ApprovalTray, AskCard } from '$lib/features/chat';
 	import { Button } from '$lib/ui/button';
+	import * as Sheet from '$lib/ui/sheet';
 	import { cn } from '$lib/utils';
 	import { peekTitle } from '../format';
 	import type { HomeItem, HomePeek } from '../types';
@@ -40,9 +41,9 @@
 </script>
 
 <section aria-labelledby="{uid}-t" class="flex flex-col gap-4 px-4 pt-2 pb-5">
-	<h2 id="{uid}-t" class="px-1 text-lg leading-snug font-semibold [overflow-wrap:anywhere]">
+	<Sheet.Title id="{uid}-t" class="px-1 [overflow-wrap:anywhere]">
 		{title}
-	</h2>
+	</Sheet.Title>
 
 	{#if peek.item?.kind === 'approval'}
 		<div class="@container -mx-2">

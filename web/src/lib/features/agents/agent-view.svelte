@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import { Button } from '$lib/ui/button';
 	import { conversationHref } from '$lib/core/nav/conversation';
 	import AgentDetail from './components/agent-detail.svelte';
+	import AgentHeader from './components/agent-header.svelte';
 	import { AgentView } from './agents.svelte';
 	import { agentState } from './model';
 	import { markSeen } from './seen';
@@ -12,12 +12,15 @@
 		focusRequest = false,
 		pageHref,
 		backLabel,
+		level = 1,
 		onback
 	}: {
 		id: string;
 		focusRequest?: boolean;
 		pageHref?: string;
 		backLabel?: string;
+		/** 2 inside the side panel, under its own tabs. */
+		level?: 1 | 2;
 		/** Gets the agent's conversation once it is known. */
 		onback: (conversationId?: string) => void;
 	} = $props();
@@ -50,6 +53,7 @@
 		conversationHref={conversationHref(agent.conversationId)}
 		{pageHref}
 		{backLabel}
+		{level}
 		onback={() => onback(agent.conversationId)}
 		onstop={() => view.stop()}
 		onanswer={(requestId, decision) => void view.answer(requestId, decision)}
@@ -57,17 +61,13 @@
 	/>
 {:else}
 	<div class="flex min-h-0 flex-1 flex-col">
-		<header class="flex min-h-13 shrink-0 items-center gap-1 border-b px-2 py-1">
-			<Button
-				size="icon"
-				variant="ghost"
-				class="shrink-0"
-				aria-label={backLabel ?? 'Back to agents'}
-				onclick={() => onback()}><ChevronLeft /></Button
-			>
-			<h2 class="text-base font-semibold">Agent</h2>
-		</header>
-		<div class="flex flex-col items-start gap-2 px-4 py-4 text-sm">
+		<AgentHeader
+			title="Agent"
+			{level}
+			backLabel={backLabel ?? 'Back to agents'}
+			onback={() => onback()}
+		/>
+		<div class="flex flex-col items-start gap-2 p-4 text-sm">
 			{#if view.loadError}<p role="alert" class="text-failed">{view.loadError}</p>
 				<Button variant="outline" onclick={() => void view.refresh()}>Retry</Button>
 			{:else}<p role="status" class="text-muted-foreground">Loading this agent…</p>{/if}

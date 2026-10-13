@@ -32,14 +32,14 @@
 							<ImageOff class="size-4" aria-hidden="true" />Image removed
 						</span>
 					{:else}
-						<button
-							type="button"
+						<Button
+							variant="ghost"
 							onclick={() => onopen?.(file)}
-							class="block overflow-hidden rounded-xl border"
+							class="h-auto overflow-hidden rounded-xl border-border p-0 any-pointer-coarse:after:hidden"
 							aria-label="Open image {file.name}"
 						>
 							<img {src} alt="" class="h-40 w-auto max-w-full object-cover" />
-						</button>
+						</Button>
 					{/if}
 				</li>
 			{/each}

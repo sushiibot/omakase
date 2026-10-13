@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Spinner } from '$lib/ui/spinner';
 	import { onDestroy, tick, untrack, type ComponentProps, type Snippet } from 'svelte';
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
@@ -6,17 +7,20 @@
 	import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';
 	import FoldVertical from '@lucide/svelte/icons/fold-vertical';
 	import Check from '@lucide/svelte/icons/check';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import MessageSquarePlus from '@lucide/svelte/icons/message-square-plus';
 	import ServerOff from '@lucide/svelte/icons/server-off';
 	import Square from '@lucide/svelte/icons/square';
 	import Screen from '$lib/ui/screen/screen.svelte';
+	import * as Sheet from '$lib/ui/sheet';
 	import RoutedSheet from '$lib/ui/sheet/routed-sheet.svelte';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import type { ConnectionState } from '$lib/ui/connection-banner.svelte';
 	import InstallHint from '$lib/ui/pwa/install-hint.svelte';
 	import UpdateToast from '$lib/ui/pwa/update-toast.svelte';
 	import { Button } from '$lib/ui/button';
+	import * as Empty from '$lib/ui/empty';
+	import { measureClass } from '$lib/ui/page';
+	import { cn } from '$lib/utils';
 	import type { LocationReply } from './location';
 	import type { PendingApproval } from './types';
 	import Composer from './components/composer.svelte';
@@ -568,8 +572,10 @@
 
 {#snippet sheetBody()}
 	{#if shownSheet === 'commands'}
-		<div class="flex flex-col gap-2 px-3 pt-1 pb-3">
-			<h2 class="px-2 pt-1 text-lg font-semibold">Chat commands</h2>
+		<Sheet.Header>
+			<Sheet.Title>Chat commands</Sheet.Title>
+		</Sheet.Header>
+		<div class="flex flex-col gap-2 px-2 pb-4">
 			{@render commandActions?.()}
 			{#if commandsOffline}
 				<p
@@ -583,38 +589,36 @@
 			<ul class="flex flex-col">
 				{#each commands as c (c.id)}
 					<li>
-						<button
-							type="button"
+						<Button
+							variant="ghost"
 							disabled={c.disabled}
 							onclick={() => (c.id === 'new' ? onopensheet?.('new') : runCommand(c.id))}
-							class="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left hover:bg-muted disabled:pointer-events-none disabled:opacity-55"
+							class="h-auto w-full items-start justify-start gap-3 px-3 py-2.5 text-left whitespace-normal any-pointer-coarse:after:hidden"
 						>
-							<c.icon class="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+							<c.icon class="mt-0.5 text-muted-foreground" aria-hidden="true" />
 							<span class="flex flex-col gap-0.5">
-								<span class="text-body font-medium">{c.label}</span>
-								<span class="text-sm text-muted-foreground">{c.note}</span>
+								<span>{c.label}</span>
+								<span class="font-normal text-muted-foreground">{c.note}</span>
 							</span>
-						</button>
+						</Button>
 					</li>
 				{/each}
 			</ul>
 		</div>
 	{:else if shownSheet === 'new'}
-		<div class="flex flex-col gap-4 px-5 pt-2 pb-5">
-			<div class="flex flex-col gap-1">
-				<h2 class="text-lg font-semibold">Reset conversation context?</h2>
-				<p class="text-sm text-muted-foreground">
-					This conversation keeps its history and memory. The agent starts with fresh context, which
-					can take up to 4 minutes.
-				</p>
-			</div>
-			<div class="flex flex-col gap-2 any-pointer-coarse:gap-4">
-				<Button size="lg" disabled={commandsOffline} onclick={() => runCommand('new')}
-					><MessageSquarePlus />Reset context</Button
-				>
-				<Button size="lg" variant="ghost" onclick={closeSheet}>Cancel</Button>
-			</div>
-		</div>
+		<Sheet.Header>
+			<Sheet.Title>Reset conversation context?</Sheet.Title>
+			<Sheet.Description>
+				This conversation keeps its history and memory. The agent starts with fresh context, which
+				can take up to 4 minutes.
+			</Sheet.Description>
+		</Sheet.Header>
+		<Sheet.Footer class="any-pointer-coarse:gap-4">
+			<Button disabled={commandsOffline} onclick={() => runCommand('new')}
+				><MessageSquarePlus />Reset context</Button
+			>
+			<Button variant="ghost" onclick={closeSheet}>Cancel</Button>
+		</Sheet.Footer>
 	{:else if shownSheet === 'viewer' && viewer?.src}
 		<div class="flex flex-col gap-3 px-4 pt-1 pb-4">
 			<img src={viewer.src} alt={viewer.name} class="w-full rounded-xl border object-contain" />
@@ -754,36 +758,37 @@
 	bind:scroller
 >
 	{#if empty}
-		<div class="mx-auto flex h-full max-w-2xl flex-col gap-6 px-4 py-6">
+		<div class={cn('flex h-full flex-col gap-6 px-4 py-6', measureClass.reading)}>
 			<InstallHint {canInstall} oninstall={install} />
-			<div class="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-				<img
-					src="/brand/mascot.png"
-					alt=""
-					width="160"
-					height="100"
-					class="h-25 w-40 shrink-0 object-contain"
-				/>
-				<p class="flex max-w-72 flex-col gap-1">
-					<span class="text-lg font-semibold text-balance">Say hi to your agent.</span>
-					<span class="text-sm text-muted-foreground"
-						>Replies, questions and approvals show up here.</span
-					>
-				</p>
-			</div>
+			<Empty.Root class="p-0">
+				<Empty.Header>
+					<Empty.Media>
+						<img
+							src="/brand/mascot.png"
+							alt=""
+							width="160"
+							height="100"
+							class="h-25 w-40 shrink-0 object-contain"
+						/>
+					</Empty.Media>
+					<Empty.Title>Say hi to your agent.</Empty.Title>
+					<Empty.Description>Replies, questions and approvals show up here.</Empty.Description>
+				</Empty.Header>
+			</Empty.Root>
 			{@render voiceCaptions?.()}
 		</div>
 	{:else}
-		<div class="mx-auto max-w-2xl">
+		<div class={measureClass.reading}>
 			<div class="px-4 pt-4">
 				<InstallHint {canInstall} oninstall={install} />
 			</div>
 			{#if hasOlder && !olderError}
 				<div bind:this={older} class="flex justify-center px-4 pt-2">
 					<Button variant="ghost" disabled={olderLoading} onclick={() => onloadolder?.()}>
-						{#if olderLoading}<LoaderCircle
-								class="animate-spin motion-reduce:animate-none"
+						{#if olderLoading}<Spinner
+								role="presentation"
 								aria-hidden="true"
+								class="motion-reduce:animate-none"
 							/>Loading earlier messages…{:else}<ChevronUp />Show earlier messages{/if}
 					</Button>
 				</div>

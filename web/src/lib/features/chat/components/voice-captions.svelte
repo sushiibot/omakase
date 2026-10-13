@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { measureClass } from '$lib/ui/page';
 	import MessageText from './message-text.svelte';
 	import Mic from '@lucide/svelte/icons/mic';
 	import Volume2 from '@lucide/svelte/icons/volume-2';
@@ -16,7 +17,7 @@
 </script>
 
 {#if userText || assistantText}
-	<section aria-label="Voice captions" aria-live="off" class="mx-auto max-w-2xl">
+	<section aria-label="Voice captions" aria-live="off" class={measureClass.reading}>
 		<ol class="flex min-w-0 flex-col gap-4 overflow-x-clip px-4 py-4 [overflow-wrap:anywhere]">
 			{#if userText}
 				<li

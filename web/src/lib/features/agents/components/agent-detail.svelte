@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
-	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import Square from '@lucide/svelte/icons/square';
 	import CircleX from '@lucide/svelte/icons/circle-x';
 	import Hand from '@lucide/svelte/icons/hand';
@@ -8,6 +7,9 @@
 	import ActionMenu from '$lib/ui/menu/action-menu.svelte';
 	import StatePill from '$lib/ui/status/state-pill.svelte';
 	import { Composer, Markdown } from '$lib/features/chat';
+	import { measureClass } from '$lib/ui/page';
+	import { cn } from '$lib/utils';
+	import AgentHeader from './agent-header.svelte';
 	import ApprovalCard from './approval-card.svelte';
 	import WorkGroup from './work-group.svelte';
 	import { agentAge, agentMeta, agentState, placeRequests, requestKey, turns } from '../model';
@@ -24,6 +26,7 @@
 		conversationHref,
 		pageHref,
 		backLabel = 'Back to agents',
+		level = 1,
 		onback,
 		onstop,
 		onanswer,
@@ -43,6 +46,8 @@
 		/** The full-page view, offered from the panel. */
 		pageHref?: string;
 		backLabel?: string;
+		/** 2 inside the side panel, under its own tabs. */
+		level?: 1 | 2;
 		onback: () => void;
 		onstop: () => Promise<boolean>;
 		onanswer: (requestId: string | number, decision: Decision) => void;
@@ -176,14 +181,17 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-agent-detail={agent.id}>
-	<header class="flex shrink-0 flex-col gap-1 border-b px-2 pt-1 pb-2 any-pointer-coarse:gap-2">
-		<div class="flex min-w-0 items-center gap-1">
-			<Button size="icon" variant="ghost" class="shrink-0" aria-label={backLabel} onclick={onback}
-				><ChevronLeft /></Button
-			>
-			<h2 class="min-w-0 flex-1 truncate text-base font-semibold" title={agent.title}>
-				{agent.title}
-			</h2>
+	<AgentHeader title={agent.title} {level} {backLabel} {onback}>
+		{#snippet subtitle()}
+			<span class="flex items-center gap-2">
+				<StatePill of={status.of} label={status.label} />
+				<span class="tabular-nums">{agentAge(record, now)}</span>
+			</span>
+		{/snippet}
+		{#snippet actions()}
+			{#if live}<Button variant="outline" disabled={busy} onclick={() => void stop()}
+					><Square class="fill-current text-failed" />Stop</Button
+				>{/if}
 			<ActionMenu label="Agent actions">
 				{#snippet children(close)}
 					<Button
@@ -205,19 +213,8 @@
 						>{/if}
 				{/snippet}
 			</ActionMenu>
-		</div>
-		<div class="flex min-w-0 items-center gap-2 pl-13">
-			<StatePill of={status.of} label={status.label} />
-			<span class="text-meta text-muted-foreground tabular-nums">{agentAge(record, now)}</span>
-			{#if live}<Button
-					variant="outline"
-					class="ml-auto"
-					disabled={busy}
-					onclick={() => void stop()}><Square class="fill-current text-failed" />Stop</Button
-				>{/if}
-		</div>
-		<p class="pl-13 text-meta break-all text-muted-foreground">{agentMeta(agent)}</p>
-	</header>
+		{/snippet}
+	</AgentHeader>
 	<p class="sr-only" role="status">{announcement}</p>
 	<div
 		bind:this={scroller}
@@ -228,8 +225,9 @@
 			role="log"
 			aria-live="off"
 			aria-label="{agent.title} transcript"
-			class="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-4"
+			class={cn('flex w-full min-w-0 flex-col gap-4', measureClass.reading)}
 		>
+			<p class="text-xs break-all text-muted-foreground">{agentMeta(agent)}</p>
 			{#if !session && unavailable}<p class="text-sm text-muted-foreground">{unavailable}</p>{/if}
 			{#if !session && !unavailable}<p role="status" class="text-sm text-muted-foreground">
 					Loading this agent…

@@ -5,6 +5,7 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import { Button } from '$lib/ui/button';
 	import { Input } from '$lib/ui/input';
+	import * as Sheet from '$lib/ui/sheet';
 	import SearchField from '$lib/ui/input/search-field.svelte';
 
 	let {
@@ -22,8 +23,8 @@
 		oncreate: (title: string) => void;
 		onback: () => void;
 	} = $props();
-	let heading: HTMLHeadingElement;
-	onMount(() => heading.focus({ preventScroll: true }));
+	let heading = $state<HTMLElement | null>(null);
+	onMount(() => heading?.focus({ preventScroll: true }));
 	let query = $state('');
 	let creating = $state(false);
 	let title = $state('');
@@ -35,13 +36,13 @@
 	const uid = $props.id();
 </script>
 
-<div class="flex flex-col gap-4 px-5 pt-2 pb-5">
-	<h2 bind:this={heading} tabindex="-1" class="text-lg font-semibold outline-none">
+<div class="flex flex-col gap-4 p-4">
+	<Sheet.Title bind:ref={heading} tabindex={-1} class="outline-none">
 		Discuss in a conversation
-	</h2>
-	<p class="text-sm text-muted-foreground">
+	</Sheet.Title>
+	<Sheet.Description>
 		Choose where to discuss this item. It opens as a draft for you to review.
-	</p>
+	</Sheet.Description>
 	{#if creating}
 		<form
 			class="flex flex-col gap-3"
@@ -51,14 +52,7 @@
 			}}
 		>
 			<label for="{uid}-title" class="text-sm font-medium">Conversation name</label>
-			<Input
-				class="min-h-12"
-				id="{uid}-title"
-				bind:value={title}
-				maxlength={120}
-				disabled={busy}
-				data-autofocus
-			/>
+			<Input id="{uid}-title" bind:value={title} maxlength={120} disabled={busy} data-autofocus />
 			<Button type="submit" disabled={busy || !title.trim()}
 				>{busy ? 'Creating…' : 'Create conversation'}</Button
 			>

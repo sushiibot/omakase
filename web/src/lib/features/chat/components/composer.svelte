@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { measureClass } from '$lib/ui/page';
+	import { Spinner } from '$lib/ui/spinner';
 	import VoiceActivity from './voice-activity.svelte';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import Square from '@lucide/svelte/icons/square';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Mic from '@lucide/svelte/icons/mic';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -159,7 +160,7 @@
 	{#if dictation?.state === 'recording'}
 		<Square class="size-3.5 fill-current" aria-hidden="true" />
 	{:else if dictation?.state === 'transcribing' || dictation?.state === 'starting'}
-		<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+		<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
 	{:else}
 		<Mic class="size-5" aria-hidden="true" />
 	{/if}
@@ -167,7 +168,7 @@
 {#snippet attachIcon()}<Plus class="size-5" aria-hidden="true" />{/snippet}
 {#snippet stopIcon()}
 	{#if stopping}
-		<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+		<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
 	{:else}
 		<Square class="size-3.5 fill-current" aria-hidden="true" />
 	{/if}
@@ -192,7 +193,7 @@
 	</button>
 {/snippet}
 
-<form class="mx-auto flex w-full max-w-2xl flex-col gap-2 px-4 pt-2.5 pb-2.5" onsubmit={submit}>
+<form class={cn('flex flex-col gap-2 px-4 pt-2.5 pb-2.5', measureClass.reading)} onsubmit={submit}>
 	{#if failed.length}
 		<ul class="flex flex-col gap-1 any-pointer-coarse:gap-4">
 			{#each failed as photo (photo.id)}
@@ -242,9 +243,10 @@
 							<span
 								class="absolute inset-0 flex flex-col items-center justify-center gap-0.5 rounded-xl text-tab font-semibold text-foreground"
 							>
-								<LoaderCircle
-									class="size-4 animate-spin motion-reduce:animate-none"
+								<Spinner
+									role="presentation"
 									aria-hidden="true"
+									class="motion-reduce:animate-none"
 								/>
 								{photo.state === 'preparing' ? 'Preparing' : `Uploading ${photo.progress ?? 0}%`}
 							</span>

@@ -1,10 +1,9 @@
 <script lang="ts">
+	import { Spinner } from '$lib/ui/spinner';
 	import type { Snippet } from 'svelte';
 	import type { LocationReply } from '$lib/features/chat';
 	import CloudOff from '@lucide/svelte/icons/cloud-off';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
-	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import ConnectionBanner, { type ConnectionState } from '$lib/ui/connection-banner.svelte';
 	import UpdateToast from '$lib/ui/pwa/update-toast.svelte';
 	import { Button } from '$lib/ui/button';
@@ -15,6 +14,7 @@
 	import { status } from '$lib/ui/status/status';
 	import HomeRow from './components/home-row.svelte';
 	import Peek from './components/peek.svelte';
+	import UndoToast from './components/undo-toast.svelte';
 	import { peekTitle } from './format';
 	import type { HomeData, HomeGroup, HomeGroups, HomeItem, HomePeek } from './types';
 
@@ -131,14 +131,7 @@
 {/snippet}
 {#snippet toast()}
 	{#if undo}
-		<span class="line-clamp-1 min-w-0 flex-1">Done: {undo.label}</span>
-		<button
-			type="button"
-			onclick={() => onundo?.()}
-			class="-my-2 -mr-2 flex h-12 shrink-0 items-center gap-1.5 rounded-lg px-3 font-semibold text-background underline-offset-4 hover:underline"
-		>
-			<Undo2 class="size-4" aria-hidden="true" />Undo
-		</button>
+		<UndoToast label={undo.label} {onundo} />
 	{:else}
 		<UpdateToast onreload={() => onreload?.()} />
 	{/if}
@@ -174,7 +167,7 @@
 {#snippet after()}
 	{#if partLoading}
 		<p role="status" class="flex items-center gap-2 px-1 text-sm text-muted-foreground">
-			<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+			<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />
 			Loading failed and running work…
 		</p>
 	{:else if partError}
@@ -192,15 +185,6 @@
 		</p>
 	{/if}
 {/snippet}
-
-{#if embedded && (undo || updateReady)}
-	<div
-		role="status"
-		class="flex items-center gap-3 rounded-xl bg-foreground px-4 py-2 text-sm text-background"
-	>
-		{@render toast()}
-	</div>
-{/if}
 
 {#if !sheetOnly}
 	<ListScreen

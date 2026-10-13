@@ -1,10 +1,10 @@
 <script lang="ts">
+	import { Spinner } from '$lib/ui/spinner';
 	import ToolConfirmation from './tool-confirmation.svelte';
 	import ToolIcon from './tool-icon.svelte';
 	import { toolCategory } from '../tool-activity';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Info from '@lucide/svelte/icons/info';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import SendHorizontal from '@lucide/svelte/icons/send-horizontal';
 	import { Button } from '$lib/ui/button';
 	import { Input } from '$lib/ui/input';
@@ -134,9 +134,10 @@
 							disabled={ask.state === 'answering'}
 							onclick={() => onanswer?.(choice, index)}
 						>
-							{#if picked}<LoaderCircle
-									class="animate-spin motion-reduce:animate-none"
+							{#if picked}<Spinner
+									role="presentation"
 									aria-hidden="true"
+									class="motion-reduce:animate-none"
 								/>{/if}{choice}
 						</Button>
 					{/each}
@@ -145,7 +146,7 @@
 					<p role="status" class="text-sm text-muted-foreground">Sending your answer…</p>
 				{:else}
 					<form
-						class="flex gap-2"
+						class="flex gap-2 any-pointer-coarse:mt-1"
 						onsubmit={(e) => {
 							e.preventDefault();
 							if (text.trim()) onanswer?.(text.trim());
@@ -156,9 +157,9 @@
 							id="{uid}-a"
 							bind:value={text}
 							placeholder="Or type an answer"
-							class="h-12 min-w-0 flex-1 text-base"
+							class="min-w-0 flex-1"
 						/>
-						<Button type="submit" variant="outline" class="px-4" disabled={!text.trim()}
+						<Button type="submit" variant="outline" size="icon" disabled={!text.trim()}
 							><SendHorizontal /><span class="sr-only">Send answer</span></Button
 						>
 					</form>
