@@ -41,8 +41,8 @@ export async function smallTargets(page: Page) {
 					const f = input.getBoundingClientRect();
 					return f.top <= r.top && f.bottom >= r.bottom && f.left <= r.left && f.right >= r.right;
 				});
-				// A Button whose hit area is switched off, a sidebar row or an Item in a group is a contiguous
-				// row and sizes its own box. Sidebar and list Item rows are promised 44px on touch.
+				// A Button whose hit area is switched off, a sidebar row or an Item in a group is a
+				// contiguous row and sizes its own box. Sidebar and list Item rows are promised 44px on touch.
 				const coarse = matchMedia('(any-pointer: coarse)').matches;
 				const sidebarRow =
 					coarse && ['menu-button', 'group-label'].includes(e.getAttribute('data-sidebar') ?? '');
@@ -50,7 +50,7 @@ export async function smallTargets(page: Page) {
 					sidebarRow ||
 					(coarse && e.getAttribute('data-slot') === 'button' && after.display === 'none');
 				const itemRow =
-					e.getAttribute('data-slot') === 'item' && !!e.closest('[data-slot=item-group]');
+					coarse && e.getAttribute('data-slot') === 'item' && !!e.closest('[data-slot=item-group]');
 				if (!extended || after.display === 'none')
 					return {
 						w: r.width,

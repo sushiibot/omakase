@@ -581,6 +581,8 @@ test('the theme choices move with the arrow keys', async ({ page, context }) => 
 	const group = page.getByRole('radiogroup', { name: 'Appearance' });
 	const system = group.getByRole('radio', { name: 'System' });
 	const light = group.getByRole('radio', { name: 'Light' });
+	// axe reads the name only through aria-labelledby, not the wrapping FieldLabel.
+	await expect(system).toHaveAttribute('aria-labelledby', /.+/);
 	await expect(system).toHaveAttribute('tabindex', '0');
 	await expect(light).toHaveAttribute('tabindex', '-1');
 	await system.focus();

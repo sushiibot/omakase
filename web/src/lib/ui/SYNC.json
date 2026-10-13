@@ -33,13 +33,13 @@
 		"drift": "none"
 	},
 	"item": {
-		"drift": "outline variant on ItemGroup for flush bordered row lists (ux-guidelines.md#shared-component-patterns)"
+		"drift": "bordered variant on ItemGroup for flush bordered row lists (ux-guidelines.md#shared-component-patterns)"
 	},
 	"label": {
 		"drift": "none"
 	},
 	"radio-group": {
-		"drift": "segmented layout, a choice-card part used by settings, a coarse-pointer hit area on the item, and an item named from its associated labels (ux-guidelines.md#shared-component-patterns)"
+		"drift": "segmented layout, a choice-card part used by settings, a coarse-pointer hit area on the item (taller only in horizontal groups), and aria-labelledby pointing at its labels because axe-core skips label text inside a role=group Field (ux-guidelines.md#shared-component-patterns)"
 	},
 	"separator": {
 		"drift": "none"

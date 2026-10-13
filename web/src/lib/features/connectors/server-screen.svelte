@@ -339,7 +339,7 @@
 					class="gap-2"
 				>
 					{#if server.usedBy.length}
-						<Item.Group variant="outline">
+						<Item.Group variant="bordered">
 							{#each server.usedBy as u (u.runId + u.tool)}
 								<div role="listitem">
 									<Item.Root size="sm">

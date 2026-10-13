@@ -177,7 +177,7 @@
 
 			{#if skill.runs.length}
 				<Section title="Runs that loaded it">
-					<Item.Group variant="outline">
+					<Item.Group variant="bordered">
 						{#each skill.runs as r (r.id)}
 							<div role="listitem">
 								<Item.Root size="sm" class="any-pointer-coarse:min-h-11">

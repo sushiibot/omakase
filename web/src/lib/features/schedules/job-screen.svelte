@@ -164,7 +164,7 @@
 			</Section>
 			<Section title="Recent runs">
 				{#if job.runs.length}
-					<Item.Group variant="outline">
+					<Item.Group variant="bordered">
 						{#each job.runs as r (r.at)}
 							<div role="listitem">
 								{#if r.runId}
