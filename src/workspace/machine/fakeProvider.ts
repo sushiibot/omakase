@@ -1,7 +1,9 @@
 /** A stand-in for `codex app-server` and `claude -p` in tests: behaviour is chosen by words in the prompt. */
 export const FAKE_PROVIDER = String.raw`
 import { createInterface } from 'node:readline';
-import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, unlinkSync, writeFileSync } from 'node:fs';
+// Where each process ran and which folder it was told to work in, for tests of the working folder.
+const where = (m) => appendFileSync('cwd.log', JSON.stringify({ proc: process.cwd(), ...m }) + '\n');
 const send = (m) => process.stdout.write(JSON.stringify(m) + '\n');
 if (process.argv.includes('-p')) {
   let prompt = '';
@@ -13,6 +15,7 @@ if (process.argv.includes('-p')) {
   process.on('SIGTERM', () => process.exit(0));
   process.stdin.on('end', () => {
     const resumed = process.argv.includes('--resume');
+    where({ method: resumed ? 'resume' : 'start' });
     send({ type: 'system', subtype: 'init', session_id: 'claude-one' });
     if (prompt.includes('wait')) {
       process.on('SIGINT', () => {
@@ -49,6 +52,8 @@ if (process.argv.includes('-p')) {
     }
     if (m.method === 'initialize') return send({ id: m.id, result: {} });
     if (m.method === 'initialized') return;
+    if (m.method === 'thread/start' || m.method === 'thread/resume' || m.method === 'turn/start')
+      where({ method: m.method, cwd: m.params.cwd, roots: m.params.sandboxPolicy?.writableRoots });
     if (m.method === 'thread/start' || m.method === 'thread/resume') return send({ id: m.id, result: { thread: { id: 'thread-one' } } });
     if (m.method === 'turn/interrupt') { send({ id: m.id, result: {} }); return complete('interrupted'); }
     if (m.method === 'turn/steer') {

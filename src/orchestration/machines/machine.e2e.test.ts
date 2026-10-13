@@ -130,6 +130,29 @@ test("a machine daemon reports agents' changes: results wake their conversation 
     await agents.action({ action: "message", id: waiting, text: "carry on" }, "main");
     await eventually(() => wakes.length, (n) => n === 4);
     expect(wakes[3]).toMatchObject({ agentId: waiting, status: "completed", final: "Done: carry on" });
+
+    // A subfolder: the daemon negotiated it, the agent works there, and the owner sees where.
+    await eventually(() => hub.supportsSessionPath("pc"), (v) => v);
+    await mkdir(join(root, "repo"));
+    const inRepo = ((await agents.action(
+      { action: "start", machineId: "pc", rootId: "code", path: "repo", provider: "codex", prompt: "approval" },
+      "main",
+      "owner",
+    )) as { agent: { id: string; path?: string } }).agent;
+    expect(inRepo.path).toBe("repo");
+    await eventually(() => pushes.filter((p) => p.kind === "agentNeedsYou").length, (n) => n === 2);
+    expect(pushes.filter((p) => p.kind === "agentNeedsYou").at(-1)).toMatchObject({ agentId: inRepo.id, label: "Codex agent on Desktop in Code/repo" });
+    const listed = (await (await routes.handle(new Request("http://local/api/agents?conversationId=main"), "/api/agents"))!.json()) as {
+      agents: { id: string; folder: string }[];
+    };
+    expect(listed.agents.find((a) => a.id === inRepo.id)?.folder).toBe("Code/repo");
+    expect(listed.agents.find((a) => a.id === approval)?.folder).toBe("Code");
+    expect(await Bun.file(join(root, "repo", "cwd.log")).text()).toContain('"method":"thread/start"');
+    await expect(
+      agents.action({ action: "start", machineId: "pc", rootId: "code", path: "README.md", provider: "codex", prompt: "hello" }, "main", "owner"),
+    ).rejects.toThrow("not a folder");
+    expect(control.agents.list().some((a) => a.path === "README.md")).toBe(false);
+    await agents.action({ action: "stop", id: inRepo.id }, "main");
   } finally {
     daemon.kill();
     await daemon.exited;

@@ -242,9 +242,10 @@ export function sessionSummaryOf(record: SessionRecord): SessionSummary {
     status: record.status,
   };
 }
-/** A record as a gateway parses it: an older gateway rejects the event fields. */
-export function wireRecord(record: SessionRecord, events: boolean) {
+/** A record as a gateway parses it: an older gateway rejects the event fields and the path. */
+export function wireRecord(record: SessionRecord, events: boolean, paths = false) {
   const copy = structuredClone(record);
+  if (!paths) delete copy.path;
   if (events) return copy;
   for (const key of SESSION_EVENT_FIELDS) delete copy[key];
   for (const r of copy.requests) {
@@ -505,12 +506,16 @@ export class MachineSessions {
     }
     const run = async () => {
       let record: SessionRecord;
+      let cwd: string;
       if (p.action === "start") {
+        const dir = await this.files.codingDir(p.rootId, p.path);
+        cwd = dir.cwd;
         const existing = this.records.find((r) => r.id === p.sessionId);
         if (existing) {
           if (
             existing.taskId !== p.taskId ||
             existing.rootId !== p.rootId ||
+            existing.path !== dir.path ||
             existing.provider !== p.provider
           )
             throw new Error(
@@ -525,6 +530,7 @@ export class MachineSessions {
           id: p.sessionId,
           taskId: p.taskId,
           rootId: p.rootId,
+          ...(dir.path ? { path: dir.path } : {}),
           provider: p.provider,
           status: "running",
           output: "",
@@ -546,10 +552,11 @@ export class MachineSessions {
           throw new Error(
             "This session is working. Stop it or wait before sending a follow-up.",
           );
+        // A resumed transcript belongs to the folder it started in.
+        cwd = (await this.files.codingDir(record.rootId, record.path)).cwd;
       }
       // A previous provider process for this session may still be exiting; two must never share a transcript.
       await this.exits.get(record.id);
-      const cwd = await this.files.path(record.rootId, ".", true);
       const command = this.commands[record.provider];
       if (!command?.length)
         throw new Error("This provider is not enabled on the machine.");

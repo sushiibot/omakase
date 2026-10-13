@@ -6,6 +6,7 @@ import {
   MACHINE_SESSIONS,
   MACHINE_SESSION_CHANGED,
   SESSION_EVENTS_FEATURE,
+  SESSION_PATH_FEATURE,
   type SessionRecord,
 } from "../../orchestration/machines/contracts.ts";
 import { SharedFiles } from "./files.ts";
@@ -62,6 +63,8 @@ const sessions = new MachineSessions(files, config.stateDir, config.providers, {
 let socket: WebSocket | undefined;
 // Set once the gateway asks for session events; an older gateway parses records strictly and sends no such request.
 let events = false;
+// Set once the gateway asks about session paths; an older gateway rejects the info and record keys.
+let paths = false;
 sessions.onChange = (summary) => {
   if (events && socket?.readyState === WebSocket.OPEN)
     socket.send(
@@ -88,6 +91,7 @@ function connect() {
   });
   socket = ws;
   events = false;
+  paths = false;
   const heartbeat = setInterval(() => {
     if (ws.readyState === WebSocket.OPEN)
       ws.send(JSON.stringify({ jsonrpc: "2.0", method: "machine/heartbeat" }));
@@ -110,6 +114,9 @@ function connect() {
           message.params.features.includes(SESSION_EVENTS_FEATURE)
         )
           events = true;
+        paths =
+          Array.isArray(message.params?.features) &&
+          message.params.features.includes(SESSION_PATH_FEATURE);
         result = {
           name: config.name,
           roots: config.roots.map(({ id, name, coding }) => ({
@@ -118,6 +125,7 @@ function connect() {
             coding,
           })),
           providers: Object.keys(config.providers),
+          ...(paths ? { features: [SESSION_PATH_FEATURE] } : {}),
         };
       } else if (message.method === MACHINE_SESSIONS) {
         events = true;
@@ -128,6 +136,7 @@ function connect() {
         result = wireRecord(
           (await sessions.request(message.params)) as SessionRecord,
           events,
+          paths,
         );
       else throw new Error("Unknown machine operation.");
       if (ws.readyState === WebSocket.OPEN)

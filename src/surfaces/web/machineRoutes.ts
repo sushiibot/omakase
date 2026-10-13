@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { MachineControl } from "../../orchestration/machines/control.ts";
-import { agentSessionView, type CodingAgents } from "../../orchestration/machines/agents.ts";
+import { agentFolder, agentSessionView, type CodingAgents } from "../../orchestration/machines/agents.ts";
 import { answerDecision } from "../../orchestration/machines/contracts.ts";
 import { json, readJson } from "./http.ts";
 
@@ -23,9 +23,16 @@ export class MachineRoutes {
       }
       if (path === "/api/agents" && req.method === "GET") {
         const conversationId = new URL(req.url).searchParams.get("conversationId") ?? undefined;
-        const machineNames = new Map(this.control.list().map((m) => [m.id, m.name]));
+        const machines = new Map(this.control.list().map((m) => [m.id, m]));
         return json({
-          agents: this.agents.list(conversationId).map((a) => ({ ...a, machineName: machineNames.get(a.machineId) ?? a.machineId })),
+          agents: this.agents.list(conversationId).map((a) => {
+            const machine = machines.get(a.machineId);
+            return {
+              ...a,
+              machineName: machine?.name ?? a.machineId,
+              folder: agentFolder(a, machine?.roots.find((r) => r.id === a.rootId)?.name),
+            };
+          }),
         });
       }
       const match = /^\/api\/agents\/([a-z0-9][a-z0-9-]{0,63})(?:\/(answer|message|stop))?$/.exec(path);

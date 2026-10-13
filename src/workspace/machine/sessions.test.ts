@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -317,4 +317,61 @@ test("waiting for one agent's provider to exit never holds up another agent", as
   await start(sessions, "s1", "codex", "quick");
   expect(Date.now() - began).toBeLessThan(1500);
   await followUp;
+});
+
+test("a session works in its folder below the root, and every follow-up stays there", async () => {
+  const { root, sessions } = setup();
+  const repo = join(root, "repo");
+  mkdirSync(join(repo, "web"), { recursive: true });
+  const cwd = realpathSync(join(repo, "web"));
+  const log = () =>
+    readFileSync(join(cwd, "cwd.log"), "utf8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+  const begin = (id: string, provider: "codex" | "claude", text: string, path?: string) =>
+    sessions.request({ action: "start", sessionId: id, taskId: "", rootId: "code", provider, text, ...(path ? { path } : {}) });
+
+  const codex = (await begin("s1", "codex", "hello", "./repo/web")) as SessionRecord;
+  expect(codex.path).toBe("repo/web");
+  await until(get(sessions, "s1"), (r) => r.status === "completed");
+  await sessions.request({ action: "message", sessionId: "s1", requestId: "m1", text: "more", origin: "owner" });
+  await until(get(sessions, "s1"), (r) => r.status === "completed" && r.attempts === 2);
+  expect(log()).toEqual([
+    { proc: cwd, method: "thread/start", cwd },
+    { proc: cwd, method: "turn/start", cwd, roots: [cwd] },
+    { proc: cwd, method: "thread/resume", cwd },
+    { proc: cwd, method: "turn/start", cwd, roots: [cwd] },
+  ]);
+  expect(existsSync(join(root, "cwd.log"))).toBe(false);
+  // A repeated start is idempotent only for the same folder.
+  expect(((await begin("s1", "codex", "hello", "repo/web")) as SessionRecord).attempts).toBe(2);
+  await expect(begin("s1", "codex", "hello", "repo")).rejects.toThrow("another assignment");
+
+  rmSync(join(cwd, "cwd.log"));
+  await begin("c1", "claude", "hello", "repo/web");
+  await until(get(sessions, "c1"), (r) => r.status === "completed");
+  await sessions.request({ action: "prompt", sessionId: "c1", requestId: "p1", text: "again" });
+  await until(get(sessions, "c1"), (r) => r.status === "completed" && r.attempts === 2);
+  expect(log()).toEqual([
+    { proc: cwd, method: "start" },
+    { proc: cwd, method: "resume" },
+  ]);
+
+  // A refused folder leaves no session behind.
+  writeFileSync(join(repo, "notes.txt"), "x");
+  for (const [path, message] of [
+    ["../outside", "'..'"],
+    ["/tmp", "relative"],
+    ["repo/notes.txt", "not a folder"],
+    ["missing", "does not exist"],
+  ] as const)
+    await expect(begin(`x-${message.length}`, "codex", "hello", path)).rejects.toThrow(message);
+  expect(sessions.summaries().map((s) => s.sessionId).sort()).toEqual(["c1", "s1"]);
+});
+
+test("a gateway that did not ask about session paths never sees one", () => {
+  const record = { id: "s1", taskId: "", rootId: "code", path: "repo", provider: "codex", status: "completed", output: "", updatedAt: "", attempts: 1, requests: [], promptIds: [] } satisfies SessionRecord;
+  expect(Object.keys(wireRecord(record, true))).not.toContain("path");
+  expect(wireRecord(record, true, true).path).toBe("repo");
 });

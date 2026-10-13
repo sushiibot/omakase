@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SharedFiles } from "./files.ts";
@@ -79,5 +79,32 @@ describe("shared machine files", () => {
         path: "binary",
       }),
     ).rejects.toThrow("binary");
+  });
+  test("a coding folder path must be an existing folder inside a coding root", async () => {
+    const { dir, root } = await fixture();
+    const files = new SharedFiles([
+      { id: "code", name: "Code", path: root, coding: true },
+      { id: "docs", name: "Docs", path: root, coding: false },
+    ]);
+    await mkdir(join(root, "repo", "web"), { recursive: true });
+    await writeFile(join(root, "repo", "README.md"), "hi");
+    await mkdir(join(dir, "outside"));
+    await symlink(join(dir, "outside"), join(root, "escape"));
+    await symlink(join(root, "repo"), join(root, "alias"));
+    expect(await files.codingDir("code")).toEqual({ cwd: await realpath(root), path: undefined });
+    expect(await files.codingDir("code", "repo/web")).toEqual({
+      cwd: await realpath(join(root, "repo", "web")),
+      path: "repo/web",
+    });
+    // A symlink that stays inside resolves to the folder it names.
+    expect((await files.codingDir("code", "alias")).path).toBe("repo");
+    await expect(files.codingDir("code", "../outside")).rejects.toThrow("'..'");
+    await expect(files.codingDir("code", "repo/../../outside")).rejects.toThrow("'..'");
+    await expect(files.codingDir("code", join(dir, "outside"))).rejects.toThrow("relative");
+    await expect(files.codingDir("code", "C:\\Windows")).rejects.toThrow("relative");
+    await expect(files.codingDir("code", "escape")).rejects.toThrow("Symlink");
+    await expect(files.codingDir("code", "repo/README.md")).rejects.toThrow("not a folder");
+    await expect(files.codingDir("code", "missing")).rejects.toThrow("does not exist");
+    await expect(files.codingDir("docs", "repo")).rejects.toThrow("not shared");
   });
 });

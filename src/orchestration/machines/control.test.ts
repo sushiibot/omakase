@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { MachineControl } from "./control.ts";
-import { CodingAgentStore } from "./agents.ts";
-import type { MachineHub } from "./hub.ts";
+import { Check } from "typebox/schema";
+import { agentFolder, codingAgentManifest, CodingAgents, CodingAgentStore, type CodingAgentRecord } from "./agents.ts";
+import { MachineUncertainError, type MachineHub } from "./hub.ts";
 import { MemoryJsonState } from "../../db/jsonState.ts";
 
 test("an agent starts only on a daemon that reports its status, so its result can reach the conversation", async () => {
@@ -68,4 +69,56 @@ test("a paused conversation refuses its agent's start and message, never the own
   await expect(control.messageSession("pc", agent.id, "hi", "agent")).rejects.toThrow("paused");
   await control.messageSession("pc", agent.id, "hi", "owner");
   expect(noted).toEqual(["main:owner", "main:owner"]);
+});
+
+test("an agent in a subfolder needs a daemon that supports it; a refused start leaves no agent behind", async () => {
+  const store = new CodingAgentStore(new MemoryJsonState());
+  const requests: Record<string, unknown>[] = [];
+  let paths = false;
+  let refuse: Error | undefined;
+  const hub = {
+    list: () => [{ id: "pc", name: "Desktop", connected: true, providers: ["codex"], roots: [{ id: "code", name: "Code", coding: true }] }],
+    supportsEvents: () => true,
+    supportsSessionPath: () => paths,
+    request: async (_m: string, _method: string, p: { sessionId: string; path?: string }) => {
+      requests.push(p);
+      if (refuse) throw refuse;
+      return { id: p.sessionId, taskId: "", rootId: "code", ...(p.path ? { path: p.path } : {}), provider: "codex", status: "running", output: "", updatedAt: new Date().toISOString(), attempts: 1, requests: [], promptIds: [], stateVersion: 1 };
+    },
+  } as unknown as MachineHub;
+  const agents = new CodingAgents(new MachineControl(hub, store));
+  const start = (path?: string) => agents.action({ action: "start", machineId: "pc", rootId: "code", provider: "codex", prompt: "Fix it", ...(path ? { path } : {}) });
+
+  await expect(start("repo/web")).rejects.toThrow("Update and restart the machine daemon");
+  expect(requests).toEqual([]);
+  expect(store.list()).toEqual([]);
+  // The root itself needs nothing new from the daemon, and sends no path.
+  await start(".");
+  expect(requests[0]).not.toHaveProperty("path");
+  expect(store.list()[0]).toMatchObject({ rootName: "Code" });
+  expect(store.list()[0]).not.toHaveProperty("path");
+
+  paths = true;
+  const { agent } = (await start("./repo/web/")) as { agent: CodingAgentRecord };
+  expect(requests[1]).toMatchObject({ action: "start", path: "repo/web" });
+  expect(agent).toMatchObject({ path: "repo/web", rootName: "Code" });
+  expect(agentFolder(agent)).toBe("Code/repo/web");
+  const listed = (await agents.action({ action: "list" })) as { agents: CodingAgentRecord[] };
+  expect(listed.agents.map((a) => a.path ?? null).sort()).toEqual([null, "repo/web"]);
+
+  refuse = new Error("Folder missing does not exist in this coding folder.");
+  await expect(start("missing")).rejects.toThrow("does not exist");
+  expect(store.list()).toHaveLength(2);
+  // A timeout may have started work, so that agent is kept.
+  refuse = new MachineUncertainError("Machine request timed out; check its session before retrying.");
+  await expect(start("slow")).rejects.toThrow("timed out");
+  expect(store.list().map((a) => a.path)).toContain("slow");
+
+  for (const path of ["../x", "a/../../b", "/etc", "C:\\x"])
+    await expect(start(path)).rejects.toThrow();
+});
+
+test("the coding_agent schema takes a folder path", () => {
+  expect(Check(codingAgentManifest.inputSchema, { action: "start", machineId: "pc", rootId: "code", path: "omakase", provider: "codex", prompt: "x" })).toBe(true);
+  expect(codingAgentManifest.description).toContain("path");
 });

@@ -5,7 +5,7 @@ import {
   type Provider,
   type SessionRecord,
 } from "./contracts.ts";
-import type { MachineHub } from "./hub.ts";
+import { MachineUncertainError, type MachineHub } from "./hub.ts";
 import type { CodingAgentRecord, CodingAgentStore } from "./agents.ts";
 /** Who asked the gateway to act on a coding agent. */
 export type ActionOrigin = "owner" | "agent";
@@ -20,6 +20,8 @@ export interface SessionObserver {
 export interface AgentStart {
   machineId: string;
   rootId: string;
+  /** Working folder relative to the root. */
+  path?: string;
   provider: Provider;
   prompt: string;
   title: string;
@@ -56,10 +58,11 @@ export class MachineControl {
     origin: ActionOrigin,
   ): Promise<CodingAgentRecord> {
     const machine = this.hub.list().find((m) => m.id === input.machineId);
+    const root = machine?.roots.find((r) => r.id === input.rootId && r.coding);
     if (
       !machine?.connected ||
       !machine.providers.includes(input.provider) ||
-      !machine.roots.some((r) => r.id === input.rootId && r.coding)
+      !root
     )
       throw new Error(
         "This machine, provider or coding folder is unavailable.",
@@ -70,11 +73,18 @@ export class MachineControl {
       throw new Error(
         "This machine's daemon does not report agent status. Update and restart the machine daemon, or retry in a few seconds if it just connected.",
       );
+    // An older daemon would run at the coding folder's root, outside the folder that was asked for.
+    if (input.path && !this.hub.supportsSessionPath(input.machineId))
+      throw new Error(
+        "This machine's daemon cannot start an agent in a subfolder. Update and restart the machine daemon.",
+      );
     const at = new Date().toISOString();
     const agent: CodingAgentRecord = {
       id: `a-${crypto.randomUUID()}`,
       machineId: input.machineId,
       rootId: input.rootId,
+      rootName: root.name,
+      ...(input.path ? { path: input.path } : {}),
       provider: input.provider,
       title: input.title.slice(0, 200),
       prompt: input.prompt.slice(0, 4000),
@@ -85,14 +95,26 @@ export class MachineControl {
     this.agents.prune();
     // Recorded before launch, so a timed-out start still has a handle on any accepted work.
     this.agents.put(agent);
-    await this.session(agent.machineId, {
-      action: "start",
-      sessionId: agent.id,
-      taskId: "",
-      rootId: agent.rootId,
-      provider: agent.provider,
-      text: input.prompt,
-    });
+    let record: SessionRecord;
+    try {
+      record = await this.session(agent.machineId, {
+        action: "start",
+        sessionId: agent.id,
+        taskId: "",
+        rootId: agent.rootId,
+        ...(agent.path ? { path: agent.path } : {}),
+        provider: agent.provider,
+        text: input.prompt,
+      });
+    } catch (err) {
+      // A refused start (missing folder, busy machine) left no work behind; an uncertain one may have.
+      if (!(err instanceof MachineUncertainError)) this.agents.forget(agent.id);
+      throw err;
+    }
+    // The daemon's resolved folder is the one the agent works in.
+    const started = this.agents.get(agent.id);
+    if (started && record.path !== undefined && record.path !== started.path)
+      this.agents.put({ ...started, path: record.path });
     this.observer?.noteAction(agent.conversationId, origin);
     return this.agents.get(agent.id) ?? agent;
   }

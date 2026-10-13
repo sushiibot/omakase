@@ -5,7 +5,7 @@ import {
   type SessionSummary,
 } from "./contracts.ts";
 import type { ActionOrigin, MachineControl, SessionObserver } from "./control.ts";
-import { agentKeys, type CodingAgentRecord } from "./agents.ts";
+import { agentFolder, agentKeys, type CodingAgentRecord } from "./agents.ts";
 import type { WorkspaceLink } from "../workspace/link.ts";
 import type { JsonState } from "../../db/jsonState.ts";
 import type { PushEvent } from "../../surfaces/web/pushRules.ts";
@@ -59,10 +59,12 @@ export interface AgentEventDeps {
 const loopKey = (conversationId: string) => `agent-loop:${conversationId}`;
 const isRecord = (v: SessionSummary | SessionRecord): v is SessionRecord => "id" in v;
 
-/** "Codex agent on Desktop": how the owner and the agent name a coding agent. */
-export function agentLabel(provider: CodingAgentRecord["provider"], machineName: string) {
-  return `${provider === "codex" ? "Codex" : "Claude Code"} agent on ${machineName}`;
+/** "Codex agent on Desktop", plus "in Code/web" for a subfolder: how the owner and the agent name a coding agent. */
+export function agentLabel(provider: CodingAgentRecord["provider"], machineName: string, folder?: string) {
+  return `${provider === "codex" ? "Codex" : "Claude Code"} agent on ${machineName}${folder ? ` in ${folder}` : ""}`;
 }
+const labelOf = (agent: CodingAgentRecord, machineName: string) =>
+  agentLabel(agent.provider, machineName, agent.path ? agentFolder(agent) : undefined);
 
 /**
  * Level-triggered: every trigger (live event, connect snapshot, a read of the agent) compares the session's
@@ -191,7 +193,7 @@ export class AgentEvents implements SessionObserver {
   private async routeRequests(agent: CodingAgentRecord, machineName: string, record: SessionRecord, pushed: string[]) {
     const open = record.status === "needs-you" ? record.requests : [];
     const ids = open.map((r) => String(r.id));
-    const base = { agentId: agent.id, conversationId: agent.conversationId, label: agentLabel(agent.provider, machineName) };
+    const base = { agentId: agent.id, conversationId: agent.conversationId, label: labelOf(agent, machineName) };
     for (const r of open) {
       if (pushed.includes(String(r.id))) continue;
       const d = r.detail;
@@ -235,7 +237,7 @@ export class AgentEvents implements SessionObserver {
       kind: "agentResult",
       agentId: agent.id,
       conversationId: agent.conversationId,
-      label: agentLabel(agent.provider, machineName),
+      label: labelOf(agent, machineName),
       status,
       text: summary,
     });

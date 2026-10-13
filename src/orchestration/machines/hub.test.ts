@@ -83,7 +83,7 @@ test("session changes arrive as notifications and as a snapshot; an older daemon
   let closed = false;
   const socket = { send: (s: string) => sent.push(JSON.parse(s)), close: () => void (closed = true) };
   hub.open("pc", socket);
-  expect(sent[0]).toMatchObject({ method: "machine/info", params: { features: ["sessionEvents"] } });
+  expect(sent[0]).toMatchObject({ method: "machine/info", params: { features: ["sessionEvents", "sessionPath"] } });
   const summary = { sessionId: "a-1", taskId: "", stateVersion: 3, status: "completed" };
   // Before machine/info answers, a notification is not trusted.
   hub.message("pc", socket, JSON.stringify({ jsonrpc: "2.0", method: "machine/sessionChanged", params: summary }));

@@ -7,6 +7,7 @@ import {
   MACHINE_SESSIONS,
   MACHINE_SESSION_CHANGED,
   SESSION_EVENTS_FEATURE,
+  SESSION_PATH_FEATURE,
   type SessionSummary,
 } from "./contracts.ts";
 export const machineGrants = z
@@ -20,6 +21,8 @@ export const machineGrants = z
       .strict(),
   )
   .max(32);
+/** The request may have reached the daemon: it may or may not have acted on it. */
+export class MachineUncertainError extends Error {}
 export type MachineGrant = z.infer<typeof machineGrants>[number];
 export interface MachineSocket {
   send(data: string): unknown;
@@ -79,7 +82,7 @@ export class MachineHub {
       previous.socket.close(4003, "Machine reconnected");
     }
     void this.request(id, "machine/info", {
-      features: [SESSION_EVENTS_FEATURE],
+      features: [SESSION_EVENTS_FEATURE, SESSION_PATH_FEATURE],
     })
       .then((info) => {
         if (this.peers.get(id) !== peer) return false;
@@ -134,7 +137,7 @@ export class MachineHub {
     for (const call of peer.pending.values()) {
       clearTimeout(call.timer);
       call.reject(
-        new Error("Machine disconnected; check its session before retrying."),
+        new MachineUncertainError("Machine disconnected; check its session before retrying."),
       );
     }
     peer.pending.clear();
@@ -184,7 +187,7 @@ export class MachineHub {
       const timer = setTimeout(() => {
         peer.pending.delete(requestId);
         reject(
-          new Error(
+          new MachineUncertainError(
             "Machine request timed out; check its session before retrying.",
           ),
         );
@@ -197,12 +200,16 @@ export class MachineHub {
       } catch {
         peer.pending.delete(requestId);
         clearTimeout(timer);
-        reject(new Error("Machine disconnected."));
+        reject(new MachineUncertainError("Machine disconnected."));
       }
     });
   }
   supportsEvents(id: string): boolean {
     return this.peers.get(id)?.events === true;
+  }
+  /** The daemon starts agents in a folder below a coding root. */
+  supportsSessionPath(id: string): boolean {
+    return this.peers.get(id)?.info?.features?.includes(SESSION_PATH_FEATURE) === true;
   }
   list() {
     return this.grants.map((g) => ({

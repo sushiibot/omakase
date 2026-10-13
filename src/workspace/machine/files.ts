@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
-import { lstat, open, readdir, realpath } from "node:fs/promises";
+import { lstat, open, readdir, realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import { fileRequest } from "../../orchestration/machines/contracts.ts";
+import { agentPath, fileRequest } from "../../orchestration/machines/contracts.ts";
 export interface SharedRoot {
   id: string;
   name: string;
@@ -31,6 +31,24 @@ export class SharedFiles {
     if (!within(base, target))
       throw new Error("Symlink leaves the shared folder.");
     return target;
+  }
+  /** A coding session's working folder: an existing directory inside a coding root, with its path from the root. */
+  async codingDir(rootId: string, path?: string) {
+    const checked = path === undefined ? "." : agentPath.safeParse(path);
+    if (typeof checked !== "string" && !checked.success)
+      throw new Error(checked.error.issues[0]?.message ?? "Invalid folder path.");
+    const base = await this.path(rootId, ".", true);
+    let cwd: string;
+    try {
+      cwd = await this.path(rootId, typeof checked === "string" ? checked : checked.data, true);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT")
+        throw new Error(`Folder ${path} does not exist in this coding folder.`);
+      throw err;
+    }
+    if (!(await stat(cwd)).isDirectory()) throw new Error(`${path} is a file, not a folder.`);
+    const rel = relative(base, cwd).split(sep).join("/");
+    return { cwd, path: rel || undefined };
   }
   private async text(path: string, offset: number, base: string) {
     const before = await lstat(path);
