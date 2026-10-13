@@ -86,6 +86,16 @@ function toolCall(name: string, args: object): Response {
 function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Response {
   const last = msgs[msgs.length - 1];
   const tag = /#([a-z0-9]{4,16})\b/.exec(userText)?.[1];
+  // Consolidation now receives source conversations. Their old E2E keywords are evidence,
+  // not commands for this run. Return a valid no-change proposal before matching chat scripts.
+  if (/^Consolidate .*memory files\./.test(userText)) {
+    const current = (name: string) => userText.split(`<current-file name="${name}">\n`)[1]?.split("\n</current-file>")[0] ?? `# ${name}`;
+    return stream([
+      "=====BEGIN USER.md=====\n", current("USER.md"), "\n=====END USER.md=====\n",
+      "=====BEGIN MEMORY.md=====\n", current("MEMORY.md"), "\n=====END MEMORY.md=====\n",
+      "=====BEGIN SUMMARY=====\nmerged: none\ndropped: none\npromoted: none\n=====END SUMMARY=====",
+    ], 0, undefined);
+  }
   if (last?.role === "tool") {
     if (userText.includes("E2E-LIST-CHECKS") || userText.includes("E2E-OWNER-DECISION") || userText.includes("E2E-CHANNEL-REQUESTS")) return stream([textOf(last.content)], 10, tag);
     if (userText.includes("E2E-BROWSER")) return stream(["Browser is open. ", "Browser task finished."], 50, tag, 0, false, 1);
