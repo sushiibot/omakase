@@ -3,6 +3,9 @@
 	import ApprovalCard from '$lib/features/agents/components/approval-card.svelte';
 	import ToolConfirmation from '$lib/features/chat/components/tool-confirmation.svelte';
 	import VoiceCallBar from '$lib/features/chat/components/voice-call-bar.svelte';
+	import VoicePanel from '$lib/features/chat/components/voice-panel.svelte';
+	import AskCard from '$lib/features/chat/components/ask-card.svelte';
+	import * as Sheet from '$lib/ui/sheet';
 	import type { AgentRecord, AgentRequest } from '$lib/features/agents/types';
 	import type { AskView } from '$lib/features/chat/types';
 	import { pending } from './api.svelte';
@@ -73,5 +76,37 @@
 			oninterrupt={log('voice:interrupt')}
 		/>
 	</div>
+	<div data-surface-probe="ask">
+		<AskCard
+			ask={ask('a1', ['Tomorrow', 'Next week', 'Later this month'])}
+			onanswer={(a) => fired.push(`ask:${a}`)}
+		/>
+	</div>
+	<!-- The panel lives in a sheet; its title needs the dialog root, not an open dialog. -->
+	<Sheet.Root>
+		<div data-surface-probe="voice-panel">
+			<VoicePanel
+				state="speaking"
+				mode="turns"
+				models={[]}
+				provider=""
+				loading={false}
+				error={null}
+				muted={false}
+				agentWorking={false}
+				userText=""
+				assistantText=""
+				seconds={42}
+				micReady
+				onprovider={() => {}}
+				onstart={log('panel:start')}
+				onstop={log('panel:end')}
+				onmute={log('panel:mute')}
+				onretry={() => {}}
+				onclose={() => {}}
+				oninterrupt={log('panel:interrupt')}
+			/>
+		</div>
+	</Sheet.Root>
 	<p data-fired>{fired.join(',')}</p>
 </div>

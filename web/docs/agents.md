@@ -106,7 +106,7 @@ A session from a machine without transcripts shows its raw output as one **Activ
 
 - The transcript is `role="log"` with `aria-live="off"`; a separate polite status announces state changes only ("Fix login needs approval", "… finished").
 - No focus moves when a request arrives.
-- Rows are links; actions are buttons. Every row and control keeps a 48px touch target.
+- Rows are links; actions are buttons. Buttons paint stock sizes and extend a 48px hit area on coarse pointers; list rows size their own box ([Reach and touch targets](ux-guidelines.md#reach-and-touch-targets)).
 
 Check: `pw` and axe at 320, 390 and 1280 px (`e2e/agents.test.ts`).
 

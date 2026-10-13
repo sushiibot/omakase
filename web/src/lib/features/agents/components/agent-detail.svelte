@@ -180,7 +180,7 @@
 	);
 </script>
 
-<div class="flex min-h-0 min-w-0 flex-1 flex-col" data-agent-detail={agent.id}>
+<div class="flex min-h-0 min-w-0 flex-1 flex-col text-base" data-agent-detail={agent.id}>
 	<AgentHeader title={agent.title} {level} {backLabel} {onback}>
 		{#snippet subtitle()}
 			<span class="flex items-center gap-2">

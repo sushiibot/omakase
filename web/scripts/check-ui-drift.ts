@@ -73,6 +73,11 @@ export const RAW_CONTROL_FILES = new Set([
 	'src/lib/features/chat/components/composer.svelte'
 ]);
 
+export const BARE_SCREEN_FILES = new Set([
+	// Chat needs the stick-to-bottom scroller and a raw composer footer, which the shared screens drop.
+	'src/lib/features/chat/chat-screen.svelte'
+]);
+
 export const ROUTE_ROOT_ALLOWED = new Set([
 	// The split workspace that hosts a chat screen beside the task inspector.
 	'TaskWorkspace',
@@ -212,7 +217,9 @@ export function checkSvelte(file: string, source: string): Violation[] {
 		n.type === 'Component' && ok(n.name ?? '');
 	const layout = top.filter((n) => !component(n, isOverlay));
 	if (inFeature && file.endsWith('-screen.svelte')) {
-		const bad = layout.find((n) => !component(n, isScreenRoot));
+		const ok = (name: string) =>
+			isScreenRoot(name) || (name === 'Screen' && BARE_SCREEN_FILES.has(file));
+		const bad = layout.find((n) => !component(n, ok));
 		if (bad || !layout.length) add(bad?.start ?? 0, RULE.screenRoot);
 	}
 	if (/^src\/routes\/(.+\/)?\+page\.svelte$/.test(file)) {

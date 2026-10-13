@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { fixtureApp } from './helpers';
+import { fixtureApp, stubStream } from './helpers';
 
 const harness = `http://localhost:${process.env.PW_HARNESS_PORT ?? 4174}/?surfaces`;
 
@@ -130,4 +130,53 @@ test('the task inspector keeps Ask, Stop and Mark done apart on touch', async ({
 	await expect(stop).toBeVisible();
 	await expectNearerOrNothing(ask, stop);
 	await expectNearerOrNothing(stop, done);
+});
+
+test('the voice panel keeps its call controls apart on touch', async ({ page }) => {
+	await surfaces(page);
+	const panel = page.locator('[data-surface-probe="voice-panel"]');
+	const mute = panel.getByRole('button', { name: 'Mute microphone' });
+	const end = panel.getByRole('button', { name: 'End call' });
+	const interrupt = panel.getByRole('button', { name: 'Stop speaking' });
+	await expectNearerOrNothing(mute, end);
+	await expectNearerOrNothing(end, interrupt);
+	await expectNearerOrNothing(mute, interrupt);
+});
+
+test('the ask card keeps its typed answer apart from the answer chips on touch', async ({
+	page
+}) => {
+	await surfaces(page);
+	const card = page.locator('[data-surface-probe="ask"]');
+	const chips = card.getByRole('group', { name: 'Answers' });
+	const input = card.getByRole('textbox', { name: 'Your own answer' });
+	await input.fill('Friday');
+	const send = card.getByRole('button', { name: 'Send answer' });
+	await expect(send).toBeEnabled();
+	await expectNearerOrNothing(chips, send);
+	await expectNearerOrNothing(chips, input);
+	await expectNearerOrNothing(card.getByRole('button', { name: 'Later this month' }), send);
+});
+
+test('an unsent message keeps Delete and Retry send apart on touch', async ({ page, context }) => {
+	await stubStream(context);
+	await context.route('**/api/**', async (route) => {
+		const path = new URL(route.request().url()).pathname;
+		const json = (data: unknown, status = 200) =>
+			route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
+		if (path === '/api/chat/history') return json({ items: [], before: null });
+		if (path === '/api/chat/messages') return json({ error: 'bad' }, 400);
+		if (path === '/api/chat/seen') return route.fulfill({ status: 204 });
+		return route.fulfill({ status: 404, body: 'Not found' });
+	});
+	await page.goto('/chat');
+	await page.getByRole('textbox', { name: 'Message' }).fill('This one fails');
+	await page.getByRole('button', { name: 'Send message' }).click();
+	const message = page.locator('[data-message-id]').filter({ hasText: 'This one fails' });
+	await expect(message).toContainText('Failed');
+	const copy = message.getByRole('button', { name: 'Copy your message' });
+	const remove = message.getByRole('button', { name: 'Delete' });
+	const retry = message.getByRole('button', { name: 'Retry send' });
+	await expectNearerOrNothing(copy, remove);
+	await expectNearerOrNothing(remove, retry);
 });

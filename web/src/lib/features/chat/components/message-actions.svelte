@@ -43,7 +43,7 @@
 	class={cn(
 		// Pulled up into the gap above, so the icons sit right under the text.
 		'-mt-2 flex h-12 items-center gap-2',
-		align === 'end' ? '-mr-1.5 justify-end self-end' : '-ml-1.5',
+		align === 'end' ? '-mr-2 justify-end self-end' : '-ml-2',
 		!always &&
 			'transition-opacity duration-(--duration-short) group-focus-within/msg:opacity-100 group-hover/msg:opacity-100 [@media(hover:hover)]:opacity-0',
 		pending && 'invisible',
@@ -54,7 +54,7 @@
 	{#each actions as a (a.id)}
 		<Button
 			variant="ghost"
-			size="icon-sm"
+			size="icon"
 			aria-label={a.label}
 			title={a.label}
 			onclick={a.onclick}

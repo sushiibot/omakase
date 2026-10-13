@@ -254,7 +254,7 @@
 		<div
 			role="group"
 			aria-label="What to pick"
-			class="mx-2 grid grid-cols-2 gap-1 rounded-xl bg-muted p-1"
+			class="mx-2 grid grid-cols-2 gap-2 rounded-xl bg-muted p-1"
 		>
 			{#each [['main', 'Model'], ['fallback', 'Fallback']] as const as [value, label] (value)}
 				<Button

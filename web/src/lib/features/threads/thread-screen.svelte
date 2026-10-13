@@ -115,7 +115,7 @@
 			size="xs"
 			aria-haspopup="dialog"
 			onclick={() => onopensheet?.('thread-memory')}
-			class="h-auto max-w-full min-w-0 shrink justify-start p-0 font-normal text-muted-foreground hover:text-foreground hover:no-underline"
+			class="-my-3 h-10 max-w-full min-w-0 shrink justify-start p-0 font-normal text-muted-foreground hover:text-foreground hover:no-underline any-pointer-coarse:after:hidden"
 		>
 			<BookMarked class="size-3.5" aria-hidden="true" />
 			<span class="truncate"

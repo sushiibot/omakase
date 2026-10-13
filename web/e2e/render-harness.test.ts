@@ -143,7 +143,7 @@ test.describe('markdown in V8', () => {
 		await expect(page.locator('#counter')).toHaveText('1');
 	});
 
-	test('Copy is a 48px icon button that copies the block and announces it', async ({
+	test('Copy keeps a touch hit area, copies the block and announces it', async ({
 		page,
 		context
 	}) => {
@@ -156,7 +156,7 @@ test.describe('markdown in V8', () => {
 		);
 		const copy = page.getByRole('button', { name: 'Copy code' });
 		const box = (await copy.boundingBox())!;
-		await expectHitArea(page, copy, { freeSides: ['top', 'bottom'] });
+		await expectHitArea(page, copy, { freeSides: ['bottom'] });
 		// Stays in view while the code scrolls sideways.
 		await page.locator('#solo pre').evaluate((el) => (el.scrollLeft = 10_000));
 		await expect(copy).toBeInViewport();
