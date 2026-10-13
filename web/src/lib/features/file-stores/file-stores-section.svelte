@@ -1,9 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import { Badge } from '$lib/ui/badge';
 	import { Button } from '$lib/ui/button';
+	import * as Collapsible from '$lib/ui/collapsible';
+	import * as Field from '$lib/ui/field';
 	import { Input } from '$lib/ui/input';
-	import { SwitchRow } from '$lib/ui/switch';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import * as Item from '$lib/ui/item';
+	import { PageIntro } from '$lib/ui/page';
+	import Section from '$lib/ui/section/section.svelte';
+	import { Spinner } from '$lib/ui/spinner';
+	import { Switch } from '$lib/ui/switch';
 	import { fileStoresApi, FileStoreApiError } from './api';
 	import type { FileStore, FileStoreInput } from './types';
 	let stores = $state<FileStore[]>([]);
@@ -29,6 +36,7 @@
 	>({});
 	let removeId = $state<string | null>(null);
 	let message = $state('');
+	let certificateOpen = $state(false);
 	const blank = (): FileStoreInput => ({
 		name: '',
 		endpoint: '',
@@ -68,6 +76,7 @@
 		error = '';
 		message = '';
 		removeId = null;
+		certificateOpen = false;
 	}
 	async function save() {
 		if (!form || busy) return;
@@ -83,6 +92,7 @@
 		} catch (e) {
 			error = errorText(e);
 			if (e instanceof FileStoreApiError) fieldErrors = e.fields;
+			if (fieldErrors.certificateSha256) certificateOpen = true;
 		} finally {
 			busy = '';
 		}
@@ -121,27 +131,22 @@
 		</p>{/if}
 {/snippet}
 
-<section aria-labelledby="external-files" class="flex flex-col gap-3">
-	<div class="flex flex-wrap items-center justify-between gap-3">
-		<h2 id="external-files" class="text-sm font-medium text-muted-foreground">
-			{heading}
-		</h2>
+<PageIntro description="Connect folders on your file server for the assistant to use.">
+	{#snippet actions()}
 		{#if !form}<Button variant="outline" disabled={!!busy || loading} onclick={() => edit()}
 				>Add file store</Button
 			>{/if}
-	</div>
-	<p class="text-sm text-muted-foreground">
-		Connect folders on your file server for the assistant to use.
-	</p>
+	{/snippet}
+</PageIntro>
+
+<Section id="external-files" title={heading}>
 	{#if loading}
 		<p role="status" class="flex items-center gap-2 text-sm text-muted-foreground">
-			<LoaderCircle
-				class="size-4 animate-spin motion-reduce:animate-none"
-				aria-hidden="true"
-			/>Loading file stores…
+			<Spinner role="presentation" aria-hidden="true" class="motion-reduce:animate-none" />Loading
+			file stores…
 		</p>
 	{:else if stores.length === 0 && !form && !error}
-		<p class="py-2 text-sm text-muted-foreground">
+		<p class="text-sm text-muted-foreground">
 			No file stores connected. Add a folder to make it available to the assistant.
 		</p>
 	{/if}
@@ -157,245 +162,267 @@
 	{/if}
 	{#if form}
 		<form
-			class="flex flex-col gap-3"
 			onsubmit={(event) => {
 				event.preventDefault();
 				void save();
 			}}
 		>
-			<h3 class="font-medium">{form.id ? 'Edit file store' : 'Add file store'}</h3>
-			<label class="flex flex-col gap-1.5 text-sm font-medium" for="store-name"
-				>Name<Input
-					disabled={!!busy}
-					id="store-name"
-					aria-invalid={!!fieldErrors.name}
-					aria-errormessage={fieldErrors.name ? 'store-name-error' : undefined}
-					class="min-h-12"
-					required
-					maxlength={100}
-					bind:value={form.name}
-					placeholder="Property documents"
-				/></label
-			>
-			{@render issue('name')}
-			<label class="flex flex-col gap-1.5 text-sm font-medium" for="store-address"
-				>Server address<Input
-					disabled={!!busy}
-					id="store-address"
-					aria-invalid={!!fieldErrors.endpoint}
-					aria-errormessage={fieldErrors.endpoint ? 'store-endpoint-error' : undefined}
-					class="min-h-12"
-					type="url"
-					required
-					bind:value={form.endpoint}
-					placeholder="https://fileserver:5006"
-					aria-describedby="store-address-help"
-				/></label
-			>
-			{@render issue('endpoint')}
-			<p id="store-address-help" class="text-sm text-muted-foreground">
-				Use the server’s Tailscale address and HTTPS port.
-			</p>
-			<fieldset class="flex min-w-0 flex-col gap-2">
-				<legend class="mb-2 text-sm font-medium">Allowed folders</legend>
-				<p id="store-folder-help" class="text-sm text-muted-foreground">
-					Writes are off by default. Restrict the NAS account to these folders too.
-				</p>
-				{@render issue('folders')}
-				<div class="flex flex-col divide-y">
-					{#each form.folders as folder, index}
-						<div class="flex min-w-0 flex-col gap-2 py-3 any-pointer-coarse:gap-4">
-							<label for={`store-folder-${index}`} class="flex flex-col gap-1.5 text-sm font-medium"
-								>Folder {index + 1}<Input
-									disabled={!!busy}
-									id={`store-folder-${index}`}
-									class="min-h-12"
-									required
-									bind:value={folder.path}
-									placeholder="/public/Property"
-									aria-describedby="store-folder-help"
-									aria-invalid={!!fieldErrors.folders}
-									aria-errormessage={fieldErrors.folders ? 'store-folders-error' : undefined}
-								/></label
-							>
-							<SwitchRow
-								checked={folder.writable}
-								disabled={!!busy}
-								onchange={(value) => (folder.writable = value)}
-								class="min-h-12 rounded-lg px-0 py-1.5"
-								><span class="font-medium">Allow writes for folder {index + 1}</span></SwitchRow
-							>
-							{#if form.folders.length > 1}<Button
-									type="button"
-									variant="ghost"
-									class="self-start"
-									disabled={!!busy}
-									onclick={() => {
-										if (form) form.folders = form.folders.filter((_, i) => i !== index);
-									}}>Remove folder {index + 1}</Button
-								>{/if}
-						</div>
-					{/each}
-				</div>
-				<Button
-					type="button"
-					variant="outline"
-					class="self-start"
-					disabled={!!busy || form.folders.length >= 20}
-					onclick={() => {
-						if (form) form.folders = [...form.folders, { path: '', writable: false }];
-					}}>Add folder</Button
-				>
-			</fieldset>
-			<div class="grid gap-3 sm:grid-cols-2">
-				<div class="flex flex-col gap-1">
-					<label class="flex flex-col gap-1.5 text-sm font-medium" for="store-account"
-						>NAS account<Input
+			<Field.Set>
+				<Field.Legend>{form.id ? 'Edit file store' : 'Add file store'}</Field.Legend>
+				<Field.Group>
+					<Field.Field>
+						<Field.Label for="store-name">Name</Field.Label>
+						<Input
 							disabled={!!busy}
-							id="store-account"
-							aria-invalid={!!fieldErrors.username}
-							aria-errormessage={fieldErrors.username ? 'store-username-error' : undefined}
-							class="min-h-12"
+							id="store-name"
+							aria-invalid={!!fieldErrors.name}
+							aria-errormessage={fieldErrors.name ? 'store-name-error' : undefined}
 							required
-							autocomplete="username"
-							bind:value={form.username}
-						/></label
-					>
-					{@render issue('username')}
-				</div>
-				<div class="flex flex-col gap-1">
-					<label class="flex flex-col gap-1.5 text-sm font-medium" for="store-password"
-						>Password<Input
+							maxlength={100}
+							bind:value={form.name}
+							placeholder="Property documents"
+						/>
+						{@render issue('name')}
+					</Field.Field>
+					<Field.Field>
+						<Field.Label for="store-address">Server address</Field.Label>
+						<Input
 							disabled={!!busy}
-							id="store-password"
-							aria-invalid={!!fieldErrors.password}
-							aria-errormessage={fieldErrors.password ? 'store-password-error' : undefined}
-							class="min-h-12"
-							type="password"
-							required={!form.id}
-							autocomplete="new-password"
-							bind:value={form.password}
-							aria-describedby="store-password-help"
-						/></label
-					>
-					{@render issue('password')}
-				</div>
-			</div>
-			<p id="store-password-help" class="text-sm text-muted-foreground">
-				{form.id ? 'Leave blank to keep the saved password. ' : ''}Saved on the server; never sent
-				to the assistant.
-			</p>
-			<details class="text-sm" open={!!fieldErrors.certificateSha256}>
-				<summary class="min-h-12 cursor-pointer py-2.5 font-medium">Private certificate</summary>
-				<div class="flex flex-col gap-2 pt-2">
-					<label class="font-medium" for="store-certificate">Verified SHA-256 fingerprint</label>
-					<Input
-						disabled={!!busy}
-						id="store-certificate"
-						aria-invalid={!!fieldErrors.certificateSha256}
-						aria-errormessage={fieldErrors.certificateSha256
-							? 'store-certificateSha256-error'
-							: undefined}
-						class="min-h-12"
-						bind:value={form.certificateSha256}
-						maxlength={64}
-						pattern={'[a-fA-F0-9]{64}'}
-						aria-describedby="store-cert-help"
-					/>
-					{@render issue('certificateSha256')}
-					<p id="store-cert-help" class="text-muted-foreground">
-						Optional. Use a fingerprint verified through trusted SSH or DSM. Leave blank for normal
-						certificate verification.
-					</p>
-				</div>
-			</details>
-			<SwitchRow
-				checked={form.enabled}
-				disabled={!!busy}
-				onchange={(v) => {
-					if (form) form.enabled = v;
-				}}
-				class="min-h-12 rounded-lg px-0 py-1.5"
-				><span class="font-medium">Available to the assistant</span></SwitchRow
-			>
-			<div class="flex flex-wrap gap-2">
-				<Button type="submit" disabled={!!busy}
-					>{busy === 'save' ? 'Saving…' : 'Save connection'}</Button
-				>
-				<Button
-					type="button"
-					variant="outline"
-					disabled={!!busy}
-					onclick={() => {
-						if (!dirty || window.confirm('Discard unsaved file-store changes?')) {
-							form = null;
-							error = '';
-						}
-					}}>Cancel</Button
-				>
-			</div>
-		</form>
-	{:else}
-		<ul class="flex flex-col divide-y" aria-label="File stores" class:hidden={stores.length === 0}>
-			{#each stores as store (store.id)}
-				<li class="flex flex-col gap-2 py-3">
-					<div class="flex flex-wrap items-baseline justify-between gap-2">
-						<h3 class="font-medium [overflow-wrap:anywhere]">{store.name}</h3>
-						<span class="text-sm text-muted-foreground"
-							>{!store.enabled
-								? 'Disabled'
-								: `${store.folders.length} ${store.folders.length === 1 ? 'folder' : 'folders'}`}</span
+							id="store-address"
+							aria-invalid={!!fieldErrors.endpoint}
+							aria-errormessage={fieldErrors.endpoint ? 'store-endpoint-error' : undefined}
+							type="url"
+							required
+							bind:value={form.endpoint}
+							placeholder="https://fileserver:5006"
+							aria-describedby="store-address-help"
+						/>
+						{@render issue('endpoint')}
+						<Field.Description id="store-address-help">
+							Use the server’s Tailscale address and HTTPS port.
+						</Field.Description>
+					</Field.Field>
+					<Field.Set>
+						<Field.Legend variant="label">Allowed folders</Field.Legend>
+						<Field.Description id="store-folder-help">
+							Writes are off by default. Restrict the NAS account to these folders too.
+						</Field.Description>
+						{@render issue('folders')}
+						{#each form.folders as folder, index}
+							<Field.Group class="gap-3 border-t pt-4 any-pointer-coarse:gap-4">
+								<Field.Field>
+									<Field.Label for={`store-folder-${index}`}>Folder {index + 1}</Field.Label>
+									<Input
+										disabled={!!busy}
+										id={`store-folder-${index}`}
+										required
+										bind:value={folder.path}
+										placeholder="/public/Property"
+										aria-describedby="store-folder-help"
+										aria-invalid={!!fieldErrors.folders}
+										aria-errormessage={fieldErrors.folders ? 'store-folders-error' : undefined}
+									/>
+								</Field.Field>
+								<Field.Field orientation="horizontal">
+									<Field.Label for={`store-folder-${index}-writes`}
+										>Allow writes for folder {index + 1}</Field.Label
+									>
+									<Switch
+										id={`store-folder-${index}-writes`}
+										disabled={!!busy}
+										bind:checked={folder.writable}
+										class="any-pointer-coarse:after:-inset-y-3.5"
+									/>
+								</Field.Field>
+								{#if form.folders.length > 1}<Button
+										type="button"
+										variant="ghost"
+										class="self-start"
+										disabled={!!busy}
+										onclick={() => {
+											if (form) form.folders = form.folders.filter((_, i) => i !== index);
+										}}>Remove folder {index + 1}</Button
+									>{/if}
+							</Field.Group>
+						{/each}
+						<Button
+							type="button"
+							variant="outline"
+							class="self-start"
+							disabled={!!busy || form.folders.length >= 20}
+							onclick={() => {
+								if (form) form.folders = [...form.folders, { path: '', writable: false }];
+							}}>Add folder</Button
 						>
+					</Field.Set>
+					<div class="grid gap-5 sm:grid-cols-2 sm:gap-3">
+						<Field.Field>
+							<Field.Label for="store-account">NAS account</Field.Label>
+							<Input
+								disabled={!!busy}
+								id="store-account"
+								aria-invalid={!!fieldErrors.username}
+								aria-errormessage={fieldErrors.username ? 'store-username-error' : undefined}
+								required
+								autocomplete="username"
+								bind:value={form.username}
+							/>
+							{@render issue('username')}
+						</Field.Field>
+						<Field.Field>
+							<Field.Label for="store-password">Password</Field.Label>
+							<Input
+								disabled={!!busy}
+								id="store-password"
+								aria-invalid={!!fieldErrors.password}
+								aria-errormessage={fieldErrors.password ? 'store-password-error' : undefined}
+								type="password"
+								required={!form.id}
+								autocomplete="new-password"
+								bind:value={form.password}
+								aria-describedby="store-password-help"
+							/>
+							{@render issue('password')}
+						</Field.Field>
+						<Field.Description id="store-password-help" class="sm:col-span-2">
+							{form.id ? 'Leave blank to keep the saved password. ' : ''}Saved on the server; never
+							sent to the assistant.
+						</Field.Description>
 					</div>
-					<ul class="flex flex-col gap-2" aria-label="Allowed folders">
-						{#each store.folders as folder}<li
-								class="flex flex-wrap items-baseline justify-between gap-2 text-sm"
-							>
-								<span class="min-w-0 [overflow-wrap:anywhere]">{folder.path}</span><span
-									class="text-muted-foreground"
-									>{folder.writable ? 'Read and write' : 'Read only'}</span
+					<Collapsible.Root bind:open={certificateOpen} class="flex flex-col gap-3">
+						<Collapsible.Trigger>
+							{#snippet child({ props })}
+								<Button {...props} variant="ghost" class="group/cert -ms-2.5 self-start"
+									>Private certificate<ChevronDown
+										class="transition-transform group-data-[state=open]/cert:rotate-180 motion-reduce:transition-none"
+										aria-hidden="true"
+									/></Button
 								>
-							</li>{/each}
-					</ul>
-					<p class="text-sm [overflow-wrap:anywhere] text-muted-foreground">{store.endpoint}</p>
-					{#if results[store.id]}<p
-							role={results[store.id].ok ? 'status' : 'alert'}
-							class="text-sm"
-							class:text-failed={!results[store.id].ok}
+							{/snippet}
+						</Collapsible.Trigger>
+						<Collapsible.Content>
+							<Field.Field>
+								<Field.Label for="store-certificate">Verified SHA-256 fingerprint</Field.Label>
+								<Input
+									disabled={!!busy}
+									id="store-certificate"
+									aria-invalid={!!fieldErrors.certificateSha256}
+									aria-errormessage={fieldErrors.certificateSha256
+										? 'store-certificateSha256-error'
+										: undefined}
+									bind:value={form.certificateSha256}
+									maxlength={64}
+									pattern={'[a-fA-F0-9]{64}'}
+									aria-describedby="store-cert-help"
+								/>
+								{@render issue('certificateSha256')}
+								<Field.Description id="store-cert-help">
+									Optional. Use a fingerprint verified through trusted SSH or DSM. Leave blank for
+									normal certificate verification.
+								</Field.Description>
+							</Field.Field>
+						</Collapsible.Content>
+					</Collapsible.Root>
+					<Field.Field orientation="horizontal">
+						<Field.Label for="store-enabled">Available to the assistant</Field.Label>
+						<Switch
+							id="store-enabled"
+							disabled={!!busy}
+							bind:checked={form.enabled}
+							class="any-pointer-coarse:after:-inset-y-3.5"
+						/>
+					</Field.Field>
+					<Field.Field orientation="horizontal" class="flex-wrap">
+						<Button type="submit" disabled={!!busy}
+							>{busy === 'save' ? 'Saving…' : 'Save connection'}</Button
 						>
-							{results[store.id].message}
-						</p>{/if}
-					{#if results[store.id]?.folders}
-						<ul class="flex flex-col gap-2 text-sm" aria-label="Folder connection results">
-							{#each results[store.id].folders ?? [] as result}<li
-									class:text-failed={!result.ok}
-									class="[overflow-wrap:anywhere]"
+						<Button
+							type="button"
+							variant="outline"
+							disabled={!!busy}
+							onclick={() => {
+								if (!dirty || window.confirm('Discard unsaved file-store changes?')) {
+									form = null;
+									error = '';
+								}
+							}}>Cancel</Button
+						>
+					</Field.Field>
+				</Field.Group>
+			</Field.Set>
+		</form>
+	{:else if stores.length}
+		<Item.Group aria-label="File stores">
+			{#each stores as store (store.id)}
+				<div role="listitem">
+					<Item.Root variant="outline" size="sm">
+						<Item.Content class="min-w-0">
+							<Item.Title class="line-clamp-none">
+								<h3 class="[overflow-wrap:anywhere]">{store.name}</h3>
+							</Item.Title>
+							<Item.Description class="[overflow-wrap:anywhere]">{store.endpoint}</Item.Description>
+						</Item.Content>
+						<Item.Actions>
+							<Badge variant={store.enabled ? 'secondary' : 'outline'}
+								>{!store.enabled
+									? 'Disabled'
+									: `${store.folders.length} ${store.folders.length === 1 ? 'folder' : 'folders'}`}</Badge
+							>
+						</Item.Actions>
+						<div class="flex basis-full flex-col gap-3">
+							<ul class="flex flex-col gap-2" aria-label="Allowed folders">
+								{#each store.folders as folder}<li
+										class="flex flex-wrap items-baseline justify-between gap-2 text-sm"
+									>
+										<span class="min-w-0 [overflow-wrap:anywhere]">{folder.path}</span><span
+											class="text-muted-foreground"
+											>{folder.writable ? 'Read and write' : 'Read only'}</span
+										>
+									</li>{/each}
+							</ul>
+							{#if results[store.id]}<p
+									role={results[store.id].ok ? 'status' : 'alert'}
+									class="text-sm"
+									class:text-failed={!results[store.id].ok}
 								>
-									{result.path}: {result.message}
-								</li>{/each}
-						</ul>
-					{/if}
-					{#if removeId === store.id}
-						<p class="text-sm">Remove this connection? Files on the server will stay in place.</p>
-						<div class="flex flex-wrap gap-2 any-pointer-coarse:gap-4">
-							<Button variant="destructive" disabled={!!busy} onclick={() => void remove(store)}
-								>Remove connection</Button
-							><Button variant="outline" disabled={!!busy} onclick={() => (removeId = null)}
-								>Keep connection</Button
-							>
+									{results[store.id].message}
+								</p>{/if}
+							{#if results[store.id]?.folders}
+								<ul class="flex flex-col gap-2 text-sm" aria-label="Folder connection results">
+									{#each results[store.id].folders ?? [] as result}<li
+											class:text-failed={!result.ok}
+											class="[overflow-wrap:anywhere]"
+										>
+											{result.path}: {result.message}
+										</li>{/each}
+								</ul>
+							{/if}
+							{#if removeId === store.id}
+								<p class="text-sm">
+									Remove this connection? Files on the server will stay in place.
+								</p>
+								<div class="flex flex-wrap gap-2 any-pointer-coarse:gap-4">
+									<Button variant="destructive" disabled={!!busy} onclick={() => void remove(store)}
+										>Remove connection</Button
+									><Button variant="outline" disabled={!!busy} onclick={() => (removeId = null)}
+										>Keep connection</Button
+									>
+								</div>
+							{:else}
+								<div class="flex flex-wrap gap-2 any-pointer-coarse:gap-4">
+									<Button variant="outline" disabled={!!busy} onclick={() => void test(store)}
+										>{busy === store.id ? 'Testing…' : 'Test connection'}</Button
+									><Button variant="outline" disabled={!!busy} onclick={() => edit(store)}
+										>Edit</Button
+									><Button variant="ghost" disabled={!!busy} onclick={() => (removeId = store.id)}
+										>Remove</Button
+									>
+								</div>
+							{/if}
 						</div>
-					{:else}
-						<div class="flex flex-wrap gap-2 any-pointer-coarse:gap-4">
-							<Button variant="outline" disabled={!!busy} onclick={() => void test(store)}
-								>{busy === store.id ? 'Testing…' : 'Test connection'}</Button
-							><Button variant="outline" disabled={!!busy} onclick={() => edit(store)}>Edit</Button
-							><Button variant="ghost" disabled={!!busy} onclick={() => (removeId = store.id)}
-								>Remove</Button
-							>
-						</div>
-					{/if}
-				</li>
+					</Item.Root>
+				</div>
 			{/each}
-		</ul>
+		</Item.Group>
 	{/if}
-</section>
+</Section>
