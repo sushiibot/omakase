@@ -194,7 +194,7 @@
 
 <form class="mx-auto flex w-full max-w-2xl flex-col gap-2 px-4 pt-2.5 pb-2.5" onsubmit={submit}>
 	{#if failed.length}
-		<ul class="flex flex-col gap-1">
+		<ul class="flex flex-col gap-1 any-pointer-coarse:gap-4">
 			{#each failed as photo (photo.id)}
 				<li class="flex items-center gap-2 text-sm">
 					<CircleAlert class="size-4 shrink-0 text-failed" aria-hidden="true" />

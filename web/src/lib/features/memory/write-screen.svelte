@@ -76,14 +76,14 @@
 	{#if write}
 		<div class="flex flex-col gap-2 border-t px-4 py-3">
 			{#if write.reverted}
-				<Button variant="outline" disabled={busy || !online} onclick={onrestore}>
+				<Button size="lg" variant="outline" disabled={busy || !online} onclick={onrestore}>
 					{#if busy}<LoaderCircle
 							class="animate-spin motion-reduce:animate-none"
 							aria-hidden="true"
 						/>Restoring…{:else}<Redo2 />Restore this change{/if}
 				</Button>
 			{:else}
-				<Button variant="outline" disabled={busy || !online} onclick={onrevert}>
+				<Button size="lg" variant="outline" disabled={busy || !online} onclick={onrevert}>
 					{#if busy}<LoaderCircle
 							class="animate-spin motion-reduce:animate-none"
 							aria-hidden="true"

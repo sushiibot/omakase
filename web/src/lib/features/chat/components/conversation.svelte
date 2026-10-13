@@ -479,7 +479,7 @@
 					<div class="flex gap-2">
 						{#each actions as a (a.id)}
 							<Button
-								size="icon"
+								size="icon-sm"
 								variant="ghost"
 								aria-label={a.label}
 								title={a.label}

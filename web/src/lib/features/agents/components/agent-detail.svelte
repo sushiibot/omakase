@@ -176,7 +176,7 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-agent-detail={agent.id}>
-	<header class="flex shrink-0 flex-col gap-1 border-b px-2 pt-1 pb-2">
+	<header class="flex shrink-0 flex-col gap-1 border-b px-2 pt-1 pb-2 any-pointer-coarse:gap-2">
 		<div class="flex min-w-0 items-center gap-1">
 			<Button size="icon" variant="ghost" class="shrink-0" aria-label={backLabel} onclick={onback}
 				><ChevronLeft /></Button

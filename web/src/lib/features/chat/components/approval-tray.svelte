@@ -292,7 +292,7 @@
 						onclick={(e) => decide(e, false)}>Cancel location request</Button
 					>{/if}
 			{:else}
-				<div bind:this={row} class="flex gap-3">
+				<div bind:this={row} class="flex gap-2 any-pointer-coarse:gap-4">
 					<Button
 						variant="outline"
 						class="px-5"

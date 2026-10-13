@@ -54,7 +54,7 @@
 			variant="outline"
 			disabled={busy || !title.trim()}
 			aria-label="Add task"
-			class="shrink-0"><Plus /></Button
+			class="shrink-0 self-center"><Plus /></Button
 		>
 	</form>
 	{#if error}<div role="alert" class="flex flex-col gap-2 text-sm text-failed">

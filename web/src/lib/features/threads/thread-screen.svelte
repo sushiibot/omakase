@@ -123,12 +123,16 @@
 
 {#snippet commandActions()}
 	<div class="flex flex-col border-b pb-2">
-		<Button variant="ghost" class="justify-start" onclick={() => onopensheet?.('thread-settings')}
-			><Pencil />Rename conversation</Button
+		<Button
+			variant="ghost"
+			class="justify-start any-pointer-coarse:h-11 any-pointer-coarse:after:hidden"
+			onclick={() => onopensheet?.('thread-settings')}><Pencil />Rename conversation</Button
 		>
 		{#if !archived}
-			<Button variant="ghost" class="justify-start" onclick={() => onopensheet?.('thread-close')}
-				><Archive />Archive conversation</Button
+			<Button
+				variant="ghost"
+				class="justify-start any-pointer-coarse:h-11 any-pointer-coarse:after:hidden"
+				onclick={() => onopensheet?.('thread-close')}><Archive />Archive conversation</Button
 			>
 		{/if}
 	</div>

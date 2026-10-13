@@ -33,7 +33,9 @@
 		<Button
 			variant="ghost"
 			size="icon-sm"
-			class="absolute top-0.5 right-0.5 {value ? '' : 'invisible'}"
+			class="absolute top-0.5 right-0.5 any-pointer-coarse:after:-inset-y-0.75 {value
+				? ''
+				: 'invisible'}"
 			aria-label="Clear search"
 			disabled={!value}
 			onclick={clear}><X /></Button

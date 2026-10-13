@@ -56,7 +56,7 @@
 	ontoggle={toggle}
 	role="group"
 	aria-label={label}
-	class="fixed top-[calc(var(--safe-top)+3.5rem)] right-4 bottom-auto left-auto m-0 flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-1 rounded-xl border bg-popover p-2 text-popover-foreground shadow-lg [&:not(:popover-open)]:hidden"
+	class="fixed top-[calc(var(--safe-top)+3.5rem)] right-4 bottom-auto left-auto m-0 flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-1 rounded-xl border bg-popover p-2 text-popover-foreground shadow-lg any-pointer-coarse:[&_[data-slot=button]]:h-11 any-pointer-coarse:[&_[data-slot=button]]:after:hidden [&:not(:popover-open)]:hidden"
 >
 	{@render children(close)}
 </div>
