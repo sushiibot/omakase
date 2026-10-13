@@ -1,6 +1,9 @@
 /// <reference types="bun" />
 import { describe, expect, test } from 'bun:test';
-import { checkDrift, checkSource } from './check-tokens';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { checkDrift, checkSource, run, widthSizing } from './check-tokens';
 
 const rules = (source: string) => checkSource('a.svelte', source).map((v) => v.rule);
 
@@ -28,25 +31,7 @@ describe('UI drift rules', () => {
 	};
 
 	test('drift rules never fail the token check', () => {
-		expect(rules('<div class="h-12 text-lg animate-spin"></div>')).toEqual([]);
-	});
-
-	test('fixed touch sizes are flagged outside lib/ui and the allowlist', () => {
-		expect(one(FEATURE, '<div class="flex min-h-13"></div>')).toContain('fixed touch size');
-		expect(one(FEATURE, '<i class="pointer-coarse:size-12"></i>')).toContain('fixed touch size');
-		expect(drift(FEATURE, '<div class="h-8 max-h-12 size-10 h-120"></div>')).toEqual([]);
-		expect(drift('src/lib/ui/shell/shell.svelte', '<div class="h-12"></div>')).toEqual([]);
-		expect(
-			drift('src/lib/features/chat/components/composer.svelte', '<div class="size-12"></div>')
-		).toEqual([]);
-	});
-
-	test('size="lg" is flagged outside sheet decisions and approvals', () => {
-		expect(one(FEATURE, '<Button size="lg">Go</Button>')).toContain('size="lg"');
-		expect(
-			drift('src/lib/features/threads/components/branch-sheet.svelte', '<Button size="lg" />')
-		).toEqual([]);
-		expect(drift(FEATURE, '<Button size="sm">Go</Button>')).toEqual([]);
+		expect(rules('<div class="text-lg animate-spin md:h-9"></div>')).toEqual([]);
 	});
 
 	test('large text is flagged outside lib/ui and markdown', () => {
@@ -65,7 +50,7 @@ describe('UI drift rules', () => {
 		expect(drift(FEATURE, '<Spinner />')).toEqual([]);
 	});
 
-	test('lib/ui sizes controls by input, not width, except stock 16px input text', () => {
+	test('lib/ui controls size by input, not width, except stock 16px input text', () => {
 		const ui = 'src/lib/ui/button/button.svelte';
 		expect(one(ui, "'h-12 desktop-pointer:h-8'")).toContain('desktop-pointer');
 		expect(one(ui, "'md:h-9'")).toContain('desktop-pointer');
@@ -73,5 +58,59 @@ describe('UI drift rules', () => {
 		expect(drift(ui, "'h-8 text-base md:text-sm any-pointer-coarse:after:-inset-2'")).toEqual([]);
 		expect(drift(ui, "'md:flex md:gap-2'")).toEqual([]);
 		expect(drift(FEATURE, '<div class="md:h-9"></div>')).toEqual([]);
+	});
+
+	test('width sizing ignores non-size text utilities and reads stacked and other breakpoints', () => {
+		expect(widthSizing('md:text-muted-foreground md:text-left md:text-center')).toEqual([]);
+		expect(widthSizing('md:text-sm/6')).toEqual([]);
+		expect(widthSizing('md:hover:h-9 max-md:h-12 sm:size-8 lg:text-[15px] xl:min-h-10')).toEqual([
+			'md:hover:h-9',
+			'max-md:h-12',
+			'sm:size-8',
+			'lg:text-[15px]',
+			'xl:min-h-10'
+		]);
+		expect(widthSizing('md:text-base/7')).toEqual(['md:text-base/7']);
+	});
+
+	test('layout primitives in lib/ui may size type by width', () => {
+		expect(drift('src/lib/ui/screen/screen.svelte', "<h1 class='md:text-base'>")).toEqual([]);
+		expect(drift('src/lib/ui/page/page-header.svelte', "<header class='md:h-14'>")).toEqual([]);
+		expect(one('src/lib/ui/input/input.svelte', "'md:text-base'")).toContain('desktop-pointer');
+	});
+});
+
+describe('run', () => {
+	const fixture = (files: Record<string, string>) => {
+		const root = mkdtempSync(join(tmpdir(), 'check-tokens-'));
+		for (const [path, text] of Object.entries(files)) {
+			mkdirSync(dirname(join(root, path)), { recursive: true });
+			writeFileSync(join(root, path), text);
+		}
+		return root;
+	};
+	const quiet = () => {};
+	const drifted = { 'src/lib/features/a/b.svelte': '<p class="text-lg">x</p>' };
+	const broken = { 'src/lib/features/a/c.svelte': '<p class="text-red-500">x</p>' };
+
+	test('drift alone exits 0 in warn mode and 1 in strict mode', () => {
+		const root = fixture(drifted);
+		try {
+			expect(run(root, { strict: false, verbose: false }, quiet, quiet)).toBe(0);
+			expect(run(root, { strict: true, verbose: false }, quiet, quiet)).toBe(1);
+		} finally {
+			rmSync(root, { recursive: true });
+		}
+	});
+
+	test('a token violation still exits 1 in warn mode while drift is present', () => {
+		const root = fixture({ ...drifted, ...broken });
+		try {
+			const lines: string[] = [];
+			expect(run(root, { strict: false, verbose: false }, (l) => lines.push(l), quiet)).toBe(1);
+			expect(lines.join('\n')).toContain('palette color');
+		} finally {
+			rmSync(root, { recursive: true });
+		}
 	});
 });

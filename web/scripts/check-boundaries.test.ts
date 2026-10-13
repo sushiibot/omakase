@@ -96,16 +96,45 @@ describe('the layer rules', () => {
 		expect(rules('src/lib/ui/screen/tabbed-screen.svelte', imp(engine))).toEqual([]);
 	});
 
-	test('features reach bits-ui only through lib/ui, as a drift warning', () => {
+	test('features and routes reach bits-ui only through lib/ui, as a drift warning', () => {
 		const file = 'src/lib/features/browser/components/browser-preview.svelte';
 		const source = svelte("import { Dialog } from 'bits-ui';");
-		expect(checkDrift(file, source).map((v) => v.rule)).toEqual([
-			'features use bits-ui through lib/ui'
-		]);
-		expect(checkDrift(file, svelte("import X from 'bits-ui/dist/x';"))).toHaveLength(1);
+		const drift = (f: string, src: string) => checkDrift(f, src).map((v) => v.rule);
+		expect(drift(file, source)).toEqual(['features and routes use bits-ui through lib/ui']);
+		expect(drift(file, svelte("import X from 'bits-ui/dist/x';"))).toHaveLength(1);
+		expect(drift('src/routes/x/+page.svelte', source)).toHaveLength(1);
+		// Types count too: a feature that needs bits-ui's types is wrapping a primitive itself.
+		expect(drift(file, svelte("import type { WithElementRef } from 'bits-ui';"))).toHaveLength(1);
 		expect(rules(file, source)).toEqual([]);
-		expect(checkDrift('src/lib/ui/sheet/sheet.svelte', source)).toEqual([]);
-		expect(checkDrift(file, svelte("import { cn } from '$lib/utils';"))).toEqual([]);
+		expect(drift('src/lib/ui/sheet/sheet.svelte', source)).toEqual([]);
+		expect(drift(file, svelte("import { cn } from '$lib/utils';"))).toEqual([]);
+	});
+
+	test('run exits 1 on a boundary violation even in warn mode, and on drift only when strict', async () => {
+		const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = await import('node:fs');
+		const { tmpdir } = await import('node:os');
+		const { dirname } = await import('node:path');
+		const { run } = await import('./check-boundaries');
+		const fixture = (files: Record<string, string>) => {
+			const root = mkdtempSync(join(tmpdir(), 'check-boundaries-'));
+			for (const [path, text] of Object.entries(files)) {
+				mkdirSync(dirname(join(root, path)), { recursive: true });
+				writeFileSync(join(root, path), text);
+			}
+			return root;
+		};
+		const quiet = () => {};
+		const warn = { strict: false, verbose: false };
+		const drifted = { 'src/lib/features/a/x.svelte': svelte("import { Dialog } from 'bits-ui';") };
+		const broken = { 'src/lib/core/http.ts': "import x from '$lib/features/a/x.svelte';" };
+		const roots = [fixture(drifted), fixture({ ...drifted, ...broken })];
+		try {
+			expect(run(roots[0], warn, quiet, quiet)).toBe(0);
+			expect(run(roots[0], { strict: true, verbose: false }, quiet, quiet)).toBe(1);
+			expect(run(roots[1], warn, quiet, quiet)).toBe(1);
+		} finally {
+			for (const root of roots) rmSync(root, { recursive: true });
+		}
 	});
 
 	test('ui imports only ui, utils and packages', () => {

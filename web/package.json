@@ -14,6 +14,7 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test:e2e": "playwright test",
 		"lint": "prettier --check . && bun scripts/check-no-raw-html.ts && bun scripts/check-tokens.ts && bun scripts/check-boundaries.ts && bun test && bun scripts/check-ui-drift.ts",
+		"lint:drift": "UI_DRIFT_VERBOSE=1 bun scripts/check-tokens.ts; UI_DRIFT_VERBOSE=1 bun scripts/check-boundaries.ts; UI_DRIFT_VERBOSE=1 bun scripts/check-ui-drift.ts",
 		"test:unit": "bun test",
 		"format": "prettier --write ."
 	},

@@ -3,7 +3,7 @@
 import { parse } from 'svelte/compiler';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { reportDrift, strict, type DriftViolation } from './ui-drift-mode';
+import { modeFromEnv, reportDrift, type DriftMode, type DriftViolation } from './ui-drift-mode';
 
 export interface Violation {
 	file: string;
@@ -11,18 +11,23 @@ export interface Violation {
 	rule: string;
 }
 
+const UI = 'src/lib/ui/';
 const FEATURES = 'src/lib/features/';
 const ROUTES = 'src/routes/';
 
 const RULE = {
+	touchSize:
+		'fixed touch size on a control outside lib/ui; paint stock sizes and let the hit area extend',
 	buttonSize: 'Button size compact, action or icon-lg; use a nova size',
 	buttonClass: 'size-12 on a Button; let the coarse-pointer hit area extend it',
+	buttonLg: 'Button size lg outside sheet decisions and approvals',
 	header: '<h1> or <header> outside the page header and shell',
-	h2: '<h2> in a feature; use Section, Sheet.Title or Card.Title',
+	h2: '<h2> in a feature or route; use Section, Sheet.Title or Card.Title',
 	screenRoot: 'screen root is not Page, ListScreen, DetailScreen, TabbedScreen or a screen',
-	routeMarkup: 'route renders markup; render a feature screen',
+	routeRoot: 'route does not render a feature screen at its root',
 	maxWidth: 'raw max-w-* in a feature; the screen primitive owns the measure',
 	rawControl: 'raw <button>, <input>, <select> or <textarea> in a feature; use lib/ui',
+	syncShape: 'SYNC.json must be an object of { "<component>": { "drift": ... } }',
 	syncMissing: 'stock-named lib/ui dir without a SYNC.json entry',
 	syncOrphan: 'SYNC.json entry without a stock-named lib/ui dir',
 	syncReason: 'SYNC.json drift reason must be "none" or cite (ux-guidelines.md#<anchor>)',
@@ -30,7 +35,25 @@ const RULE = {
 	syncHeader: 'stock-named lib/ui file without its shadcn-svelte nova header'
 };
 
-export const HEADING_FILES = new Set([
+export const LARGE_TARGET_FILES = new Set([
+	// The composer's send and attach controls sit at the thumb edge on phones.
+	'src/lib/features/chat/components/composer.svelte',
+	// The voice panel's call controls are used hands-busy, mid-conversation.
+	'src/lib/features/chat/components/voice-panel.svelte'
+]);
+
+export const LG_ALLOWED = new Set([
+	// Sheet decision bodies: the confirming action is the sheet's whole purpose.
+	'src/lib/features/threads/components/branch-sheet.svelte',
+	'src/lib/features/threads/components/thread-settings-sheet.svelte',
+	// Approval decisions, where a mis-tap is costly.
+	'src/lib/features/chat/components/approval-tray.svelte',
+	'src/lib/features/chat/components/approval-inline.svelte',
+	'src/lib/features/chat/components/tool-confirmation.svelte',
+	'src/lib/features/agents/components/approval-card.svelte'
+]);
+
+export const H2_FILES = new Set([
 	// Transcript cards are articles in the conversation, each with its own heading.
 	'src/lib/features/chat/components/conversation.svelte',
 	'src/lib/features/chat/components/approval-tray.svelte',
@@ -38,7 +61,7 @@ export const HEADING_FILES = new Set([
 	'src/lib/features/chat/components/tool-confirmation.svelte',
 	'src/lib/features/agents/components/approval-card.svelte'
 ]);
-/** Markdown renders the author's own headings. */
+/** Markdown renders the author's own headings, h1 included. */
 const MARKDOWN_RENDER = `${FEATURES}chat/render/`;
 
 export const RAW_CONTROL_FILES = new Set([
@@ -46,13 +69,22 @@ export const RAW_CONTROL_FILES = new Set([
 	'src/lib/features/chat/components/composer.svelte'
 ]);
 
-/** Sheets portal out of the layout, so they may sit beside the screen root. */
-const isOverlay = (name: string) => /Sheet(\.Root)?$/.test(name);
+export const ROUTE_ROOT_ALLOWED = new Set([
+	// The split workspace that hosts a chat screen beside the task inspector.
+	'TaskWorkspace',
+	// Renders nothing; it clears shown notifications while the chat is visible.
+	'ClearNotifications'
+]);
+
+/** Sheets and dialogs portal out of the layout, so they may sit beside the screen root. */
+const isOverlay = (name: string) => /(?:Sheet|Dialog|Drawer)(?:\.Root)?$/.test(name);
 /** ListScreen, DetailScreen, TabbedScreen, or another feature's screen; never the bare Screen. */
 const isScreenRoot = (name: string) =>
 	/^Page(\.|$)/.test(name) || (/Screen$/.test(name) && name !== 'Screen');
 
-const MAX_WIDTH = /(?<![\w-])max-w-(?:xs|sm|md|lg|xl|[2-7]xl)\b/;
+const TOUCH_SIZE = /(?<![\w-])(?:min-h|h|size)-1[2-6](?![\w-])/;
+const MAX_WIDTH = /(?<![\w-])max-w-(?!(?:prose|full|none)(?![\w-])|\[85%\])[\w[\].%-]+/;
+const INTERACTIVE_TAGS = /^(a|button|input|select|textarea|summary)$/;
 
 interface Node {
 	type: string;
@@ -84,24 +116,24 @@ const IGNORED_ROOTS = new Set([
 	'SvelteBody',
 	'SvelteOptions'
 ]);
+const BRANCHES = [
+	'consequent',
+	'alternate',
+	'body',
+	'fallback',
+	'fragment',
+	'pending',
+	'then',
+	'catch'
+];
 
-/** The rendered top-level nodes of a fragment, looking through control-flow blocks. */
+/** The rendered top-level nodes of a fragment, looking through control-flow blocks and boundaries. */
 function roots(nodes: Node[]): Node[] {
 	return nodes.flatMap((node): Node[] => {
 		if (node.type === 'Text') return String(node.data).trim() ? [node] : [];
 		if (IGNORED_ROOTS.has(node.type)) return [];
-		if (/Block$/.test(node.type)) {
-			const branches = [
-				'consequent',
-				'alternate',
-				'body',
-				'fallback',
-				'fragment',
-				'pending',
-				'then',
-				'catch'
-			];
-			return branches.flatMap((key) => {
+		if (/Block$/.test(node.type) || node.type === 'SvelteBoundary') {
+			return BRANCHES.flatMap((key) => {
 				const branch = node[key] as { nodes?: Node[] } | null | undefined;
 				return branch?.nodes ? roots(branch.nodes) : [];
 			});
@@ -116,30 +148,53 @@ export function checkSvelte(file: string, source: string): Violation[] {
 	const lineOf = (offset: number) => source.slice(0, offset).split('\n').length;
 	const add = (offset: number, rule: string) => out.push({ file, line: lineOf(offset), rule });
 	const ast = parse(source, { filename: file, modern: true });
+	const inUi = file.startsWith(UI);
 	const inFeature = file.startsWith(FEATURES);
 	const inMarkup = inFeature || file.startsWith(ROUTES);
-	const headingsAllowed = HEADING_FILES.has(file) || file.startsWith(MARKDOWN_RENDER);
+	const inMarkdown = file.startsWith(MARKDOWN_RENDER);
 
 	walk(ast.fragment, (node) => {
+		if (inFeature && (node.type === 'Attribute' || node.type === 'ClassDirective')) {
+			if (MAX_WIDTH.test(source.slice(node.start, node.end))) add(node.start, RULE.maxWidth);
+		}
+		if (node.type !== 'Component' && node.type !== 'RegularElement') return;
 		const attrs = (node.attributes as Node[] | undefined) ?? [];
+		const has = (name: string) => attrs.some((a) => a.type === 'Attribute' && a.name === name);
 		const attrText = (name: string) =>
 			attrs
 				.filter((a) => a.type === 'Attribute' && a.name === name)
 				.map((a) => source.slice(a.start, a.end))
 				.join(' ');
-		if (
-			node.type === 'Component' &&
-			node.name === 'Button' &&
-			!file.startsWith('src/lib/ui/button/')
-		) {
+		const classText = [
+			attrText('class'),
+			...attrs.filter((a) => a.type === 'ClassDirective').map((a) => `class:${a.name}`)
+		].join(' ');
+		const isButton = node.type === 'Component' && node.name === 'Button';
+
+		if (isButton && !file.startsWith(`${UI}button/`)) {
 			if (/['"](?:compact|action|icon-lg)['"]/.test(attrText('size')))
 				add(node.start, RULE.buttonSize);
-			if (/(?<![\w-])size-12\b/.test(attrText('class'))) add(node.start, RULE.buttonClass);
+			if (/(?<![\w-])size-12(?![\w-])/.test(classText)) add(node.start, RULE.buttonClass);
+			if (/['"]lg['"]/.test(attrText('size')) && !inUi && !LG_ALLOWED.has(file))
+				add(node.start, RULE.buttonLg);
 		}
+
+		const interactive =
+			isButton ||
+			has('onclick') ||
+			has('href') ||
+			/^(button|link|tab|switch|checkbox|menuitem)$/.test(
+				attrText('role').replace(/^role=["']?|["']$/g, '')
+			) ||
+			(node.type === 'RegularElement' && INTERACTIVE_TAGS.test(node.name ?? ''));
+		if (interactive && !inUi && !LARGE_TARGET_FILES.has(file)) {
+			const sizing = isButton ? classText.replace(/(?<![\w-])size-12(?![\w-])/g, '') : classText;
+			if (TOUCH_SIZE.test(sizing)) add(node.start, RULE.touchSize);
+		}
+
 		if (node.type !== 'RegularElement' || !inMarkup) return;
-		if ((node.name === 'h1' || node.name === 'header') && !headingsAllowed)
-			add(node.start, RULE.header);
-		if (node.name === 'h2' && !headingsAllowed) add(node.start, RULE.h2);
+		if ((node.name === 'h1' || node.name === 'header') && !inMarkdown) add(node.start, RULE.header);
+		if (node.name === 'h2' && !inMarkdown && !H2_FILES.has(file)) add(node.start, RULE.h2);
 		if (
 			inFeature &&
 			/^(button|input|select|textarea)$/.test(node.name ?? '') &&
@@ -149,19 +204,18 @@ export function checkSvelte(file: string, source: string): Violation[] {
 	});
 
 	const top = roots(ast.fragment.nodes as unknown as Node[]);
+	const component = (n: Node, ok: (name: string) => boolean) =>
+		n.type === 'Component' && ok(n.name ?? '');
+	const layout = top.filter((n) => !component(n, isOverlay));
 	if (inFeature && file.endsWith('-screen.svelte')) {
-		const layout = top.filter((n) => !(n.type === 'Component' && isOverlay(n.name ?? '')));
-		const bad = layout.find((n) => !(n.type === 'Component' && isScreenRoot(n.name ?? '')));
+		const bad = layout.find((n) => !component(n, isScreenRoot));
 		if (bad || !layout.length) add(bad?.start ?? 0, RULE.screenRoot);
 	}
 	if (/^src\/routes\/(.+\/)?\+page\.svelte$/.test(file)) {
-		const bad = top.find((n) => n.type !== 'Component');
-		if (bad) add(bad.start, RULE.routeMarkup);
-	}
-	if (inFeature) {
-		source.split('\n').forEach((text, i) => {
-			if (MAX_WIDTH.test(text)) out.push({ file, line: i + 1, rule: RULE.maxWidth });
-		});
+		const bad = layout.find(
+			(n) => !component(n, (name) => isScreenRoot(name) || ROUTE_ROOT_ALLOWED.has(name))
+		);
+		if (bad) add(bad.start, RULE.routeRoot);
 	}
 	return out;
 }
@@ -240,12 +294,14 @@ export const LOCAL_FILES = new Set([
 	'tabs/swipeable-tabs.svelte'
 ]);
 
-/** GitHub-style heading anchors of a markdown document. */
+/** GitHub-style heading anchors of a markdown document, ignoring fenced code. */
 export function anchors(markdown: string): Set<string> {
 	const out = new Set<string>();
 	const seen = new Map<string, number>();
-	for (const [, text] of markdown.matchAll(/^#{1,6}\s+(.+?)\s*#*\s*$/gm)) {
+	const prose = markdown.replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[^\n]*$/gm, '');
+	for (const [, text] of prose.matchAll(/^#{1,6}\s+(.+?)\s*#*\s*$/gm)) {
 		const slug = text
+			.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
 			.toLowerCase()
 			.replace(/[^\p{L}\p{N}\s_-]/gu, '')
 			.replace(/\s/g, '-');
@@ -263,7 +319,16 @@ export function checkSync(
 	guidelines: string
 ): DriftViolation[] {
 	const out: DriftViolation[] = [];
-	const sync = JSON.parse(syncJson) as Record<string, { drift?: unknown }>;
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(syncJson);
+	} catch {
+		parsed = null;
+	}
+	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+		return [{ where: 'src/lib/ui/SYNC.json', rule: RULE.syncShape }];
+	}
+	const sync = parsed as Record<string, { drift?: unknown } | null>;
 	const known = anchors(guidelines);
 	for (const dir of Object.keys(dirs)) {
 		if (!(dir in sync)) out.push({ where: `src/lib/ui/${dir}`, rule: RULE.syncMissing });
@@ -273,10 +338,13 @@ export function checkSync(
 		if (!(name in dirs)) out.push({ where, rule: RULE.syncOrphan });
 		const drift = entry?.drift;
 		if (drift === 'none') continue;
-		const cited = typeof drift === 'string' && drift.match(/\(ux-guidelines\.md#([\w-]+)\)/);
-		if (!cited) out.push({ where, rule: RULE.syncReason });
-		else if (!known.has(cited[1]))
-			out.push({ where: `${where} #${cited[1]}`, rule: RULE.syncAnchor });
+		const cited =
+			typeof drift === 'string'
+				? [...drift.matchAll(/\(ux-guidelines\.md#([\w-]+)\)/g)].map((m) => m[1])
+				: [];
+		if (!cited.length) out.push({ where, rule: RULE.syncReason });
+		for (const anchor of cited.filter((c) => !known.has(c)))
+			out.push({ where: `${where} #${anchor}`, rule: RULE.syncAnchor });
 	}
 	for (const [dir, files] of Object.entries(dirs)) {
 		for (const [file, source] of Object.entries(files)) {
@@ -315,8 +383,8 @@ export function readStockDirs(uiDir: string): Record<string, Record<string, stri
 	return out;
 }
 
-if (import.meta.main) {
-	const root = join(import.meta.dir, '..');
+/** Checks every component under root/src plus SYNC.json, and returns the exit code. */
+export function run(root: string, mode: DriftMode, log = console.error, ok = console.log): number {
 	const ui = join(root, 'src/lib/ui');
 	const syncPath = join(ui, 'SYNC.json');
 	const violations: DriftViolation[] = files(join(root, 'src'))
@@ -326,12 +394,13 @@ if (import.meta.main) {
 		.map((v) => ({ where: `${v.file}:${v.line}`, rule: v.rule }));
 	violations.push(
 		...checkSync(
-			readStockDirs(ui),
+			existsSync(ui) ? readStockDirs(ui) : {},
 			existsSync(syncPath) ? readFileSync(syncPath, 'utf8') : '{}',
 			readFileSync(join(root, 'docs/ux-guidelines.md'), 'utf8')
 		)
 	);
-	const exit = reportDrift('check-ui-drift', violations, strict);
-	if (!violations.length) console.log('UI follows stock nova and the shared screens');
-	process.exit(exit);
+	if (!violations.length) ok('UI follows stock nova and the shared screens');
+	return reportDrift('check-ui-drift', violations, mode, log);
 }
+
+if (import.meta.main) process.exit(run(join(import.meta.dir, '..'), modeFromEnv()));

@@ -3,7 +3,7 @@
 import { parse } from 'svelte/compiler';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, normalize, relative } from 'node:path';
-import { reportDrift, strict } from './ui-drift-mode';
+import { modeFromEnv, reportDrift, type DriftMode } from './ui-drift-mode';
 
 export interface Violation {
 	file: string;
@@ -177,12 +177,12 @@ export function checkFile(
 	});
 }
 
-/** Package imports reported as UI drift rather than failing the lint. */
+/** Package imports reported as UI drift rather than failing the lint; type-only imports count too. */
 export function checkDrift(file: string, source: string): Violation[] {
-	if (!feature(file)) return [];
+	if (!feature(file) && !file.startsWith('src/routes/')) return [];
 	return specifiers(file, source).flatMap((specifier) =>
 		specifier === 'bits-ui' || specifier.startsWith('bits-ui/')
-			? [{ file, specifier, rule: 'features use bits-ui through lib/ui' }]
+			? [{ file, specifier, rule: 'features and routes use bits-ui through lib/ui' }]
 			: []
 	);
 }
@@ -195,24 +195,26 @@ function walk(dir: string): string[] {
 	});
 }
 
-if (import.meta.main) {
-	const root = join(import.meta.dir, '..');
+/** Checks every module under root/src and returns the exit code. */
+export function run(root: string, mode: DriftMode, log = console.error, ok = console.log): number {
 	const exists = (path: string) =>
 		existsSync(join(root, path)) && statSync(join(root, path)).isFile();
 	const files = walk(join(root, 'src')).map((path) => ({
 		file: relative(root, path).replace(/\\/g, '/'),
 		source: readFileSync(path, 'utf8')
 	}));
+	const violations = files.flatMap(({ file, source }) => checkFile(file, source, exists));
+	for (const v of violations) log(`${v.file}  ${v.specifier}  ${v.rule}`);
+	if (violations.length) {
+		log(`\n${violations.length} boundary violation(s). See web/README.md, Layout.`);
+	} else {
+		ok('imports follow the layers');
+	}
 	const drift = files
 		.flatMap(({ file, source }) => checkDrift(file, source))
 		.map((v) => ({ where: `${v.file}  ${v.specifier}`, rule: v.rule }));
-	const driftExit = reportDrift('check-boundaries', drift, strict);
-	const violations = files.flatMap(({ file, source }) => checkFile(file, source, exists));
-	for (const v of violations) console.error(`${v.file}  ${v.specifier}  ${v.rule}`);
-	if (violations.length) {
-		console.error(`\n${violations.length} boundary violation(s). See web/README.md, Layout.`);
-		process.exit(1);
-	}
-	console.log('imports follow the layers');
-	process.exit(driftExit);
+	const driftExit = reportDrift('check-boundaries', drift, mode, log);
+	return violations.length ? 1 : driftExit;
 }
+
+if (import.meta.main) process.exit(run(join(import.meta.dir, '..'), modeFromEnv()));

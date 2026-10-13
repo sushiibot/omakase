@@ -1,8 +1,8 @@
 // Fails the lint on colors or text sizes that bypass the tokens in src/app.css (docs/ux-guidelines.md,
-// "Tokens" and "Type scale"), and reports UI sizing drift. The prototype's fake phone chrome is exempt.
+// "Tokens" and "Type scale"), and reports type and sizing drift. The prototype's fake phone chrome is exempt.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { reportDrift, strict, type DriftViolation } from './ui-drift-mode';
+import { modeFromEnv, reportDrift, type DriftMode } from './ui-drift-mode';
 
 export interface Violation {
 	file: string;
@@ -30,24 +30,6 @@ export function checkSource(file: string, source: string): Violation[] {
 
 const UI = 'src/lib/ui/';
 
-export const LARGE_TARGET_FILES = new Set([
-	// The composer's send and attach controls sit at the thumb edge on phones.
-	'src/lib/features/chat/components/composer.svelte',
-	// The voice panel's call controls are used hands-busy, mid-conversation.
-	'src/lib/features/chat/components/voice-panel.svelte'
-]);
-
-export const LG_ALLOWED = new Set([
-	// Sheet decision bodies: the confirming action is the sheet's whole purpose.
-	'src/lib/features/threads/components/branch-sheet.svelte',
-	'src/lib/features/threads/components/thread-settings-sheet.svelte',
-	// Approval decisions, where a mis-tap is costly.
-	'src/lib/features/chat/components/approval-tray.svelte',
-	'src/lib/features/chat/components/approval-inline.svelte',
-	'src/lib/features/chat/components/tool-confirmation.svelte',
-	'src/lib/features/agents/components/approval-card.svelte'
-]);
-
 export const LARGE_TEXT_FILES = new Set([
 	// Markdown headings keep their document scale.
 	'src/lib/features/chat/render/markdown.svelte'
@@ -58,21 +40,35 @@ export const SPIN_ALLOWED = new Set([
 	'src/lib/features/agents/components/status-glyph.svelte'
 ]);
 
+export const LAYOUT_DIRS = new Set([
+	// Page and pane layout, not controls: width breakpoints legitimately size their headers and type.
+	'page',
+	'screen',
+	'section',
+	'shell',
+	'workspace'
+]);
+
 /** Stock nova keeps 16px input text below md so phones don't zoom on focus. */
 const STOCK_WIDTH_SIZING = new Set(['md:text-sm']);
-const WIDTH_SIZING = /(?<![\w-])(?:md|desktop-pointer):(?:h|min-h|size|text)-[\w.[\]/-]+/g;
+const WIDTH_SIZING =
+	/(?<![\w-])((?:max-)?(?:sm|md|lg|xl|2xl)|desktop-pointer):(?:[\w-]+:)*(min-h|h|size|text)-([\w.[\]/%-]+)/g;
+const TEXT_SIZE = /^(?:xs|sm|base|lg|[2-9]?xl|\[[^\]]+\])(?:\/[\w.]+)?$/;
+
+/** Class tokens that size a control by viewport width or the desktop-pointer variant. */
+export function widthSizing(text: string): string[] {
+	return [...text.matchAll(WIDTH_SIZING)].flatMap(([token, variant, prop, value]) => {
+		if (prop === 'text' && !TEXT_SIZE.test(value)) return [];
+		return STOCK_WIDTH_SIZING.has(`${variant}:${prop}-${value.split('/')[0]}`) ? [] : [token];
+	});
+}
+
+const isControlUi = (f: string) => {
+	const dir = f.match(/^src\/lib\/ui\/([^/]+)\//)?.[1];
+	return dir !== undefined && !LAYOUT_DIRS.has(dir);
+};
 
 const DRIFT_RULES: [(file: string) => boolean, (text: string) => boolean, string][] = [
-	[
-		(f) => !f.startsWith(UI) && !LARGE_TARGET_FILES.has(f),
-		(t) => /(?<![\w-])(?:min-h|h|size)-1[2-6]\b/.test(t),
-		'fixed touch size outside lib/ui; paint stock sizes and let the hit area extend'
-	],
-	[
-		(f) => !LG_ALLOWED.has(f),
-		(t) => /\bsize=["']lg["']/.test(t),
-		'size="lg" outside sheet decisions and approvals'
-	],
 	[
 		(f) => !f.startsWith(UI) && !LARGE_TEXT_FILES.has(f),
 		(t) => /(?<![\w-])text-(?:lg|[2-9]?xl)(?![\w-])/.test(t),
@@ -84,9 +80,9 @@ const DRIFT_RULES: [(file: string) => boolean, (text: string) => boolean, string
 		'animate-spin loader; use Spinner'
 	],
 	[
-		(f) => f.startsWith(UI),
-		(t) => [...t.matchAll(WIDTH_SIZING)].some(([m]) => !STOCK_WIDTH_SIZING.has(m)),
-		'width or desktop-pointer sizing in lib/ui; size by any-pointer-coarse:'
+		isControlUi,
+		(t) => widthSizing(t).length > 0,
+		'width or desktop-pointer sizing on a lib/ui control; size by any-pointer-coarse:'
 	]
 ];
 
@@ -107,22 +103,24 @@ function walk(dir: string): string[] {
 	});
 }
 
-if (import.meta.main) {
-	const root = join(import.meta.dir, '..');
+/** Checks every component under root/src and returns the exit code. */
+export function run(root: string, mode: DriftMode, log = console.error, ok = console.log): number {
 	const files = walk(join(root, 'src')).map((path) => ({
 		file: relative(root, path).replace(/\\/g, '/'),
 		source: readFileSync(path, 'utf8')
 	}));
-	const drift: DriftViolation[] = files
+	const violations = files.flatMap(({ file, source }) => checkSource(file, source));
+	for (const v of violations) log(`${v.file}:${v.line}  ${v.rule}`);
+	if (violations.length) {
+		log(`\n${violations.length} token violation(s). Use the tokens in src/app.css.`);
+	} else {
+		ok('colors and text sizes use tokens');
+	}
+	const drift = files
 		.flatMap(({ file, source }) => checkDrift(file, source))
 		.map((v) => ({ where: `${v.file}:${v.line}`, rule: v.rule }));
-	const driftExit = reportDrift('check-tokens', drift, strict);
-	const violations = files.flatMap(({ file, source }) => checkSource(file, source));
-	for (const v of violations) console.error(`${v.file}:${v.line}  ${v.rule}`);
-	if (violations.length) {
-		console.error(`\n${violations.length} token violation(s). Use the tokens in src/app.css.`);
-		process.exit(1);
-	}
-	console.log('colors and text sizes use tokens');
-	process.exit(driftExit);
+	const driftExit = reportDrift('check-tokens', drift, mode, log);
+	return violations.length ? 1 : driftExit;
 }
+
+if (import.meta.main) process.exit(run(join(import.meta.dir, '..'), modeFromEnv()));
