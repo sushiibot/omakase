@@ -10,7 +10,7 @@
 	import { Composer, Markdown } from '$lib/features/chat';
 	import ApprovalCard from './approval-card.svelte';
 	import WorkGroup from './work-group.svelte';
-	import { agentAge, agentMeta, agentState, requestKey, turns } from '../model';
+	import { agentAge, agentMeta, agentState, placeRequests, requestKey, turns } from '../model';
 	import type { AgentRecord, AgentSession, Decision } from '../types';
 	let {
 		agent,
@@ -85,17 +85,7 @@
 		return all;
 	});
 	const requests = $derived(session?.requests ?? []);
-	/** Approval items with no request behind them are answered or gone; live ones render as cards. */
-	const pendingIds = $derived(new Set(requests.map((r) => requestKey(r.id))));
-	const placed = $derived(
-		new Set(
-			(session?.transcript ?? []).flatMap((i) =>
-				i.kind === 'approval' && pendingIds.has(requestKey(i.requestId))
-					? [requestKey(i.requestId)]
-					: []
-			)
-		)
-	);
+	const placement = $derived(placeRequests(items ?? [], session?.transcript ? requests : []));
 	const live = $derived(session?.status === 'running' || session?.status === 'needs-you');
 
 	let scroller = $state<HTMLElement | null>(null);
@@ -256,19 +246,11 @@
 							</p>
 						</div>
 					{/if}
-					{#if turn.work.some((i) => !(i.kind === 'approval' && placed.has(requestKey(i.requestId)))) || !turn.end}
-						<WorkGroup
-							turn={{
-								...turn,
-								work: turn.work.filter(
-									(i) => !(i.kind === 'approval' && placed.has(requestKey(i.requestId)))
-								)
-							}}
-							number={index + 1}
-							{now}
-						/>
+					{@const work = turn.work.filter((i) => !placement.items.has(i))}
+					{#if work.length || !turn.end}
+						<WorkGroup turn={{ ...turn, work }} number={index + 1} {now} />
 					{/if}
-					{#each requests.filter( (r) => turn.work.some((i) => i.kind === 'approval' && requestKey(i.requestId) === requestKey(r.id)) ) as request (requestKey(request.id))}
+					{#each placement.byTurn.get(index) ?? [] as request (requestKey(request.id))}
 						<ApprovalCard
 							{request}
 							{agent}
@@ -311,7 +293,7 @@
 					</div>{/if}
 			{/if}
 			{#if session}
-				{#each requests.filter((r) => !placed.has(requestKey(r.id))) as request (requestKey(request.id))}
+				{#each session.transcript ? placement.loose : requests as request (requestKey(request.id))}
 					<ApprovalCard
 						{request}
 						{agent}

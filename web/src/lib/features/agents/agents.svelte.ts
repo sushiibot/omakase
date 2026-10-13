@@ -23,6 +23,8 @@ export class AgentList {
 	constructor(readonly conversationId?: string) {}
 	readonly pending = $derived(pendingRequests(this.agents));
 	async refresh() {
+		// An empty id is a conversation on its way out, never a request for every agent.
+		if (this.conversationId === '') return void (this.loading = false);
 		try {
 			this.agents = (await configured.list(this.conversationId)).agents;
 			this.error = null;
@@ -75,17 +77,23 @@ export class AgentView {
 	busy = $state(false);
 	/** The request being answered, so its buttons say so until the machine replies. */
 	submitting = $state<string | null>(null);
+	/** Bumped by every read and action, so an older poll never overwrites a newer answer. */
+	private seq = 0;
 	constructor(readonly id: string) {}
 	get session(): AgentSession | undefined {
 		return this.detail?.session;
 	}
 	async refresh() {
+		const seq = ++this.seq;
 		try {
-			this.detail = await configured.get(this.id);
+			const detail = await configured.get(this.id);
+			if (seq !== this.seq) return;
+			this.detail = detail;
 			this.loadError = null;
-			for (const list of lists.values()) list.merge(this.detail.agent);
+			for (const list of lists.values()) list.merge(detail.agent);
 		} catch (err) {
-			this.loadError = err instanceof Error ? err.message : 'Could not reach this agent.';
+			if (seq === this.seq)
+				this.loadError = err instanceof Error ? err.message : 'Could not reach this agent.';
 		}
 	}
 	watch() {
@@ -98,8 +106,11 @@ export class AgentView {
 	private async act(run: () => ReturnType<AgentsApi['stop']>, failure: string) {
 		this.busy = true;
 		this.actionError = null;
+		// Any poll that started before this action is now stale.
+		++this.seq;
 		try {
 			const { agent, session } = await run();
+			++this.seq;
 			if (this.detail)
 				this.detail = { ...this.detail, agent: { ...this.detail.agent, ...agent }, session };
 			for (const list of lists.values()) list.merge(agent);

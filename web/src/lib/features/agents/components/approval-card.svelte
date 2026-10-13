@@ -6,6 +6,7 @@
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { Button } from '$lib/ui/button';
 	import { SwitchRow } from '$lib/ui/switch';
+	import { revealInvisible } from '$lib/ui/format/reveal';
 	import { choices, requestKey, requestRisk, requestView } from '../model';
 	import type { AgentRecord, AgentRequest, Decision } from '../types';
 	let {
@@ -59,10 +60,13 @@
 			<p id="{uid}-exact" class="text-meta text-muted-foreground">Exact input</p>
 			<pre
 				aria-labelledby="{uid}-exact"
-				class="max-h-60 overflow-auto rounded-lg border bg-background p-3 font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{view.exact}</pre>
+				class="max-h-60 overflow-auto rounded-lg border bg-background p-3 font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{revealInvisible(
+					view.exact
+				)}</pre>
 		</div>
 		<p class="text-meta [overflow-wrap:anywhere] text-muted-foreground">
-			{#if request.detail?.cwd}In <span class="font-mono">{request.detail.cwd}</span
+			{#if request.detail?.cwd}In <span class="font-mono"
+					>{revealInvisible(request.detail.cwd)}</span
 				>{:else if agent.folder}In
 				{agent.folder}{/if} on {agent.machineName}
 		</p>
@@ -71,7 +75,9 @@
 				{request.detail.reason}
 			</p>{/if}
 	{:else}
-		<p class="text-ui [overflow-wrap:anywhere] whitespace-pre-wrap">{request.description}</p>
+		<p class="text-ui [overflow-wrap:anywhere] whitespace-pre-wrap">
+			{revealInvisible(request.description)}
+		</p>
 		{#if !answerable}<p class="text-meta text-muted-foreground">
 				The app can't send an answer to this request. Decline it and the agent continues without
 				one.

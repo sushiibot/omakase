@@ -32,7 +32,7 @@ export interface AgentRecord {
 
 export type TranscriptFile = {
 	path: string;
-	change: 'add' | 'delete' | 'update';
+	change: 'add' | 'delete' | 'update' | 'unknown';
 	movePath?: string;
 };
 

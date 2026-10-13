@@ -32,7 +32,9 @@
 	} = $props();
 	const workspace = getWorkspace();
 	const store = tasksStore();
-	const agents = $derived(agentList(conversationId));
+	// A conversation that is going away has no id; its agents are not fetched unfiltered.
+	const agents = $derived(conversationId ? agentList(conversationId) : null);
+	const waiting = $derived(agents?.pending ?? 0);
 	let selectedId = $state<string | undefined>(untrack(() => initialSelectedId));
 	let wide = $state(false);
 	const docked = $derived(workspace ? workspace.docked : wide);
@@ -55,11 +57,11 @@
 			query.removeEventListener('change', sync);
 		};
 	});
-	$effect(() => agents.watch());
+	$effect(() => agents?.watch());
 	// Opening the panel while an agent waits on the owner lands on that tab.
 	function toggle() {
 		if (open) return onclose();
-		if (agents.pending) tab = 'agents';
+		if (waiting) tab = 'agents';
 		onopen();
 	}
 	$effect(() =>
@@ -84,9 +86,9 @@
 		{onclose}
 	/>{/snippet}
 {#if workspace}
-	{@render children(toggle, count, agents.pending, docked)}
+	{@render children(toggle, count, waiting, docked)}
 {:else}
 	<SplitWorkspace {open} {onopen} {onclose} {panel}
-		>{@render children(toggle, count, agents.pending, docked)}</SplitWorkspace
+		>{@render children(toggle, count, waiting, docked)}</SplitWorkspace
 	>
 {/if}

@@ -36,8 +36,10 @@
 		/** Leaves the panel for a page, such as an agent's on phones. */
 		onnavigate?: (href: string) => void;
 	} = $props();
-	const agents = $derived(agentList(conversationId ?? 'main'));
-	$effect(() => (fullPage ? undefined : agents.watch()));
+	const agents = $derived(
+		fullPage || conversationId === '' ? null : agentList(conversationId ?? 'main')
+	);
+	$effect(() => agents?.watch());
 	const store = tasksStore();
 	const task = $derived(store.tasks.find((t) => t.id === selectedId));
 	const visible = $derived(
@@ -131,7 +133,7 @@
 					<Tabs.Trigger
 						value={item.value}
 						class="relative flex min-h-12 min-w-12 items-center gap-1.5 px-3 text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=active]:text-foreground data-[state=active]:after:absolute data-[state=active]:after:inset-x-2 data-[state=active]:after:bottom-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-foreground"
-						>{item.label}{#if item.value === 'agents' && agents.pending}<Badge
+						>{item.label}{#if item.value === 'agents' && agents?.pending}<Badge
 								class="bg-waiting-soft text-waiting tabular-nums"
 								><span aria-hidden="true">{agents.pending}</span><span class="sr-only"
 									>, {agents.pending} need you</span

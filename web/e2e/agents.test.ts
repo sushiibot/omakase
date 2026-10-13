@@ -257,3 +257,81 @@ for (const width of [390, 1280]) {
 		expect(await axe(page)).toEqual([]);
 	});
 }
+
+test('a request id a later turn reuses shows one live card, in that turn; the earlier turn stays answered', async ({
+	page,
+	context
+}) => {
+	await page.setViewportSize({ width: 390, height: 640 });
+	await fixtureApp(context);
+	const request = {
+		id: 'req-1',
+		description: 'Run: bun test',
+		decisions: ['accept', 'decline'],
+		detail: { kind: 'command', command: 'bun test' }
+	};
+	const at = (m: number) => new Date(Date.parse('2026-10-12T10:00:00Z') + m * 60_000).toISOString();
+	const long = Array.from({ length: 30 }, (_, i) => `Line ${i} of a long answer.`).join('\n\n');
+	const transcript = [
+		{ kind: 'prompt', origin: 'agent', text: 'First turn', at: at(0) },
+		{ kind: 'approval', requestId: 'req-1', title: 'Run: ls', status: 'accepted', at: at(1) },
+		{ kind: 'message', text: long, final: true, at: at(2) },
+		{ kind: 'turnEnd', status: 'completed', at: at(3) },
+		{ kind: 'prompt', origin: 'owner', text: 'Second turn', at: at(4) },
+		{ kind: 'approval', requestId: 'req-1', title: 'Run: bun test', status: 'pending', at: at(5) }
+	];
+	const agent = {
+		id: 'a-reuse',
+		machineId: 'pc',
+		machineName: 'Desktop',
+		rootId: 'code',
+		folder: 'Code',
+		provider: 'codex',
+		title: 'Reused ids',
+		conversationId: 'main',
+		remoteStatus: 'needs-you',
+		requests: 1,
+		createdAt: at(0),
+		updatedAt: at(5)
+	};
+	await context.route('**/api/agents**', (route) =>
+		route.fulfill({
+			json:
+				new URL(route.request().url()).pathname === '/api/agents'
+					? { agents: [agent] }
+					: {
+							agent,
+							session: {
+								status: 'needs-you',
+								attempts: 2,
+								output: '',
+								requests: [request],
+								transcript
+							}
+						}
+		})
+	);
+	await page.goto('/agents/a-reuse');
+	const detail = page.locator('[data-agent-detail="a-reuse"]');
+	const heading = detail.getByRole('heading', { name: 'Run a command' });
+	await expect(heading).toHaveCount(1);
+	await expect(heading).toBeFocused();
+	// The live card follows the second prompt, not the first.
+	const order = await detail.evaluate((root) => {
+		const prompt = [...root.querySelectorAll('[data-prompt]')].at(-1)!;
+		const card = root.querySelector('[data-approval]')!;
+		return !!(prompt.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING);
+	});
+	expect(order).toBe(true);
+	const first = detail.getByRole('button', { name: /^Turn 1 work:/ });
+	await first.click();
+	await expect(detail.getByText('Approved')).toBeVisible();
+	await expect(detail.getByText('Run: ls')).toBeVisible();
+	// Scrolled away from the card, the pointer brings it back without its own decision controls.
+	await detail.locator('[data-agent-scroll]').evaluate((el) => (el.scrollTop = 0));
+	const review = page.getByRole('button', { name: /1 approval pending · Review/ });
+	await expect(review).toBeVisible();
+	await review.click();
+	await expect(heading).toBeFocused();
+	await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(1);
+});

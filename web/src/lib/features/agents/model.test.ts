@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import {
 	agentAge,
 	agentState,
+	placeRequests,
 	choices,
 	groupAgents,
 	pendingRequests,
@@ -114,4 +115,23 @@ test('an approval shows the exact thing approved, and approving for the turn is 
 	]);
 	expect(choices(['decline']).map((c) => c.label)).toEqual(['Decline']);
 	expect(requestKey(1)).not.toBe(requestKey('1'));
+});
+
+test('a request id reused by a later turn shows one live card, in that turn; the earlier one stays answered', () => {
+	const items: TranscriptItem[] = [
+		{ kind: 'prompt', origin: 'agent', text: 'One', at: 'a' },
+		{ kind: 'approval', requestId: 'req-1', title: 'Run: ls', status: 'accepted', at: 'b' },
+		{ kind: 'turnEnd', status: 'completed', at: 'c' },
+		{ kind: 'prompt', origin: 'owner', text: 'Two', at: 'd' },
+		{ kind: 'approval', requestId: 'req-1', title: 'Run: rm', status: 'pending', at: 'e' }
+	];
+	const all = turns(items);
+	const request = { id: 'req-1', description: 'Run: rm', decisions: ['accept' as const] };
+	const placed = placeRequests(all, [request]);
+	expect([...placed.byTurn.keys()]).toEqual([1]);
+	expect(placed.loose).toEqual([]);
+	expect([...placed.items]).toEqual([all[1]!.work[0]]);
+	expect(placed.items.has(all[0]!.work[0]!)).toBe(false);
+	// A request no pending item names still shows, after the transcript.
+	expect(placeRequests(turns(items.slice(0, 3)), [request]).loose).toEqual([request]);
 });

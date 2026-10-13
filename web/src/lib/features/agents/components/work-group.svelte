@@ -22,7 +22,12 @@
 			if (!summary.failed) open = false;
 		}
 	});
-	const change = { add: 'Added', delete: 'Deleted', update: 'Changed' } as const;
+	const change = {
+		add: 'Added',
+		delete: 'Deleted',
+		update: 'Changed',
+		unknown: 'Unknown change to'
+	} as const;
 	const decided = {
 		pending: 'Waiting for you',
 		accepted: 'Approved',
@@ -108,7 +113,7 @@
 					>
 						<FilePen class="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
 						<ul class="flex min-w-0 flex-1 flex-col gap-1">
-							{#each item.files as file (file.path)}<li class="min-w-0 [overflow-wrap:anywhere]">
+							{#each item.files as file, f (f)}<li class="min-w-0 [overflow-wrap:anywhere]">
 									<span class="text-muted-foreground">{change[file.change]}</span>
 									<span class="font-mono text-code">{file.path}</span>{#if file.movePath}<span
 											class="text-muted-foreground"

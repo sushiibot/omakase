@@ -254,3 +254,35 @@ export function choices(decisions: Decision[]) {
 							: 'Decline'
 		}));
 }
+
+export interface Placement {
+	/** Live requests to show as cards after each turn's work, by turn index. */
+	byTurn: Map<number, AgentRequest[]>;
+	/** The pending approval items those cards stand in for; the work group leaves them out. */
+	items: Set<WorkItem>;
+	/** Live requests no pending item names, shown after the transcript. */
+	loose: AgentRequest[];
+}
+
+/**
+ * Places each live request at its pending approval item, in the newest turn that has one. Request ids
+ * repeat across turns (each turn is a new provider process), so answered items never match.
+ */
+export function placeRequests(all: Turn[], requests: AgentRequest[]): Placement {
+	const placement: Placement = { byTurn: new Map(), items: new Set(), loose: [] };
+	for (const request of requests) {
+		const key = requestKey(request.id);
+		let found = false;
+		for (let t = all.length - 1; t >= 0 && !found; t--) {
+			const item = all[t]!.work.findLast(
+				(i) => i.kind === 'approval' && i.status === 'pending' && requestKey(i.requestId) === key
+			);
+			if (!item || placement.items.has(item)) continue;
+			placement.items.add(item);
+			placement.byTurn.set(t, [...(placement.byTurn.get(t) ?? []), request]);
+			found = true;
+		}
+		if (!found) placement.loose.push(request);
+	}
+	return placement;
+}
