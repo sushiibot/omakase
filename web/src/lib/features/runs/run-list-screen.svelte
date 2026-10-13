@@ -122,11 +122,8 @@
 			disabled={loading}
 			onclick={() => current && onloadolder?.()}
 		>
-			{#if loading}<Spinner
-					role="presentation"
-					aria-hidden="true"
-					class="motion-reduce:animate-none"
-				/>Loading older activity…{:else}<ChevronDown />Show older activity{/if}
+			{#if loading}<Spinner decorative class="motion-reduce:animate-none" />Loading older activity…{:else}<ChevronDown
+				/>Show older activity{/if}
 		</Button>
 		{#if error}<p role="alert" class="text-sm text-failed">
 				Couldn't load older activity. {error}

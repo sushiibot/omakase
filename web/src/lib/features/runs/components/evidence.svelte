@@ -86,10 +86,10 @@
 	{#if evidence?.filesSent.length || files.length}
 		<div class="flex flex-col gap-1.5" role="group" aria-labelledby="{uid}-files">
 			{@render heading(`${uid}-files`, 'Files sent to you')}
-			<ul class="flex flex-col divide-y rounded-xl border">
+			<Item.Group variant="bordered">
 				{#each files as file (file.id)}
-					<li>
-						<Item.Root size="sm" class="rounded-none">
+					<div role="listitem">
+						<Item.Root size="sm">
 							{#snippet child({ props })}
 								<a href={fileUrl(file.id)} download={file.name} {...props}>
 									<Item.Media variant="icon">
@@ -104,15 +104,19 @@
 								</a>
 							{/snippet}
 						</Item.Root>
-					</li>
+					</div>
 				{/each}
 				{#each (evidence?.filesSent ?? []).filter((f) => !files.some((u) => u.name === f.name)) as f, i (i)}
-					<li class="flex min-h-12 items-center justify-between gap-3 px-3 py-2 text-sm">
-						<span class="min-w-0 [overflow-wrap:anywhere]">{f.name}</span>
-						<span class="shrink-0 text-meta text-muted-foreground">{t(f.at)}</span>
-					</li>
+					<div role="listitem">
+						<Item.Root size="sm">
+							<Item.Content class="min-w-0">
+								<Item.Title class="line-clamp-none [overflow-wrap:anywhere]">{f.name}</Item.Title>
+							</Item.Content>
+							<span class="shrink-0 text-xs text-muted-foreground">{t(f.at)}</span>
+						</Item.Root>
+					</div>
 				{/each}
-			</ul>
+			</Item.Group>
 		</div>
 	{/if}
 

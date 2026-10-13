@@ -256,11 +256,8 @@
 							disabled={moreLoading}
 							onclick={() => onloadmore?.()}
 						>
-							{#if moreLoading}<Spinner
-									role="presentation"
-									aria-hidden="true"
-									class="motion-reduce:animate-none"
-								/>Loading more steps…
+							{#if moreLoading}<Spinner decorative class="motion-reduce:animate-none" />Loading more
+								steps…
 							{:else}<ChevronDown />Show more steps{/if}
 						</Button>
 						{#if moreError}<p role="alert" class="text-sm text-failed">
