@@ -13,7 +13,8 @@
 		approvalReason,
 		pending,
 		submitting = false,
-		open = false,
+		open = $bindable(false),
+		focused = false,
 		executionUnknown = false,
 		onapprove,
 		ondeny
@@ -24,10 +25,14 @@
 		pending?: PendingApproval;
 		submitting?: boolean;
 		open?: boolean;
+		focused?: boolean;
 		executionUnknown?: boolean;
 		onapprove?: (nonce: string, location?: LocationReply) => void;
 		ondeny?: (nonce: string) => void;
 	} = $props();
+	$effect(() => {
+		if (focused) open = true;
+	});
 	const labels: Record<ApprovalOutcome, string> = {
 		pending: 'Approval needed',
 		approved: 'Approved',
@@ -43,8 +48,17 @@
 {#if pending && approval?.outcome === 'pending'}
 	<ApprovalInline {pending} {submitting} {onapprove} {ondeny} />
 {:else}
-	<details {open} data-tool-call={step.id} class="group/tool min-w-0 text-ui text-muted-foreground">
+	<details
+		bind:open
+		data-tool-call={step.id}
+		class="group/tool min-w-0 text-ui text-muted-foreground"
+	>
 		<summary
+			onclick={(event) => {
+				// Commit before another stream update; native toggle events arrive later.
+				event.preventDefault();
+				open = !open;
+			}}
 			class="flex min-h-12 cursor-pointer list-none items-center gap-2 py-1 [&::-webkit-details-marker]:hidden"
 		>
 			<ToolIcon kind={toolCategory(step.tool).kind} />

@@ -42,6 +42,7 @@ export function channelActivity(
 	let turn: Turn | undefined;
 	let step: TurnStep | undefined;
 	let typing = false;
+	let hasResponseText = false;
 	for (const message of messages) {
 		if (message.role !== 'assistant') continue;
 		const active = message.parts.some(
@@ -57,6 +58,7 @@ export function channelActivity(
 				turn = part.data;
 			if (part.type === 'data-tool' && part.data.state === 'running') step = part.data;
 		}
+		hasResponseText ||= message.parts.some((part) => part.type === 'text' && part.text.length > 0);
 		if (message.streaming && message.parts.some((part) => part.type === 'text' && part.text.length))
 			typing = true;
 	}
@@ -76,6 +78,11 @@ export function channelActivity(
 	}
 	if (turn?.toolRunning) return { kind: 'tool', label: 'Sushii is using a tool…' };
 	if (turn?.state === 'stopping') return { kind: 'stopping', label: 'Stopping…' };
+	if (
+		!hasResponseText &&
+		(!turn?.label || ['Working…', 'Thinking…', 'Waiting for the model…'].includes(turn.label))
+	)
+		return { kind: 'typing', label: 'Sushii is typing…' };
 	if (turn?.modelActivity === 'waiting')
 		return {
 			kind: 'working',
@@ -83,7 +90,7 @@ export function channelActivity(
 		};
 	if (turn?.modelActivity === 'thinking') return { kind: 'thinking', label: 'Sushii is thinking…' };
 	if (typing && (turn?.modelActivity === undefined || turn.modelActivity === 'responding'))
-		return { kind: 'typing', label: 'Sushii is typing…' };
+		return null;
 	if (turn?.state === 'thinking' || turn?.label === 'Thinking…')
 		return { kind: 'thinking', label: 'Sushii is thinking…' };
 	if (turn?.label && !['Working…', 'Thinking…'].includes(turn.label))

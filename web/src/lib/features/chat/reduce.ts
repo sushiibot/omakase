@@ -806,32 +806,37 @@ function fromHistory(s: ChatState, h: WebHistoryItem): ChatItem | null {
 
 /**
  * Merges one oldest-first history page ahead of the items held. A send the page contains already
- * sits in the bot's log, so it moves into the page and settles; so does an ask seeded from the first frame.
+ * sits in the bot's log, so it moves into the page and settles. Existing replies and decisions
+ * move to their durable positions too, preserving live state and interaction anchors.
  */
 export function mergeHistory(s: ChatState, items: WebHistoryItem[]): Effect[] {
 	const fx: Effect[] = [];
 	const local = new Map<string, Extract<ChatItem, { kind: 'user' }>>();
-	const seededAsks = new Map<string, ChatItem>();
-	const seededApprovals = new Map<string, ChatItem>();
+	const existingReplies = new Map<string, ChatItem>();
+	const existingAsks = new Map<string, ChatItem>();
+	const existingApprovals = new Map<string, ChatItem>();
 	for (const i of s.items) {
 		if (i.kind === 'user' && i.clientId) local.set(i.clientId, i);
-		if (i.kind === 'ask' && i.id.startsWith(PENDING_ASK_PREFIX)) seededAsks.set(i.askId, i);
-		if (i.kind === 'approval' && i.id.startsWith(PENDING_APPROVAL_PREFIX))
-			seededApprovals.set(i.nonce, i);
+		if (i.kind === 'assistant' && i.key) existingReplies.set(i.key, i);
+		if (i.kind === 'ask') existingAsks.set(i.askId, i);
+		if (i.kind === 'approval') existingApprovals.set(i.nonce, i);
 	}
 	const moved = new Set<ChatItem>();
 	const mapped: ChatItem[] = [];
 	for (const h of items) {
-		const seeded =
-			h.type === 'ask'
-				? seededAsks.get(h.askId)
-				: h.type === 'approval'
-					? seededApprovals.get(h.nonce)
-					: undefined;
-		if (seeded && !moved.has(seeded)) {
-			moved.add(seeded);
-			if (h.type === 'approval') seeded.id = `h:${h.id}`;
-			mapped.push(seeded);
+		const existing =
+			h.type === 'assistant' && h.outboxId
+				? existingReplies.get(h.outboxId)
+				: h.type === 'ask'
+					? existingAsks.get(h.askId)
+					: h.type === 'approval'
+						? existingApprovals.get(h.nonce)
+						: undefined;
+		if (existing && !moved.has(existing)) {
+			moved.add(existing);
+			if (h.type === 'approval' && existing.id.startsWith(PENDING_APPROVAL_PREFIX))
+				existing.id = `h:${h.id}`;
+			mapped.push(existing);
 			continue;
 		}
 		const mine = h.type === 'user' && h.clientId ? local.get(h.clientId) : undefined;

@@ -106,6 +106,8 @@
 		delegatedActivity?: Snippet<[string]>;
 	} = $props();
 
+	// Keep disclosure state when a lone call becomes a group.
+	let expanded = $state<Record<string, boolean>>({});
 	// The newest finished reply keeps its actions in view; older ones show them on hover or focus.
 	const latestReply = $derived(
 		messages.findLast((m) => m.role === 'assistant' && !m.streaming && hasText(m))?.id
@@ -224,7 +226,14 @@
 					{:else if part.type === 'data-turn'}
 						<WorkingRow turn={part.data} open={openTurn === message.id} {openStep} />
 					{:else if part.type === 'data-tool-group'}
-						<ToolActivityGroup steps={part.data} {openStep} />
+						<ToolActivityGroup
+							steps={part.data}
+							{openStep}
+							bind:open={
+								() => expanded[`${message.id}:${i}`] ?? false,
+								(value) => (expanded[`${message.id}:${i}`] = value)
+							}
+						/>
 					{:else if part.type === 'data-tool'}
 						{#if part.data.confirmation && ['pending', 'answering'].includes(part.data.confirmation.state)}
 							<AskCard
@@ -239,7 +248,11 @@
 								approvalReason={part.data.approvalReason}
 								pending={approvals.find((a) => a.nonce === part.data.approval?.nonce)}
 								submitting={approvalSubmitting}
-								open={openStep === part.data.id}
+								focused={openStep === part.data.id}
+								bind:open={
+									() => expanded[`${message.id}:${i}`] ?? false,
+									(value) => (expanded[`${message.id}:${i}`] = value)
+								}
 								{onapprove}
 								{ondeny}
 							/>
@@ -431,7 +444,11 @@
 								input: JSON.stringify(part.input, null, 2),
 								output: part.output ? JSON.stringify(part.output, null, 2) : undefined
 							}}
-							open={openStep === part.toolCallId}
+							focused={openStep === part.toolCallId}
+							bind:open={
+								() => expanded[`${message.id}:${i}`] ?? false,
+								(value) => (expanded[`${message.id}:${i}`] = value)
+							}
 						/>
 					{/if}
 				{/each}

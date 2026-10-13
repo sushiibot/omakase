@@ -12,22 +12,22 @@ const message = (turn: Turn, streaming = false): ChatMessage => ({
 });
 
 describe('channel activity', () => {
-	test('typing requires actual live text; thinking and preparation retain their own states', () => {
+	test('typing appears before the first text and disappears during streaming', () => {
 		expect(channelActivity([message({ state: 'thinking', steps: [] })], true, false)?.kind).toBe(
-			'thinking'
+			'typing'
 		);
 		expect(
-			channelActivity([message({ state: 'working', steps: [] }, true)], true, false)?.label
-		).toBe('Sushii is typing…');
+			channelActivity([message({ state: 'working', steps: [] }, true)], true, false)
+		).toBeNull();
 		expect(
 			channelActivity(
 				[message({ state: 'working', steps: [], label: 'Waiting for the model…' })],
 				true,
 				false
 			)?.label
-		).toBe('Waiting for the model…');
+		).toBe('Sushii is typing…');
 		expect(channelActivity([message({ state: 'working', steps: [] })], true, false)?.kind).toBe(
-			'working'
+			'typing'
 		);
 	});
 	test('active tools override old streamed text; completed tools do not claim ongoing work', () => {
@@ -87,7 +87,7 @@ test('snapshot phases after old text or completed tools do not resurrect typing'
 	const state = createState();
 	const activity = () => channelActivity(toMessages(state.items), true, false);
 	applyEvent(state, { type: 'delta', data: { turnId: 't', offset: 0, text: 'Old text' } });
-	expect(activity()?.kind).toBe('typing');
+	expect(activity()).toBeNull();
 	applyEvent(state, {
 		type: 'tool',
 		data: { turnId: 't', name: 'read', summary: 'Read file', id: 'call' }
@@ -129,5 +129,5 @@ test('snapshot phases after old text or completed tools do not resurrect typing'
 	});
 	expect(activity()?.label).toBe('Waiting for the model…');
 	applyEvent(state, { type: 'delta', data: { turnId: 't', offset: 8, text: ' again' } });
-	expect(activity()?.kind).toBe('typing');
+	expect(activity()).toBeNull();
 });

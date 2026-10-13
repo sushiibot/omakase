@@ -11,11 +11,19 @@
 >
 	{#if activity}
 		{#if activity.kind === 'thinking' || activity.kind === 'typing'}
-			<span aria-hidden="true" class="activity-dots flex shrink-0 items-center gap-1"
+			<span
+				aria-hidden="true"
+				class="activity-dots flex shrink-0 items-center gap-1.5 rounded-full bg-muted px-3 py-2"
 				><i></i><i></i><i></i></span
 			>
 		{/if}
-		<p data-typing role="status" class="min-w-0 flex-1 truncate">{activity.label}</p>
+		<p
+			data-typing
+			role="status"
+			class={activity.kind === 'typing' ? 'sr-only' : 'min-w-0 flex-1 truncate'}
+		>
+			{activity.label}
+		</p>
 		{#if activity.request && onreview}<Button variant="ghost" onclick={onreview}>Review</Button
 			>{/if}
 	{/if}
@@ -23,8 +31,8 @@
 
 <style>
 	.activity-dots i {
-		width: 3px;
-		height: 3px;
+		width: 5px;
+		height: 5px;
 		border-radius: 50%;
 		background: currentColor;
 	}
@@ -43,9 +51,11 @@
 		0%,
 		100% {
 			opacity: 0.4;
+			transform: translateY(0);
 		}
 		50% {
 			opacity: 1;
+			transform: translateY(-2px);
 		}
 	}
 </style>

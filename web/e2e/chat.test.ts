@@ -154,7 +154,7 @@ test('a send shows at once, carries a ULID, and settles on the status event', as
 	await expect(page.locator('[data-message-id]').filter({ hasText: 'Book' })).toHaveCount(1);
 	// The status names the actual model state.
 	await expect(page.locator('[data-typing]')).toContainText(/\S.*…/);
-	await expect(page.locator('[data-typing]')).toContainText('Waiting for the model…');
+	await expect(page.locator('[data-typing]')).toContainText('Sushii is typing…');
 
 	await push(page, 'tool', { turnId: 't1', name: 'search_mail', summary: 'Searching mail' });
 	await expect(page.getByText('Searching mail').first()).toBeVisible();
@@ -1876,9 +1876,9 @@ for (const width of [412, 1280]) {
 		await expect(page.locator('[data-typing]')).not.toContainText('Used');
 		await page.screenshot({ path: `/tmp/chat-typing-${width}.png` });
 		const visibleStatus = page.locator('[data-typing]');
-		await expect(visibleStatus).toHaveText('Waiting for the model…');
+		await expect(visibleStatus).toHaveText('Sushii is typing…');
 		await page.clock.runFor(16000);
-		await expect(visibleStatus).toHaveText('Waiting for the model…');
+		await expect(visibleStatus).toHaveText('Sushii is typing…');
 		await push(page, 'snapshot', {
 			turnId: 'compact',
 			view: {
@@ -1890,9 +1890,9 @@ for (const width of [412, 1280]) {
 				modelActivity: 'thinking'
 			}
 		});
-		await expect(visibleStatus).toHaveText('Sushii is thinking…');
+		await expect(visibleStatus).toHaveText('Sushii is typing…');
 		await page.clock.runFor(8000);
-		await expect(visibleStatus).toHaveText('Sushii is thinking…');
+		await expect(visibleStatus).toHaveText('Sushii is typing…');
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 		await expect(page.locator('.activity-dots i').first()).toHaveCSS('animation-name', 'none');
 		const stillPhrase = await visibleStatus.textContent();
@@ -1910,8 +1910,8 @@ for (const width of [412, 1280]) {
 				modelActivity: 'waiting'
 			}
 		});
-		await expect(visibleStatus).toHaveText('Waiting for the model…');
-		await expect(page.locator('.activity-dots')).toHaveCount(0);
+		await expect(visibleStatus).toHaveText('Sushii is typing…');
+		await expect(page.locator('.activity-dots')).toHaveCount(1);
 		await push(page, 'delta', {
 			turnId: 'compact',
 			offset: 0,
@@ -2271,3 +2271,63 @@ for (const width of [390, 1280]) {
 		await expect(page.locator('[data-context-divider]')).toHaveCount(4);
 	});
 }
+
+for (const width of [412, 1280]) {
+	test(`tool expansion survives new calls and text at ${width}px`, async ({ page, context }) => {
+		await chatServer(context);
+		await page.setViewportSize({ width, height: 915 });
+		await open(page);
+		await push(page, 'tool', {
+			turnId: 'expand',
+			id: 'first',
+			name: 'read',
+			summary: 'First file'
+		});
+		await page.locator('[data-tool-call="first"] summary').click();
+		await expect(page.locator('[data-tool-call="first"]')).toHaveAttribute('open', '');
+		await push(page, 'tool', {
+			turnId: 'expand',
+			id: 'second',
+			name: 'read',
+			summary: 'Second file'
+		});
+		const group = page.locator('[data-tool-activity]');
+		await expect(group).toHaveAttribute('open', '');
+		await expect(page.locator('[data-tool-call="first"]')).toHaveAttribute('open', '');
+		await push(page, 'tool', {
+			turnId: 'expand',
+			id: 'third',
+			name: 'read',
+			summary: 'Third file'
+		});
+		await expect(group).toHaveAttribute('open', '');
+		await expect(page.locator('[data-tool-call="first"]')).toHaveAttribute('open', '');
+		await push(page, 'delta', { turnId: 'expand', offset: 0, text: 'Here is the result.' });
+		await expect(group).toHaveAttribute('open', '');
+		await expect(page.locator('[data-tool-call="first"]')).toHaveAttribute('open', '');
+		await group.locator(':scope > summary').click();
+		await expect(group).not.toHaveAttribute('open');
+		await push(page, 'tool', {
+			turnId: 'expand',
+			id: 'third',
+			name: 'read',
+			summary: 'Third file',
+			ok: true
+		});
+		await expect(group).not.toHaveAttribute('open');
+	});
+}
+
+test('typing dots disappear as soon as text streams', async ({ page, context }) => {
+	await chatServer(context);
+	await open(page);
+	await push(page, 'snapshot', {
+		turnId: 'typing',
+		view: { turnId: 'typing', startedAt: Date.now(), text: '', lines: [], toolCount: 0 }
+	});
+	await expect(page.locator('.activity-dots')).toBeVisible();
+	await expect(page.locator('[data-typing]')).toHaveClass(/\bsr-only\b/);
+	await push(page, 'delta', { turnId: 'typing', offset: 0, text: 'Hello' });
+	await expect(page.locator('.activity-dots')).toHaveCount(0);
+	await expect(page.locator('[data-typing]')).toHaveCount(0);
+});
