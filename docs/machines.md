@@ -43,7 +43,7 @@ Create a private config file, for example `/home/me/.config/sushii/machine.json`
 
 `stallMinutes` (default 10) is how long a running session may produce no output before it is reported as stalled.
 
-Use native absolute paths on Windows. A mounted SMB or NFS folder works as a shared root. Each root has its own ID. `coding: false` permits file reads only. `coding: true` also permits launching a coding session with that folder as its working directory.
+Use native absolute paths on Windows. A mounted SMB or NFS folder works as a shared root. Each root has its own ID. `coding: false` permits file reads only. `coding: true` also permits launching a coding session in that folder or in a folder below it.
 
 Protect the config with `chmod 600`. Do not commit it. Start the daemon:
 
@@ -92,11 +92,13 @@ Example agent calls:
 An agent is a Codex or Claude Code session the owner's agent delegates to a coding folder on a machine, for example "a Codex agent on Desktop". Agents are separate from tasks. The main agent manages them with the `coding_agent` tool:
 
 ```json
-{ "action": "start", "machineId": "pc", "rootId": "project", "provider": "codex", "prompt": "Fix the login redirect and run the tests." }
+{ "action": "start", "machineId": "pc", "rootId": "project", "path": "web", "provider": "codex", "prompt": "Fix the login redirect and run the tests." }
 { "action": "message", "id": "<agent-id>", "text": "Report what changed and the test results." }
 { "action": "get", "id": "<agent-id>" }
 { "action": "stop", "id": "<agent-id>" }
 ```
+
+`path` is the agent's working folder, relative to the coding folder. A coding folder that holds many repositories, such as `~/projects`, should get the repository's folder as `path`; the main agent finds it with `machine_files` `list` on the coding folder. Without `path` the agent works in the coding folder itself. The daemon resolves symlinks and accepts only an existing folder inside the coding folder: absolute paths, `..` and symlinks that leave it are rejected. Follow-up messages resume in the same folder. Codex gets that folder as its working directory and its only writable root. The app and notifications show it as `<coding folder name>/<path>`. A daemon too old to start agents in a subfolder refuses a start with `path`; update and restart it.
 
 An agent starts only on a daemon that reports agent status; update and restart an older daemon first. A call from outside a web conversation, such as a scheduled job, reports to Main; scheduled jobs cannot start agents. The gateway records each agent, with the conversation that started it, before launch. A repeated start with the same ID is idempotent on the daemon. The daemon keeps the latest 64 KB of visible output. Up to four agents can work at once. Work continues through a gateway connection loss; it is marked interrupted after a daemon restart.
 
