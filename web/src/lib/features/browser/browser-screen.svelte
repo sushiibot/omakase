@@ -67,7 +67,7 @@
 		<div class="flex flex-col gap-2 border-t px-4 py-3">
 			{#if error}<p role="alert" class="text-sm text-failed">{error}</p>{/if}
 			{#if status.holder === 'agent'}
-				<Button size="lg" disabled={!!pending || !online} onclick={ontakeover}>
+				<Button disabled={!!pending || !online} onclick={ontakeover}>
 					{#if pending === 'taking'}<LoaderCircle
 							class="animate-spin motion-reduce:animate-none"
 							aria-hidden="true"
@@ -77,7 +77,7 @@
 					The agent pauses and can't touch the browser until you hand it back.
 				</p>
 			{:else}
-				<Button size="lg" variant="outline" disabled={!!pending || !online} onclick={onhandback}>
+				<Button variant="outline" disabled={!!pending || !online} onclick={onhandback}>
 					{#if pending === 'handing'}<LoaderCircle
 							class="animate-spin motion-reduce:animate-none"
 							aria-hidden="true"

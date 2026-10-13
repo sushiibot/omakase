@@ -48,9 +48,9 @@
 </script>
 
 <Button
+	size="icon"
 	bind:ref={trigger}
 	variant={voice.state === 'idle' ? 'ghost' : 'secondary'}
-	class="size-12 px-0"
 	aria-label={voice.state === 'idle'
 		? 'Voice chat'
 		: voice.agentWorking

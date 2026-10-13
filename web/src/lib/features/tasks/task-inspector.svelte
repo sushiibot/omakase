@@ -83,11 +83,8 @@
 
 <div class="flex min-h-0 flex-1 flex-col" data-task-inspector>
 	<header class="flex min-h-13 shrink-0 items-center gap-2 border-b px-2 py-1">
-		<Button
-			variant="ghost"
-			class="size-12 shrink-0 px-0"
-			aria-label="Back to tasks"
-			onclick={onback}><ChevronLeft /></Button
+		<Button size="icon" variant="ghost" class="shrink-0" aria-label="Back to tasks" onclick={onback}
+			><ChevronLeft /></Button
 		>
 		<div class="min-w-0 flex-1">
 			<h2 class="truncate text-base font-semibold">Task details</h2>
@@ -96,8 +93,9 @@
 			</p>
 		</div>
 		{#if onclose}<Button
+				size="icon"
 				variant="ghost"
-				class="size-12 shrink-0 px-0"
+				class="shrink-0"
 				aria-label="Close task details"
 				onclick={onclose}><X /></Button
 			>{/if}
@@ -212,10 +210,11 @@
 						bind:value={step}
 						class="min-h-12 min-w-0 flex-1 rounded-lg border bg-background px-3 text-base"
 					/><Button
+						size="icon"
 						type="submit"
 						aria-label="Add checklist step"
 						variant="outline"
-						class="size-12 shrink-0 px-0"
+						class="shrink-0"
 						disabled={busy || !step.trim() || task.checklist.length >= 100}><Plus /></Button
 					>
 				</form>

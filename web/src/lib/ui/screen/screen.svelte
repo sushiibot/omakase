@@ -87,7 +87,7 @@
 		<h1 class="truncate text-base leading-tight font-semibold">{title}</h1>
 		{@render subtitle?.()}
 	</div>
-	<div class="ml-auto flex shrink-0 items-center gap-1">{@render actions?.()}</div>
+	<div class="ml-auto flex shrink-0 items-center gap-2">{@render actions?.()}</div>
 </header>
 {#if toast && toastPosition === 'top'}
 	<div class="shrink-0 px-3 pt-3 @3xl:px-6">

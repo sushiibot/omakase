@@ -62,7 +62,7 @@
 		<Button
 			variant="ghost"
 			size="icon"
-			class="absolute top-1 right-1 size-12"
+			class="absolute top-1 right-1"
 			aria-label="Dismiss install hint"
 			onclick={dismiss}><X class="size-5" /></Button
 		>

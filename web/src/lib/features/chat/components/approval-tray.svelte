@@ -301,7 +301,7 @@
 						onclick={(e) => decide(e, false)}><X />Deny</Button
 					>
 					<Button
-						class="relative min-w-0 flex-1 overflow-hidden"
+						class="min-w-0 flex-1"
 						disabled={!ready}
 						aria-label={isLocation ? 'Share current location' : `Approve ${view.tool}`}
 						aria-describedby={ready ? undefined : `${uid}-hold`}
@@ -309,12 +309,16 @@
 						onclick={(e) => decide(e, true)}
 					>
 						{#if !ready}
-							{#key holdVersion}
-								<span
-									class="absolute inset-x-0 bottom-0 h-1 origin-left animate-[arm_1s_linear_forwards] bg-primary-foreground/60 motion-reduce:animate-none"
-									aria-hidden="true"
-								></span>
-							{/key}
+							<span
+								class="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
+								aria-hidden="true"
+							>
+								{#key holdVersion}
+									<span
+										class="absolute inset-x-0 bottom-0 h-1 origin-left animate-[arm_1s_linear_forwards] bg-primary-foreground/60 motion-reduce:animate-none"
+									></span>
+								{/key}
+							</span>
 						{/if}
 						<Check />{isLocation ? 'Share current location' : 'Approve'}
 					</Button>

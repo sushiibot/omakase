@@ -81,11 +81,8 @@
 
 <div class="flex min-h-0 flex-1 flex-col" data-task-detail>
 	<header class="flex min-h-13 shrink-0 items-center gap-1 border-b px-2 py-1">
-		<Button
-			variant="ghost"
-			class="size-12 shrink-0 px-0"
-			aria-label="Back to tasks"
-			onclick={onback}><ChevronLeft /></Button
+		<Button size="icon" variant="ghost" class="shrink-0" aria-label="Back to tasks" onclick={onback}
+			><ChevronLeft /></Button
 		>
 		<div class="min-w-0 flex-1">
 			<h2 class="truncate text-base font-semibold">{task.title}</h2>
@@ -94,8 +91,9 @@
 			</p>
 		</div>
 		{#if fullHref}<Button
+				size="icon"
 				variant="ghost"
-				class="size-12 shrink-0 px-0"
+				class="shrink-0"
 				href={fullHref}
 				aria-label="Open task page"><ExternalLink /></Button
 			>{/if}
@@ -103,7 +101,8 @@
 	<div class="flex shrink-0 border-b px-2" aria-label="Task sections">
 		{#each ['overview', 'conversation', 'runs'] as value}<Button
 				variant="ghost"
-				class="min-w-0 flex-1 rounded-none border-b-2 px-2 {tab === value
+				class="min-w-0 flex-1 rounded-none border-b-2 px-2 any-pointer-coarse:after:-bottom-2.5 {tab ===
+				value
 					? 'border-primary text-foreground'
 					: 'border-transparent text-muted-foreground'}"
 				aria-pressed={tab === value}
@@ -189,10 +188,11 @@
 						bind:value={step}
 						class="min-h-12 min-w-0 flex-1 rounded-lg border bg-background px-3 text-base"
 					/><Button
+						size="icon"
 						type="submit"
 						aria-label="Add checklist step"
 						variant="outline"
-						class="size-12 shrink-0 px-0"
+						class="shrink-0"
 						disabled={busy || !step.trim() || task.checklist.length >= 100}><Plus /></Button
 					>
 				</form>

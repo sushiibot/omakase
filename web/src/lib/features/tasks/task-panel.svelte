@@ -127,7 +127,7 @@
 		>{/if}
 {:else}
 	<Tabs.Root bind:value={tab} class="flex min-h-0 flex-1 flex-col">
-		<header class="flex min-h-13 shrink-0 items-center gap-2 border-b pl-2">
+		<header class="flex min-h-13 shrink-0 items-center gap-2 border-b px-2">
 			<Tabs.List aria-label="Side panel" class="flex min-w-0 flex-1 gap-1 self-stretch">
 				{#each [{ value: 'tasks', label: 'Tasks' }, { value: 'agents', label: 'Agents' }] as item (item.value)}
 					<Tabs.Trigger
@@ -143,8 +143,9 @@
 				{/each}
 			</Tabs.List>
 			{#if onclose}<Button
+					size="icon"
 					variant="ghost"
-					class="size-12 shrink-0 px-0"
+					class="shrink-0"
 					aria-label="Close side panel"
 					onclick={onclose}><X /></Button
 				>{/if}

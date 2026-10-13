@@ -126,11 +126,8 @@
 		<h2 id="external-files" class="text-sm font-medium text-muted-foreground">
 			{heading}
 		</h2>
-		{#if !form}<Button
-				size="action"
-				variant="outline"
-				disabled={!!busy || loading}
-				onclick={() => edit()}>Add file store</Button
+		{#if !form}<Button variant="outline" disabled={!!busy || loading} onclick={() => edit()}
+				>Add file store</Button
 			>{/if}
 	</div>
 	<p class="text-sm text-muted-foreground">
@@ -152,7 +149,6 @@
 	{#if error}
 		<p role="alert" class="text-sm text-failed">{error}</p>
 		{#if !form}<Button
-				size="action"
 				class="self-start"
 				variant="outline"
 				disabled={!!busy}
@@ -230,7 +226,6 @@
 								><span class="font-medium">Allow writes for folder {index + 1}</span></SwitchRow
 							>
 							{#if form.folders.length > 1}<Button
-									size="action"
 									type="button"
 									variant="ghost"
 									class="self-start"
@@ -243,7 +238,6 @@
 					{/each}
 				</div>
 				<Button
-					size="action"
 					type="button"
 					variant="outline"
 					class="self-start"
@@ -325,11 +319,10 @@
 				><span class="font-medium">Available to the assistant</span></SwitchRow
 			>
 			<div class="flex flex-wrap gap-2">
-				<Button size="action" type="submit" disabled={!!busy}
+				<Button type="submit" disabled={!!busy}
 					>{busy === 'save' ? 'Saving…' : 'Save connection'}</Button
 				>
 				<Button
-					size="action"
 					type="button"
 					variant="outline"
 					disabled={!!busy}
@@ -385,33 +378,19 @@
 					{#if removeId === store.id}
 						<p class="text-sm">Remove this connection? Files on the server will stay in place.</p>
 						<div class="flex flex-wrap gap-2">
-							<Button
-								size="action"
-								variant="destructive"
-								disabled={!!busy}
-								onclick={() => void remove(store)}>Remove connection</Button
-							><Button
-								size="action"
-								variant="outline"
-								disabled={!!busy}
-								onclick={() => (removeId = null)}>Keep connection</Button
+							<Button variant="destructive" disabled={!!busy} onclick={() => void remove(store)}
+								>Remove connection</Button
+							><Button variant="outline" disabled={!!busy} onclick={() => (removeId = null)}
+								>Keep connection</Button
 							>
 						</div>
 					{:else}
 						<div class="flex flex-wrap gap-2">
-							<Button
-								size="action"
-								variant="outline"
-								disabled={!!busy}
-								onclick={() => void test(store)}
+							<Button variant="outline" disabled={!!busy} onclick={() => void test(store)}
 								>{busy === store.id ? 'Testing…' : 'Test connection'}</Button
-							><Button size="action" variant="outline" disabled={!!busy} onclick={() => edit(store)}
-								>Edit</Button
-							><Button
-								size="action"
-								variant="ghost"
-								disabled={!!busy}
-								onclick={() => (removeId = store.id)}>Remove</Button
+							><Button variant="outline" disabled={!!busy} onclick={() => edit(store)}>Edit</Button
+							><Button variant="ghost" disabled={!!busy} onclick={() => (removeId = store.id)}
+								>Remove</Button
 							>
 						</div>
 					{/if}

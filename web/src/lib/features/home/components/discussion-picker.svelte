@@ -79,7 +79,7 @@
 				<li>
 					<Button
 						variant="ghost"
-						class="h-auto min-h-12 w-full justify-start whitespace-normal"
+						class="h-auto min-h-8 w-full justify-start whitespace-normal"
 						disabled={busy}
 						onclick={() => onchoose(conversation.id)}
 						><MessageSquare class="shrink-0" /><span

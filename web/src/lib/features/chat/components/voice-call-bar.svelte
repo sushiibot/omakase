@@ -63,7 +63,7 @@
 		<div class="flex items-center gap-2">
 			<Button
 				variant="ghost"
-				class="h-auto min-h-12 min-w-0 flex-1 justify-start gap-2 px-2 py-1 text-left"
+				class="h-auto min-h-8 min-w-0 flex-1 justify-start gap-2 px-2 py-1 text-left"
 				aria-label={status.review ? 'Review voice request in chat' : 'Voice call details'}
 				onclick={status.review ? onreview : ondetails}
 			>
@@ -77,8 +77,9 @@
 				<ChevronUp class="size-4 shrink-0" aria-hidden="true" />
 			</Button>
 			<Button
+				size="icon"
 				variant="ghost"
-				class="size-12 shrink-0 px-0"
+				class="shrink-0"
 				aria-label={muted ? 'Unmute microphone' : 'Mute microphone'}
 				aria-pressed={muted}
 				disabled={state === 'connecting'}
@@ -87,14 +88,16 @@
 				{#if muted}<MicOff aria-hidden="true" />{:else}<Mic aria-hidden="true" />{/if}
 			</Button>
 			{#if mode === 'turns' && state === 'speaking'}<Button
+					size="icon"
 					variant="ghost"
-					class="size-12 shrink-0 px-0"
+					class="shrink-0"
 					aria-label="Stop speaking"
 					onclick={oninterrupt}><Square aria-hidden="true" /></Button
 				>{/if}
 			<Button
+				size="icon"
 				variant="destructive"
-				class="size-12 shrink-0 px-0"
+				class="shrink-0"
 				aria-label="End call"
 				onclick={onstop}><PhoneOff aria-hidden="true" /></Button
 			>

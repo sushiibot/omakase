@@ -204,7 +204,6 @@
 						</p>
 						<Button
 							variant="outline"
-							size="compact"
 							disabled={push !== 'on' || testBusy}
 							onclick={() => ontest?.()}
 						>
@@ -262,11 +261,11 @@
 					</div>
 				</dl>
 				<div class="flex flex-wrap gap-2">
-					<Button variant="outline" size="compact" onclick={() => onreload?.()}>
+					<Button variant="outline" onclick={() => onreload?.()}>
 						<RotateCw aria-hidden="true" />Reload app
 					</Button>
 					{#if canInstall}
-						<Button size="compact" onclick={() => oninstall?.()}>Install the app</Button>
+						<Button onclick={() => oninstall?.()}>Install the app</Button>
 					{/if}
 				</div>
 				{#if installFailed}

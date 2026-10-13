@@ -126,14 +126,14 @@
 		<div role="group" aria-label="Voice mode" class="grid grid-cols-2 gap-2">
 			<Button
 				variant={mode === 'turns' ? 'secondary' : 'outline'}
-				class="h-auto min-h-12 px-2 py-2 whitespace-normal"
+				class="h-auto min-h-8 px-2 py-2 whitespace-normal"
 				aria-pressed={mode === 'turns'}
 				disabled={active}
 				onclick={() => onmode?.('turns')}>Talk in turns</Button
 			>
 			<Button
 				variant={mode === 'live' ? 'secondary' : 'outline'}
-				class="h-auto min-h-12 px-2 py-2 whitespace-normal"
+				class="h-auto min-h-8 px-2 py-2 whitespace-normal"
 				aria-pressed={mode === 'live'}
 				disabled={active}
 				onclick={() => onmode?.('live')}>Live conversation</Button

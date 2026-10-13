@@ -121,7 +121,7 @@
 		<div class="flex flex-col gap-5">
 			<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b pb-3">
 				<p class="text-sm text-muted-foreground">Tools available to your agent.</p>
-				<Button href={addHref} size="compact" variant="outline" aria-label="Add a server by URL">
+				<Button href={addHref} variant="outline" aria-label="Add a server by URL">
 					<Plus class="size-4" aria-hidden="true" />Add server
 				</Button>
 			</div>

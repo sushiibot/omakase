@@ -49,11 +49,12 @@
 			class="min-h-12 min-w-0 flex-1 rounded-lg border bg-background px-3 text-base"
 		/>
 		<Button
+			size="icon"
 			type="submit"
 			variant="outline"
 			disabled={busy || !title.trim()}
 			aria-label="Add task"
-			class="size-12 shrink-0 px-0"><Plus /></Button
+			class="shrink-0"><Plus /></Button
 		>
 	</form>
 	{#if error}<div role="alert" class="flex flex-col gap-2 text-sm text-failed">

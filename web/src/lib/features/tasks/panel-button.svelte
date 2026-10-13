@@ -18,7 +18,7 @@
 
 <Button
 	variant="ghost"
-	class="min-w-12 gap-1 px-2"
+	class="gap-1 px-2"
 	aria-label="Tasks, {count} open{waiting
 		? `. Agents: ${waiting} ${waiting === 1 ? 'request needs' : 'requests need'} you`
 		: ''}"

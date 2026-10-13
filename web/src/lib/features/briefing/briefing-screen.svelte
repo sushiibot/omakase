@@ -89,28 +89,27 @@
 			</div>
 			<div class="flex items-center gap-2 px-1.5 pb-1.5">
 				<Button
+					size="icon"
 					variant="ghost"
 					aria-label="Useful"
 					title="Useful"
 					aria-pressed={i.vote === 'up'}
 					onclick={() => onvote?.(i.id, 'up')}
-					class={cn(
-						'size-12 px-0',
-						i.vote === 'up' && 'bg-review-soft text-review hover:bg-review-soft'
-					)}><ThumbsUp /></Button
+					class={cn(i.vote === 'up' && 'bg-review-soft text-review hover:bg-review-soft')}
+					><ThumbsUp /></Button
 				>
 				<Button
+					size="icon"
 					variant="ghost"
 					aria-label="Not useful"
 					title="Not useful"
 					aria-pressed={i.vote === 'down'}
 					onclick={() => onvote?.(i.id, 'down')}
-					class={cn('size-12 px-0', i.vote === 'down' && 'bg-muted text-foreground hover:bg-muted')}
+					class={cn(i.vote === 'down' && 'bg-muted text-foreground hover:bg-muted')}
 					><ThumbsDown /></Button
 				>
 				<Button
 					variant="ghost"
-					size="lg"
 					class="ml-auto text-muted-foreground"
 					onclick={() => ondismiss?.(i.id, true)}><X />Dismiss</Button
 				>

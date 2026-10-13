@@ -60,23 +60,23 @@
 				{add.error}
 			</p>{/if}
 		{#if add.stage === 'url'}
-			<Button size="compact" disabled={!add.url.trim() || add.busy || !online} onclick={onbegin}>
+			<Button disabled={!add.url.trim() || add.busy || !online} onclick={onbegin}>
 				{#if add.busy}<LoaderCircle
 						class="animate-spin motion-reduce:animate-none"
 						aria-hidden="true"
 					/>Checking the server…{:else}Continue{/if}
 			</Button>
 		{:else if add.stage === 'oauth'}
-			<Button size="compact" onclick={onsignedin}>I've signed in</Button>
-			<Button size="compact" variant="ghost" onclick={onstepback}>Back to the address</Button>
+			<Button onclick={onsignedin}>I've signed in</Button>
+			<Button variant="ghost" onclick={onstepback}>Back to the address</Button>
 		{:else}
-			<Button size="compact" disabled={!hasCode || add.busy || !online} onclick={onfinish}>
+			<Button disabled={!hasCode || add.busy || !online} onclick={onfinish}>
 				{#if add.busy}<LoaderCircle
 						class="animate-spin motion-reduce:animate-none"
 						aria-hidden="true"
 					/>Connecting…{:else}Connect{/if}
 			</Button>
-			<Button size="compact" variant="ghost" onclick={onstepback}>Back to sign-in</Button>
+			<Button variant="ghost" onclick={onstepback}>Back to sign-in</Button>
 		{/if}
 	</div>
 {/snippet}
@@ -102,9 +102,7 @@
 						Resumed your server setup. Tokens and callback addresses were cleared when you left;
 						enter them again if needed.
 					</p>
-					<Button size="compact" variant="ghost" disabled={add.busy} onclick={onstartover}
-						>Start over</Button
-					>
+					<Button variant="ghost" disabled={add.busy} onclick={onstartover}>Start over</Button>
 				</div>
 			{/if}
 			{#if add.stage === 'url'}
@@ -162,17 +160,10 @@
 						>
 					</div>
 					<div class="flex flex-wrap gap-2">
-						<Button
-							size="compact"
-							variant="outline"
-							href={add.authUrl}
-							target="_blank"
-							rel="noopener noreferrer"><ExternalLink />Open sign-in link</Button
+						<Button variant="outline" href={add.authUrl} target="_blank" rel="noopener noreferrer"
+							><ExternalLink />Open sign-in link</Button
 						>
-						<Button
-							size="compact"
-							variant="outline"
-							onclick={() => add.authUrl && oncopy?.(add.authUrl)}
+						<Button variant="outline" onclick={() => add.authUrl && oncopy?.(add.authUrl)}
 							><Copy />{copied ? 'Copied' : 'Copy'}</Button
 						>
 					</div>

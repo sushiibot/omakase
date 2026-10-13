@@ -658,8 +658,8 @@
 	{#if !readOnly}
 		{@render voice?.()}
 		{#if onopensheet}<Button
+				size="icon"
 				variant="ghost"
-				class="size-12 px-0"
 				aria-label="Chat commands"
 				onclick={() => onopensheet?.('commands')}><EllipsisVertical class="size-5" /></Button
 			>{/if}

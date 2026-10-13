@@ -82,13 +82,7 @@
 {#snippet trackingSnapshot()}
 	{#if server?.changed}
 		<div class="mt-6 flex flex-col gap-2 border-t pt-4">
-			<Button
-				size="compact"
-				class="self-start"
-				variant="outline"
-				disabled={busy || !online}
-				onclick={onaccept}
-			>
+			<Button class="self-start" variant="outline" disabled={busy || !online} onclick={onaccept}>
 				{#if operation === 'snapshot'}<LoaderCircle
 						class="animate-spin motion-reduce:animate-none"
 						aria-hidden="true"
@@ -106,7 +100,6 @@
 		<ActionMenu label="Connection actions">
 			{#snippet children(close)}
 				<Button
-					size="compact"
 					variant="ghost"
 					class="w-full justify-start"
 					disabled={busy || !online}
@@ -116,7 +109,6 @@
 					}}>Reconnect</Button
 				>
 				{#if server.enabled !== false}<Button
-						size="compact"
 						variant="ghost"
 						class="w-full justify-start"
 						disabled={busy || !online}
@@ -126,7 +118,6 @@
 						}}>Disconnect</Button
 					>{/if}
 				{#if signInHref}<Button
-						size="compact"
 						variant="ghost"
 						class="w-full justify-start"
 						href={signInHref}
@@ -134,7 +125,6 @@
 						onclick={() => close()}>Sign in / replace token</Button
 					>{/if}
 				<Button
-					size="compact"
 					variant="ghost"
 					class="w-full justify-start"
 					disabled={busy || !online}
@@ -180,15 +170,13 @@
 				>
 				{#if server.problem}<p class="text-sm">{server.problem}</p>{/if}
 				{#if server.enabled === false}
-					<Button size="compact" class="self-start" disabled={busy || !online} onclick={onreconnect}
+					<Button class="self-start" disabled={busy || !online} onclick={onreconnect}
 						>Reconnect now</Button
 					>
 				{:else if server.status === 'signed-out' && signInHref}
-					<Button size="compact" class="self-start" href={signInHref} disabled={busy || !online}
-						>Sign in</Button
-					>
+					<Button class="self-start" href={signInHref} disabled={busy || !online}>Sign in</Button>
 				{:else if server.status === 'error'}
-					<Button size="compact" class="self-start" disabled={busy || !online} onclick={onreconnect}
+					<Button class="self-start" disabled={busy || !online} onclick={onreconnect}
 						>Retry connection</Button
 					>
 				{/if}
@@ -199,7 +187,7 @@
 						provider.
 					</p>
 					<div class="flex flex-wrap gap-2">
-						<Button size="compact" variant="outline" disabled={busy || !online} onclick={onremove}>
+						<Button variant="outline" disabled={busy || !online} onclick={onremove}>
 							<span class="grid"
 								><span aria-hidden="true" class="invisible col-start-1 row-start-1"
 									>Removing connection…</span
@@ -207,9 +195,7 @@
 									>{operation === 'remove' ? 'Removing connection…' : 'Remove connection'}</span
 								></span
 							>
-						</Button><Button size="compact" variant="ghost" onclick={() => (removing = false)}
-							>Cancel</Button
-						>
+						</Button><Button variant="ghost" onclick={() => (removing = false)}>Cancel</Button>
 					</div>
 				{/if}
 				{#if operation}<p role="status" class="sr-only">

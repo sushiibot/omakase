@@ -124,7 +124,7 @@
 						<Button
 							variant="outline"
 							class={cn(
-								'h-auto min-h-12 max-w-full rounded-full px-4 py-2 font-medium whitespace-normal',
+								'h-auto min-h-8 max-w-full rounded-full px-4 py-2 font-medium whitespace-normal',
 								picked && 'border-foreground'
 							)}
 							disabled={ask.state === 'answering'}

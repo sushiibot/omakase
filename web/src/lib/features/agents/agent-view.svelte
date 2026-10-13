@@ -59,8 +59,9 @@
 	<div class="flex min-h-0 flex-1 flex-col">
 		<header class="flex min-h-13 shrink-0 items-center gap-1 border-b px-2 py-1">
 			<Button
+				size="icon"
 				variant="ghost"
-				class="size-12 shrink-0 px-0"
+				class="shrink-0"
 				aria-label={backLabel ?? 'Back to agents'}
 				onclick={() => onback()}><ChevronLeft /></Button
 			>

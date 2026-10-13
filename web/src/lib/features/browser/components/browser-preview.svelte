@@ -71,17 +71,14 @@
 				{#if status.state !== 'ended'}<Button variant="ghost" onclick={onshow}>Show</Button>{/if}
 			{:else}
 				<Button
+					size="icon"
 					variant="ghost"
-					class="size-12 px-0"
 					aria-label="Expand browser preview"
 					disabled={!frame}
 					onclick={onexpand}><Maximize aria-hidden="true" /></Button
 				>
-				<Button
-					variant="ghost"
-					class="size-12 px-0"
-					aria-label="Hide browser preview"
-					onclick={onhide}><X aria-hidden="true" /></Button
+				<Button size="icon" variant="ghost" aria-label="Hide browser preview" onclick={onhide}
+					><X aria-hidden="true" /></Button
 				>
 			{/if}
 		</div>
@@ -129,11 +126,8 @@
 							aria-hidden="true"
 						/>{/if}</Button
 				>
-				<Button
-					variant="ghost"
-					class="size-12 px-0"
-					aria-label="Close browser screen"
-					onclick={onclose}><X aria-hidden="true" /></Button
+				<Button size="icon" variant="ghost" aria-label="Close browser screen" onclick={onclose}
+					><X aria-hidden="true" /></Button
 				>
 			</div>
 			<Dialog.Description class="sr-only"

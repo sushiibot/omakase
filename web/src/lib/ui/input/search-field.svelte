@@ -20,7 +20,7 @@
 	<label for={uid} class="text-sm font-medium">{label}</label>
 	<div class="relative">
 		<Search
-			class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+			class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
 			aria-hidden="true"
 		/>
 		<Input
@@ -28,12 +28,12 @@
 			type="search"
 			bind:value
 			bind:ref
-			class="h-12 pr-12 pl-9 text-base [&::-webkit-search-cancel-button]:appearance-none"
+			class="pr-9 pl-8 [&::-webkit-search-cancel-button]:appearance-none"
 		/>
 		<Button
 			variant="ghost"
-			size="icon-lg"
-			class="absolute top-0 right-0 size-12 {value ? '' : 'invisible'}"
+			size="icon-sm"
+			class="absolute top-0.5 right-0.5 {value ? '' : 'invisible'}"
 			aria-label="Clear search"
 			disabled={!value}
 			onclick={clear}><X /></Button

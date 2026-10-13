@@ -63,19 +63,13 @@
 			{#if error}<p role="alert" class="text-sm text-failed">Couldn't change it. {error}</p>{/if}
 			<div class="flex gap-2">
 				<Button
-					size="lg"
 					variant="outline"
 					class="flex-1"
 					disabled={busy || !online}
 					onclick={() => onsetstage?.('archived')}><Archive />Archive</Button
 				>
 				{#if skill.stage === 'draft' || skill.stage === 'stale'}
-					<Button
-						size="lg"
-						class="flex-1"
-						disabled={busy || !online}
-						onclick={() => onsetstage?.('active')}
-					>
+					<Button class="flex-1" disabled={busy || !online} onclick={() => onsetstage?.('active')}>
 						{#if busy}<LoaderCircle
 								class="animate-spin motion-reduce:animate-none"
 								aria-hidden="true"

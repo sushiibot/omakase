@@ -32,7 +32,7 @@
 <Item.Root
 	variant={card ? 'outline' : 'default'}
 	size="xs"
-	class="min-h-12 flex-nowrap items-start desktop-pointer:min-h-0"
+	class="min-h-0 flex-nowrap items-start any-pointer-coarse:min-h-12"
 >
 	{#snippet child({ props })}
 		<a {...props} {href} data-agent-row={agent.id} onclick={onopen}>

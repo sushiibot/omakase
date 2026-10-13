@@ -1,3 +1,5 @@
+<!-- shadcn-svelte nova: ui/sheet/sheet-content.svelte -->
+<!-- drift: motion tokens, motion-reduce and full-distance slide-out -->
 <script lang="ts" module>
 	export type Side = 'top' | 'right' | 'bottom' | 'left';
 </script>
@@ -44,7 +46,7 @@
 		{#if showCloseButton}
 			<SheetPrimitive.Close data-slot="sheet-close">
 				{#snippet child({ props })}
-					<Button variant="ghost" class="absolute top-3 right-3" size="icon-lg" {...props}>
+					<Button variant="ghost" class="absolute top-3 right-3" size="icon-sm" {...props}>
 						<XIcon />
 						<span class="sr-only">Close</span>
 					</Button>

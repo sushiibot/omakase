@@ -40,8 +40,8 @@
 
 <svelte:window onkeydown={keydown} />
 <Button
+	size="icon"
 	variant="ghost"
-	class="size-12 px-0"
 	aria-label={label}
 	aria-expanded={open}
 	aria-controls={uid}

@@ -49,8 +49,8 @@
 		>
 			{#snippet children(toggle: () => void)}
 				{#snippet actions()}<Button
+						size="icon"
 						variant="ghost"
-						class="size-12 px-0"
 						aria-label="Task details"
 						aria-expanded={taskPane.open}
 						onclick={toggle}><ListChecks class="size-5" /></Button

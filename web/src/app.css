@@ -3,8 +3,6 @@
 @import 'shadcn-svelte/tailwind.css';
 @import '@fontsource-variable/inter';
 
-@custom-variant desktop-pointer (@media (min-width: 48rem) and (hover: hover) and (pointer: fine) and (not (any-pointer: coarse)));
-
 @custom-variant dark (&:is(.dark *));
 /* Toggled from visualViewport: iOS overlays the keyboard instead of resizing the layout. */
 @custom-variant kb (&:is(.keyboard-open *));

@@ -23,7 +23,7 @@
 	class={cn(
 		'group h-12 min-w-12 text-sm font-medium text-muted-foreground data-checked:text-foreground',
 		variant === 'segment'
-			? 'flex shrink-0 items-center px-0.5 desktop-pointer:h-8'
+			? 'flex h-8 shrink-0 items-center px-0.5 any-pointer-coarse:h-12'
 			: compact
 				? 'flex shrink-0 items-center'
 				: 'rounded-xl border bg-card data-checked:border-foreground',

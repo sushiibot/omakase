@@ -55,7 +55,7 @@
 		aria-controls="{uid}-work"
 		aria-label="Turn {number} work: {summary.text}"
 		onclick={() => (open = !open)}
-		class="flex min-h-12 w-full min-w-0 items-center gap-2 rounded-lg text-left text-ui text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 desktop-pointer:min-h-8"
+		class="flex min-h-8 w-full min-w-0 items-center gap-2 rounded-lg text-left text-ui text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 any-pointer-coarse:min-h-12"
 	>
 		{#if !turn.end}<LoaderCircle
 				class="size-4 shrink-0 animate-spin text-running motion-reduce:animate-none"
@@ -79,7 +79,7 @@
 				{#if item.kind === 'command'}
 					<details class="group/item min-w-0">
 						<summary
-							class="flex min-h-12 cursor-pointer list-none items-center gap-2 desktop-pointer:min-h-8 [&::-webkit-details-marker]:hidden"
+							class="flex min-h-8 cursor-pointer list-none items-center gap-2 any-pointer-coarse:min-h-12 [&::-webkit-details-marker]:hidden"
 						>
 							<Terminal class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
 							<code class="min-w-0 flex-1 truncate font-mono text-code">{item.command}</code>
@@ -109,7 +109,7 @@
 					</details>
 				{:else if item.kind === 'fileChange'}
 					<div
-						class="flex min-h-12 min-w-0 items-start gap-2 py-3 desktop-pointer:min-h-8 desktop-pointer:py-1.5"
+						class="flex min-h-8 min-w-0 items-start gap-2 py-1.5 any-pointer-coarse:min-h-12 any-pointer-coarse:py-3"
 					>
 						<FilePen class="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
 						<ul class="flex min-w-0 flex-1 flex-col gap-1">
@@ -130,7 +130,7 @@
 				{:else if item.kind === 'tool'}
 					<details class="min-w-0">
 						<summary
-							class="flex min-h-12 cursor-pointer list-none items-center gap-2 desktop-pointer:min-h-8 [&::-webkit-details-marker]:hidden"
+							class="flex min-h-8 cursor-pointer list-none items-center gap-2 any-pointer-coarse:min-h-12 [&::-webkit-details-marker]:hidden"
 						>
 							<Wrench class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
 							<span class="min-w-0 flex-1 truncate"
@@ -153,7 +153,7 @@
 					</details>
 				{:else if item.kind === 'approval'}
 					<p
-						class="flex min-h-12 min-w-0 items-center gap-2 text-muted-foreground desktop-pointer:min-h-8"
+						class="flex min-h-8 min-w-0 items-center gap-2 text-muted-foreground any-pointer-coarse:min-h-12"
 					>
 						<UserCheck class="size-4 shrink-0" aria-hidden="true" />
 						<span class="min-w-0 flex-1 truncate">{item.title ?? 'Approval'}</span>

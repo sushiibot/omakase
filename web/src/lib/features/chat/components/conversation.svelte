@@ -479,8 +479,8 @@
 					<div class="flex gap-2">
 						{#each actions as a (a.id)}
 							<Button
+								size="icon"
 								variant="ghost"
-								class="size-12 px-0"
 								aria-label={a.label}
 								title={a.label}
 								onclick={a.onclick}><a.icon aria-hidden="true" /></Button

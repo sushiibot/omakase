@@ -92,12 +92,8 @@
 					{current || 'Not set'}
 				</p>
 				{#snippet actions()}
-					<Button
-						id="{uid}-edit"
-						variant="outline"
-						size="compact"
-						aria-label="Edit your name"
-						onclick={openEditor}>Edit</Button
+					<Button id="{uid}-edit" variant="outline" aria-label="Edit your name" onclick={openEditor}
+						>Edit</Button
 					>
 				{/snippet}
 			</PreferenceRow>
@@ -127,7 +123,7 @@
 					</p>
 				</div>
 				<div class="flex flex-wrap items-center gap-2">
-					<Button type="submit" size="compact" disabled={!dirty || saving}>
+					<Button type="submit" disabled={!dirty || saving}>
 						{#if saving}
 							<LoaderCircle class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
 							Saving…
@@ -137,7 +133,6 @@
 					</Button>
 					<Button
 						variant="outline"
-						size="compact"
 						disabled={saving}
 						onclick={() => {
 							draft = current;
@@ -149,7 +144,6 @@
 					{#if current}
 						<Button
 							variant="ghost"
-							size="compact"
 							disabled={saving}
 							onclick={() => {
 								// The field empties once the clear is saved; a failed clear keeps it.

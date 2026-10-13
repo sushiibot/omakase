@@ -59,7 +59,7 @@
 		class="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-3 border-b bg-background px-5 py-2"
 	>
 		<h2 class="font-semibold">{label}</h2>
-		<Button variant="ghost" size="icon" class="size-12" aria-label="Close" onclick={close}>
+		<Button variant="ghost" size="icon" aria-label="Close" onclick={close}>
 			<X aria-hidden="true" />
 		</Button>
 	</div>

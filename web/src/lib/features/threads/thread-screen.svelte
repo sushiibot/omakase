@@ -123,18 +123,12 @@
 
 {#snippet commandActions()}
 	<div class="flex flex-col border-b pb-2">
-		<Button
-			variant="ghost"
-			size="lg"
-			class="justify-start"
-			onclick={() => onopensheet?.('thread-settings')}><Pencil />Rename conversation</Button
+		<Button variant="ghost" class="justify-start" onclick={() => onopensheet?.('thread-settings')}
+			><Pencil />Rename conversation</Button
 		>
 		{#if !archived}
-			<Button
-				variant="ghost"
-				size="lg"
-				class="justify-start"
-				onclick={() => onopensheet?.('thread-close')}><Archive />Archive conversation</Button
+			<Button variant="ghost" class="justify-start" onclick={() => onopensheet?.('thread-close')}
+				><Archive />Archive conversation</Button
 			>
 		{/if}
 	</div>
@@ -216,7 +210,7 @@
 					Nothing written to memory from this conversation yet.
 				</p>
 			{/if}
-			{#if thread?.memoryTracking !== false}<Button variant="outline" size="lg" href={memoryHref}
+			{#if thread?.memoryTracking !== false}<Button variant="outline" href={memoryHref}
 					>All memory changes</Button
 				>{/if}
 		</div>

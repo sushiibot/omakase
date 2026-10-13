@@ -80,12 +80,7 @@
 					{/if}
 				</div>
 			{/if}
-			<Button
-				size="lg"
-				variant="outline"
-				disabled={test?.state === 'running' || !online}
-				onclick={ontest}
-			>
+			<Button variant="outline" disabled={test?.state === 'running' || !online} onclick={ontest}>
 				<FlaskConical />{test && test.state !== 'running' ? 'Test again' : 'Test run'}
 			</Button>
 			<p class="text-center text-meta text-muted-foreground">

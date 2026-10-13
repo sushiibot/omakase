@@ -71,7 +71,7 @@
 
 {#snippet actions()}
 	{#if onnew}
-		<Button variant="ghost" size="lg" aria-label="New conversation" onclick={onnew}
+		<Button variant="ghost" aria-label="New conversation" onclick={onnew}
 			><Plus /><span class="hidden @sm:inline">New conversation</span></Button
 		>
 	{/if}

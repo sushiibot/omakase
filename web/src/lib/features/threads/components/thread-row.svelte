@@ -106,8 +106,7 @@
 
 	{#if onoptions}<Button
 			variant="ghost"
-			size="lg"
-			class="size-12 p-0"
+			size="icon"
 			aria-haspopup="dialog"
 			aria-label="Options for {title}"
 			onclick={onoptions}><Ellipsis /></Button
