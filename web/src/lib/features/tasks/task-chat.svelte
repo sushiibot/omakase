@@ -13,7 +13,8 @@
 		headerActions,
 		focusTurn,
 		focusAsk,
-		focusApproval
+		focusApproval,
+		focusAgent
 	}: {
 		task: TaskRecord;
 		viewing?: boolean;
@@ -21,6 +22,7 @@
 		focusTurn?: string;
 		focusAsk?: string;
 		focusApproval?: string;
+		focusAgent?: string;
 	} = $props();
 	const workspace = getWorkspace();
 	const id = untrack(() => task.workConversationId!);
@@ -43,7 +45,7 @@
 	});
 </script>
 
-{#snippet agents()}<AgentsBar conversationId={id} />{/snippet}
+{#snippet agents()}<AgentsBar conversationId={id} {focusAgent} />{/snippet}
 
 <ChatScreen
 	title={task.title}

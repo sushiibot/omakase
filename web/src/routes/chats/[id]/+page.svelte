@@ -140,7 +140,10 @@
 
 <svelte:head><title>{detail?.summary.title ?? 'Channel'} · sushii</title></svelte:head>
 
-{#snippet agents()}<AgentsBar conversationId={id} />{/snippet}
+{#snippet agents()}<AgentsBar
+		conversationId={id}
+		focusAgent={page.url.searchParams.get('agent') ?? undefined}
+	/>{/snippet}
 
 {#snippet browserPreview()}
 	<BrowserPreviewPanel

@@ -187,7 +187,10 @@
 
 <svelte:head><title>Chat · sushii</title></svelte:head>
 
-{#snippet agents()}<AgentsBar conversationId="main" />{/snippet}
+{#snippet agents()}<AgentsBar
+		conversationId="main"
+		focusAgent={page.url.searchParams.get('agent') ?? undefined}
+	/>{/snippet}
 
 {#snippet browserPreview()}
 	<BrowserPreviewPanel

@@ -43,6 +43,7 @@
 					focusTurn={page.url.searchParams.get('turn') ?? undefined}
 					focusAsk={page.url.searchParams.get('ask') ?? undefined}
 					focusApproval={page.url.searchParams.get('approve') ?? undefined}
+					focusAgent={page.url.searchParams.get('agent') ?? undefined}
 				/>
 			{/snippet}
 		</TaskWorkspace>{/key}

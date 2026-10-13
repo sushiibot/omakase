@@ -1,27 +1,46 @@
 <script lang="ts">
+	import { tick, untrack } from 'svelte';
 	import { Button } from '$lib/ui/button';
+	import { SwitchRow } from '$lib/ui/switch';
 	import StatePill from '$lib/ui/status/state-pill.svelte';
 	import type { StatusKey } from '$lib/ui/status/status';
 	import {
 		agentName,
 		agentsApi,
 		choices,
+		requestKey,
+		requestView,
 		visibleAgents,
 		type AgentRecord,
 		type AgentSession,
 		type AgentStatus,
-		type AgentsApi
+		type AgentsApi,
+		type Decision
 	} from './api';
 
-	let { conversationId, api = agentsApi }: { conversationId: string; api?: AgentsApi } = $props();
+	let {
+		conversationId,
+		focusAgent,
+		api = agentsApi
+	}: {
+		conversationId: string;
+		/** From a notification link: open this agent's row and move focus to its approval. */
+		focusAgent?: string;
+		api?: AgentsApi;
+	} = $props();
 
 	let agents = $state<AgentRecord[]>([]);
-	let open = $state<string | null>(null);
+	let open = $state<string | null>(untrack(() => focusAgent ?? null));
 	let session = $state<AgentSession | null>(null);
 	let unavailable = $state<string | null>(null);
 	let error = $state<string | null>(null);
 	let busy = $state(false);
+	/** The request being answered, so its buttons say so until the machine replies. */
+	let submitting = $state<string | null>(null);
+	let wholeTurn = $state<Record<string, boolean>>({});
 	let text = $state('');
+	let region = $state<HTMLElement | null>(null);
+	let focused = false;
 	const shown = $derived(visibleAgents(agents));
 	const current = $derived(shown.find((a) => a.id === open) ?? null);
 
@@ -77,6 +96,17 @@
 		};
 	});
 
+	// A notification link lands on the approval itself, once.
+	$effect(() => {
+		if (focused || !focusAgent || open !== focusAgent || !session?.requests.length || !region)
+			return;
+		focused = true;
+		void tick().then(() => {
+			region?.scrollIntoView({ block: 'nearest' });
+			region?.querySelector<HTMLElement>('[data-decision="accept"]')?.focus();
+		});
+	});
+
 	function toggle(id: string) {
 		open = open === id ? null : id;
 		session = null;
@@ -95,6 +125,17 @@
 			return false;
 		} finally {
 			busy = false;
+		}
+	}
+
+	async function answer(agent: string, id: string | number, decision: Decision) {
+		const key = requestKey(id);
+		submitting = key;
+		const sent = decision === 'accept' && wholeTurn[key] ? 'acceptForSession' : decision;
+		try {
+			await act(() => api.answer(agent, id, sent), 'Could not answer this approval.');
+		} finally {
+			submitting = null;
 		}
 	}
 </script>
@@ -119,6 +160,7 @@
 		{/each}
 		{#if current}
 			<div
+				bind:this={region}
 				class="flex max-h-[50vh] flex-col gap-3 overflow-y-auto overscroll-contain px-2 pb-2"
 				aria-label="{agentName(current)} details"
 				role="region"
@@ -144,25 +186,44 @@
 							Denied without asking: {session.deniedTools.join(', ')}. Allow them in the CLI's
 							settings on the machine.
 						</p>{/if}
-					{#each session.requests as approval (approval.id)}
-						<div class="flex flex-col gap-2 border-t pt-3">
-							<p class="text-sm [overflow-wrap:anywhere] whitespace-pre-wrap">
-								{approval.description}
-							</p>
-							{#if approval.decisions.includes('acceptForSession')}<p
-									class="text-sm text-muted-foreground"
-								>
-									Approve for this session also allows matching requests until this agent ends.
-								</p>{/if}
+					{#each session.requests as approval (requestKey(approval.id))}
+						{@const view = requestView(approval)}
+						{@const key = requestKey(approval.id)}
+						<div class="flex flex-col gap-2 border-t pt-3" data-approval>
+							<h3 class="text-sm font-semibold">{view.title}</h3>
+							{#if view.exact}
+								<p class="text-sm text-muted-foreground">Exact input</p>
+								<pre
+									class="max-h-60 overflow-y-auto rounded-lg border bg-muted/30 p-3 font-mono text-sm [overflow-wrap:anywhere] whitespace-pre-wrap"
+									aria-label="Exact input">{view.exact}</pre>
+								{#if approval.detail?.cwd}<p class="text-sm [overflow-wrap:anywhere]">
+										Working folder: <span class="font-mono">{approval.detail.cwd}</span>
+									</p>{/if}
+								{#if approval.detail?.reason}<p
+										class="text-sm [overflow-wrap:anywhere] text-muted-foreground"
+									>
+										Agent's explanation: {approval.detail.reason}
+									</p>{/if}
+							{:else}
+								<p class="text-sm [overflow-wrap:anywhere] whitespace-pre-wrap">
+									{approval.description}
+								</p>
+							{/if}
+							{#if approval.decisions.includes('acceptForSession')}<SwitchRow
+									checked={wholeTurn[key] ?? false}
+									disabled={busy}
+									onchange={(next) => (wholeTurn = { ...wholeTurn, [key]: next })}
+									class="min-h-12 rounded-lg px-0 py-1.5"
+									><span class="text-sm">Also allow matching requests until this turn ends</span
+									></SwitchRow
+								>{/if}
 							<div class="flex flex-wrap gap-2">
 								{#each choices(approval.decisions) as choice (choice.decision)}<Button
 										variant={choice.primary ? 'default' : 'outline'}
+										data-decision={choice.decision}
 										disabled={busy}
-										onclick={() =>
-											void act(
-												() => api.answer(current.id, approval.id, choice.decision),
-												'Could not answer this approval.'
-											)}>{choice.label}</Button
+										onclick={() => void answer(current.id, approval.id, choice.decision)}
+										>{submitting === key && choice.primary ? 'Submitting…' : choice.label}</Button
 									>{/each}
 							</div>
 						</div>
