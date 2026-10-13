@@ -50,7 +50,11 @@ export const LG_ALLOWED = new Set([
 	'src/lib/features/chat/components/approval-tray.svelte',
 	'src/lib/features/chat/components/approval-inline.svelte',
 	'src/lib/features/chat/components/tool-confirmation.svelte',
-	'src/lib/features/agents/components/approval-card.svelte'
+	'src/lib/features/agents/components/approval-card.svelte',
+	// Sticky footers whose only actions are the page's primary decision.
+	'src/lib/features/skills/skill-screen.svelte',
+	'src/lib/features/memory/write-screen.svelte',
+	'src/lib/features/browser/browser-screen.svelte'
 ]);
 
 export const H2_FILES = new Set([
