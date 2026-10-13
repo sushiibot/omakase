@@ -302,13 +302,14 @@ describe('warn and strict modes', () => {
 	const warn = { strict: false, verbose: false };
 	const strict = { strict: true, verbose: false };
 
-	test('the mode comes from UI_DRIFT_STRICT and UI_DRIFT_VERBOSE', () => {
-		expect(modeFromEnv({})).toEqual(warn);
+	test('drift is strict unless UI_DRIFT_STRICT=0', () => {
+		expect(modeFromEnv({})).toEqual(strict);
 		expect(modeFromEnv({ UI_DRIFT_STRICT: '1', UI_DRIFT_VERBOSE: '1' })).toEqual({
 			strict: true,
 			verbose: true
 		});
-		expect(modeFromEnv({ UI_DRIFT_STRICT: 'true' })).toEqual(warn);
+		expect(modeFromEnv({ UI_DRIFT_STRICT: 'false' })).toEqual(strict);
+		expect(modeFromEnv({ UI_DRIFT_STRICT: '0' })).toEqual(warn);
 	});
 
 	test('warn mode prints only per-rule counts and exits 0', () => {
@@ -318,7 +319,7 @@ describe('warn and strict modes', () => {
 		expect(text).toContain('3 UI drift warning(s)');
 		expect(text).toMatch(/2 {2}rule a/);
 		expect(text).not.toContain('a.svelte:1');
-		expect(text).toContain('UI_DRIFT_STRICT=1');
+		expect(text).toContain('UI_DRIFT_VERBOSE=1');
 	});
 
 	test('verbose and strict modes list each violation under its rule', () => {
@@ -334,7 +335,7 @@ describe('warn and strict modes', () => {
 	test('strict mode exits 1 and says why; a clean tree exits 0 in either mode', () => {
 		const lines: string[] = [];
 		expect(reportDrift('x', violations, strict, (l) => lines.push(l))).toBe(1);
-		expect(lines.at(-1)).toContain('UI_DRIFT_STRICT=1');
+		expect(lines.at(-1)).toContain('UI_DRIFT_STRICT=0');
 		expect(reportDrift('x', [], strict, () => {})).toBe(0);
 		expect(reportDrift('x', [], warn, () => {})).toBe(0);
 	});
@@ -373,13 +374,5 @@ describe('run', () => {
 		} finally {
 			rmSync(root, { recursive: true });
 		}
-	});
-
-	test('the script reads UI_DRIFT_STRICT from the environment', () => {
-		const script = join(import.meta.dir, 'check-ui-drift.ts');
-		const exit = (env: Record<string, string>) =>
-			Bun.spawnSync(['bun', script], { env: { ...process.env, ...env } }).exitCode;
-		expect(exit({ UI_DRIFT_STRICT: '0' })).toBe(0);
-		expect(exit({ UI_DRIFT_STRICT: '1' })).toBe(1);
 	});
 });

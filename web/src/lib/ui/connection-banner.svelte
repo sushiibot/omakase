@@ -10,9 +10,9 @@
 
 <script lang="ts">
 	import WifiOff from '@lucide/svelte/icons/wifi-off';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import ServerOff from '@lucide/svelte/icons/server-off';
 	import History from '@lucide/svelte/icons/history';
+	import { Spinner } from '$lib/ui/spinner';
 	import ShieldOff from '@lucide/svelte/icons/shield-off';
 	import { cn } from '$lib/utils';
 
@@ -46,10 +46,7 @@
 				: "You're offline. The app reconnects on its own when the network is back."}</span
 		>
 	{:else if state.kind === 'reconnecting'}
-		<LoaderCircle
-			class="mt-0.5 size-4 shrink-0 animate-spin motion-reduce:animate-none"
-			aria-hidden="true"
-		/>
+		<Spinner decorative class="mt-0.5 shrink-0" />
 		<span
 			>Reconnecting…{#if state.elapsed}<span class="tabular-nums"> {state.elapsed}</span>{/if}</span
 		>
