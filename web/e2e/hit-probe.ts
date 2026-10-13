@@ -5,8 +5,6 @@ export type Side = 'top' | 'right' | 'bottom' | 'left';
 export interface HitProbeOptions {
 	/** Sides without an adjacent control; each gets a probe 23px from the center. Defaults to all four. */
 	freeSides?: Side[];
-	/** Sides facing a neighbor that still need a full reach, as in decision rows with a touch gap. */
-	neighborSides?: Side[];
 }
 
 export type HitPointKind = 'center' | 'edge' | 'reach';
@@ -16,7 +14,8 @@ export interface HitPointFailure {
 	side?: Side;
 	x: number;
 	y: number;
-	/** Short description of the element that received the point, or null when it fell outside the viewport. */
+	reason: 'off-viewport' | 'other-element';
+	/** Short description of the element that received the point, or null when nothing did. */
 	hit: string | null;
 }
 
@@ -31,61 +30,63 @@ const REACH = 23;
 // Points exactly on the border box can resolve to the parent after subpixel rounding.
 const EDGE_INSET = 1;
 
+// `page` stays in the signature for callers; the probe runs in the control's own frame.
 export async function probeHitArea(
 	page: Page,
 	control: Locator,
 	opts: HitProbeOptions = {}
 ): Promise<HitProbeResult> {
-	await control.scrollIntoViewIfNeeded();
-	const reachSides = [
-		...new Set([...(opts.freeSides ?? ALL_SIDES), ...(opts.neighborSides ?? [])])
-	];
-	const handle = await control.elementHandle();
-	if (!handle) throw new Error('probeHitArea: control is not attached');
-	try {
-		return await page.evaluate(
-			({ el, reachSides, allSides, reach, inset }): HitProbeResult => {
-				const r = el.getBoundingClientRect();
-				const cx = r.left + r.width / 2;
-				const cy = r.top + r.height / 2;
-				const offset: Record<Side, [number, number]> = {
-					top: [0, -1],
-					right: [1, 0],
-					bottom: [0, 1],
-					left: [-1, 0]
-				};
-				const edge: Record<Side, [number, number]> = {
-					top: [cx, r.top + inset],
-					right: [r.right - inset, cy],
-					bottom: [cx, r.bottom - inset],
-					left: [r.left + inset, cy]
-				};
-				const points: Omit<HitPointFailure, 'hit'>[] = [{ kind: 'center', x: cx, y: cy }];
-				for (const side of allSides) {
-					const [x, y] = edge[side];
-					points.push({ kind: 'edge', side, x, y });
+	return control.evaluate(
+		(el, { reachSides, allSides, reach, inset }): HitProbeResult => {
+			// Centering keeps reach points clear of the viewport edge and of sticky headers or composers.
+			el.scrollIntoView({ block: 'center', inline: 'center' });
+			const r = el.getBoundingClientRect();
+			const cx = r.left + r.width / 2;
+			const cy = r.top + r.height / 2;
+			const offset: Record<Side, [number, number]> = {
+				top: [0, -1],
+				right: [1, 0],
+				bottom: [0, 1],
+				left: [-1, 0]
+			};
+			const edge: Record<Side, [number, number]> = {
+				top: [cx, r.top + inset],
+				right: [r.right - inset, cy],
+				bottom: [cx, r.bottom - inset],
+				left: [r.left + inset, cy]
+			};
+			const points: Omit<HitPointFailure, 'hit' | 'reason'>[] = [{ kind: 'center', x: cx, y: cy }];
+			for (const side of allSides) {
+				const [x, y] = edge[side];
+				points.push({ kind: 'edge', side, x, y });
+			}
+			for (const side of reachSides) {
+				const [dx, dy] = offset[side];
+				points.push({ kind: 'reach', side, x: cx + dx * reach, y: cy + dy * reach });
+			}
+			const root = el.getRootNode() as Document | ShadowRoot;
+			const describe = (hit: Element) => {
+				const slot = hit.getAttribute('data-slot');
+				const name = hit.getAttribute('aria-label') ?? hit.textContent?.trim().slice(0, 40);
+				return `<${hit.tagName.toLowerCase()}${slot ? ` data-slot="${slot}"` : ''}>${name ?? ''}`;
+			};
+			const failures = points.flatMap((p): HitPointFailure[] => {
+				if (p.x < 0 || p.y < 0 || p.x >= innerWidth || p.y >= innerHeight) {
+					return [{ ...p, reason: 'off-viewport', hit: null }];
 				}
-				for (const side of reachSides) {
-					const [dx, dy] = offset[side];
-					points.push({ kind: 'reach', side, x: cx + dx * reach, y: cy + dy * reach });
-				}
-				const describe = (hit: Element) => {
-					const slot = hit.getAttribute('data-slot');
-					const name = hit.getAttribute('aria-label') ?? hit.textContent?.trim().slice(0, 40);
-					return `<${hit.tagName.toLowerCase()}${slot ? ` data-slot="${slot}"` : ''}>${name ?? ''}`;
-				};
-				const failures = points.flatMap((p) => {
-					const hit = document.elementFromPoint(p.x, p.y);
-					if (hit && (hit === el || el.contains(hit))) return [];
-					return [{ ...p, hit: hit ? describe(hit) : null }];
-				});
-				return { probed: points.length, failures };
-			},
-			{ el: handle, reachSides, allSides: ALL_SIDES, reach: REACH, inset: EDGE_INSET }
-		);
-	} finally {
-		await handle.dispose();
-	}
+				const hit = root.elementFromPoint(p.x, p.y);
+				if (hit && (hit === el || el.contains(hit))) return [];
+				return [{ ...p, reason: 'other-element', hit: hit ? describe(hit) : null }];
+			});
+			return { probed: points.length, failures };
+		},
+		{
+			reachSides: opts.freeSides ?? ALL_SIDES,
+			allSides: ALL_SIDES,
+			reach: REACH,
+			inset: EDGE_INSET
+		}
+	);
 }
 
 export async function expectHitArea(page: Page, control: Locator, opts?: HitProbeOptions) {

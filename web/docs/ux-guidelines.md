@@ -43,8 +43,8 @@ The primary mobile device is an Android phone running the installed PWA (Chrome 
 
 ### Reach and touch targets
 
-- **Paint stock sizes; extend hit areas invisibly on touch.** The shared `Button` paints shadcn-svelte nova sizes (`sm` 28px, default 32px, `lg` 36px); Input and sidebar rows are 32px. On any coarse pointer, an invisible `::after` (`relative any-pointer-coarse:after:absolute any-pointer-coarse:after:-inset-*`) extends each separate control's hit area toward 48px. Layout uses the painted size, so the hit area never moves anything. Do not grow a target with local height classes. Why: WCAG 2.5.8 AA requires 24px; Apple's minimum is 28pt and its default 44pt; Android recommends 48dp and allows the visible element to be smaller than its target ([Android API defaults](https://developer.android.com/develop/ui/compose/accessibility/api-defaults), [Android accessibility help](https://support.google.com/accessibility/android/answer/7101858)); 1 CSS px = 1dp on Android Chrome. Layout-sized 48px controls bloat every screen. Check: `pw` hit probe (below). axe's `target-size` rule covers only the WCAG floor of 24px (`minSize: 24` in axe-core 4.13).
-- **Hit areas may extend into gaps, never over another control's painted face.** Separate controls keep the stock `gap-2`; under it, each control keeps at least 40px of its own target along the row and 48px across it. Decision rows (approve/deny, destructive next to primary) use `gap-2 any-pointer-coarse:gap-4`, so each keeps a full 48px. Why: a covered face sends the tap to the wrong control; Android asks for 8dp separation, and a mis-tap on a decision is costly. Check: hit probe at each face edge resolves to that face's control; decision rows also probe toward their neighbors.
+- **Paint stock sizes; extend hit areas invisibly on touch.** The shared `Button` paints shadcn-svelte nova sizes (`xs` 24px, `sm` 28px, default 32px, `lg` 36px); sidebar rows are 32px. On any coarse pointer, an invisible `::after` (`relative any-pointer-coarse:after:absolute any-pointer-coarse:after:-inset-*`) extends each separate control's hit area to 48px tall. Its horizontal inset never exceeds 8px (`after:-inset-x-2`), so it stays inside a stock gap. Input and Textarea keep the stock `h-8` and carry no `::after`: replaced elements render no pseudo-elements, and the full-width field is its own target. Layout uses the painted size, so the hit area never moves anything. Do not grow a target with local height classes. Why: WCAG 2.5.8 AA requires 24px; Apple's minimum is 28pt and its default 44pt; Android recommends 48dp and allows the visible element to be smaller than its target ([Android API defaults](https://developer.android.com/develop/ui/compose/accessibility/api-defaults), [Android accessibility help](https://support.google.com/accessibility/android/answer/7101858)); 1 CSS px = 1dp on Android Chrome. Layout-sized 48px controls bloat every screen. Check: `pw` hit probe (below). axe's `target-size` rule covers only the WCAG floor of 24px (`minSize: 24` in axe-core 4.13).
+- **Hit areas may extend into gaps, never over another control's painted face.** Separate controls keep the stock `gap-2`; under it, each control keeps its face plus 8px of its own target along the row (40px for default, 36px for `sm`) and 48px across it. Decision rows (approve/deny, destructive next to primary) use `gap-2 any-pointer-coarse:gap-4`, so each keeps a full 48px. Why: a covered face sends the tap to the wrong control; Android asks for 8dp separation, and a mis-tap on a decision is costly. Check: hit probe at each face edge resolves to that face's control; decision rows also probe 23px toward their neighbors.
 - **Contiguous rows size their own box.** Navigation rows, list `Item` rows and tabs get no `after:` hit area, because it would cover the neighboring row. Navigation rows are `h-8` with `any-pointer-coarse:h-11` (44px); list `Item` rows keep stock padding; line-variant tab triggers add `any-pointer-coarse:h-10`. Separate project groups with space; do not space every channel like an action button. Why: overlapping row targets steal taps; 44pt is Apple's default control size. Check: `pw` row height per input type.
 - **Inline text links inside prose are exempt from the hit-area rules, but nothing important is reachable only through one.** Why: WCAG 2.5.8 exempts inline links because they are small and easy to miss. Check: `review`.
 - **Keep frequent phone actions within reach.** Place composer actions and sheet decisions near the bottom. Keep list creation actions beside their list. Do not stretch short pages to force every action below a fixed coordinate. Why: thumb reach matters alongside context ([Hoober, How do users really hold mobile devices](https://www.uxmatters.com/mt/archives/2013/02/how-do-users-really-hold-mobile-devices.php)). Check: `shot`, `phone` with the keyboard open and closed.
@@ -54,14 +54,11 @@ The primary mobile device is an Android phone running the installed PWA (Chrome 
 - **No gesture-only actions. Every swipe or long-press has a visible button alternative.** Why: WCAG 2.5.7 Dragging Movements; gestures are undiscoverable. Check: `review`.
   - Per-message actions are visible icon buttons in a row under the message (Copy, and Share where the browser has `navigator.share`), never a gesture or a hijacked menu: the app does not intercept `contextmenu`, long-press or middle-click, so the browser's own menu, text selection and autoscroll work in the chat. The row is always shown under the newest reply and on touch screens; on hover-capable devices older rows are transparent until hover or `:focus-within`, keeping their height so nothing moves. Icons are 16px inside `Button size="icon-sm"` controls with the coarse-pointer hit area, each with an `aria-label` and a `title`. The row never holds anything approval-like. Check: `pw` (`e2e/message-actions.test.ts`).
 
-The hit probe is `probeHitArea` in `e2e/hit-probe.ts`; `expectHitArea` asserts that no point fails. For each control it calls `document.elementFromPoint` at the center, 1px inside each face edge, and 23px from the center on every side in `freeSides` (default: all four), and requires the hit element to be the control or a descendant. Pass only the sides without an adjacent control as `freeSides`; decision rows add `neighborSides` to probe toward the neighbor too. Run it in a touch context on real screens, not only on a controls fixture: `overflow-hidden` and scrolling ancestors clip `::after` hit areas, so a control flush against a clipping edge needs the parent's padding (`p-2`, `p-4`) to leave room.
+The hit probe is `probeHitArea` in `e2e/hit-probe.ts`; `expectHitArea` asserts that no point fails. It scrolls the control to the center of the viewport, then calls `elementFromPoint` on the control's root node at the center, 1px inside each face edge, and 23px from the center on every side in `freeSides` (default: all four). Each point must resolve to the control or a descendant; a point outside the viewport fails as `off-viewport`. Pass only the sides without an adjacent control as `freeSides`. Decision rows, whose 16px touch gap leaves room for a full reach, also pass the sides that face a neighbor. Probe a sidebar row through its `SidebarMenuItem`, so a `SidebarMenuAction` over the row's right edge counts as a descendant. Run it in a touch context on real screens, not only on a controls fixture: `overflow-hidden` and scrolling ancestors clip `::after` hit areas, so a control flush against a clipping edge needs the parent's padding (`p-2`, `p-4`) to leave room.
 
 ```ts
-// Approve sits left of Deny in a decision row.
-await expectHitArea(page, approve, {
-	freeSides: ['top', 'bottom', 'left'],
-	neighborSides: ['right']
-});
+// Approve sits left of Deny in a decision row with a 16px touch gap, so the right side is probed too.
+await expectHitArea(page, approve, { freeSides: ['top', 'right', 'bottom', 'left'] });
 ```
 
 ### Viewport, keyboard and system bars
@@ -308,8 +305,8 @@ The push payload is `{ title, body, url, tag? }`; the service worker shows it, a
 ### Spacing and density
 
 - **Use the block rhythm on a 4px grid.** `Page.Body` owns `p-4 md:p-6` and `gap-4 md:gap-6`. Content is centered at `max-w-3xl` (`reading`, the default); dense lists opt into `full`. Sections use `gap-2` between heading and content. Chat keeps 16px between messages. Why: this matches shadcn-svelte sidebar-10/15 and dashboard-01, so copied block code needs no translation. Check: `shot` at 412 and 1280.
-- **Headers share one height.** The navigation, inset and inspector headers use `h-(--header-height)` (56px, defined in `src/app.css`). Why: header bottoms align into one line across panes. Check: `shot` at 1280 with the inspector open.
-- **Use one content column on phones.** Desktop uses the shell's container-based pane layout and aligned metadata columns where useful. Why: each layout supports its available space. Check: `shot` at 412 and 1280.
+- **Headers share one height.** The navigation, chat and inspector headers use `h-(--header-height)` (56px, defined in `src/app.css`). Why: header bottoms align into one line across panes. Check: `shot` at 1280 with the inspector open.
+- **Use one content column on phones.** Desktop docks panes at the [Breakpoints](#breakpoints) widths and uses aligned metadata columns where useful. Why: each layout supports its available space. Check: `shot` at 412 and 1280.
 - **Keep layout dimensions in shared components.** Why: per-screen widths and gutters drift when each caller repeats them. Check: `review`, `shot`: screen wrappers own sizing and scroll policy; content does not add competing outer widths or gutters.
 - **Align visible content edges.** Why: a header or back control with unexplained inset looks detached from its content. Check: `shot` at 320px, 412px, and desktop: compare text and icon edges, not only control bounding boxes.
 - **Line length of chat text at most ~70 characters on desktop.** Why: long lines are hard to track. Check: `shot` at 1280.
@@ -320,10 +317,10 @@ The push payload is `{ title, body, url, tag? }`; the service worker shows it, a
 | --------------------- | ------------------------------------------ | ---------------------------- |
 | Persistent navigation | Docked left navigation at 768px and wider  | `md`, `MOBILE_BREAKPOINT`    |
 | Persistent inspector  | Docked right inspector at 1024px and wider | `lg`, `INSPECTOR_BREAKPOINT` |
-| Input sizing          | Hit areas and navigation row heights       | `any-pointer-coarse:`        |
+| Touch sizing          | Hit areas and navigation row heights       | `any-pointer-coarse:`        |
 
-- **Never use width for input sizing; never use pointer for layout.** Width breakpoints decide which panes are docked; `any-pointer-coarse:` decides hit areas and row heights. Any coarse pointer keeps touch sizing, including on mixed-input devices. Why: a narrow desktop window still has a mouse, and a wide tablet still has touch. Check: `review`; `pw` with a narrow fine-pointer context and a wide touch context.
-- **Scripts read breakpoints from `src/lib/ui/breakpoints.ts`.** CSS uses Tailwind's `md` and `lg`, which have the same values. Why: one source for every width decision made in code. Check: `review`.
+- **Never use width for touch sizing (hit areas, row heights); never use pointer for layout.** Input text size follows stock (`text-base md:text-sm`). Width breakpoints decide which panes are docked; `any-pointer-coarse:` decides hit areas and row heights. Any coarse pointer keeps touch sizing, including on mixed-input devices. Why: a narrow desktop window still has a mouse, and a wide tablet still has touch. Check: `review`; `pw` with a narrow fine-pointer context and a wide touch context.
+- **Scripts read breakpoints from `src/lib/ui/breakpoints.ts`.** CSS uses Tailwind's `md` and `lg`, pinned in px in the `src/app.css` `@theme` so they match the constants under OS text scaling. Why: rem media queries move with the root font size while a px `matchMedia` does not, and the two must agree. Check: `review`.
 
 ### Dark and light
 
@@ -382,8 +379,8 @@ Chat transcripts, the workspace shell, and tab pagers retain their specialized s
 
 The normal button uses 14px medium labels, shared corners, a short color transition, and a stationary press state.
 Button sizes are stock: `xs` 24px, `sm` 28px, default 32px, `lg` 36px; icon sizes are 24, 28, 32 and 36px.
-Input, Textarea and Switch are stock nova. Input is `h-8`, with 16px text below `md`.
-Every control size carries an `any-pointer-coarse:after:` hit box reaching 48px.
+Input, Textarea, Switch, Checkbox and Radio are stock nova. Input is `h-8`, with 16px text below `md`, and has no `::after` hit box.
+Every Button size carries an `any-pointer-coarse:after:` hit box reaching 48px tall, with at most 8px of horizontal inset. Switch, Checkbox and Radio keep their stock `after:` and add `any-pointer-coarse:after:-inset-y-4` on the control itself.
 Small icon glyphs do not justify small touch targets. Label every icon-only action.
 
 Use a horizontal `Field` to align labels, values, and optional actions.
@@ -467,22 +464,22 @@ Verification covers row positions before and after delayed refreshes. It also co
 
 Target: WCAG 2.2 AA. The criteria that matter for this app, and how each is checked:
 
-| Criterion                               | Where it bites here                                                                                                    | Check                                |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| 1.1.1 Non-text Content (A)              | Icon-only buttons (send, back, copy, overflow) need a name                                                             | `axe`, `check`                       |
-| 1.3.1 Info and Relationships (A)        | Message list is a list; approval card is a labeled region                                                              | `axe`, `review`                      |
-| 1.4.1 Use of Color (A)                  | Status pills, diff lines                                                                                               | `review`                             |
-| 1.4.3 / 1.4.11 Contrast (AA)            | Muted text, `*-soft` pills, borders, both themes                                                                       | `axe` light + dark                   |
-| 1.4.4 Resize Text (AA)                  | Android font scaling                                                                                                   | `phone`                              |
-| 1.4.10 Reflow (AA)                      | Code, long URLs, tables at 320px                                                                                       | `pw` reflow                          |
-| 2.1.1 Keyboard (A)                      | Approval tabs, tool rows, sheets on desktop                                                                            | `review`, manual keyboard pass       |
-| 2.2.1 Timing Adjustable (A)             | Approval cards and toasts that need action never expire                                                                | `review`                             |
-| 2.4.3 Focus Order / 2.4.7 Focus Visible | Sheets trap and return focus; `:focus-visible` ring stays                                                              | manual keyboard pass                 |
-| 2.4.11 Focus Not Obscured (AA)          | Sticky composer vs focused items                                                                                       | `phone`, `scroll-padding`            |
-| 2.5.7 Dragging Movements (AA)           | Swipe actions need a button alternative                                                                                | `review`                             |
-| 2.5.8 Target Size (AA)                  | 24px floor; invisible 48px coarse-pointer hit boxes (at least 40px exclusive in stock-gap rows, 48px in decision rows) | `axe` `target-size` + `pw` hit probe |
-| 4.1.2 Name, Role, Value (A)             | Custom tabs, `div` dialogs, switches                                                                                   | `axe`, `check`                       |
-| 4.1.3 Status Messages (AA)              | Delivery states, "Reconnecting", "Agent replied"                                                                       | `review` of `role="status"`          |
+| Criterion                               | Where it bites here                                                                                                            | Check                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| 1.1.1 Non-text Content (A)              | Icon-only buttons (send, back, copy, overflow) need a name                                                                     | `axe`, `check`                       |
+| 1.3.1 Info and Relationships (A)        | Message list is a list; approval card is a labeled region                                                                      | `axe`, `review`                      |
+| 1.4.1 Use of Color (A)                  | Status pills, diff lines                                                                                                       | `review`                             |
+| 1.4.3 / 1.4.11 Contrast (AA)            | Muted text, `*-soft` pills, borders, both themes                                                                               | `axe` light + dark                   |
+| 1.4.4 Resize Text (AA)                  | Android font scaling                                                                                                           | `phone`                              |
+| 1.4.10 Reflow (AA)                      | Code, long URLs, tables at 320px                                                                                               | `pw` reflow                          |
+| 2.1.1 Keyboard (A)                      | Approval tabs, tool rows, sheets on desktop                                                                                    | `review`, manual keyboard pass       |
+| 2.2.1 Timing Adjustable (A)             | Approval cards and toasts that need action never expire                                                                        | `review`                             |
+| 2.4.3 Focus Order / 2.4.7 Focus Visible | Sheets trap and return focus; `:focus-visible` ring stays                                                                      | manual keyboard pass                 |
+| 2.4.11 Focus Not Obscured (AA)          | Sticky composer vs focused items                                                                                               | `phone`, `scroll-padding`            |
+| 2.5.7 Dragging Movements (AA)           | Swipe actions need a button alternative                                                                                        | `review`                             |
+| 2.5.8 Target Size (AA)                  | 24px floor; invisible 48px-tall coarse-pointer hit boxes (face plus 8px exclusive along stock-gap rows, 48px in decision rows) | `axe` `target-size` + `pw` hit probe |
+| 4.1.2 Name, Role, Value (A)             | Custom tabs, `div` dialogs, switches                                                                                           | `axe`, `check`                       |
+| 4.1.3 Status Messages (AA)              | Delivery states, "Reconnecting", "Agent replied"                                                                               | `review` of `role="status"`          |
 
 ### axe setup
 
@@ -536,7 +533,7 @@ Capture each screen that changed in every state that applies, at 412x915 unless 
 
 A UX bug blocks when any of these is true:
 
-- A check in this doc fails (axe violation, a target under 24px anywhere or a coarse-pointer hit area under 44px without a documented exception, overflow at 320px, the scroll-jank test).
+- A check in this doc fails (axe violation, a target under 24px anywhere, a coarse-pointer hit area under 44px other than the exceptions documented above (line-variant tabs at 40px, the row axis of stock-gap rows at face plus 8px, `sm`/`xs` buttons at face plus 16px wide, stock `SidebarMenuAction`, and full-width Input and Textarea), overflow at 320px, the scroll-jank test).
 - Data loss: a typed message, a draft edit, or a pending approval can disappear without the user choosing it.
 - A blocking wait, failure, or required action has no visible feedback. Cached background refreshes can remain quiet.
 - Back does the wrong thing (exits the app, skips a screen, leaves an overlay open).

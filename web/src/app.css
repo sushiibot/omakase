@@ -188,6 +188,13 @@
 	--duration-short: 150ms;
 	--duration-medium: 250ms;
 	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	/* px so docking matches the matchMedia constants in src/lib/ui/breakpoints.ts under OS text
+	   scaling. Tailwind sorts breakpoints by unit before value, so all of them share px. */
+	--breakpoint-sm: 640px;
+	--breakpoint-md: 768px;
+	--breakpoint-lg: 1024px;
+	--breakpoint-xl: 1280px;
+	--breakpoint-2xl: 1536px;
 }
 
 @layer base {
