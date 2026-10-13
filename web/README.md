@@ -59,10 +59,17 @@ The [shared component patterns](docs/ux-guidelines.md#shared-component-patterns)
 Document new reusable patterns there. Keep feature documents focused on domain behavior.
 
 Use the normal `Button` for routine actions. Its compact face preserves the full touch target.
-Use `ScreenContent` for content geometry, `Section` for repeated groups, and `SwitchRow` for toggle preferences.
-Use the shared segmented radio variant for short preference choices.
+Use `ScreenContent` for content geometry, `Section` for repeated groups, and a horizontal `Field` with stock `Switch` for toggle preferences.
+Use `ToggleGroup` for short exclusive preference choices.
 Do not copy button sizing, page gutters, section headings, or control internals into feature classes.
 Review shared changes on desktop and touch layouts, in both themes.
+
+Adding UI:
+
+1. Check whether shadcn-svelte nova ships it, and add it with the CLI (`bunx shadcn-svelte@latest add <name>`) into `src/lib/ui` before writing anything by hand. Start each file with the source header the drift check expects: `<!-- shadcn-svelte nova: ui/<name>/<file> -->` in Svelte files, `// shadcn-svelte nova: ui/<name>/<file>` in TypeScript.
+2. Add a `src/lib/ui/SYNC.json` entry for the new component: `"drift": "none"`, or one line saying what differs and citing the rule (`(ux-guidelines.md#<anchor>)`).
+3. For a layout with no stock component, copy from the nearest shadcn-svelte block and name it in a header comment (`<!-- modeled on shadcn-svelte dashboard-01 ... -->`).
+4. Run `bun run lint`; the UI drift checks fail it. `bun run lint:drift` lists every hit, and `UI_DRIFT_STRICT=0` reports drift as warnings while fixing a batch.
 
 The [channel interaction rules](docs/channel-interaction-rules.md) define the workspace layout,
 source evidence, gesture behavior, and acceptance checks. The live shell keeps channel navigation
@@ -92,7 +99,7 @@ Use `ui/screen/TabbedScreen` for screens with tabs and swipe navigation.
 It owns the screen shell, full-width pager, 16px content gutters, and panel scrolling.
 Screens provide tab labels, lead content, panel content, and callbacks.
 Do not add an enclosing screen, horizontal padding, or another vertical scroll container.
-Use `wide` for the wider desktop content measure.
+Set `measure="full"` for dense desktop content; the default `reading` measure centers a column.
 Desktop tab changes are immediate. Touch taps select the label immediately while the panel moves.
 Reduced motion removes panel animation. Do not add feature-level carousel timing or active-tab state.
 

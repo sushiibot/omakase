@@ -374,6 +374,8 @@ Where the app departs:
 | Secondary commands     | [ActionMenu](../src/lib/ui/menu/action-menu.svelte)                                          | Group related actions. Open an editor only after the owner selects Edit or Rename.                                                                                                                                                                                                                                                                                                                                               |
 
 `Page.Body` centers content at `max-w-3xl` for `reading` and spans the inset for `full`.
+A sticky footer is a `ScreenFooter` passed as the Screen's `footer`: it draws the full-bleed top border and lines its `flex flex-col gap-2 px-4 py-3 md:px-6` contents up with the body measure. Footers bring no border or gutters of their own.
+The header `subtitle` clips text sideways only, so a control in it (such as the thread memory link) keeps its coarse-pointer hit area; keep that hit area inside the header's bottom edge so it never covers the content below.
 It owns gutters and section rhythm. Embedded content adds no competing outer geometry.
 Chat transcripts, the workspace shell, and tab pagers retain their specialized scrolling layouts.
 
