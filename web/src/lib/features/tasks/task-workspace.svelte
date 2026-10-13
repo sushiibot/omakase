@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { INSPECTOR_BREAKPOINT } from '$lib/ui/breakpoints';
 	import type { Snippet } from 'svelte';
 	import { onMount, untrack } from 'svelte';
 	import { getWorkspace } from '$lib/ui/workspace/context';
@@ -47,7 +48,7 @@
 		).length
 	);
 	onMount(() => {
-		const query = matchMedia('(min-width: 1100px)');
+		const query = matchMedia(`(min-width: ${INSPECTOR_BREAKPOINT}px)`);
 		const sync = () => (wide = query.matches);
 		sync();
 		query.addEventListener('change', sync);

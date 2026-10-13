@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { INSPECTOR_BREAKPOINT } from '$lib/ui/breakpoints';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -12,7 +13,8 @@
 	import ListChecks from '@lucide/svelte/icons/list-checks';
 	const taskPane = routedSheet('tasks');
 	const workspaceLayout = getWorkspace();
-	const docked = () => workspaceLayout?.docked ?? matchMedia('(min-width: 1100px)').matches;
+	const docked = () =>
+		workspaceLayout?.docked ?? matchMedia(`(min-width: ${INSPECTOR_BREAKPOINT}px)`).matches;
 	let panelTab = $state<'tasks' | 'agents'>('tasks');
 	let panelAgent = $state<string | undefined>();
 	function showAgent(id: string) {

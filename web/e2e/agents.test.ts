@@ -48,7 +48,7 @@ async function fixtureAgents(context: BrowserContext) {
 }
 
 for (const width of [320, 390, 1280]) {
-	const phone = width < 1100;
+	const phone = width < 1024;
 	test(`a notification opens the agent on its approval; answer, message and stop at ${width}px`, async ({
 		page,
 		context
@@ -193,7 +193,7 @@ for (const width of [320, 390, 1280]) {
 }
 
 for (const width of [390, 1280]) {
-	const phone = width < 1100;
+	const phone = width < 1024;
 	test(`agents live in the side panel and as cards under the message that started them at ${width}px`, async ({
 		page,
 		context

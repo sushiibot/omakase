@@ -41,11 +41,12 @@ export async function smallTargets(page: Page) {
 					const f = input.getBoundingClientRect();
 					return f.top <= r.top && f.bottom >= r.bottom && f.left <= r.left && f.right >= r.right;
 				});
-				// A Button whose hit area is switched off is a contiguous row and sizes its own box.
+				// A Button whose hit area is switched off, or a sidebar row, is a contiguous row and
+				// sizes its own box.
 				const row =
-					e.getAttribute('data-slot') === 'button' &&
-					after.display === 'none' &&
-					matchMedia('(any-pointer: coarse)').matches;
+					matchMedia('(any-pointer: coarse)').matches &&
+					((e.getAttribute('data-slot') === 'button' && after.display === 'none') ||
+						['menu-button', 'group-label'].includes(e.getAttribute('data-sidebar') ?? ''));
 				if (!extended || after.display === 'none')
 					return {
 						w: r.width,

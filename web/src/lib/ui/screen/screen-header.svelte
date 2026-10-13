@@ -12,7 +12,7 @@
 		back,
 		channelNavigation = false,
 		...headerProps
-	}: Omit<ComponentProps<typeof PageHeader>, 'leading' | 'leadingClass'> & {
+	}: Omit<ComponentProps<typeof PageHeader>, 'leading'> & {
 		back?: ScreenBack;
 		/** The channel drawer replaces the back link. */
 		channelNavigation?: boolean;
@@ -20,7 +20,11 @@
 
 	// A screen without a back chevron is a drawer destination; on a phone its header opens the drawer.
 	const drawer = getDrawer();
-	const showBack = $derived(!!back && !(channelNavigation && drawer?.channels));
+	const showBack = $derived(
+		!!back &&
+			!(channelNavigation && drawer?.channels) &&
+			!(back.desktop === false && drawer?.persistent)
+	);
 	const showMenu = $derived(!showBack && !!drawer && !drawer.persistent);
 </script>
 
@@ -33,7 +37,7 @@
 			size="sm"
 			class="-ms-1.5 px-1.5 text-muted-foreground"
 		>
-			<ChevronLeft class="size-4" aria-hidden="true" /><span class="sr-only @3xl:not-sr-only"
+			<ChevronLeft class="size-4" aria-hidden="true" /><span class="sr-only md:not-sr-only"
 				>{back.label}</span
 			>
 		</Button>
@@ -58,8 +62,4 @@
 	{/if}
 {/snippet}
 
-<PageHeader
-	{...headerProps}
-	leading={showBack || showMenu ? leading : undefined}
-	leadingClass={showBack && back?.desktop === false ? '@3xl:hidden' : undefined}
-/>
+<PageHeader {...headerProps} leading={showBack || showMenu ? leading : undefined} />

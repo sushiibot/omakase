@@ -1,9 +1,16 @@
+<!-- modeled on shadcn-svelte sidebar-15: left sidebar, inset, right sidebar; phones keep the gesture panes -->
 <script lang="ts">
 	import { onMount, tick, untrack, type Snippet } from 'svelte';
+	import { MediaQuery } from 'svelte/reactivity';
 	import { BitsConfig } from 'bits-ui';
 	import X from '@lucide/svelte/icons/x';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Settings from '@lucide/svelte/icons/settings';
+	import * as Sidebar from '$lib/ui/sidebar';
+	import { SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_COOKIE_NAME } from '$lib/ui/sidebar/constants';
+	import { Button } from '$lib/ui/button';
+	import { INSPECTOR_BREAKPOINT } from '$lib/ui/breakpoints';
+	import { IsMobile } from '$lib/hooks/is-mobile.svelte';
 	import { setDrawer } from './drawer';
 	import { setWorkspace, type WorkspaceInspector } from '../workspace/context';
 	import {
@@ -48,23 +55,32 @@
 
 	const uid = $props.id();
 	const sheets = `${uid}-sheets`;
+	const mobile = new IsMobile();
+	const inspectorQuery = new MediaQuery(`min-width: ${INSPECTOR_BREAKPOINT}px`);
+	let frame = $state<HTMLElement | null>(null);
 	let root: HTMLElement;
 	let width = $state(412);
+	let sidebarOpen = $state(
+		typeof document === 'undefined' || !document.cookie.includes(`${SIDEBAR_COOKIE_NAME}=false`)
+	);
 	let standaloneOpen = $state(false);
 	let inspector = $state.raw<WorkspaceInspector | null>(null);
 	let drag = $state<number | null>(null);
 	let focusBefore: HTMLElement | null = null;
 	let previous: Pane = 'chat';
-	const wide = $derived(width >= 1100);
+	const navDocked = $derived(!mobile.current);
+	const inspectorDocked = $derived(inspectorQuery.current);
 	const navOpen = $derived(onopenNavigation ? navigationOpen : standaloneOpen);
 	const pane = $derived<Pane>(navOpen ? 'navigation' : inspector?.open ? 'inspector' : 'chat');
-	const navWidth = $derived(Math.min(320, width - 56));
-	const inspectorWidth = $derived(inspector ? Math.min(360, width - 48) : 0);
-	const offset = $derived(wide ? 0 : (drag ?? offsetFor(pane, navWidth, inspectorWidth)));
-	const navigationActive = $derived(wide || pane === 'navigation');
-	const inspectorActive = $derived(!!inspector && pane === 'inspector');
-	const navigationShown = $derived(navigationActive || (drag !== null && drag > 0));
-	const inspectorShown = $derived(inspectorActive || (drag !== null && drag < 0));
+	const navWidth = $derived(navDocked ? 0 : Math.min(320, width - 56));
+	const inspectorWidth = $derived(inspector && !inspectorDocked ? Math.min(360, width - 48) : 0);
+	const offset = $derived(drag ?? offsetFor(pane, navWidth, inspectorWidth));
+	// The open pane slides over the chat instead of sitting beside it.
+	const overlaid = $derived(
+		(pane === 'navigation' && !navDocked) || (pane === 'inspector' && !inspectorDocked)
+	);
+	const navigationShown = $derived(pane === 'navigation' || (drag !== null && drag > 0));
+	const inspectorShown = $derived(pane === 'inspector' || (drag !== null && drag < 0));
 	const footerNav = $derived(nav.filter((item) => item.id !== home && item.id !== 'settings'));
 	const badgeTotal = $derived(
 		Object.values(badges).reduce<number>(
@@ -75,10 +91,10 @@
 
 	setWorkspace({
 		get contentVisible() {
-			return wide || pane === 'chat';
+			return !overlaid;
 		},
 		get docked() {
-			return wide;
+			return inspectorDocked;
 		},
 		registerInspector(next) {
 			inspector = next;
@@ -89,19 +105,24 @@
 	});
 	setDrawer({
 		open() {
-			openNavigation();
+			if (navDocked) setSidebarOpen(true);
+			else openNavigation();
 		},
 		get badge() {
 			return badgeTotal;
 		},
 		get persistent() {
-			return wide;
+			return navDocked && sidebarOpen;
 		},
 		get channels() {
 			return !!navigation;
 		}
 	});
 
+	function setSidebarOpen(value: boolean) {
+		sidebarOpen = value;
+		document.cookie = `${SIDEBAR_COOKIE_NAME}=${value}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+	}
 	function openNavigation() {
 		focusBefore = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 		if (onopenNavigation) onopenNavigation();
@@ -163,11 +184,12 @@
 	function down(e: PointerEvent) {
 		suppressClick = false;
 		if (
-			wide ||
+			(!navWidth && !inspectorWidth) ||
 			!e.isPrimary ||
 			e.button !== 0 ||
 			e.pointerType === 'mouse' ||
-			(!conversation && pane === 'chat')
+			(!conversation && pane === 'chat') ||
+			(pane !== 'chat' && !overlaid)
 		)
 			return;
 		const target = e.target;
@@ -187,7 +209,7 @@
 		)
 			return;
 		if (
-			root.querySelector(
+			frame?.querySelector(
 				'[data-routed-sheet][data-state="open"],dialog[open],[data-slot="sheet-content"][data-state="open"]'
 			)
 		)
@@ -254,7 +276,7 @@
 			e.stopPropagation();
 			closePane();
 		}
-		if (e.key !== 'Tab' || wide) return;
+		if (e.key !== 'Tab' || !overlaid) return;
 		const area = root.querySelector<HTMLElement>(
 			pane === 'navigation' ? '[data-channel-navigation]' : '[data-workspace-inspector]'
 		);
@@ -299,7 +321,7 @@
 		};
 	});
 	$effect(() => {
-		if (wide && navOpen) untrack(closePane);
+		if (navDocked && navOpen) untrack(closePane);
 	});
 	$effect(() => {
 		void navigationKey;
@@ -319,7 +341,7 @@
 				if (next === 'chat') {
 					if (focusBefore?.isConnected && !focusBefore.closest('[inert]'))
 						focusBefore.focus({ preventScroll: true });
-				} else if (!wide)
+				} else if (overlaid)
 					root
 						.querySelector<HTMLElement>(
 							next === 'navigation' ? '[data-channel-navigation]' : '[data-workspace-inspector]'
@@ -334,142 +356,231 @@
 
 {#snippet badge(id: string)}
 	{@const value = badges[id]}
-	{#if typeof value === 'number' && value > 0}<span
-			class="rounded-full bg-waiting-soft px-1.5 text-meta font-semibold text-waiting tabular-nums"
-			>{value}<span class="sr-only"> need you</span></span
+	{#if typeof value === 'number' && value > 0}<Sidebar.MenuBadge
+			class="bg-waiting-soft text-waiting any-pointer-coarse:top-3"
+			>{value}<span class="sr-only"> need you</span></Sidebar.MenuBadge
 		>
-	{:else if value === true}<span class="size-2 rounded-full bg-brand"
-			><span class="sr-only">Unread</span></span
+	{:else if value === true}<Sidebar.MenuBadge class="any-pointer-coarse:top-3"
+			><span class="size-2 rounded-full bg-brand"></span><span class="sr-only">Unread</span
+			></Sidebar.MenuBadge
 		>{/if}
 {/snippet}
 {#snippet navBody()}
-	<div class="workspace-header flex items-center gap-2 px-4">
-		<img src="/brand/mark.png" alt="" width="32" height="20" class="h-5 w-8 object-contain" />
-		<span class="flex-1 text-ui font-semibold">sushii</span>
-		{#if wide}<a
-				href="/settings"
-				aria-label="Settings"
-				class="grid size-12 place-items-center rounded-md hover:bg-sidebar-accent"
-				><Settings class="size-4" /></a
-			>
-		{:else}<a
-				href="/settings"
-				aria-label="Settings"
-				data-sveltekit-replacestate={navOpen ? '' : undefined}
-				class="grid size-12 place-items-center rounded-md hover:bg-sidebar-accent"
-				><Settings class="size-4" /></a
-			><button
+	<Sidebar.Header
+		class="h-(--header-height) shrink-0 flex-row items-center border-b border-sidebar-border py-0"
+	>
+		<Sidebar.Menu class="min-w-0 flex-1">
+			<Sidebar.MenuItem>
+				<Sidebar.MenuButton size="lg">
+					{#snippet child({ props })}
+						<a
+							{...props}
+							href="/settings"
+							aria-label="Settings"
+							data-sveltekit-replacestate={navOpen ? '' : undefined}
+						>
+							<span
+								class="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-accent"
+								><img
+									src="/brand/mark.png"
+									alt=""
+									width="32"
+									height="20"
+									class="h-4 w-6 object-contain"
+								/></span
+							>
+							<span class="grid flex-1 text-start text-sm leading-tight">
+								<span class="truncate font-medium">sushii</span>
+								<span class="truncate text-xs text-muted-foreground">Settings</span>
+							</span>
+							<Settings class="ms-auto" />
+						</a>
+					{/snippet}
+				</Sidebar.MenuButton>
+			</Sidebar.MenuItem>
+		</Sidebar.Menu>
+		{#if !navDocked}<Button
+				variant="ghost"
+				size="icon-sm"
 				aria-label="Close channels"
-				class="grid size-12 place-items-center rounded-md hover:bg-sidebar-accent"
-				onclick={closePane}><X class="size-5" /></button
+				class="text-muted-foreground"
+				onclick={closePane}><X /></Button
 			>{/if}
-	</div>
+	</Sidebar.Header>
 	{#if navigation}{@render navigation()}
-	{:else}<div class="flex min-h-0 flex-1 flex-col overflow-y-auto p-2">
-			{#each nav as item (item.id)}<a
-					href={item.href}
-					aria-current={active === item.id ? 'page' : undefined}
-					onclick={(e) => {
-						if (item.id === home) onhome?.(e);
-						if (!onopenNavigation) standaloneOpen = false;
-					}}
-					class="flex min-h-12 items-center gap-2 rounded-md px-2 text-ui hover:bg-sidebar-accent"
-					><item.icon class="size-4" />{item.label}{@render badge(item.id)}</a
-				>{/each}
-		</div>{/if}
-	{#if navigation}<nav aria-label="Workspace" class="grid grid-cols-3 gap-2 border-t p-2">
-			{#each footerNav as item (item.id)}<a
-					href={item.href}
-					data-sveltekit-replacestate={navOpen ? '' : undefined}
-					aria-current={active === item.id ? 'page' : undefined}
-					class="flex min-h-12 flex-col items-center justify-center gap-1 rounded-md text-meta text-muted-foreground hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent aria-[current=page]:text-foreground"
-					><item.icon class="size-4" />{item.label}{@render badge(item.id)}</a
-				>{/each}
-		</nav>{/if}
+	{:else}<Sidebar.Content>
+			<Sidebar.Group>
+				<Sidebar.Menu>
+					{#each nav as item (item.id)}
+						<Sidebar.MenuItem>
+							<Sidebar.MenuButton isActive={active === item.id} class="any-pointer-coarse:h-11">
+								{#snippet child({ props })}
+									<a
+										{...props}
+										href={item.href}
+										aria-current={active === item.id ? 'page' : undefined}
+										onclick={(e) => {
+											if (item.id === home) onhome?.(e);
+											if (!onopenNavigation) standaloneOpen = false;
+										}}><item.icon aria-hidden="true" /><span>{item.label}</span></a
+									>
+								{/snippet}
+							</Sidebar.MenuButton>
+							{@render badge(item.id)}
+						</Sidebar.MenuItem>
+					{/each}
+				</Sidebar.Menu>
+			</Sidebar.Group>
+		</Sidebar.Content>{/if}
+	{#if navigation}<Sidebar.Footer class="border-t border-sidebar-border">
+			<nav aria-label="Workspace">
+				<Sidebar.Menu>
+					{#each footerNav as item (item.id)}
+						<Sidebar.MenuItem>
+							<Sidebar.MenuButton
+								size="sm"
+								isActive={active === item.id}
+								class="any-pointer-coarse:h-11 any-pointer-coarse:text-sm"
+							>
+								{#snippet child({ props })}
+									<a
+										{...props}
+										href={item.href}
+										data-sveltekit-replacestate={navOpen ? '' : undefined}
+										aria-current={active === item.id ? 'page' : undefined}
+										><item.icon aria-hidden="true" /><span>{item.label}</span></a
+									>
+								{/snippet}
+							</Sidebar.MenuButton>
+							{@render badge(item.id)}
+						</Sidebar.MenuItem>
+					{/each}
+				</Sidebar.Menu>
+			</nav>
+		</Sidebar.Footer>{/if}
 {/snippet}
 
 <BitsConfig defaultPortalTo={`#${sheets}`}>
-	<div
-		bind:this={root}
+	<Sidebar.Provider
+		bind:ref={frame}
+		bind:open={() => sidebarOpen, setSidebarOpen}
 		role="group"
 		aria-label="Channel workspace"
 		data-shell
 		data-workspace-pane={pane}
-		class="workspace group/shell @container relative h-[calc(100%-var(--kb))] overflow-hidden bg-background pt-(--safe-top) text-foreground"
-		class:wide
-		class:dragging={drag !== null}
-		style:--nav-width={`${navWidth}px`}
-		style:--inspector-width={`${inspectorWidth}px`}
-		style:--chat-offset={`${offset}px`}
-		style:--inspector-column={inspectorActive ? '320px' : '0px'}
-		onclickcapture={(e) => {
-			if (!suppressClick || e.detail === 0) return;
-			suppressClick = false;
-			e.preventDefault();
-			e.stopPropagation();
-		}}
-		onpointerdown={down}
-		onpointermove={move}
-		onpointerup={up}
-		onpointercancel={recover}
-		onlostpointercapture={(e) => {
-			if (e.target === root && gesture && !root.hasPointerCapture(e.pointerId)) recover();
-		}}
+		class="isolate h-[calc(100%-var(--kb))] min-h-0 overflow-hidden bg-background text-foreground"
 	>
+		{#if navDocked}
+			<Sidebar.Root
+				data-channel-navigation
+				role="navigation"
+				aria-label="Channel navigation"
+				class="pt-(--safe-top) pb-(--safe-bottom)"
+			>
+				{@render navBody()}
+			</Sidebar.Root>
+		{/if}
+		<!-- Sidebar.Inset's classes on a div: each screen renders the page's own <main> -->
 		<div
-			data-channel-navigation
-			role={wide ? 'navigation' : 'dialog'}
-			aria-label={wide ? 'Channel navigation' : 'Menu'}
-			aria-modal={!wide && navOpen ? true : undefined}
-			tabindex="-1"
-			class="navigation"
-			class:exposed={navigationShown}
-			inert={!navigationActive}
-			aria-hidden={!navigationActive}
-			onclick={navigationClick}
+			data-slot="sidebar-inset"
+			class="relative flex w-full min-w-0 flex-1 flex-col bg-background"
 		>
-			{@render navBody()}
-		</div>
-		{#if inspector}<aside
-				data-workspace-inspector
-				aria-label="Conversation tasks"
-				tabindex="-1"
-				class="inspector"
-				class:exposed={inspectorShown}
-				inert={!inspectorActive}
-				aria-hidden={!inspectorActive}
-			>
-				{@render inspector.content()}
-			</aside>{/if}
-		<div class="chat-surface" data-chat-surface>
 			<div
-				class="chat-content flex h-full min-h-0 min-w-0 flex-col"
-				inert={!wide && pane !== 'chat'}
-				aria-hidden={!wide && pane !== 'chat' ? true : undefined}
+				bind:this={root}
+				role="presentation"
+				class="workspace relative min-h-0 flex-1 overflow-hidden"
+				class:dragging={drag !== null}
+				style:--nav-width={`${navWidth}px`}
+				style:--inspector-width={`${inspectorWidth}px`}
+				style:--chat-offset={`${offset}px`}
+				onclickcapture={(e) => {
+					if (!suppressClick || e.detail === 0) return;
+					suppressClick = false;
+					e.preventDefault();
+					e.stopPropagation();
+				}}
+				onpointerdown={down}
+				onpointermove={move}
+				onpointerup={up}
+				onpointercancel={recover}
+				onlostpointercapture={(e) => {
+					if (e.target === root && gesture && !root.hasPointerCapture(e.pointerId)) recover();
+				}}
 			>
-				{@render children()}
+				{#if !navDocked}
+					<div
+						data-channel-navigation
+						role="dialog"
+						aria-label="Menu"
+						aria-modal={navOpen ? true : undefined}
+						tabindex="-1"
+						class="navigation"
+						class:exposed={navigationShown}
+						inert={pane !== 'navigation'}
+						aria-hidden={pane !== 'navigation'}
+						onclick={navigationClick}
+					>
+						<Sidebar.Root collapsible="none" class="min-h-0 w-full flex-1">
+							{@render navBody()}
+						</Sidebar.Root>
+					</div>
+				{/if}
+				{#if inspector && !inspectorDocked}<aside
+						data-workspace-inspector
+						aria-label="Conversation tasks"
+						tabindex="-1"
+						class="inspector"
+						class:exposed={inspectorShown}
+						inert={pane !== 'inspector'}
+						aria-hidden={pane !== 'inspector'}
+					>
+						<Sidebar.Root collapsible="none" class="min-h-0 w-full flex-1">
+							{@render inspector.content()}
+						</Sidebar.Root>
+					</aside>{/if}
+				<div class="chat-surface" data-chat-surface>
+					<div
+						class="chat-content flex h-full min-h-0 min-w-0 flex-col"
+						inert={overlaid}
+						aria-hidden={overlaid ? true : undefined}
+					>
+						{@render children()}
+					</div>
+					{#if overlaid}<button
+							data-workspace-return
+							class="return-to-chat"
+							class:inspector-return={pane === 'inspector'}
+							aria-label="Return to conversation"
+							onclick={closePane}><ArrowLeft class="size-5" /></button
+						>{/if}
+				</div>
 			</div>
-			{#if !wide && pane !== 'chat'}<button
-					data-workspace-return
-					class="return-to-chat"
-					class:inspector-return={pane === 'inspector'}
-					aria-label="Return to conversation"
-					onclick={closePane}><ArrowLeft class="size-5" /></button
-				>{/if}
 		</div>
+		{#if inspector?.open && inspectorDocked}
+			<!-- 20rem rather than the stock 16rem: the panel hosts an agent transcript and its composer -->
+			<Sidebar.Root
+				collapsible="none"
+				class="h-full border-s pt-(--safe-top)"
+				style="--sidebar-width: 20rem"
+			>
+				<aside
+					data-workspace-inspector
+					aria-label="Conversation tasks"
+					tabindex="-1"
+					class="flex min-h-0 flex-1 flex-col outline-none"
+				>
+					{@render inspector.content()}
+				</aside>
+			</Sidebar.Root>
+		{/if}
 		<div id={sheets}></div>
-	</div>
+	</Sidebar.Provider>
 </BitsConfig>
 
 <style>
 	.workspace {
 		isolation: isolate;
 		touch-action: pan-y pinch-zoom;
-	}
-	.workspace-header {
-		min-height: 56px;
-		flex-shrink: 0;
-		border-bottom: 1px solid var(--border);
 	}
 	.navigation,
 	.inspector {
@@ -525,40 +636,9 @@
 	}
 	.workspace :global(main),
 	.navigation,
-	.navigation :global(.overflow-y-auto),
+	.navigation :global([data-sidebar='content']),
 	.inspector :global(.overflow-y-auto) {
 		touch-action: pan-y pinch-zoom;
-	}
-	.wide {
-		display: grid;
-		grid-template-columns: 256px minmax(0, 1fr) var(--inspector-column);
-	}
-	.wide .navigation,
-	.wide .inspector,
-	.wide .chat-surface {
-		position: relative;
-		inset: auto;
-		width: auto;
-		transform: none;
-		min-height: 0;
-		padding-top: 0;
-	}
-	.wide .navigation {
-		grid-column: 1;
-		grid-row: 1;
-		border-right: 1px solid var(--border);
-	}
-	.wide .chat-surface {
-		grid-column: 2;
-		grid-row: 1;
-		min-width: 0;
-	}
-	.wide .inspector {
-		grid-column: 3;
-		grid-row: 1;
-		min-width: 0;
-		overflow: hidden;
-		border-left: 1px solid var(--border);
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.chat-surface {

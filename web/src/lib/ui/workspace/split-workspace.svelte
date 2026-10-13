@@ -1,6 +1,8 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { tick } from 'svelte';
 	import type { Snippet } from 'svelte';
+	import { MediaQuery } from 'svelte/reactivity';
+	import { INSPECTOR_BREAKPOINT } from '$lib/ui/breakpoints';
 	let {
 		open,
 		onopen,
@@ -10,16 +12,10 @@
 	}: { open: boolean; onopen: () => void; onclose: () => void; panel: Snippet; children: Snippet } =
 		$props();
 	let root: HTMLDivElement;
-	let mobile = $state(true);
+	const docked = new MediaQuery(`min-width: ${INSPECTOR_BREAKPOINT}px`);
+	const mobile = $derived(!docked.current);
 	let drag = $state<number | null>(null);
 	let gesture: { x: number; y: number; horizontal: boolean } | null = null;
-	onMount(() => {
-		const query = matchMedia('(min-width: 1100px)');
-		const sync = () => (mobile = !query.matches);
-		sync();
-		query.addEventListener('change', sync);
-		return () => query.removeEventListener('change', sync);
-	});
 	let wasOpen = false;
 	$effect(() => {
 		const revealed = open;
@@ -97,9 +93,9 @@
 	style:--task-offset={drag === null ? (open ? '100%' : '0%') : `${drag}px`}
 	data-task-workspace
 >
-	<div class="workspace-track h-full" data-task-track>
+	<div class="workspace-track h-full lg:transform-none!" data-task-track>
 		<div
-			class="workspace-chat flex min-h-0 min-w-0 flex-col"
+			class="workspace-chat flex min-h-0 w-full min-w-0 flex-none basis-full flex-col lg:w-auto lg:flex-1"
 			inert={mobile && open}
 			aria-hidden={mobile && open ? true : undefined}
 		>
@@ -108,7 +104,13 @@
 		<aside
 			aria-label="Conversation tasks"
 			tabindex="-1"
-			class="workspace-panel flex min-h-0 flex-col border-l bg-background"
+			class={[
+				'workspace-panel flex min-h-0 w-full flex-none basis-full flex-col bg-sidebar text-sidebar-foreground lg:border-s',
+				open
+					? 'lg:w-(--sidebar-width) lg:basis-(--sidebar-width)'
+					: 'lg:invisible lg:w-0 lg:basis-0 lg:overflow-hidden'
+			]}
+			style="--sidebar-width: 20rem"
 			inert={!open}
 			aria-hidden={!open ? true : undefined}
 			onkeydown={(e) => {
@@ -129,31 +131,6 @@
 	}
 	.dragging .workspace-track {
 		transition: none;
-	}
-	.workspace-chat,
-	.workspace-panel {
-		width: 100%;
-		flex: 0 0 100%;
-	}
-	@media (min-width: 1100px) {
-		.workspace-track {
-			transform: none;
-		}
-		.workspace-chat {
-			flex: 1;
-			width: auto;
-		}
-		.workspace-panel {
-			flex: 0 0 0;
-			width: 0;
-			visibility: hidden;
-			overflow: hidden;
-		}
-		.open .workspace-panel {
-			flex-basis: 24rem;
-			width: 24rem;
-			visibility: visible;
-		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.workspace-track {

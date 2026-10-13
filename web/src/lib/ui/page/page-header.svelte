@@ -10,7 +10,6 @@
 		media,
 		subtitle,
 		leading,
-		leadingClass,
 		breadcrumb,
 		actions,
 		class: className
@@ -23,8 +22,6 @@
 		subtitle?: Snippet;
 		/** A drawer button or back link, followed by a separator. */
 		leading?: Snippet;
-		/** Classes for the leading group, such as hiding it where the sidebar already leads there. */
-		leadingClass?: string;
 		/** Replaces the visible title from `md` up; the heading stays for assistive tech. */
 		breadcrumb?: Snippet;
 		actions?: Snippet;
@@ -42,7 +39,7 @@
 	)}
 >
 	{#if leading}
-		<div class={cn('flex shrink-0 items-center gap-2', leadingClass)}>
+		<div class="flex shrink-0 items-center gap-2">
 			{@render leading()}
 			<Separator orientation="vertical" class="me-2 data-vertical:h-4 data-vertical:self-auto" />
 		</div>

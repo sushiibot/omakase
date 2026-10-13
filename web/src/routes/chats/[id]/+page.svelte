@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { INSPECTOR_BREAKPOINT } from '$lib/ui/breakpoints';
 	import { AgentCards } from '$lib/features/agents';
 	import { followAgentLink, openAgentFrom, openAgentPage } from '$lib/core/nav/agent-link';
 	import { getWorkspace } from '$lib/ui/workspace/context';
@@ -44,7 +45,8 @@
 		if (!page.url.searchParams.has('agent')) return;
 		untrack(() =>
 			followAgentLink({
-				docked: () => workspaceLayout?.docked ?? matchMedia('(min-width: 1100px)').matches,
+				docked: () =>
+					workspaceLayout?.docked ?? matchMedia(`(min-width: ${INSPECTOR_BREAKPOINT}px)`).matches,
 				sheet: taskPane,
 				openPanel: (agent) => {
 					panelTab = 'agents';
