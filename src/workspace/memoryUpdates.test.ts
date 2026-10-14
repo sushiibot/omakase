@@ -193,3 +193,58 @@ test("unchanged rejected work becomes eligible after the retry interval", async 
 test("the model cannot smuggle invented citations into the text field", () => {
   expect(() => parseMemoryUpdate(JSON.stringify(upsert("Likes tea. (src: 2026-10-14, web:invented)")))).toThrow("citations are rendered by the host");
 });
+
+test("bare entry hashes resolve exactly and the reviewer sees the canonical replacement", async () => {
+  const id = memoryEntries(before)[0]!.id;
+  const update = upsert();
+  Object.assign(update.operations[0]!, { id: id.slice("entry-".length) });
+  const d = deps(update);
+  d.review = async (_system, prompt) => {
+    expect(JSON.parse(prompt).items[0].change.id).toBe(id);
+    return { text: verdict("supported"), model: "judge" };
+  };
+  expect((await runConsolidation(d, { capture: true })).status).toBe("applied");
+  expect(read("USER.md")).not.toContain("Avoids dairy.");
+  expect(read("USER.md")).toContain("Prefers dairy-free meals.");
+});
+
+test("evidence mistaken for an edit target is repaired with retrieved evidence available", async () => {
+  const invalid = upsert();
+  Object.assign(invalid.operations[0]!, { id: evidence.id });
+  const d = deps(invalid);
+  let attempts = 0;
+  d.propose = async (_system, prompt, supplied) => {
+    supplied!.set(evidence.id, evidence);
+    if (++attempts === 2) {
+      expect(prompt).toContain("This is a source ID, not an existing entry ID");
+      expect(prompt).toContain("For a new upsert, omit id");
+      expect(prompt).toContain(evidence.text);
+    }
+    return { text: JSON.stringify(attempts === 1 ? invalid : upsert()), model: "fixture" };
+  };
+  expect((await runConsolidation(d, { capture: true })).status).toBe("applied");
+  expect(attempts).toBe(2);
+  expect(read("USER.md")).toContain("Avoids dairy.");
+});
+
+test("unknown and ambiguous target hashes cannot delete entries or silently add replacements", () => {
+  for (const id of ["3f479afbb5aaccd717efb678", evidence.id]) {
+    expect(() => renderMemoryUpdate({ operations: [{ op: "remove", id, reason: "obsolete", sources: [] }], documents: [], summary: "" }, before, sources(), {})).toThrow("unknown entry");
+    const update = upsert();
+    Object.assign(update.operations[0]!, { id });
+    expect(() => renderMemoryUpdate(update, before, sources(), {})).toThrow("unknown entry");
+  }
+  const canonical = memoryEntries(before)[0]!.id;
+  const bare = canonical.slice(6);
+  const ambiguous = sources();
+  ambiguous.set(bare, { id: bare, role: "user", text: "different evidence" });
+  const update = upsert();
+  Object.assign(update.operations[0]!, { id: bare });
+  expect(() => renderMemoryUpdate(update, before, ambiguous, {})).toThrow("source ID");
+  update.operations.push({ op: "remove", id: canonical, reason: "obsolete", sources: [] });
+  expect(() => renderMemoryUpdate(update, before, sources(), {})).toThrow("multiple edits");
+});
+
+test("empty edit target IDs are rejected instead of silently ignoring removals", () => {
+  expect(() => parseMemoryUpdate(JSON.stringify({ operations: [{ op: "remove", id: "", reason: "obsolete", sources: [] }] }))).toThrow();
+});

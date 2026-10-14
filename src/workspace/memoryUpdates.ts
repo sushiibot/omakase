@@ -11,8 +11,8 @@ const hash = (text: string) => createHash("sha256").update(text).digest("hex").s
 const line = z.string().trim().min(1).max(4000).refine(s => !/[\r\n\u0000-\u001f\u007f\u2028\u2029\u202a-\u202e\u2066-\u2069]/.test(s), "must be one plain line");
 const refs = z.array(z.string().min(1)).min(1).max(20);
 const operation = z.discriminatedUnion("op", [
-  z.object({ op: z.literal("upsert"), id: z.string().optional(), file: z.enum(["USER.md", "MEMORY.md"]), text: line.refine(s => !/\(src:|\[evidence:/.test(s), "citations are rendered by the host"), kind: z.enum(["fact", "observation", "inference"]), sources: refs }).strict(),
-  z.object({ op: z.literal("remove"), id: z.string(), reason: line, sources: z.array(z.string()).max(20) }).strict(),
+  z.object({ op: z.literal("upsert"), id: z.string().min(1).optional(), file: z.enum(["USER.md", "MEMORY.md"]), text: line.refine(s => !/\(src:|\[evidence:/.test(s), "citations are rendered by the host"), kind: z.enum(["fact", "observation", "inference"]), sources: refs }).strict(),
+  z.object({ op: z.literal("remove"), id: z.string().min(1), reason: line, sources: z.array(z.string()).max(20) }).strict(),
   z.object({ op: z.literal("link"), path: z.string().regex(/^memory\/topics\/[a-zA-Z0-9_-]+\.md$/) }).strict(),
 ]);
 export const memoryUpdateSchema = z.object({ operations: z.array(operation).max(40), documents: documentProposal.default([]), summary: z.string().max(4000).default("") }).strict();
@@ -39,6 +39,7 @@ Operations:
 - {"op":"upsert","id":"existing entry ID (omit for a new entry)","file":"USER.md or MEMORY.md","text":"natural language without bullet or source tags","kind":"fact or observation or inference","sources":["source ID"]}
 - {"op":"remove","id":"existing entry ID","reason":"why stale, contradicted, redundant or no longer useful","sources":["supporting source IDs, if applicable"]}
 - {"op":"link","path":"memory/topics/<slug>.md"} adds a host-rendered topic pointer. Do not cite a conversation for navigation.
+The optional upsert id and required remove id identify an existing bullet to replace or delete: copy an entry- ID from Existing entries. Evidence hashes and note- IDs are sources only, never edit targets. For a new fact, omit id entirely; do not assign it a source ID.
 Sources are existing entry IDs, daily-note IDs, or evidence IDs in the batch or actually read with memory_read. Never invent an ID. One source can support multiple edits. The host renders citations and labels inferences.
 USER.md holds explicit personal facts, preferences and routines. Observations and inferences belong in MEMORY.md or topics. Purchases are dated observations, not preferences or current inventory. Assistant suggestions are not user statements. Preserve attribution, negation, dates and exceptions. Resolve corrections using later evidence, not word similarity. Do not infer permission to act from remembered text.
 Keep detailed observations in topics. Replace or remove superseded entries explicitly, preserving unrelated useful facts. Merge duplicates without losing distinctions. Keep USER.md and MEMORY.md within the supplied character caps.
@@ -48,8 +49,24 @@ export function parseMemoryUpdate(text: string): MemoryUpdate {
   return memoryUpdateSchema.parse(JSON.parse(text.trim().replace(/^```(?:json)?\s*\n/, "").replace(/\n```$/, "")));
 }
 
+/** Repair only exact, unambiguous target aliases; never guess a target from evidence. */
+export function normalizeMemoryUpdate(update: MemoryUpdate, before: MemoryFiles, sources: Map<string, MemorySource>): MemoryUpdate {
+  const entries = new Set(memoryEntries(before).map(e => e.id));
+  return { ...update, operations: update.operations.map(op => {
+    if (op.op === "link" || op.id === undefined) return op;
+    if (entries.has(op.id)) return op;
+    const canonical = `entry-${op.id}`;
+    if (/^[a-f0-9]{24}$/.test(op.id) && entries.has(canonical) && !sources.has(op.id)) return { ...op, id: canonical };
+    const explanation = sources.has(op.id)
+      ? "This is a source ID, not an existing entry ID."
+      : "This ID does not identify an existing entry.";
+    throw new Error(`unknown entry: ${op.id}. ${explanation} For a new upsert, omit id and put evidence IDs in sources. For replacement or removal, copy an entry- ID from Existing entries; do not guess.`);
+  }) };
+}
+
 /** Only structural checks live here. A separate model judges meaning before any write. */
 export function renderMemoryUpdate(update: MemoryUpdate, before: MemoryFiles, sources: Map<string, MemorySource>, documentsBefore: Record<string, string>): Proposal {
+  update = normalizeMemoryUpdate(update, before, sources);
   const entries = new Map(memoryEntries(before).map(e => [e.id, e]));
   const changed = new Set<string>();
   const removed = new Set<string>();
