@@ -1,11 +1,12 @@
 <script lang="ts">
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import Check from '@lucide/svelte/icons/check';
+	import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';
 	import Plug from '@lucide/svelte/icons/plug';
 	import * as Breadcrumb from '$lib/ui/breadcrumb';
 	import { Button } from '$lib/ui/button';
 	import * as Item from '$lib/ui/item';
-	import ActionMenu from '$lib/ui/menu/action-menu.svelte';
+	import * as DropdownMenu from '$lib/ui/dropdown-menu';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import { ago } from '$lib/ui/format/time';
 	import TabbedScreen from '$lib/ui/screen/tabbed-screen.svelte';
@@ -99,44 +100,39 @@
 
 {#snippet actions()}
 	{#if server}
-		<ActionMenu label="Connection actions">
-			{#snippet children(close)}
-				<Button
-					variant="ghost"
-					class="w-full justify-start"
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger>
+				{#snippet child({ props })}
+					<Button {...props} size="icon" variant="ghost" aria-label="Connection actions"
+						><EllipsisVertical class="size-5" /></Button
+					>
+				{/snippet}
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content align="end" class="w-56">
+				<DropdownMenu.Item
+					class="any-pointer-coarse:h-11"
 					disabled={busy || !online}
-					onclick={() => {
-						close();
-						onreconnect?.();
-					}}>Reconnect</Button
+					onSelect={() => onreconnect?.()}>Reconnect</DropdownMenu.Item
 				>
-				{#if server.enabled !== false}<Button
-						variant="ghost"
-						class="w-full justify-start"
+				{#if server.enabled !== false}<DropdownMenu.Item
+						class="any-pointer-coarse:h-11"
 						disabled={busy || !online}
-						onclick={() => {
-							close();
-							ondisconnect?.();
-						}}>Disconnect</Button
+						onSelect={() => ondisconnect?.()}>Disconnect</DropdownMenu.Item
 					>{/if}
-				{#if signInHref}<Button
-						variant="ghost"
-						class="w-full justify-start"
-						href={signInHref}
+				{#if signInHref}<DropdownMenu.Item
+						class="any-pointer-coarse:h-11"
 						disabled={busy || !online}
-						onclick={() => close()}>Sign in / replace token</Button
-					>{/if}
-				<Button
-					variant="ghost"
-					class="w-full justify-start"
+					>
+						{#snippet child({ props })}<a href={signInHref} {...props}>Sign in / replace token</a
+							>{/snippet}
+					</DropdownMenu.Item>{/if}
+				<DropdownMenu.Item
+					class="any-pointer-coarse:h-11"
 					disabled={busy || !online}
-					onclick={() => {
-						close();
-						removing = true;
-					}}>Remove…</Button
+					onSelect={() => (removing = true)}>Remove…</DropdownMenu.Item
 				>
-			{/snippet}
-		</ActionMenu>
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
 	{/if}
 {/snippet}
 

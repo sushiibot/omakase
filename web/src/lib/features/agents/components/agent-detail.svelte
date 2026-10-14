@@ -3,8 +3,9 @@
 	import Square from '@lucide/svelte/icons/square';
 	import CircleX from '@lucide/svelte/icons/circle-x';
 	import Hand from '@lucide/svelte/icons/hand';
+	import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';
 	import { Button } from '$lib/ui/button';
-	import ActionMenu from '$lib/ui/menu/action-menu.svelte';
+	import * as DropdownMenu from '$lib/ui/dropdown-menu';
 	import StatePill from '$lib/ui/status/state-pill.svelte';
 	import { Composer, Markdown } from '$lib/features/chat';
 	import { measureClass } from '$lib/ui/page';
@@ -161,8 +162,7 @@
 		if (!text) return;
 		if (await onmessage(text)) draft = '';
 	}
-	async function copyFolder(close: () => void) {
-		close();
+	async function copyFolder() {
 		try {
 			await navigator.clipboard.writeText(agent.folder ?? '');
 		} catch {
@@ -195,27 +195,28 @@
 					disabled={busy}
 					onclick={() => void stop()}><Square class="fill-current text-failed" />Stop</Button
 				>{/if}
-			<ActionMenu label="Agent actions">
-				{#snippet children(close)}
-					<Button
-						variant="ghost"
-						class="w-full justify-start"
-						href={conversationHref}
-						onclick={close}>Jump to conversation</Button
-					>
-					{#if pageHref}<Button
-							variant="ghost"
-							class="w-full justify-start"
-							href={pageHref}
-							onclick={close}>Open full page</Button
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger>
+					{#snippet child({ props })}
+						<Button {...props} size="icon" variant="ghost" aria-label="Agent actions"
+							><EllipsisVertical class="size-5" /></Button
+						>
+					{/snippet}
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="end" class="w-56">
+					<DropdownMenu.Item class="any-pointer-coarse:h-11">
+						{#snippet child({ props })}<a href={conversationHref} {...props}>Jump to conversation</a
+							>{/snippet}
+					</DropdownMenu.Item>
+					{#if pageHref}<DropdownMenu.Item class="any-pointer-coarse:h-11">
+							{#snippet child({ props })}<a href={pageHref} {...props}>Open full page</a>{/snippet}
+						</DropdownMenu.Item>{/if}
+					{#if agent.folder}<DropdownMenu.Item
+							class="any-pointer-coarse:h-11"
+							onSelect={() => void copyFolder()}>Copy folder path</DropdownMenu.Item
 						>{/if}
-					{#if agent.folder}<Button
-							variant="ghost"
-							class="w-full justify-start"
-							onclick={() => void copyFolder(close)}>Copy folder path</Button
-						>{/if}
-				{/snippet}
-			</ActionMenu>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
 		{/snippet}
 	</AgentHeader>
 	<p class="sr-only" role="status">{announcement}</p>

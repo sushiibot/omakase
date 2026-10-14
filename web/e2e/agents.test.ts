@@ -159,6 +159,13 @@ for (const width of [320, 390, 1280]) {
 		await expect.poll(() => smallTargets(page)).toEqual([]);
 		expect(await axe(page)).toEqual([]);
 
+		await detail.getByRole('button', { name: 'Agent actions', exact: true }).click();
+		const jump = page.getByRole('menuitem', { name: 'Jump to conversation', exact: true });
+		await expect(jump).toHaveAttribute('href', /^\/chat/);
+		await expect(page.getByRole('menuitem', { name: 'Copy folder path' })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(jump).toHaveCount(0);
+
 		await wholeTurn.click();
 		await approve.click();
 		await expect(page.getByRole('button', { name: 'Submitting…' })).toBeDisabled();

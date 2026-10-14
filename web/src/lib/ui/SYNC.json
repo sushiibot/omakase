@@ -22,7 +22,7 @@
 		"reason": "line diff view (ux-guidelines.md#long-content-on-narrow-screens)"
 	},
 	"dropdown-menu": {
-		"drift": "none"
+		"drift": "a CloseWatcher while open, so Android back closes the menu (ux-guidelines.md#back-gesture-and-navigation)"
 	},
 	"empty": {
 		"drift": "none"
@@ -45,10 +45,6 @@
 	},
 	"label": {
 		"drift": "none"
-	},
-	"menu": {
-		"source": "app",
-		"reason": "overflow menu for secondary commands (ux-guidelines.md#shared-component-patterns)"
 	},
 	"native-select": {
 		"drift": "text-base below md like stock Input, so iOS does not zoom on focus (ux-guidelines.md#breakpoints)"

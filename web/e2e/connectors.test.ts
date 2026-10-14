@@ -135,18 +135,18 @@ test('Fastmail token connection can disconnect, reconnect and remove its credent
 	await page.getByRole('button', { name: 'Connection actions', exact: true }).click();
 	// Menu rows are contiguous: each sizes its own box and none covers the next.
 	for (const name of ['Reconnect', 'Disconnect', 'Remove…']) {
-		const row = page.getByRole('button', { name, exact: true });
+		const row = page.getByRole('menuitem', { name, exact: true });
 		await expect(row).toHaveCSS('height', '44px');
 		await expectHitArea(page, row, { freeSides: [] });
 	}
-	await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Disconnect', exact: true }).click();
 	await expect(page.getByText('Disconnected', { exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Connection actions', exact: true }).click();
-	await expect(page.getByRole('button', { name: 'Disconnect', exact: true })).toHaveCount(0);
-	await page.getByRole('button', { name: 'Reconnect', exact: true }).click();
+	await expect(page.getByRole('menuitem', { name: 'Disconnect', exact: true })).toHaveCount(0);
+	await page.getByRole('menuitem', { name: 'Reconnect', exact: true }).click();
 	await expect(page.getByText('Connected', { exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Connection actions', exact: true }).click();
-	await page.getByRole('button', { name: 'Remove…', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Remove…', exact: true }).click();
 	await page.getByRole('button', { name: 'Remove connection', exact: true }).click();
 	await expect(page).toHaveURL(/\/connectors$/);
 	await expect(page.getByRole('link', { name: /api.fastmail.com/ })).toHaveCount(0);
@@ -217,11 +217,11 @@ test('reconnect reports its own progress and failure without implying a snapshot
 	try {
 		await page.goto('/connectors/code-host');
 		await page.getByRole('button', { name: 'Connection actions', exact: true }).click();
-		await expect(page.getByRole('button', { name: 'Reconnect', exact: true })).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: 'Reconnect', exact: true })).toBeVisible();
 		const pager = page.locator('[data-tab-pager]');
 		const before = await pager.boundingBox();
-		await page.getByRole('button', { name: 'Reconnect', exact: true }).click();
-		await expect(page.getByRole('button', { name: 'Reconnect', exact: true })).toBeHidden();
+		await page.getByRole('menuitem', { name: 'Reconnect', exact: true }).click();
+		await expect(page.getByRole('menuitem', { name: 'Reconnect', exact: true })).toBeHidden();
 		await expect(page.getByText('Reconnecting…', { exact: true }).first()).toBeVisible();
 		await expect(
 			page.getByRole('button', { name: 'Save tracking snapshot', exact: true })
@@ -233,7 +233,7 @@ test('reconnect reports its own progress and failure without implying a snapshot
 		await expect(page.getByRole('alert')).toContainText('Couldn’t reconnect.');
 		await expect(page.getByRole('alert')).toHaveCount(1);
 		await page.getByRole('button', { name: 'Connection actions', exact: true }).click();
-		await expect(page.getByRole('button', { name: 'Reconnect', exact: true })).toBeEnabled();
+		await expect(page.getByRole('menuitem', { name: 'Reconnect', exact: true })).toBeEnabled();
 	} finally {
 		release();
 	}
@@ -247,17 +247,19 @@ test('connection actions support keyboard navigation, Escape and outside dismiss
 	await page.goto('/connectors/code-host');
 	const trigger = page.getByRole('button', { name: 'Connection actions', exact: true });
 	await trigger.click();
-	await expect(page.getByRole('button', { name: 'Reconnect', exact: true })).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: 'Reconnect', exact: true })).toBeVisible();
 	await page.keyboard.press('Escape');
-	await expect(page.getByRole('button', { name: 'Reconnect', exact: true })).toBeHidden();
+	await expect(page.getByRole('menuitem', { name: 'Reconnect', exact: true })).toBeHidden();
 	await expect(trigger).toBeFocused();
-	await trigger.click();
-	await expect(page.getByRole('button', { name: 'Reconnect', exact: true })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Reconnect', exact: true })).toBeFocused();
+	// A keyboard open focuses the first item; a pointer open focuses the menu itself.
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('menuitem', { name: 'Reconnect', exact: true })).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: 'Reconnect', exact: true })).toBeFocused();
 	await page.keyboard.press('ArrowDown');
-	await expect(page.getByRole('button', { name: 'Disconnect', exact: true })).toBeFocused();
-	await page.getByRole('heading', { name: 'Code host', exact: true }).click();
-	await expect(page.getByRole('button', { name: 'Reconnect', exact: true })).toBeHidden();
+	await expect(page.getByRole('menuitem', { name: 'Disconnect', exact: true })).toBeFocused();
+	// The open menu is modal, so the page under it takes no pointer events until it closes.
+	await page.getByRole('heading', { name: 'Code host', exact: true }).click({ force: true });
+	await expect(page.getByRole('menuitem', { name: 'Reconnect', exact: true })).toBeHidden();
 	await expect(page).toHaveURL(/\/connectors\/code-host$/);
 });
 
@@ -335,7 +337,7 @@ test('a different server sign-in intent replaces unrelated saved setup', async (
 	await page.getByRole('link', { name: 'Back to Connectors', exact: true }).click();
 	await page.getByRole('link', { name: /Code host/ }).click();
 	await page.getByRole('button', { name: 'Connection actions', exact: true }).click();
-	await page.getByRole('link', { name: 'Sign in / replace token', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Sign in / replace token', exact: true }).click();
 	await expect(page.getByRole('textbox', { name: 'Server address' })).toHaveValue(
 		'https://mcp.code-host.example/mcp'
 	);
