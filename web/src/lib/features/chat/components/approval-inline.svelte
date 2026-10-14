@@ -3,9 +3,10 @@
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import Check from '@lucide/svelte/icons/check';
 	import X from '@lucide/svelte/icons/x';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { Button } from '$lib/ui/button';
+	import * as Collapsible from '$lib/ui/collapsible';
+	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
 	import { currentLocation, type LocationReply } from '../location';
 	import type { PendingApproval } from '../types';
 	let {
@@ -90,31 +91,27 @@
 			</div>
 		{/each}
 	</dl>
-	<details class="group/exact mt-1">
-		<summary
-			class="flex min-h-8 cursor-pointer list-none items-center gap-1.5 text-meta text-muted-foreground any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
-			>Exact input<ChevronDown
-				class="size-3.5 transition-transform group-open/exact:rotate-180 motion-reduce:transition-none"
-				aria-hidden="true"
-			/></summary
-		>
-		<dl class="mb-2 flex max-h-48 flex-col gap-2 overflow-auto text-meta">
-			{#each view.fields as field, i (i)}<div>
-					<dt>{field.key}</dt>
-					<dd class="font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">
-						{field.value}
-					</dd>
-				</div>{/each}
-			<div>
-				<dt>Tool</dt>
-				<dd class="font-mono text-code [overflow-wrap:anywhere]">{view.tool}</dd>
-			</div>
-			<div>
-				<dt>Requested by (self-reported)</dt>
-				<dd>{view.agentName}</dd>
-			</div>
-		</dl>
-	</details>
+	<Collapsible.Root class="mt-1">
+		<DisclosureTrigger><span>Exact input</span></DisclosureTrigger>
+		<Collapsible.Content hiddenUntilFound>
+			<dl class="mb-2 flex max-h-48 flex-col gap-2 overflow-auto text-meta">
+				{#each view.fields as field, i (i)}<div>
+						<dt>{field.key}</dt>
+						<dd class="font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">
+							{field.value}
+						</dd>
+					</div>{/each}
+				<div>
+					<dt>Tool</dt>
+					<dd class="font-mono text-code [overflow-wrap:anywhere]">{view.tool}</dd>
+				</div>
+				<div>
+					<dt>Requested by (self-reported)</dt>
+					<dd>{view.agentName}</dd>
+				</div>
+			</dl>
+		</Collapsible.Content>
+	</Collapsible.Root>
 	{#if pending.tainted}<p class="mb-2 flex items-start gap-2 text-meta text-taint">
 			<TriangleAlert class="mt-0.5 size-4 shrink-0" aria-hidden="true" />{pending.tainted}
 		</p>{/if}

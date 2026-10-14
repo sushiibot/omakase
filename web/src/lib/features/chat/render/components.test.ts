@@ -42,6 +42,9 @@ const decode = (s: string) =>
 		.replace(/&quot;/g, '"')
 		.replace(/&amp;/g, '&');
 
+const disclosure = (e: El) => e.attrs['data-slot'] === 'collapsible';
+const decision = (e: El) => e.tag === 'button' && e.attrs['data-slot'] !== 'collapsible-trigger';
+
 const ID = 'AbCdEfGhIjKlMnOpQrStUv';
 
 const PAYLOADS = [
@@ -303,7 +306,7 @@ describe('compact inline activity', () => {
 		expect(text).toContain('Approved');
 		expect(text).toContain('Execution status unavailable');
 		expect(text).not.toContain('Finished');
-		expect(els.filter((e) => e.tag === 'button')).toHaveLength(0);
+		expect(els.filter(decision)).toHaveLength(0);
 	});
 
 	test('approval shows structured fields, exact input and disabled submitting controls', async () => {
@@ -328,7 +331,7 @@ describe('compact inline activity', () => {
 		expect(text).toContain('Subject');
 		expect(text).toContain('Exact input');
 		expect(text).toContain('Submitting');
-		expect(els.filter((e) => e.tag === 'button').every((e) => 'disabled' in e.attrs)).toBe(true);
+		expect(els.filter(decision).every((e) => 'disabled' in e.attrs)).toBe(true);
 	});
 });
 
@@ -349,9 +352,9 @@ describe('grouped tool activity', () => {
 			],
 			openStep: 'read1'
 		});
-		const details = els.filter((e) => e.tag === 'details');
-		expect(details).toHaveLength(3);
-		expect(details.map((e) => 'open' in e.attrs)).toEqual([true, true, false]);
+		const disclosures = els.filter(disclosure);
+		expect(disclosures).toHaveLength(3);
+		expect(disclosures.map((e) => e.attrs['data-state'])).toEqual(['open', 'open', 'closed']);
 		expect(text).toContain('Task content');
 		expect(text).toContain('Read × 1');
 		expect(text).toContain('Bash × 1');
@@ -368,7 +371,7 @@ describe('grouped tool activity', () => {
 				input: 'TASKS.md'
 			}))
 		});
-		expect(els.filter((e) => e.tag === 'details').every((e) => !('open' in e.attrs))).toBe(true);
+		expect(els.filter(disclosure).every((e) => e.attrs['data-state'] === 'closed')).toBe(true);
 	});
 });
 
@@ -425,7 +428,7 @@ describe('tool confirmations', () => {
 		expect(text).toContain('Reason');
 		expect(text).not.toContain('Output');
 		expect(text).not.toContain('Finished');
-		expect(els.filter((e) => e.tag === 'details').every((e) => !('open' in e.attrs))).toBe(true);
+		expect(els.filter(disclosure).every((e) => e.attrs['data-state'] === 'closed')).toBe(true);
 	});
 	test('a text-only legacy tool question stays a question instead of gaining approval authority', async () => {
 		const { els, text } = await dom(AskCard, {

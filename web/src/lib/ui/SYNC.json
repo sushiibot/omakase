@@ -15,7 +15,7 @@
 		"drift": "coarse-pointer hit area 48px wide and 40px tall, so 44px rows never overlap (ux-guidelines.md#shared-component-patterns)"
 	},
 	"collapsible": {
-		"drift": "none"
+		"drift": "app-owned DisclosureTrigger, the one disclosure row (ux-guidelines.md#shared-component-patterns)"
 	},
 	"diff": {
 		"source": "app",

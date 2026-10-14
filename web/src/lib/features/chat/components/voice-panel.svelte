@@ -4,6 +4,8 @@
 	import Search from '@lucide/svelte/icons/search';
 	import X from '@lucide/svelte/icons/x';
 	import { Button } from '$lib/ui/button';
+	import * as Collapsible from '$lib/ui/collapsible';
+	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
 	import type { SpeechModel, VoiceModel } from '../types';
 	import { speechPrice } from '../render/speech-price';
 	import { voiceProvider } from '../render/voice-provider';
@@ -245,48 +247,49 @@
 					</Button>
 				{/each}
 			</section>
-			<details>
-				<summary
-					class="min-h-8 cursor-pointer py-1.5 font-medium any-pointer-coarse:min-h-11 any-pointer-coarse:py-3"
-					>Browse all OpenRouter speech models</summary
-				>
-				<div class="flex flex-col gap-2">
-					<InputGroup.Root>
-						<InputGroup.Input
-							type="search"
-							aria-label="Search speech models"
-							placeholder="Search by name or model ID…"
-							bind:value={query}
-							disabled={active || loading}
-							class="[&::-webkit-search-cancel-button]:appearance-none"
-						/>
-						<InputGroup.Addon><Search /></InputGroup.Addon>
-						{#if query}<InputGroup.Addon align="inline-end">
-								<InputGroup.Button
-									size="icon-xs"
-									aria-label="Clear search"
-									disabled={active || loading}
-									onclick={() => (query = '')}><X /></InputGroup.Button
+			<Collapsible.Root>
+				<DisclosureTrigger><span>Browse all OpenRouter speech models</span></DisclosureTrigger>
+				<Collapsible.Content hiddenUntilFound>
+					<div class="flex flex-col gap-2">
+						<InputGroup.Root>
+							<InputGroup.Input
+								type="search"
+								aria-label="Search speech models"
+								placeholder="Search by name or model ID…"
+								bind:value={query}
+								disabled={active || loading}
+								class="[&::-webkit-search-cancel-button]:appearance-none"
+							/>
+							<InputGroup.Addon><Search /></InputGroup.Addon>
+							{#if query}<InputGroup.Addon align="inline-end">
+									<InputGroup.Button
+										size="icon-xs"
+										aria-label="Clear search"
+										disabled={active || loading}
+										onclick={() => (query = '')}><X /></InputGroup.Button
+									>
+								</InputGroup.Addon>{/if}
+						</InputGroup.Root>
+						{#each found as model (model.id)}
+							<Button
+								variant="ghost"
+								class="h-auto w-full flex-col items-start gap-1 px-3 py-2 text-left whitespace-normal transition-none aria-pressed:bg-muted any-pointer-coarse:after:hidden"
+								aria-pressed={speechModel === model.id}
+								disabled={active || loading}
+								onclick={() => onspeech?.(model.id)}
+							>
+								<span class="text-sm font-medium [overflow-wrap:anywhere]">{model.name}</span>
+								<span class="text-sm [overflow-wrap:anywhere] text-muted-foreground"
+									>{model.id}</span
 								>
-							</InputGroup.Addon>{/if}
-					</InputGroup.Root>
-					{#each found as model (model.id)}
-						<Button
-							variant="ghost"
-							class="h-auto w-full flex-col items-start gap-1 px-3 py-2 text-left whitespace-normal transition-none aria-pressed:bg-muted any-pointer-coarse:after:hidden"
-							aria-pressed={speechModel === model.id}
-							disabled={active || loading}
-							onclick={() => onspeech?.(model.id)}
-						>
-							<span class="text-sm font-medium [overflow-wrap:anywhere]">{model.name}</span>
-							<span class="text-sm [overflow-wrap:anywhere] text-muted-foreground">{model.id}</span>
-							<span class="text-sm text-muted-foreground tabular-nums">{speechPrice(model)}</span>
-						</Button>
-					{:else}{#if !loading}<p role="status" class="text-sm text-muted-foreground">
-								No speech models match this search.
-							</p>{/if}{/each}
-				</div>
-			</details>
+								<span class="text-sm text-muted-foreground tabular-nums">{speechPrice(model)}</span>
+							</Button>
+						{:else}{#if !loading}<p role="status" class="text-sm text-muted-foreground">
+									No speech models match this search.
+								</p>{/if}{/each}
+					</div>
+				</Collapsible.Content>
+			</Collapsible.Root>
 			<p class="text-xs text-muted-foreground">
 				OpenRouter catalog prices{pricesUpdatedAt
 					? ` · checked ${new Date(pricesUpdatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`

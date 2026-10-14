@@ -2,6 +2,8 @@
 	import { Spinner } from '$lib/ui/spinner';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import { Button } from '$lib/ui/button';
+	import * as Collapsible from '$lib/ui/collapsible';
+	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
 	import ToolIcon from './tool-icon.svelte';
 	import ToolRow from './tool-row.svelte';
 	import { toolCategory } from '../tool-activity';
@@ -55,13 +57,12 @@
 			>
 				<p class="font-medium">{push.destination}</p>
 				<p class="text-body">{push.summary}</p>
-				<details class="group/commit">
-					<summary
-						class="flex min-h-8 cursor-pointer items-center text-meta text-muted-foreground any-pointer-coarse:min-h-11"
-						>Commit {push.commit.slice(0, 7)}</summary
-					>
-					<p class="pb-2 font-mono text-code">{push.commit}</p>
-				</details>
+				<Collapsible.Root>
+					<DisclosureTrigger><span>Commit {push.commit.slice(0, 7)}</span></DisclosureTrigger>
+					<Collapsible.Content hiddenUntilFound>
+						<p class="pb-2 font-mono text-code">{push.commit}</p>
+					</Collapsible.Content>
+				</Collapsible.Root>
 			</div>
 		{:else}
 			<pre

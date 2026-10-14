@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Spinner } from '$lib/ui/spinner';
 	import { untrack } from 'svelte';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import * as Collapsible from '$lib/ui/collapsible';
+	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
 	import ToolIcon from './tool-icon.svelte';
 	import ToolRow from './tool-row.svelte';
 	import { activityCategories } from '../tool-activity';
@@ -26,16 +27,8 @@
 	);
 </script>
 
-<details bind:open data-tool-activity class="group/activity min-w-0 text-ui text-muted-foreground">
-	<summary
-		onclick={(event) => {
-			// Commit before another stream update; native toggle events arrive later.
-			event.preventDefault();
-			open = !open;
-		}}
-		aria-label={label}
-		class="flex min-h-8 cursor-pointer list-none items-center gap-2 py-1 any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
-	>
+<Collapsible.Root bind:open data-tool-activity class="min-w-0 text-ui text-muted-foreground">
+	<DisclosureTrigger aria-label={label} class="py-1">
 		<span class="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
 			{#each categories.slice(0, 2) as category (category.key)}
 				<span class="flex min-w-0 items-center gap-1.5 whitespace-nowrap"
@@ -50,21 +43,19 @@
 		{#if running}<span class="flex shrink-0 items-center gap-1 text-meta text-running"
 				><Spinner decorative class="size-3.5" /><span>Running</span></span
 			>{/if}
-		<ChevronDown
-			class="size-3.5 shrink-0 transition-transform group-open/activity:rotate-180 motion-reduce:transition-none"
-			aria-hidden="true"
-		/>
-	</summary>
-	<ul class="min-w-0 border-l pl-3">
-		{#each steps as step, index (`${index}:${step.id}`)}<li>
-				<ToolRow
-					{step}
-					focused={openStep === step.id}
-					bind:open={
-						() => expandedSteps[index] ?? openStep === step.id,
-						(value) => (expandedSteps[index] = value)
-					}
-				/>
-			</li>{/each}
-	</ul>
-</details>
+	</DisclosureTrigger>
+	<Collapsible.Content hiddenUntilFound>
+		<ul class="min-w-0 border-l pl-3">
+			{#each steps as step, index (`${index}:${step.id}`)}<li>
+					<ToolRow
+						{step}
+						focused={openStep === step.id}
+						bind:open={
+							() => expandedSteps[index] ?? openStep === step.id,
+							(value) => (expandedSteps[index] = value)
+						}
+					/>
+				</li>{/each}
+		</ul>
+	</Collapsible.Content>
+</Collapsible.Root>

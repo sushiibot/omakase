@@ -44,7 +44,7 @@ export async function smallTargets(page: Page) {
 						return f.top <= r.top && f.bottom >= r.bottom && f.left <= r.left && f.right >= r.right;
 					});
 				// A Button whose hit area is switched off, a sidebar row, an Item in a group or a disclosure
-				// summary is a contiguous row and sizes its own box. All but Button rows are promised 44px on touch.
+				// trigger is a contiguous row and sizes its own box. All but Button rows are promised 44px on touch.
 				const coarse = matchMedia('(any-pointer: coarse)').matches;
 				const sidebarRow =
 					coarse && ['menu-button', 'group-label'].includes(e.getAttribute('data-sidebar') ?? '');
@@ -53,7 +53,9 @@ export async function smallTargets(page: Page) {
 					(coarse && e.getAttribute('data-slot') === 'button' && after.display === 'none');
 				const itemRow =
 					coarse && e.getAttribute('data-slot') === 'item' && !!e.closest('[data-slot=item-group]');
-				const summaryRow = coarse && e.tagName === 'SUMMARY';
+				const summaryRow =
+					coarse &&
+					(e.tagName === 'SUMMARY' || e.getAttribute('data-slot') === 'collapsible-trigger');
 				if (!extended || after.display === 'none')
 					return {
 						w: r.width,
@@ -189,6 +191,7 @@ export async function horizontalOverflow(page: Page) {
 			if (
 				el.matches('[data-tab-track],[data-task-track]') ||
 				el.closest('[inert]') ||
+				el.closest('[hidden]') ||
 				el.closest('[data-tab-panel][aria-hidden=true]') ||
 				el.closest('[data-tab-strip]') ||
 				el.closest(
@@ -378,20 +381,22 @@ export async function openDrawer(page: Page) {
 
 /** Open the shared inbox after its records load; slow loads may already have expanded it. */
 export async function openSharedInbox(page: Page) {
-	const inbox = page.locator('details[data-inbox="shared"]');
-	await expect(inbox.locator('summary')).toContainText(/Inbox · \d+/);
-	if (!(await inbox.evaluate((element) => (element as HTMLDetailsElement).open)))
-		await inbox.locator('summary').click();
-	await expect(inbox).toHaveAttribute('open', '');
+	const inbox = page.locator('[data-inbox="shared"]');
+	const trigger = inbox.locator('[data-slot=collapsible-trigger]');
+	await expect(trigger).toContainText(/Inbox · \d+/);
+	if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
+	await expect(inbox).toHaveAttribute('data-state', 'open');
+	await expect(trigger).toHaveAttribute('aria-expanded', 'true');
 }
 
 /** Inbox action tests keep disclosures expanded, including records arriving on refresh. */
 export async function expandConversationInboxes(context: BrowserContext) {
 	await context.addInitScript(() => {
 		const expand = () => {
-			for (const details of document.querySelectorAll<HTMLDetailsElement>('details[data-inbox]')) {
-				if (!details.open) details.open = true;
-			}
+			for (const trigger of document.querySelectorAll<HTMLElement>(
+				'[data-inbox] > [data-slot=collapsible-trigger][aria-expanded=false]'
+			))
+				trigger.click();
 		};
 		new MutationObserver(expand).observe(document, { childList: true, subtree: true });
 	});

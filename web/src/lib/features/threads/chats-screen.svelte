@@ -1,8 +1,9 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Plus from '@lucide/svelte/icons/plus';
 	import { Button } from '$lib/ui/button';
+	import * as Collapsible from '$lib/ui/collapsible';
+	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import UpdateToast from '$lib/ui/pwa/update-toast.svelte';
 	import ListScreen, { type ListSection } from '$lib/ui/screen/list-screen.svelte';
@@ -134,17 +135,16 @@
 {#snippet after()}
 	{#if !q && archived.length}
 		<section aria-label="Archived conversations">
-			<details class="group">
-				<summary
-					class="flex min-h-8 cursor-pointer list-none items-center gap-2 px-1 text-sm font-medium text-muted-foreground any-pointer-coarse:min-h-11"
-				>
-					<ChevronDown class="size-4 -rotate-90 group-open:rotate-0" aria-hidden="true" />Archived
-					<span class="tabular-nums">{archived.length}</span>
-				</summary>
-				<ul>
-					{#each archived as t (t.id)}<li>{@render row(t)}</li>{/each}
-				</ul>
-			</details>
+			<Collapsible.Root>
+				<DisclosureTrigger class="px-3">
+					<span>Archived · <span class="tabular-nums">{archived.length}</span></span>
+				</DisclosureTrigger>
+				<Collapsible.Content hiddenUntilFound>
+					<ul>
+						{#each archived as t (t.id)}<li>{@render row(t)}</li>{/each}
+					</ul>
+				</Collapsible.Content>
+			</Collapsible.Root>
 		</section>
 	{/if}
 	{#if data && !q}

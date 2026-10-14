@@ -3,6 +3,8 @@
 	import { ChatsScreen } from '$lib/features/threads';
 	import { HomeScreen } from '$lib/features/home';
 	import { busyGroups } from '$lib/features/home/fixtures';
+	import * as Collapsible from '$lib/ui/collapsible';
+	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
 
 	let props: ComponentProps<typeof ChatsScreen> = $props();
 </script>
@@ -10,12 +12,12 @@
 {#snippet inbox()}
 	{@const groups = { ...busyGroups(props.now), waiting: [] }}
 	{@const total = Object.values(groups).reduce((count, items) => count + items.length, 0)}
-	<details aria-label="Inbox">
-		<summary class="flex min-h-12 cursor-pointer items-center px-3 text-sm text-muted-foreground"
-			>Inbox · {total}</summary
-		>
-		<HomeScreen embedded hideSheet {groups} remote={{ status: 'ready' }} now={props.now} />
-	</details>
+	<Collapsible.Root role="group" aria-label="Inbox" class="min-w-0">
+		<DisclosureTrigger class="px-3"><span>Inbox · {total}</span></DisclosureTrigger>
+		<Collapsible.Content hiddenUntilFound>
+			<HomeScreen embedded hideSheet {groups} remote={{ status: 'ready' }} now={props.now} />
+		</Collapsible.Content>
+	</Collapsible.Root>
 {/snippet}
 
 {#snippet attention()}

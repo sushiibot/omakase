@@ -1,5 +1,6 @@
 <script lang="ts">
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import * as Collapsible from '$lib/ui/collapsible';
+	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
 	import { HomeScreen } from '$lib/features/home';
 	import { inboxDisclosure, type Inbox } from './inbox.svelte';
 
@@ -10,40 +11,34 @@
 	const total = $derived(Object.values(groups).reduce((count, items) => count + items.length, 0));
 </script>
 
-<details
-	open={inboxDisclosure.expanded}
-	ontoggle={(event) => {
-		inboxDisclosure.expanded = event.currentTarget.open;
-	}}
+<Collapsible.Root
+	bind:open={inboxDisclosure.expanded}
 	data-inbox="shared"
+	role="group"
 	aria-label="Inbox"
-	class="group/inbox min-w-0"
+	class="min-w-0"
 >
-	<summary
-		class="flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted/60 any-pointer-coarse:min-h-11"
-	>
-		<ChevronDown
-			class="size-4 shrink-0 transition-transform group-open/inbox:rotate-180"
-			aria-hidden="true"
-		/>
+	<DisclosureTrigger class="px-3">
 		<span>Inbox{total ? ` · ${total}` : ' · No updates'}</span>
-	</summary>
-	<div class="px-2 pt-2 pb-3">
-		<HomeScreen
-			embedded
-			hideSheet
-			{groups}
-			remote={inbox.remote}
-			now={inbox.now}
-			partError={inbox.greeted && data.status === 'error' ? data.error : null}
-			partLoading={inbox.greeted && data.status === 'loading' && data.slow}
-			workspace={data.data?.workspace.state ?? 'online'}
-			onopen={(id) => {
-				home.clearResult(id);
-				inbox.sheet.openWith(id);
-			}}
-			onretry={() => void data.refetch()}
-			ondone={inbox.done}
-		/>
-	</div>
-</details>
+	</DisclosureTrigger>
+	<Collapsible.Content hiddenUntilFound>
+		<div class="px-2 pt-2 pb-3">
+			<HomeScreen
+				embedded
+				hideSheet
+				{groups}
+				remote={inbox.remote}
+				now={inbox.now}
+				partError={inbox.greeted && data.status === 'error' ? data.error : null}
+				partLoading={inbox.greeted && data.status === 'loading' && data.slow}
+				workspace={data.data?.workspace.state ?? 'online'}
+				onopen={(id) => {
+					home.clearResult(id);
+					inbox.sheet.openWith(id);
+				}}
+				onretry={() => void data.refetch()}
+				ondone={inbox.done}
+			/>
+		</div>
+	</Collapsible.Content>
+</Collapsible.Root>

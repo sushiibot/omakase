@@ -27,12 +27,16 @@ test('Channels keeps Main first, a shared inbox and working channel search', asy
 	await expect(page.getByRole('region', { name: 'Main chat' })).not.toContainText('Pinned');
 	await expect(page.getByRole('heading', { name: 'Channels', level: 2 })).toBeVisible();
 	const archive = page.getByRole('region', { name: /^Archived/ });
-	await expect(archive.locator('details')).not.toHaveAttribute('open', '');
+	await expect(archive.locator('[data-slot=collapsible]')).toHaveAttribute('data-state', 'closed');
+	await expect(archive.locator('[data-slot=collapsible-trigger]')).toHaveAttribute(
+		'aria-expanded',
+		'false'
+	);
 	await expect(archive.getByRole('link', { name: /Couch delivery/ })).toBeHidden();
-	await archive.locator('summary').click();
+	await archive.locator('[data-slot=collapsible-trigger]').click();
 	await expect(page.getByRole('region', { name: /^Archived/ })).toContainText('Couch delivery');
 	await openSharedInbox(page);
-	await expect(page.locator('details[data-inbox="shared"]')).toContainText('nightly-sync failed');
+	await expect(page.locator('[data-inbox="shared"]')).toContainText('nightly-sync failed');
 	await page.getByRole('searchbox', { name: 'Search channels' }).fill('lease');
 	await expect(page.getByRole('heading', { name: '1 matching' })).toBeVisible();
 	await page.getByRole('link', { name: /Lease renewal/ }).click();
@@ -54,16 +58,19 @@ test('closing an inbox expanded by a slow load stays closed when its records arr
 		});
 	});
 	await page.goto('/chats');
-	const inbox = page.locator('details[data-inbox="shared"]');
+	const inbox = page.locator('[data-inbox="shared"]');
+	const trigger = inbox.locator('[data-slot=collapsible-trigger]');
 	try {
-		await expect(inbox).toHaveAttribute('open', '');
-		await inbox.locator('summary').click();
-		await expect(inbox).not.toHaveAttribute('open', '');
+		await expect(inbox).toHaveAttribute('data-state', 'open');
+		await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+		await trigger.click();
+		await expect(inbox).toHaveAttribute('data-state', 'closed');
 	} finally {
 		release();
 	}
-	await expect(inbox.locator('summary')).toContainText(/Inbox · \d+/);
-	await expect(inbox).not.toHaveAttribute('open', '');
+	await expect(trigger).toContainText(/Inbox · \d+/);
+	await expect(inbox).toHaveAttribute('data-state', 'closed');
+	await expect(trigger).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('decisions name their source while topic work and heartbeats share one inbox', async ({
@@ -98,13 +105,13 @@ test('decisions name their source while topic work and heartbeats share one inbo
 	await expect(attention.getByRole('button', { name: /Approve send_email/ })).toBeVisible();
 	const main = page.getByRole('region', { name: 'Main chat', exact: true });
 	expect((await attention.boundingBox())!.y).toBeLessThan((await main.boundingBox())!.y);
-	const inbox = page.locator('details[data-inbox="shared"]');
-	await inbox.locator('summary').click();
+	const inbox = page.locator('[data-inbox="shared"]');
+	await inbox.locator('[data-slot=collapsible-trigger]').click();
 	await expect(inbox).toContainText('Compare flight prices for the October trip');
 	await expect(inbox).toContainText('Your passport renewal is due Friday');
 	await expect(main).not.toContainText('Compare flight prices');
 	await expect(main).not.toContainText('Your passport renewal');
-	await expect(page.locator('details[data-inbox]')).toHaveCount(1);
+	await expect(page.locator('[data-inbox]')).toHaveCount(1);
 });
 
 test('a thread says it shares memory with Main, and back closes its sheet', async ({
@@ -258,7 +265,7 @@ test('row options rename archived threads and Back cancels unsaved changes', asy
 	await page.goto('/chats');
 	await page
 		.getByRole('region', { name: /^Archived/ })
-		.locator('summary')
+		.locator('[data-slot=collapsible-trigger]')
 		.click();
 	await page.getByRole('button', { name: 'Options for Couch delivery' }).click();
 	const sheet = page.getByRole('dialog', { name: 'Conversation settings' });

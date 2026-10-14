@@ -147,7 +147,7 @@ test('inline chat approval keeps Deny, Approve and Exact input apart on touch', 
 	const approve = inline.getByRole('button', { name: /^Approve/ });
 	await expectNearerOrNothing(deny, approve);
 	// Nothing in the decision row reaches into the disclosure above it.
-	const exact = inline.locator('summary');
+	const exact = inline.locator('[data-slot=collapsible-trigger]');
 	await exact.scrollIntoViewIfNeeded();
 	const inside = await exact.evaluate((el) => {
 		const r = el.getBoundingClientRect();
@@ -279,8 +279,8 @@ async function tapAll(page: Page, points: { x: number; y: number }[], reset?: ()
 
 const closeDetails = (page: Page, probe: string) => () =>
 	page
-		.locator(`[data-surface-probe="${probe}"] details`)
-		.evaluateAll((all) => all.forEach((d) => ((d as HTMLDetailsElement).open = false)));
+		.locator(`[data-surface-probe="${probe}"] [data-slot=collapsible-trigger][aria-expanded=true]`)
+		.evaluateAll((all) => all.forEach((t) => (t as HTMLElement).click()));
 
 test('real taps on and just below a disclosure never fire the decision under it', async ({
 	page
@@ -291,7 +291,7 @@ test('real taps on and just below a disclosure never fire the decision under it'
 		['inline', /^Deny/, 'inline:']
 	] as const) {
 		const surface = page.locator(`[data-surface-probe="${probe}"]`);
-		const summary = surface.locator('summary').first();
+		const summary = surface.locator('[data-slot=collapsible-trigger]').first();
 		await summary.scrollIntoViewIfNeeded();
 		const s = (await summary.boundingBox())!;
 		const d = (await surface.getByRole('button', { name: decision }).boundingBox())!;

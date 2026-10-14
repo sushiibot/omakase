@@ -7,6 +7,8 @@
 	import Info from '@lucide/svelte/icons/info';
 	import SendHorizontal from '@lucide/svelte/icons/send-horizontal';
 	import { Button } from '$lib/ui/button';
+	import * as Collapsible from '$lib/ui/collapsible';
+	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
 	import { Input } from '$lib/ui/input';
 	import { cn } from '$lib/utils';
 	import { splitAskQuestion } from '../render/ask-question';
@@ -79,24 +81,20 @@
 {#if confirmation}
 	<ToolConfirmation {ask} {confirmation} {onanswer} />
 {:else if parts.action && !live}
-	<details data-surface="ask" class="group/question min-w-0 text-ui text-muted-foreground">
-		<summary
-			class="flex min-h-8 cursor-pointer list-none items-center gap-2 any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
-		>
+	<Collapsible.Root data-surface="ask" class="min-w-0 text-ui text-muted-foreground">
+		<DisclosureTrigger>
 			<ToolIcon kind={toolCategory(parts.action.tool).kind} />
 			<span class="min-w-0 flex-1 truncate"
 				>{parts.action.tool === 'github_push' ? 'GitHub push' : 'Tool question'}</span
 			>
 			<span class="text-meta">{ask.answer ? `Answered ${ask.answer}` : 'Question closed'}</span>
-			<ChevronDown
-				class="size-3.5 shrink-0 transition-transform group-open/question:rotate-180 motion-reduce:transition-none"
-				aria-hidden="true"
-			/>
-		</summary>
-		<div class="flex min-w-0 flex-col gap-3 pb-2 text-body">
-			{@render question('The agent asked:', false)}
-		</div>
-	</details>
+		</DisclosureTrigger>
+		<Collapsible.Content hiddenUntilFound>
+			<div class="flex min-w-0 flex-col gap-3 pb-2 text-body">
+				{@render question('The agent asked:', false)}
+			</div>
+		</Collapsible.Content>
+	</Collapsible.Root>
 {:else}
 	<section
 		aria-labelledby="{uid}-q"

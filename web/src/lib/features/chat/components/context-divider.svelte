@@ -1,8 +1,9 @@
 <script lang="ts">
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import X from '@lucide/svelte/icons/x';
 	import { Button } from '$lib/ui/button';
+	import * as Collapsible from '$lib/ui/collapsible';
+	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
 	import * as Sheet from '$lib/ui/sheet';
 	import RoutedSheet from '$lib/ui/sheet/routed-sheet.svelte';
 	import type { SessionBoundary } from '$lib/core/realtime/events';
@@ -103,22 +104,23 @@
 					update these files.
 				</p>
 				{#each boundary.memory.files as file}
-					<details class="group/file border-b border-border">
-						<summary
-							class="flex min-h-8 cursor-pointer list-none items-center justify-between gap-3 focus-visible:outline-2 focus-visible:outline-ring any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
-						>
-							<span>{file.path}<span class="ml-2 text-muted-foreground">{file.change}</span></span>
-							<ChevronDown class="size-4 shrink-0 group-open/file:rotate-180" aria-hidden="true" />
-						</summary>
-						<div class="space-y-2 pb-4">
-							{#if file.change === 'removed'}<p>
-									This file was removed from shared memory.
-								</p>{:else}<Markdown text={file.content} />{/if}
-							{#if file.truncated}<p class="text-muted-foreground">
-									This file preview is shortened.
-								</p>{/if}
-						</div>
-					</details>
+					<Collapsible.Root class="border-b border-border">
+						<DisclosureTrigger>
+							<span class="min-w-0 flex-1 [overflow-wrap:anywhere]"
+								>{file.path}<span class="ml-2">{file.change}</span></span
+							>
+						</DisclosureTrigger>
+						<Collapsible.Content hiddenUntilFound>
+							<div class="space-y-2 pb-4">
+								{#if file.change === 'removed'}<p>
+										This file was removed from shared memory.
+									</p>{:else}<Markdown text={file.content} />{/if}
+								{#if file.truncated}<p class="text-muted-foreground">
+										This file preview is shortened.
+									</p>{/if}
+							</div>
+						</Collapsible.Content>
+					</Collapsible.Root>
 				{/each}
 				{#if boundary.memory.truncated}<p class="text-muted-foreground">
 						Some memory changes are not included in this snapshot.
@@ -131,22 +133,19 @@
 			<section class="space-y-2">
 				<h3 class="font-medium">Workspace context loaded</h3>
 				{#each boundary.context.files as file}
-					<details class="group/file border-b border-border">
-						<summary
-							class="flex min-h-8 cursor-pointer list-none items-center justify-between gap-3 focus-visible:outline-2 focus-visible:outline-ring any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
-						>
-							{file.path}<ChevronDown
-								class="size-4 shrink-0 group-open/file:rotate-180"
-								aria-hidden="true"
-							/>
-						</summary>
-						<div class="space-y-2 pb-4">
-							<Markdown text={file.content} />
-							{#if file.truncated}<p class="text-muted-foreground">
-									This file preview is shortened.
-								</p>{/if}
-						</div>
-					</details>
+					<Collapsible.Root class="border-b border-border">
+						<DisclosureTrigger>
+							<span class="min-w-0 flex-1 [overflow-wrap:anywhere]">{file.path}</span>
+						</DisclosureTrigger>
+						<Collapsible.Content hiddenUntilFound>
+							<div class="space-y-2 pb-4">
+								<Markdown text={file.content} />
+								{#if file.truncated}<p class="text-muted-foreground">
+										This file preview is shortened.
+									</p>{/if}
+							</div>
+						</Collapsible.Content>
+					</Collapsible.Root>
 				{/each}
 				{#if boundary.context.truncated}<p class="text-muted-foreground">
 						Some context files are not included in this snapshot.

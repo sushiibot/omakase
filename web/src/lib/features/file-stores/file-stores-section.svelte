@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import { Badge } from '$lib/ui/badge';
 	import { Button } from '$lib/ui/button';
 	import * as Collapsible from '$lib/ui/collapsible';
+	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
 	import * as Field from '$lib/ui/field';
 	import { Input } from '$lib/ui/input';
 	import * as Item from '$lib/ui/item';
@@ -288,16 +288,7 @@
 						</Field.Description>
 					</div>
 					<Collapsible.Root bind:open={certificateOpen} class="flex flex-col gap-3">
-						<Collapsible.Trigger>
-							{#snippet child({ props })}
-								<Button {...props} variant="ghost" class="group/cert -ms-2.5 self-start"
-									>Private certificate<ChevronDown
-										class="transition-transform group-data-[state=open]/cert:rotate-180 motion-reduce:transition-none"
-										aria-hidden="true"
-									/></Button
-								>
-							{/snippet}
-						</Collapsible.Trigger>
+						<DisclosureTrigger class="w-fit"><span>Private certificate</span></DisclosureTrigger>
 						<Collapsible.Content>
 							<Field.Field data-invalid={!!fieldErrors.certificateSha256 || undefined}>
 								<Field.Label for="store-certificate">Verified SHA-256 fingerprint</Field.Label>

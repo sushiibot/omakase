@@ -4,7 +4,8 @@
 	import ToolDiff from './tool-diff.svelte';
 	import { toolCategory } from '../tool-activity';
 	import CircleX from '@lucide/svelte/icons/circle-x';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import * as Collapsible from '$lib/ui/collapsible';
+	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
 	import ApprovalInline from './approval-inline.svelte';
 	import type { TurnStep, PendingApproval, ApprovalOutcome } from '../types';
 	import type { LocationReply } from '../location';
@@ -49,19 +50,12 @@
 {#if pending && approval?.outcome === 'pending'}
 	<ApprovalInline {pending} {submitting} {onapprove} {ondeny} />
 {:else}
-	<details
+	<Collapsible.Root
 		bind:open
 		data-tool-call={step.id}
-		class="group/tool min-w-0 text-ui text-muted-foreground"
+		class="min-w-0 text-ui text-muted-foreground"
 	>
-		<summary
-			onclick={(event) => {
-				// Commit before another stream update; native toggle events arrive later.
-				event.preventDefault();
-				open = !open;
-			}}
-			class="flex min-h-8 cursor-pointer list-none items-center gap-2 py-1 any-pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden"
-		>
+		<DisclosureTrigger class="py-1">
 			<ToolIcon kind={toolCategory(step.tool).kind} />
 			{#if step.state === 'failed'}<CircleX
 					class="size-4 shrink-0 text-failed"
@@ -83,52 +77,50 @@
 								: 'Finished'}</span
 				></span
 			>
-			<ChevronDown
-				class="size-3.5 shrink-0 transition-transform group-open/tool:rotate-180 motion-reduce:transition-none"
-				aria-hidden="true"
-			/>
-		</summary>
-		<dl class="flex min-w-0 flex-col gap-2 border-t py-2 text-meta">
-			{#if approval}<div>
-					<dt class="sr-only">Decision</dt>
-					<dd data-approval-record>
-						{labels[approval.outcome]}{approval.outcome.startsWith('approved')
-							? executionUnknown
-								? ' · Execution status unavailable'
-								: ' · Execution status shown above'
-							: ''}
-					</dd>
-				</div>{/if}
-			{#if approvalReason}<div>
-					<dt>Reason</dt>
-					<dd class="whitespace-pre-wrap">{approvalReason}</dd>
-				</div>{/if}
-			<div>
-				<dt class="text-muted-foreground">Tool</dt>
-				<dd class="font-mono text-code">{step.tool}</dd>
-			</div>
-			{#if step.input}<div>
-					<dt>Input</dt>
-					<dd>
-						<pre
-							class="max-h-48 overflow-auto font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{step.input}</pre>
-					</dd>
-				</div>{/if}
-			{#if step.diff}<div>
-					<dt class="sr-only">File changes</dt>
-					<dd><ToolDiff diff={step.diff} /></dd>
+		</DisclosureTrigger>
+		<Collapsible.Content hiddenUntilFound>
+			<dl class="flex min-w-0 flex-col gap-2 border-t py-2 text-meta">
+				{#if approval}<div>
+						<dt class="sr-only">Decision</dt>
+						<dd data-approval-record>
+							{labels[approval.outcome]}{approval.outcome.startsWith('approved')
+								? executionUnknown
+									? ' · Execution status unavailable'
+									: ' · Execution status shown above'
+								: ''}
+						</dd>
+					</div>{/if}
+				{#if approvalReason}<div>
+						<dt>Reason</dt>
+						<dd class="whitespace-pre-wrap">{approvalReason}</dd>
+					</div>{/if}
+				<div>
+					<dt class="text-muted-foreground">Tool</dt>
+					<dd class="font-mono text-code">{step.tool}</dd>
 				</div>
-			{:else if step.tool === 'edit' && step.state === 'ok'}<div>
-					<dt class="sr-only">File changes</dt>
-					<dd>Diff was not recorded for this call.</dd>
-				</div>{/if}
-			{#if step.output}<div>
-					<dt>Output</dt>
-					<dd>
-						<pre
-							class="max-h-64 overflow-auto font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{step.output}</pre>
-					</dd>
-				</div>{/if}
-		</dl>
-	</details>
+				{#if step.input}<div>
+						<dt>Input</dt>
+						<dd>
+							<pre
+								class="max-h-48 overflow-auto font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{step.input}</pre>
+						</dd>
+					</div>{/if}
+				{#if step.diff}<div>
+						<dt class="sr-only">File changes</dt>
+						<dd><ToolDiff diff={step.diff} /></dd>
+					</div>
+				{:else if step.tool === 'edit' && step.state === 'ok'}<div>
+						<dt class="sr-only">File changes</dt>
+						<dd>Diff was not recorded for this call.</dd>
+					</div>{/if}
+				{#if step.output}<div>
+						<dt>Output</dt>
+						<dd>
+							<pre
+								class="max-h-64 overflow-auto font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{step.output}</pre>
+						</dd>
+					</div>{/if}
+			</dl>
+		</Collapsible.Content>
+	</Collapsible.Root>
 {/if}

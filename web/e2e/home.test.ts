@@ -129,8 +129,8 @@ test('groups inbox items while menu and Main ping count only canonical channel r
 	await expect(page.getByRole('region', { name: 'Needs you', exact: true })).toContainText(
 		'Which day works'
 	);
-	await expect(page.locator('details[data-inbox="shared"]')).toContainText('nightly-sync failed');
-	await expect(page.locator('details[data-inbox="shared"]')).toContainText('Compare flight prices');
+	await expect(page.locator('[data-inbox="shared"]')).toContainText('nightly-sync failed');
+	await expect(page.locator('[data-inbox="shared"]')).toContainText('Compare flight prices');
 	const menu = page.getByRole('button', { name: /^Menu/ });
 	await expect(menu).toHaveAccessibleName('Menu, 2 need you');
 	await menu.click();

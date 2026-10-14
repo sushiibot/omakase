@@ -5,6 +5,8 @@
 	import Hand from '@lucide/svelte/icons/hand';
 	import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';
 	import { Button } from '$lib/ui/button';
+	import * as Collapsible from '$lib/ui/collapsible';
+	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
 	import * as DropdownMenu from '$lib/ui/dropdown-menu';
 	import StatePill from '$lib/ui/status/state-pill.svelte';
 	import { Composer, Markdown } from '$lib/features/chat';
@@ -280,19 +282,18 @@
 					{/if}
 				{/each}
 			{:else if session}
-				<details class="min-w-0" open>
-					<summary
-						class="flex min-h-8 cursor-pointer items-center text-ui text-muted-foreground any-pointer-coarse:min-h-11"
-						>Activity</summary
-					>
-					{#if session.output}<pre
-							class="max-h-96 overflow-auto rounded-lg border bg-muted/30 p-3 font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap"
-							aria-label="Raw output">{session.output}</pre>{:else}<p
-							class="text-meta text-muted-foreground"
-						>
-							No output yet.
-						</p>{/if}
-				</details>
+				<Collapsible.Root open class="min-w-0">
+					<DisclosureTrigger><span>Activity</span></DisclosureTrigger>
+					<Collapsible.Content hiddenUntilFound>
+						{#if session.output}<pre
+								class="max-h-96 overflow-auto rounded-lg border bg-muted/30 p-3 font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap"
+								aria-label="Raw output">{session.output}</pre>{:else}<p
+								class="text-meta text-muted-foreground"
+							>
+								No output yet.
+							</p>{/if}
+					</Collapsible.Content>
+				</Collapsible.Root>
 				{#if session.final}<div class="min-w-0 text-body" data-answer>
 						<Markdown text={session.final} />
 					</div>{/if}

@@ -289,10 +289,14 @@ test('an answered legacy auto-mode question collapses while retaining command de
 	]);
 	await open(page);
 	const card = page.locator('[data-surface="ask"]');
-	await expect(card.locator(':scope > summary')).toContainText('Answered Yes');
+	await expect(card.locator(':scope > [data-slot=collapsible-trigger]')).toContainText(
+		'Answered Yes'
+	);
 	await expect(card.getByRole('group', { name: 'bash command' })).not.toBeVisible();
-	expect((await card.locator(':scope > summary').boundingBox())!.height).toBeGreaterThanOrEqual(44);
-	await card.locator(':scope > summary').click();
+	expect(
+		(await card.locator(':scope > [data-slot=collapsible-trigger]').boundingBox())!.height
+	).toBeGreaterThanOrEqual(44);
+	await card.locator(':scope > [data-slot=collapsible-trigger]').click();
 	await expect(card.getByText('The agent asked:')).toBeVisible();
 	await expect(card.getByRole('group', { name: 'bash command' })).toContainText(
 		'from pathlib import Path'
@@ -374,7 +378,7 @@ for (const width of [320, 412, 1280]) {
 			await page.screenshot({ path: `/tmp/github-push-${width}-${theme}.png` });
 			await card.getByRole('button', { name: 'Approve', exact: true }).click();
 			await push(page, 'ask_resolved', { askId: 'push-ask', answer: 'Yes' }, 2);
-			await expect(card.locator('summary')).toContainText('Approved');
+			await expect(card.locator('[data-slot=collapsible-trigger]')).toContainText('Approved');
 			await expect(card.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
 			await expectNoSideScroll(page, 'resolved GitHub push approval');
 		});
@@ -399,10 +403,10 @@ test('the old GitHub push prompt collapses after an answer without implying exec
 	]);
 	await open(page);
 	const card = page.locator('[data-surface="ask"]');
-	await expect(card.locator('summary')).toContainText('GitHub push');
-	await expect(card.locator('summary')).toContainText('Answered Yes');
+	await expect(card.locator('[data-slot=collapsible-trigger]')).toContainText('GitHub push');
+	await expect(card.locator('[data-slot=collapsible-trigger]')).toContainText('Answered Yes');
 	await expect(card.getByText('Update travel notes', { exact: false })).not.toBeVisible();
-	await card.locator('summary').click();
+	await card.locator('[data-slot=collapsible-trigger]').click();
 	await expect(card).toContainText('Update travel notes');
 	await expect(card).not.toContainText('Finished');
 });
