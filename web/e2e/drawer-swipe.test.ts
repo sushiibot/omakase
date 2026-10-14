@@ -261,3 +261,39 @@ test('the inspector retains native vertical scrolling while horizontal swipes di
 	await expect(inspector).toBeVisible();
 	await expect(inspector.getByRole('tab', { name: 'Tasks', exact: true })).toBeVisible();
 });
+
+for (const interruption of ['cancel', 'blur', 'resize'] as const) {
+	test(`a held drag recovers after ${interruption} and the next swipe still works`, async ({
+		page,
+		context
+	}) => {
+		await fixtureApp(context);
+		await page.goto('/chat');
+		const start = await chatSurface(page);
+		const surface = page.locator('[data-chat-surface]');
+		const offset = () =>
+			surface.evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).m41);
+		const session = await context.newCDPSession(page);
+		await session.send('Input.dispatchTouchEvent', {
+			type: 'touchStart',
+			touchPoints: [start]
+		});
+		await session.send('Input.dispatchTouchEvent', {
+			type: 'touchMove',
+			touchPoints: [{ x: start.x + 100, y: start.y }]
+		});
+		await expect.poll(offset).toBeCloseTo(100, 0);
+		if (interruption === 'blur') await page.evaluate(() => dispatchEvent(new Event('blur')));
+		if (interruption === 'resize') await page.setViewportSize({ width: 390, height: 844 });
+		if (interruption !== 'cancel') await expect.poll(offset).toBeCloseTo(0, 0);
+		await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+		await session.detach();
+		await expect.poll(offset).toBeCloseTo(0, 0);
+		await expect(page.locator('.workspace')).not.toHaveClass(/dragging/);
+		await expect(page.getByRole('dialog', { name: 'Menu', exact: true })).toBeHidden();
+		const next = await chatSurface(page);
+		await swipe(page, [next.x, next.y], [next.x + 220, next.y]);
+		await expect(page.getByRole('dialog', { name: 'Menu', exact: true })).toBeVisible();
+		await expect.poll(offset).toBeCloseTo(320, 0);
+	});
+}

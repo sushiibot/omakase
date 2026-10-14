@@ -59,6 +59,7 @@
 	const inspectorQuery = new MediaQuery(`min-width: ${INSPECTOR_BREAKPOINT}px`);
 	let frame = $state<HTMLElement | null>(null);
 	let root: HTMLElement;
+	let chatSurface: HTMLDivElement;
 	let width = $state(412);
 	let sidebarOpen = $state(
 		typeof document === 'undefined' ||
@@ -66,7 +67,11 @@
 	);
 	let standaloneOpen = $state(false);
 	let inspector = $state.raw<WorkspaceInspector | null>(null);
-	let drag = $state<number | null>(null);
+	// Pointer coordinates stay outside reactivity; only gesture boundaries change UI state.
+	let drag: number | null = null;
+	let dragFrame = 0;
+	let dragging = $state(false);
+	let dragSide = $state<Pane | null>(null);
 	let focusBefore: HTMLElement | null = null;
 	let previous: Pane = 'chat';
 	const navDocked = $derived(navQuery.current);
@@ -75,13 +80,13 @@
 	const pane = $derived<Pane>(navOpen ? 'navigation' : inspector?.open ? 'inspector' : 'chat');
 	const navWidth = $derived(navDocked ? 0 : Math.min(320, width - 56));
 	const inspectorWidth = $derived(inspector && !inspectorDocked ? Math.min(360, width - 48) : 0);
-	const offset = $derived(drag ?? offsetFor(pane, navWidth, inspectorWidth));
+	const offset = $derived(offsetFor(pane, navWidth, inspectorWidth));
 	// The open pane slides over the chat instead of sitting beside it.
 	const overlaid = $derived(
 		(pane === 'navigation' && !navDocked) || (pane === 'inspector' && !inspectorDocked)
 	);
-	const navigationShown = $derived(pane === 'navigation' || (drag !== null && drag > 0));
-	const inspectorShown = $derived(pane === 'inspector' || (drag !== null && drag < 0));
+	const navigationShown = $derived(pane === 'navigation' || dragSide === 'navigation');
+	const inspectorShown = $derived(pane === 'inspector' || dragSide === 'inspector');
 	const footerNav = $derived(nav.filter((item) => item.id !== home && item.id !== 'settings'));
 	const badgeTotal = $derived(
 		Object.values(badges).reduce<number>(
@@ -196,9 +201,23 @@
 		velocity: number;
 		horizontal: boolean;
 	} | null = null;
-	function recover() {
-		gesture = null;
+	function clearDrag() {
+		cancelAnimationFrame(dragFrame);
+		dragFrame = 0;
 		drag = null;
+		dragging = false;
+		dragSide = null;
+	}
+	function recover() {
+		const pointerId = gesture?.id;
+		gesture = null;
+		if (pointerId !== undefined && root.hasPointerCapture(pointerId))
+			root.releasePointerCapture(pointerId);
+		clearDrag();
+	}
+	function paintDrag() {
+		dragFrame = 0;
+		if (drag !== null) chatSurface.style.transform = `translateX(${drag}px)`;
 	}
 	const excluded =
 		'a,button,input,textarea,select,summary,pre,code,[contenteditable],[role="slider"],[role="tab"],[data-tab-pager]';
@@ -258,6 +277,7 @@
 			if (Math.abs(dy) > motion.intent && Math.abs(dy) > Math.abs(dx)) return recover();
 			if (!horizontalIntent(dx, dy)) return;
 			gesture.horizontal = true;
+			dragging = true;
 			root.setPointerCapture(e.pointerId);
 		}
 		const at = performance.now(),
@@ -266,6 +286,8 @@
 		gesture.lastX = e.clientX;
 		gesture.at = at;
 		drag = clampOffset(gesture.base + dx, navWidth, inspectorWidth);
+		dragSide = drag > 0 ? 'navigation' : drag < 0 ? 'inspector' : null;
+		if (!dragFrame) dragFrame = requestAnimationFrame(paintDrag);
 	}
 	function up(e: PointerEvent) {
 		if (gesture?.id !== e.pointerId) return;
@@ -280,9 +302,9 @@
 					)
 				: pane;
 		suppressClick = gesture.horizontal;
-		if (root.hasPointerCapture(e.pointerId)) root.releasePointerCapture(e.pointerId);
 		gesture = null;
-		drag = null;
+		if (root.hasPointerCapture(e.pointerId)) root.releasePointerCapture(e.pointerId);
+		clearDrag();
 		select(next);
 	}
 	function keys(e: KeyboardEvent) {
@@ -333,11 +355,17 @@
 		addEventListener('keydown', phoneShortcut, { capture: true });
 		document.addEventListener('visibilitychange', visibility);
 		return () => {
+			cancelAnimationFrame(dragFrame);
 			resize.disconnect();
 			removeEventListener('blur', recover);
 			removeEventListener('keydown', phoneShortcut, { capture: true });
 			document.removeEventListener('visibilitychange', visibility);
 		};
+	});
+	// Restore the committed position on release/cancel, even when the pane did not change.
+	$effect(() => {
+		const target = offset;
+		if (!dragging && chatSurface) chatSurface.style.transform = `translateX(${target}px)`;
 	});
 	$effect(() => {
 		if (navDocked && navOpen) untrack(closePane);
@@ -533,10 +561,9 @@
 				bind:this={root}
 				role="presentation"
 				class="workspace relative min-h-0 flex-1 overflow-hidden"
-				class:dragging={drag !== null}
+				class:dragging
 				style:--nav-width={`${navWidth}px`}
 				style:--inspector-width={`${inspectorWidth}px`}
-				style:--chat-offset={`${offset}px`}
 				onclickcapture={(e) => {
 					if (!suppressClick || e.detail === 0) return;
 					suppressClick = false;
@@ -582,7 +609,12 @@
 							{@render inspector.content()}
 						</Sidebar.Root>
 					</aside>{/if}
-				<div class="chat-surface" data-chat-surface>
+				<div
+					bind:this={chatSurface}
+					class="chat-surface"
+					class:swipeable={navWidth > 0 || inspectorWidth > 0}
+					data-chat-surface
+				>
 					<div
 						class="chat-content flex h-full min-h-0 min-w-0 flex-col"
 						inert={overlaid}
@@ -660,9 +692,12 @@
 		inset: 0;
 		z-index: 1;
 		background: var(--background);
-		transform: translateX(var(--chat-offset));
+		transform: translateX(0);
 		transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
 		padding-top: var(--safe-top);
+	}
+	.chat-surface.swipeable {
+		will-change: transform;
 	}
 	.dragging .chat-surface {
 		transition: none;
