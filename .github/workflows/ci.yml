@@ -213,7 +213,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: sushiibot/sushii-workflows/.github/workflows/deploy.yml@main # zizmor: ignore[unpinned-uses] first-party, tracked at @main by design
+    uses: sushiibot/sushii-workflows/.github/workflows/deploy.yml@051ddfc675a0b19e7ef56bb4d936074cf5a4c9c5 # sushii-ci-app branch
     with:
       service: private-bots/omakase
       image_version: ${{ needs.docker-build.outputs.image_version }}
@@ -221,6 +221,7 @@ jobs:
       private_registry: true
     secrets:
       ANSIBLE_REPO_TOKEN: ${{ secrets.ANSIBLE_REPO_TOKEN }}
+      SUSHII_CI_PRIVATE_KEY: ${{ secrets.SUSHII_CI_PRIVATE_KEY }}
       ANSIBLE_SSH_PRIVATE_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
       ANSIBLE_KNOWN_HOSTS: ${{ secrets.ANSIBLE_KNOWN_HOSTS }}
       ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
@@ -234,7 +235,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: sushiibot/sushii-workflows/.github/workflows/deploy.yml@main # zizmor: ignore[unpinned-uses] first-party, tracked at @main by design
+    uses: sushiibot/sushii-workflows/.github/workflows/deploy.yml@051ddfc675a0b19e7ef56bb4d936074cf5a4c9c5 # sushii-ci-app branch
     with:
       service: private-bots/omakase-workspace
       image_version: ${{ needs.docker-build-workspace.outputs.short_sha }}
@@ -242,6 +243,7 @@ jobs:
       private_registry: true
     secrets:
       ANSIBLE_REPO_TOKEN: ${{ secrets.ANSIBLE_REPO_TOKEN }}
+      SUSHII_CI_PRIVATE_KEY: ${{ secrets.SUSHII_CI_PRIVATE_KEY }}
       ANSIBLE_SSH_PRIVATE_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
       ANSIBLE_KNOWN_HOSTS: ${{ secrets.ANSIBLE_KNOWN_HOSTS }}
       ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
