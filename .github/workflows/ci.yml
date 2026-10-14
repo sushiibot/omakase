@@ -204,47 +204,29 @@ jobs:
             type=registry,ref=ghcr.io/sushiibot/omakase:buildcache-workspace
           cache-to: type=registry,ref=ghcr.io/sushiibot/omakase:buildcache-workspace,mode=max
 
-  # Serial gateway → workspace: each deploy pushes a tag bump to the deploy config repo, and parallel deploys
-  # would race those pushes.
+  # apps deploys on its own (sushii-ansible roles/pull_deploy): each job bumps the tag in sushii-ansible and
+  # waits for apps' commit status. Serial gateway → workspace so the bumps don't race.
   deploy:
     needs: [docker-build, typecheck, test, web, web-e2e, browser-smoke, e2e-system]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    # The host pulls with this job's token; a new ghcr package can start out private.
-    permissions:
-      contents: read
-      packages: read
-    uses: sushiibot/sushii-workflows/.github/workflows/deploy.yml@051ddfc675a0b19e7ef56bb4d936074cf5a4c9c5 # sushii-ci-app branch
+    permissions: {}
+    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@31a017e60c169e5432238a3c1457dc05f654336e # pull-deploy
     with:
       service: private-bots/omakase
       image_version: ${{ needs.docker-build.outputs.image_version }}
       host: apps
-      private_registry: true
     secrets:
-      ANSIBLE_REPO_TOKEN: ${{ secrets.ANSIBLE_REPO_TOKEN }}
       SUSHII_CI_PRIVATE_KEY: ${{ secrets.SUSHII_CI_PRIVATE_KEY }}
-      ANSIBLE_SSH_PRIVATE_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
-      ANSIBLE_KNOWN_HOSTS: ${{ secrets.ANSIBLE_KNOWN_HOSTS }}
-      ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-      REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # After the gateway: a new workspace may send fields an older gateway drops.
   deploy-workspace:
     needs: [deploy, docker-build-workspace]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    # The host pulls with this job's token; a new ghcr package can start out private.
-    permissions:
-      contents: read
-      packages: read
-    uses: sushiibot/sushii-workflows/.github/workflows/deploy.yml@051ddfc675a0b19e7ef56bb4d936074cf5a4c9c5 # sushii-ci-app branch
+    permissions: {}
+    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@31a017e60c169e5432238a3c1457dc05f654336e # pull-deploy
     with:
       service: private-bots/omakase-workspace
       image_version: ${{ needs.docker-build-workspace.outputs.short_sha }}
       host: apps
-      private_registry: true
     secrets:
-      ANSIBLE_REPO_TOKEN: ${{ secrets.ANSIBLE_REPO_TOKEN }}
       SUSHII_CI_PRIVATE_KEY: ${{ secrets.SUSHII_CI_PRIVATE_KEY }}
-      ANSIBLE_SSH_PRIVATE_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
-      ANSIBLE_KNOWN_HOSTS: ${{ secrets.ANSIBLE_KNOWN_HOSTS }}
-      ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-      REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
