@@ -131,6 +131,13 @@ test('a thread says it shares memory with Main, and back closes its sheet', asyn
 	await expect(page.getByRole('heading', { name: 'October trip', level: 1 })).toBeVisible();
 	await expect(page.getByText('Brief from Main')).toBeVisible();
 	await expect(page.getByText('Picking up the trip here.')).toBeVisible();
+	// Touch adjustment carries real taps a few px; the title's lowest rows must not open memory.
+	const title = (await page
+		.getByRole('heading', { name: 'October trip', level: 1 })
+		.boundingBox())!;
+	for (let d = 1; d <= 7; d++)
+		await page.touchscreen.tap(title.x + title.width / 2, title.y + title.height - d);
+	await expect(page.getByRole('dialog')).toHaveCount(0);
 	await page.getByRole('button', { name: /Shares memory with Main · 2 writes/ }).click();
 	const sheet = page.getByRole('dialog', { name: 'Memory shared with Main' });
 	await expect(sheet).toContainText('2 writes from this conversation');

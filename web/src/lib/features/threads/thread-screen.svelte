@@ -108,23 +108,25 @@
 	</Item.Group>
 {/snippet}
 
-{#snippet subtitle()}
+{#snippet headerActions()}
 	{#if thread}
+		{@const memory =
+			thread.memoryTracking === false
+				? 'Shares memory with Main'
+				: `Shares memory with Main · ${thread.writes} ${thread.writes === 1 ? 'write' : 'writes'}`}
 		<Button
-			variant="link"
-			size="xs"
+			variant="ghost"
+			class="gap-1 px-2"
+			aria-label={memory}
+			title={memory}
 			aria-haspopup="dialog"
 			onclick={() => onopensheet?.('thread-memory')}
-			class="max-w-full min-w-0 shrink justify-start p-0 font-normal text-muted-foreground hover:text-foreground hover:no-underline"
+			><BookMarked class="size-5" />{#if thread.memoryTracking !== false}<span
+					class="text-sm tabular-nums">{thread.writes}</span
+				>{/if}</Button
 		>
-			<BookMarked class="size-3.5" aria-hidden="true" />
-			<span class="truncate"
-				>{thread.memoryTracking === false
-					? 'Shares memory with Main'
-					: `Shares memory with Main · ${thread.writes} ${thread.writes === 1 ? 'write' : 'writes'}`}</span
-			>
-		</Button>
 	{/if}
+	{@render chat?.headerActions?.()}
 {/snippet}
 
 {#snippet commandActions()}
@@ -170,7 +172,7 @@
 		sheet={chatSheet}
 		title={thread.title}
 		placeholder="Message in {thread.title}"
-		{subtitle}
+		{headerActions}
 		{commandActions}
 		readOnly={!sendable ? readOnly : undefined}
 		back={{ ...back, desktop: true }}

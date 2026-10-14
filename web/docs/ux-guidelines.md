@@ -379,7 +379,7 @@ Where the app departs:
 
 `Page.Body` centers content at `max-w-3xl` for `reading` and spans the inset for `full`.
 A sticky footer is a `ScreenFooter` passed as the Screen's `footer`: it draws the full-bleed top border and lines its `flex flex-col gap-2 px-4 py-3 md:px-6` contents up with the body measure. Footers bring no border or gutters of their own.
-The header `subtitle` clips text sideways only. `Page.Header` owns the vertical reach of a `Button` in it: on coarse pointers its `::after` runs from the button's top edge, which is the title's bottom, to 4px below its face, which is the header's bottom edge. That keeps it off the title and off the content below. The thread memory link is 28px tall on touch, an exception to the 44px rule, and callers add no hit-area classes.
+The header `subtitle` is status text only and clips sideways. Put header controls in `actions`: Chromium's touch adjustment moves taps on the title's lowest pixels onto a control directly under it.
 It owns gutters and section rhythm. Embedded content adds no competing outer geometry.
 Chat transcripts, the workspace shell, and tab pagers retain their specialized scrolling layouts.
 
@@ -543,7 +543,7 @@ Capture each screen that changed in every state that applies, at 412x915 unless 
 
 A UX bug blocks when any of these is true:
 
-- A check in this doc fails (axe violation, a target under 24px anywhere, a coarse-pointer hit area under 44px other than the exceptions documented above (line-variant tabs at 40px, the row axis of stock-gap rows at face plus 8px, `sm`/`xs` buttons at face plus 16px wide, stock `SidebarMenuAction`, a header subtitle control at 28px, and full-width Input and Textarea), overflow at 320px, the scroll-jank test).
+- A check in this doc fails (axe violation, a target under 24px anywhere, a coarse-pointer hit area under 44px other than the exceptions documented above (line-variant tabs at 40px, the row axis of stock-gap rows at face plus 8px, `sm`/`xs` buttons at face plus 16px wide, stock `SidebarMenuAction`, and full-width Input and Textarea), overflow at 320px, the scroll-jank test).
 - Data loss: a typed message, a draft edit, or a pending approval can disappear without the user choosing it.
 - A blocking wait, failure, or required action has no visible feedback. Cached background refreshes can remain quiet.
 - Back does the wrong thing (exits the app, skips a screen, leaves an overlay open).

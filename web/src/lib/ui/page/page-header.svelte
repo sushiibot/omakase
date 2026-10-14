@@ -20,6 +20,7 @@
 		level?: 1 | 2;
 		/** Before the title, such as an avatar or status dot; the heading text stays `title`. */
 		media?: Snippet;
+		/** Status text only: touch adjustment moves taps on the title onto any control here. */
 		subtitle?: Snippet;
 		/** A drawer button or back link, followed by a separator. */
 		leading?: Snippet;
@@ -57,11 +58,10 @@
 			<h1 class={titleClass}>{title}</h1>
 		{/if}
 		{#if subtitle}
-			<!-- Clipped sideways only. A button here reaches from the title's bottom to the header's, never over either. -->
 			<div
 				data-slot="page-header-subtitle"
 				class={cn(
-					'overflow-x-clip text-xs text-ellipsis whitespace-nowrap text-muted-foreground [&_[data-slot=button]]:any-pointer-coarse:after:top-0 [&_[data-slot=button]]:any-pointer-coarse:after:-bottom-1',
+					'overflow-x-clip text-xs text-ellipsis whitespace-nowrap text-muted-foreground',
 					breadcrumb && 'md:hidden'
 				)}
 			>
