@@ -12,6 +12,8 @@
 	import FileUp from '@lucide/svelte/icons/file-up';
 	import RoutedSheet from '$lib/ui/sheet/routed-sheet.svelte';
 	import * as Sheet from '$lib/ui/sheet';
+	import * as DropdownMenu from '$lib/ui/dropdown-menu';
+	import { MediaQuery } from 'svelte/reactivity';
 	import X from '@lucide/svelte/icons/x';
 	import CircleAlert from '@lucide/svelte/icons/circle-alert';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
@@ -99,8 +101,15 @@
 	let picker = $state<HTMLInputElement | null>(null);
 	let attachmentTrigger = $state<HTMLButtonElement | null>(null);
 	let localAttachmentsOpen = $state(false);
+	let attachmentMenuOpen = $state(false);
+	const desktopAttachments = new MediaQuery('(min-width: 48rem)');
 	const showAttachments = $derived(attachmentsOpen || localAttachmentsOpen);
+	$effect(() => {
+		if (desktopAttachments.current && showAttachments) closeAttachments();
+		if (!desktopAttachments.current) attachmentMenuOpen = false;
+	});
 	function closeAttachments() {
+		attachmentMenuOpen = false;
 		localAttachmentsOpen = false;
 		oncloseattachments?.();
 	}
@@ -341,18 +350,49 @@
 						input.value = '';
 					}}
 				/>
-				<button
-					bind:this={attachmentTrigger}
-					type="button"
-					aria-label="Add attachments"
-					aria-haspopup="dialog"
-					aria-expanded={showAttachments}
-					disabled={quotaFull}
-					onclick={() => (onopenattachments ? onopenattachments() : (localAttachmentsOpen = true))}
-					class="group/round grid size-12 shrink-0 place-items-center rounded-full outline-none select-none disabled:pointer-events-none"
-				>
-					<span class={roundFace('muted')}>{@render attachIcon()}</span>
-				</button>
+				{#if desktopAttachments.current}
+					<DropdownMenu.Root bind:open={attachmentMenuOpen}>
+						<DropdownMenu.Trigger
+							bind:ref={attachmentTrigger}
+							aria-label="Add attachments"
+							disabled={quotaFull}
+							class="group/round grid size-12 shrink-0 place-items-center rounded-full outline-none select-none disabled:pointer-events-none"
+						>
+							<span class={roundFace('muted')}>{@render attachIcon()}</span>
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content
+							side="top"
+							align="start"
+							sideOffset={8}
+							class="w-48"
+							aria-label="Add attachments"
+						>
+							<DropdownMenu.Item onSelect={() => pickAttachment('camera')}
+								><Camera aria-hidden="true" />Take photo</DropdownMenu.Item
+							>
+							<DropdownMenu.Item onSelect={() => pickAttachment('photos')}
+								><Image aria-hidden="true" />Upload photo</DropdownMenu.Item
+							>
+							<DropdownMenu.Item onSelect={() => pickAttachment('files')}
+								><FileUp aria-hidden="true" />Upload file</DropdownMenu.Item
+							>
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				{:else}
+					<button
+						bind:this={attachmentTrigger}
+						type="button"
+						aria-label="Add attachments"
+						aria-haspopup="dialog"
+						aria-expanded={showAttachments}
+						disabled={quotaFull}
+						onclick={() =>
+							onopenattachments ? onopenattachments() : (localAttachmentsOpen = true)}
+						class="group/round grid size-12 shrink-0 place-items-center rounded-full outline-none select-none disabled:pointer-events-none"
+					>
+						<span class={roundFace('muted')}>{@render attachIcon()}</span>
+					</button>
+				{/if}
 			{/if}
 			{#if onmodel && model}
 				<!-- A 36px pill inside the 48px target, like the round buttons. -->
@@ -476,7 +516,7 @@
 </form>
 
 <RoutedSheet
-	open={showAttachments}
+	open={!desktopAttachments.current && showAttachments}
 	label="Add attachments"
 	returnFocus={attachmentTrigger}
 	onclose={closeAttachments}

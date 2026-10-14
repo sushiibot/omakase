@@ -208,7 +208,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 		await trigger.click();
 		await expect(drawer).toBeVisible();
 		await checkScreen(page);
-		for (const width of [320, 412, 1280]) {
+		for (const width of [320, 412]) {
 			await page.setViewportSize({ width, height: 915 });
 			await expect
 				.poll(async () => {
@@ -244,5 +244,63 @@ for (const colorScheme of ['light', 'dark'] as const) {
 		await page.keyboard.press('Escape');
 		await expect(drawer).toBeHidden();
 		await expect(trigger).toBeFocused();
+	});
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
+	test(`desktop attachments open above the plus without blocking chat in ${colorScheme}`, async ({
+		browser
+	}) => {
+		const context = await browser.newContext({
+			viewport: { width: 1280, height: 900 },
+			isMobile: false,
+			hasTouch: false,
+			colorScheme
+		});
+		await fixtureApp(context, { override: '' });
+		const page = await context.newPage();
+		await page.goto('/chat');
+		const trigger = page.getByRole('button', { name: 'Add attachments' });
+		const message = page.getByRole('textbox', { name: 'Message' });
+		await message.fill('Keep this draft');
+		await trigger.click();
+		const menu = page.getByRole('menu', { name: 'Add attachments' });
+		await expect(menu).toBeVisible();
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(page.locator('[data-slot="sheet-overlay"]')).toHaveCount(0);
+		await expect
+			.poll(async () => {
+				const anchor = await trigger.boundingBox();
+				const box = await menu.boundingBox();
+				return (
+					!!anchor &&
+					!!box &&
+					Math.abs(box.x - anchor.x) < 2 &&
+					box.y + box.height <= anchor.y &&
+					anchor.y - (box.y + box.height) < 16
+				);
+			})
+			.toBe(true);
+		await page.screenshot({ path: `/tmp/omakase-attachment-menu-${colorScheme}.png` });
+		await page.keyboard.press('Escape');
+		await expect(menu).toBeHidden();
+		await expect(trigger).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(menu).toBeVisible();
+		const messageBox = (await message.boundingBox())!;
+		await page.mouse.click(messageBox.x + 20, messageBox.y + 20);
+		await expect(menu).toBeHidden();
+		await message.click();
+		await expect(message).toBeFocused();
+		await expect(message).toHaveValue('Keep this draft');
+		for (const action of ['Take photo', 'Upload photo', 'Upload file']) {
+			await trigger.click();
+			const event = page.waitForEvent('filechooser');
+			await menu.getByRole('menuitem', { name: action, exact: true }).click();
+			const chooser = await event;
+			expect(chooser.isMultiple()).toBe(action !== 'Take photo');
+			await expect(menu).toBeHidden();
+		}
+		await context.close();
 	});
 }
