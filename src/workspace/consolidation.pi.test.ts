@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { WorkspaceConfig } from "./config.ts";
 import { BackendSelector } from "./chatgptFallback.ts";
 import { CONSOLIDATION_AGENT, systemPrompt, createConsolidationJob } from "./consolidation.ts";
-import { memoryEntries, memorySources, MEMORY_REVIEW_SYSTEM } from "./memoryUpdates.ts";
+import { memoryEntries, memorySources, MEMORY_REVIEW_RULES } from "./memoryUpdates.ts";
 import { commitHome, scaffoldHome } from "./home.ts";
 import { runToolFreeJob } from "./jobSession.ts";
 import { RunLog } from "./runLog.ts";
@@ -23,17 +23,20 @@ type Body = { messages: Array<{ role: string; content: unknown }>; tools?: unkno
 let root: string;
 let requests: string[];
 let bodies: Body[];
+let decisionBodies: any[];
 const realFetch = globalThis.fetch;
 const realKey = process.env.OPENAI_API_KEY;
 const savedEnv: Record<string, string | undefined> = {};
 
 const isChatGpt = (url: string) => url.startsWith("https://api.openai.com/");
+const isDecision = (url: string) => url === "http://openrouter.test/alpha/decisions";
 const isOpenRouter = (url: string) => url.startsWith(`${OPENROUTER_BASE}/chat/completions`);
 
 function stubFetch(handler: (url: string) => Response | undefined): void {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     requests.push(url);
+    if (isDecision(url)) decisionBodies.push(JSON.parse(String(init?.body)));
     if (isOpenRouter(url)) bodies.push(JSON.parse(String(init?.body ?? (input instanceof Request ? await input.text() : "{}"))));
     if (url.startsWith("https://openrouter.ai/api/v1/models")) return new Response("", { status: 503 });
     const response = handler(url);
@@ -88,7 +91,7 @@ const PROPOSAL = JSON.stringify({ operations: [
   { op: "upsert", id: entries[1]!.id, file: "MEMORY.md", text: "Deploys from main via CI on every push.", kind: "fact", sources: [entries[1]!.id, entries[0]!.id] },
   { op: "upsert", file: "MEMORY.md", text: "Uses uv for Python.", kind: "fact", sources: [noteId] },
 ], documents: [], summary: "merged deploy entries" });
-const REVIEW = JSON.stringify({ decisions: [0, 1, 2].map(i => ({ id: `operation:${i}`, verdict: "supported", reason: "supported by provided sources" })) });
+const REVIEW = { model: "perplexity/pplx-decider-v1.1-27b", answers: Object.fromEntries([0, 1, 2].map(i => [`item_${i}`, { type: "noul", noul: 0.99 }])), usage: { input_tokens: 100, output_tokens: 3, cost: 0.000002 } };
 
 beforeAll(() => {
   for (const [k, v] of Object.entries(GIT_ENV)) {
@@ -108,6 +111,7 @@ beforeEach(async () => {
   root = mkdtempSync(join(tmpdir(), "ws-consolidate-pi-"));
   requests = [];
   bodies = [];
+  decisionBodies = [];
   delete process.env.OPENAI_API_KEY;
   mkdirSync(join(root, "agent"), { recursive: true });
   const home = join(root, "home");
@@ -129,16 +133,19 @@ afterEach(() => {
 describe("consolidation job on a real Pi session", () => {
   test("ChatGPT limit → OpenRouter retry; read-only evidence tools on the wire; applied; logged as job:consolidation", async () => {
     signInChatGpt();
-    stubFetch((url) => (isChatGpt(url) ? jsonResponse(429, USAGE_LIMIT_BODY) : isOpenRouter(url) ? openRouterReply(bodies.length === 1 ? PROPOSAL : REVIEW) : undefined));
+    stubFetch((url) => (isChatGpt(url) ? jsonResponse(429, USAGE_LIMIT_BODY) : isOpenRouter(url) ? openRouterReply(PROPOSAL) : isDecision(url) ? jsonResponse(200, REVIEW) : undefined));
     const runs = new RunLog(config().stateDir);
 
     const outcome = await createConsolidationJob(config(), { runs, selector: new BackendSelector({ primaryEnabled: config().provider === "chatgpt" }) }).run({ trigger: "manual", force: false });
 
     expect(outcome.status).toBe("applied");
     expect(requests.filter(isChatGpt)).toHaveLength(1);
-    expect(requests.filter(isOpenRouter)).toHaveLength(2);
-    expect(bodies[1]!.tools ?? []).toEqual([]);
-    expect(JSON.stringify(bodies[1]!.messages)).toContain(MEMORY_REVIEW_SYSTEM.slice(0, 60));
+    expect(requests.filter(isOpenRouter)).toHaveLength(1);
+    expect(requests.filter(isDecision)).toHaveLength(1);
+    expect(decisionBodies[0].model).toBe(REVIEW.model);
+    expect(decisionBodies[0].questions.item_0.type).toBe("noul");
+    expect(decisionBodies[0].questions.item_0.instructions).toContain(MEMORY_REVIEW_RULES);
+    expect(decisionBodies[0].state.items).toHaveLength(3);
     expect(runs.listRuns({ agentName: "job:memory-review" })[0]).toMatchObject({ status: "done" });
     const body = bodies[0]!;
     expect((body.tools ?? []).map(t => (t as { function: { name: string } }).function.name).sort()).toEqual(["find", "grep", "ls", "memory_read", "memory_search", "read"]);

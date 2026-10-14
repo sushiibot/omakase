@@ -41,16 +41,25 @@ The host renders citations and inference labels. It checks allowed paths, source
 One source can support several entries. Topic links require an existing or proposed destination, rather than a conversation citation.
 Topic documents still use full-file proposals. New topic content requires evidence supplied in the batch or read through `memory_read`.
 
-A separate model session reviews each edit and document against the supplied evidence.
+The OpenRouter Decisions API reviews each edit and document against the supplied evidence.
 It checks meaning, attribution, negation, temporal corrections, and distinctions between facts, observations, and inferences.
-The reviewer has no tools and uses the existing model connection. Every proposed change requires a decision.
+The reviewer returns typed probabilities and has no tools. Every proposed change requires a decision.
+The host accepts a change only when its support probability is at least 0.95.
+This initial threshold needs evaluation against labeled memory changes. It does not guarantee 95% accuracy.
 Missing, duplicate, or invalid decisions cannot authorize a write. Word overlap and source-use counts do not decide factual support.
 Capture gets one repair attempt after a structural or semantic rejection.
+API failures and invalid review responses stop the attempt and keep the evidence pending.
 The complete update must pass before application, so a topic and its index cannot become inconsistent.
 Unresolved rejection leaves all evidence pending. There is no partial application in this protocol.
 
 The reviewer is fallible. This design separates structural guarantees from semantic judgments rather than claiming to prove truth.
-No additional vendor receives personal data. The review callback can support another decision model after evaluation.
+Review uses the OpenRouter key, even when chat uses a ChatGPT sign-in.
+The selected decision provider receives the review evidence through OpenRouter.
+The default reviewer is `perplexity/pplx-decider-v1.1-27b`.
+Set `WORKSPACE_MEMORY_REVIEW_MODEL` to another Decisions API model, such as `typesafe/jev-1.13` or `microsoft/microsoft-decision-1`.
+The endpoint uses `OPENAI_BASE_URL`, with `/v1` replaced by `/alpha/decisions`. Custom gateways must support this route.
+Run logs record the reviewer model, token usage, cost, and acceptance count when available.
+The proposal model still writes JSON updates. Proposal errors and review errors have separate failure messages.
 The old whole-file protocol remains available to internal callers without a review callback. Production always supplies the callback.
 
 The host applies proposals between chat turns and requests a context reload.
@@ -84,7 +93,7 @@ These tests verify the pipeline. They do not measure a model's semantic accuracy
 
 The synthetic cases in `fixtures/memory-review.ts` cover paraphrases, negation, attribution, purchases, corrections, temporary travel, and inferences.
 Run `bun scripts/eval-memory-review.ts --list` to inspect the cases without model calls.
-With an OpenRouter key in `OPENAI_API_KEY`, run `bun scripts/eval-memory-review.ts` to evaluate the configured `WORKSPACE_MODEL`.
+With an OpenRouter key in `OPENAI_API_KEY`, run `bun scripts/eval-memory-review.ts` to evaluate the configured `WORKSPACE_MEMORY_REVIEW_MODEL` through the Decisions API.
 The evaluation uses temporary storage and synthetic data. It reports false acceptances, false rejections, and errors separately.
 It makes paid model calls. A passing small fixture set does not establish production accuracy.
 

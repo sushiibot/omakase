@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { memoryEntries, memorySources, parseMemoryUpdate, renderMemoryUpdate, reviewProblems, MEMORY_REVIEW_SYSTEM, type MemoryFiles, type MemoryUpdate } from "./memoryUpdates.ts";
 import { runConsolidation, type ConsolidationDeps, type NoteChunk } from "./consolidation.ts";
 import type { Evidence } from "./memoryEvidence.ts";
+import { reviewMemoryDecisions } from "./memoryDecisions.ts";
+import { RunLog } from "./runLog.ts";
 
 const before: MemoryFiles = {
   "USER.md": "# User\n\n- Avoids dairy. (src: 2026-10-01, web:a; web:b)\n- Old entry without a recognized tag.\n",
@@ -110,6 +112,34 @@ test("capture uses semantic review, applies supported paraphrase and records rev
   expect((await runConsolidation(d, { capture: true })).status).toBe("applied");
   expect(read("USER.md")).toContain("Prefers dairy-free meals.");
   expect(read("DREAMS.md")).toContain("Semantic review model: review-fixture");
+});
+
+test.each([0.99, 0.1])("native decision review controls memory application at probability %s", async probability => {
+  const d = deps(upsert());
+  const request = (async () => Response.json({ model: "decision-fixture", answers: { item_0: { type: "noul", noul: probability } } })) as import("./memoryDecisions.ts").DecisionRequest;
+  d.review = async (_system, prompt) => reviewMemoryDecisions({ apiKey: "test", baseUrl: "https://openrouter.ai/api/v1" }, prompt, new RunLog(d.stateDir), request);
+  const result = await runConsolidation(d, { capture: true });
+  expect(result.status).toBe(probability >= 0.95 ? "applied" : "rejected");
+  expect(read("USER.md").includes("Prefers dairy-free meals.")).toBe(probability >= 0.95);
+  if (probability < 0.95) expect(JSON.parse(readFileSync(join(d.stateDir, "consolidation.json"), "utf8")).notes).toEqual({});
+});
+
+test("review outage cannot turn into a no-op repair that consumes pending evidence", async () => {
+  const d = deps(upsert());
+  let proposals = 0;
+  const propose = d.propose;
+  d.propose = async (...args) => {
+    proposals++;
+    if (proposals > 1) return { text: '{"operations":[]}', model: "fixture" };
+    return propose(...args);
+  };
+  d.review = async () => { throw new Error("review unavailable"); };
+  const result = await runConsolidation(d, { capture: true });
+  expect(result.status).toBe("rejected");
+  expect(result.reasons?.[0]).toContain("invalid memory review");
+  expect(proposals).toBe(1);
+  expect(read("USER.md")).toBe(before["USER.md"]);
+  expect(JSON.parse(readFileSync(join(d.stateDir, "consolidation.json"), "utf8")).notes).toEqual({});
 });
 
 test("semantic objection gets one repair attempt before writing", async () => {
