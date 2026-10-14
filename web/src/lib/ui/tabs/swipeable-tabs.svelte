@@ -1,3 +1,4 @@
+<!-- app: touch pager under the stock line tabs (ux-guidelines.md#tabs-swipes-and-scroll-ownership) -->
 <script lang="ts" module>
 	export interface SwipeableTab {
 		value: string;

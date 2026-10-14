@@ -1,3 +1,4 @@
+<!-- app: overflow menu for secondary header commands (ux-guidelines.md#shared-component-patterns) -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';

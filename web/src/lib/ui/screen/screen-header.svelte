@@ -1,4 +1,4 @@
-<!-- Page.Header with the phone drawer button or back link, for headers outside a Screen -->
+<!-- app: Page.Header with the phone drawer button or back link, for headers outside a Screen (ux-guidelines.md#shared-component-patterns) -->
 <script lang="ts">
 	import type { ComponentProps } from 'svelte';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';

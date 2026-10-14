@@ -1,3 +1,4 @@
+// app: shows hidden and bidirectional characters in approval text (ux-guidelines.md#approval-cards)
 // Bidirectional overrides and zero-width characters can make shown text differ from what runs.
 const HIDDEN = /[​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
 

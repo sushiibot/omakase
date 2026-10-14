@@ -1,4 +1,4 @@
-<!-- modeled on shadcn-svelte dashboard-01 main and the sidebar-10/15 content column -->
+<!-- app: modeled on shadcn-svelte dashboard-01 main and the sidebar-10/15 content column (ux-guidelines.md#spacing-and-density) -->
 <script lang="ts" module>
 	export type PageMeasure = 'reading' | 'full';
 

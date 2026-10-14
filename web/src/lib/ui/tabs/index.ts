@@ -1,3 +1,4 @@
+// app: stock tab parts plus the swipe pager (ux-guidelines.md#tabs-swipes-and-scroll-ownership)
 import Root from './tabs.svelte';
 import Content from './tabs-content.svelte';
 import List from './tabs-list.svelte';

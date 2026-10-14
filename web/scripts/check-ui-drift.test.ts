@@ -235,10 +235,11 @@ describe('SYNC.json and nova headers', () => {
 	});
 
 	test('missing and orphan entries are flagged', () => {
-		expect(check({ badge }, {})).toEqual(['stock-named lib/ui dir without a SYNC.json entry']);
+		expect(check({ badge }, {})).toEqual(['lib/ui dir without a SYNC.json entry']);
 		expect(check({}, { badge: { drift: 'none' } })).toEqual([
-			'SYNC.json entry without a stock-named lib/ui dir'
+			'SYNC.json entry without a lib/ui dir'
 		]);
+		expect(check({ '': { 'x.ts': '// app: helper (ux-guidelines.md#guide)' } }, {})).toEqual([]);
 	});
 
 	test('drift reasons must cite anchors that exist, every one of them', () => {
@@ -246,7 +247,7 @@ describe('SYNC.json and nova headers', () => {
 			'SYNC.json drift reason must be "none" or cite (ux-guidelines.md#<anchor>)'
 		]);
 		expect(check({ badge }, { badge: { drift: 'x (ux-guidelines.md#nope)' } })).toEqual([
-			'SYNC.json drift reason cites a missing ux-guidelines.md anchor'
+			'cites a missing ux-guidelines.md anchor'
 		]);
 		expect(
 			check(
@@ -257,7 +258,7 @@ describe('SYNC.json and nova headers', () => {
 					}
 				}
 			)
-		).toEqual(['SYNC.json drift reason cites a missing ux-guidelines.md anchor']);
+		).toEqual(['cites a missing ux-guidelines.md anchor']);
 	});
 
 	test('a SYNC.json that is not an object of entries is reported, not thrown', () => {
@@ -273,23 +274,54 @@ describe('SYNC.json and nova headers', () => {
 		]);
 	});
 
-	test('every stock file carries its own nova header; local parts are exempt', () => {
-		const header = 'stock-named lib/ui file without its shadcn-svelte nova header';
-		expect(check({ badge: { 'badge.svelte': '<span />' } }, { badge: { drift: 'none' } })).toEqual([
-			header
-		]);
+	test('every file carries its nova header or an app header citing a real anchor', () => {
+		const header =
+			'lib/ui file without its shadcn-svelte nova header or an app header citing ux-guidelines.md';
+		const none = { badge: { drift: 'none' } };
+		expect(check({ badge: { 'badge.svelte': '<span />' } }, none)).toEqual([header]);
 		expect(
 			check(
 				{ badge: { 'badge.svelte': '<!-- shadcn-svelte nova: ui/badge/other.svelte -->' } },
-				{ badge: { drift: 'none' } }
+				none
 			)
 		).toEqual([header]);
+		const pager = { tabs: { drift: 'pager (ux-guidelines.md#tabs-swipes-and-scroll-ownership)' } };
+		expect(check({ tabs: { 'swipeable-tabs.svelte': '<div />' } }, pager)).toEqual([header]);
 		expect(
 			check(
-				{ tabs: { 'swipeable-tabs.svelte': '<div />' } },
-				{ tabs: { drift: 'pager (ux-guidelines.md#tabs-swipes-and-scroll-ownership)' } }
+				{
+					tabs: {
+						'swipeable-tabs.svelte':
+							'<!-- app: pager (ux-guidelines.md#tabs-swipes-and-scroll-ownership) -->',
+						'pane.ts': '// app: motion (ux-guidelines.md#reach-and-touch-targets)'
+					}
+				},
+				pager
 			)
 		).toEqual([]);
+		expect(check({ '': { 'x.svelte': '<!-- app: no rule cited -->' } }, {})).toEqual([header]);
+		expect(check({ '': { 'x.svelte': '<!-- app: x (ux-guidelines.md#nope) -->' } }, {})).toEqual([
+			'cites a missing ux-guidelines.md anchor'
+		]);
+	});
+
+	test('app-owned dirs record their source and an anchored reason, and use app headers', () => {
+		const app =
+			'app-owned lib/ui dir needs { "source": "app", "reason": "... (ux-guidelines.md#<anchor>)" }';
+		const screen = { 'screen.svelte': '<!-- app: screens (ux-guidelines.md#guide) -->' };
+		expect(
+			check({ screen }, { screen: { source: 'app', reason: 'screens (ux-guidelines.md#guide)' } })
+		).toEqual([]);
+		expect(check({ screen }, { screen: { drift: 'none' } })).toEqual([app]);
+		expect(check({ screen }, { screen: { source: 'app', reason: 'screens' } })).toEqual([app]);
+		expect(
+			check(
+				{ screen: { 'screen.svelte': '<!-- shadcn-svelte nova: ui/screen/screen.svelte -->' } },
+				{ screen: { source: 'app', reason: 'screens (ux-guidelines.md#guide)' } }
+			)
+		).toEqual([
+			'lib/ui file without its shadcn-svelte nova header or an app header citing ux-guidelines.md'
+		]);
 	});
 });
 

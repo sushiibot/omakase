@@ -177,10 +177,7 @@
 					bind:value={() => theme, (v) => onchoosetheme?.(v as ThemeChoice)}
 				>
 					{#each themes as t (t.id)}
-						<Field.Label
-							for="{uid}-theme-{t.id}"
-							class="any-pointer-coarse:*:data-[slot=field]:px-3.5 any-pointer-coarse:*:data-[slot=field]:py-4"
-						>
+						<Field.Label for="{uid}-theme-{t.id}">
 							<Field.Field orientation="horizontal">
 								<RadioGroup.Item value={t.id} id="{uid}-theme-{t.id}" />
 								<Field.Title>{t.label}</Field.Title>

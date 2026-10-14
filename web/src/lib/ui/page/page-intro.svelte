@@ -1,4 +1,4 @@
-<!-- modeled on shadcn-svelte card-header: title, description and a trailing action -->
+<!-- app: modeled on shadcn-svelte card-header: title, description and a trailing action (ux-guidelines.md#shared-component-patterns) -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { cn } from '$lib/utils';

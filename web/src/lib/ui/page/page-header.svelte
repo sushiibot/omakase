@@ -1,4 +1,4 @@
-<!-- modeled on shadcn-svelte dashboard-01 site-header and the sidebar-10/15 inset header -->
+<!-- app: modeled on shadcn-svelte dashboard-01 site-header and the sidebar-10/15 inset header (ux-guidelines.md#shared-component-patterns) -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { Separator } from '$lib/ui/separator';

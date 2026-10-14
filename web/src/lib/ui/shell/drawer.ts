@@ -1,3 +1,4 @@
+// app: drawer open state shared by the shell and screen headers (ux-guidelines.md#back-gesture-and-navigation)
 import { getContext, setContext } from 'svelte';
 
 const KEY = Symbol('drawer');

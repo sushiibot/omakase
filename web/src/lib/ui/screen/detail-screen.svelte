@@ -1,3 +1,4 @@
+<!-- app: screen for one record with remote state (ux-guidelines.md#shared-component-patterns) -->
 <script lang="ts">
 	import type { ComponentProps, Snippet } from 'svelte';
 	import Screen from './screen.svelte';

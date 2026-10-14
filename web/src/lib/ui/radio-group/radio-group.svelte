@@ -7,20 +7,14 @@
 		ref = $bindable(null),
 		class: className,
 		value = $bindable(''),
-		layout = 'stack',
 		...restProps
-	}: RadioGroupPrimitive.RootProps & { layout?: 'stack' | 'segmented' } = $props();
+	}: RadioGroupPrimitive.RootProps = $props();
 </script>
 
 <RadioGroupPrimitive.Root
 	bind:ref
 	bind:value
 	data-slot="radio-group"
-	class={cn(
-		layout === 'segmented'
-			? 'relative isolate flex w-fit gap-0 before:absolute before:inset-x-0 before:inset-y-0 before:-z-10 before:rounded-lg before:bg-muted any-pointer-coarse:before:inset-y-2'
-			: 'grid w-full gap-2',
-		className
-	)}
+	class={cn('grid w-full gap-2', className)}
 	{...restProps}
 />

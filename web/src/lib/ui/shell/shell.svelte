@@ -1,4 +1,4 @@
-<!-- modeled on shadcn-svelte sidebar-15: left sidebar, inset, right sidebar; phones keep the gesture panes -->
+<!-- app: modeled on shadcn-svelte sidebar-15: left sidebar, inset, right sidebar; phones keep the gesture panes (ux-guidelines.md#breakpoints) -->
 <script lang="ts">
 	import { onMount, tick, untrack, type Snippet } from 'svelte';
 	import { MediaQuery } from 'svelte/reactivity';

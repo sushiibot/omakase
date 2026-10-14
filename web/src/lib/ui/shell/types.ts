@@ -1,3 +1,4 @@
+// app: navigation entries the shell renders (ux-guidelines.md#breakpoints)
 import type { Component } from 'svelte';
 
 export interface NavItem {

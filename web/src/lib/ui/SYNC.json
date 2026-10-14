@@ -12,10 +12,14 @@
 		"drift": "none"
 	},
 	"checkbox": {
-		"drift": "none"
+		"drift": "coarse-pointer hit area 44px tall, so stacked rows meet without overlapping (ux-guidelines.md#shared-component-patterns)"
 	},
 	"collapsible": {
 		"drift": "none"
+	},
+	"diff": {
+		"source": "app",
+		"reason": "line diff view (ux-guidelines.md#long-content-on-narrow-screens)"
 	},
 	"dropdown-menu": {
 		"drift": "none"
@@ -26,8 +30,12 @@
 	"field": {
 		"drift": "none"
 	},
+	"format": {
+		"source": "app",
+		"reason": "text and date formatting helpers (ux-guidelines.md#copy-accuracy-and-dates)"
+	},
 	"input": {
-		"drift": "none"
+		"drift": "app-owned SearchField beside the stock Input (ux-guidelines.md#shared-component-patterns)"
 	},
 	"input-group": {
 		"drift": "none"
@@ -38,17 +46,41 @@
 	"label": {
 		"drift": "none"
 	},
+	"menu": {
+		"source": "app",
+		"reason": "overflow menu for secondary commands (ux-guidelines.md#shared-component-patterns)"
+	},
 	"native-select": {
 		"drift": "text-base below md like stock Input, so iOS does not zoom on focus (ux-guidelines.md#breakpoints)"
 	},
+	"page": {
+		"source": "app",
+		"reason": "page anatomy modeled on dashboard-01 and sidebar-10/15 (ux-guidelines.md#shared-component-patterns)"
+	},
+	"pwa": {
+		"source": "app",
+		"reason": "install and update prompts (ux-guidelines.md#notifications)"
+	},
 	"radio-group": {
-		"drift": "segmented layout, a coarse-pointer hit area on the item (taller only in horizontal groups), and aria-labelledby pointing at its labels because axe-core skips label text inside a role=group Field (ux-guidelines.md#shared-component-patterns)"
+		"drift": "a coarse-pointer hit area on the item (taller only in horizontal groups), and aria-labelledby pointing at its labels because axe-core skips label text inside a role=group Field (ux-guidelines.md#shared-component-patterns)"
+	},
+	"screen": {
+		"source": "app",
+		"reason": "shared screens built on Page.* (ux-guidelines.md#shared-component-patterns)"
+	},
+	"section": {
+		"source": "app",
+		"reason": "section heading (ux-guidelines.md#shared-component-patterns)"
 	},
 	"separator": {
 		"drift": "none"
 	},
 	"sheet": {
-		"drift": "motion duration tokens and reduced-motion override (ux-guidelines.md#motion)"
+		"drift": "motion duration tokens and reduced-motion override (ux-guidelines.md#motion); app-owned RoutedSheet so Android back closes it (ux-guidelines.md#back-gesture-and-navigation)"
+	},
+	"shell": {
+		"source": "app",
+		"reason": "app shell modeled on sidebar-15 with phone gesture panes (ux-guidelines.md#breakpoints)"
 	},
 	"sidebar": {
 		"drift": "none"
@@ -58,6 +90,10 @@
 	},
 	"spinner": {
 		"drift": "forwards icon color props only when set so the icon keeps currentColor (ux-guidelines.md#tokens); decorative prop and reduced-motion stop (ux-guidelines.md#shared-component-patterns)"
+	},
+	"status": {
+		"source": "app",
+		"reason": "status pill (ux-guidelines.md#shared-component-patterns)"
 	},
 	"switch": {
 		"drift": "coarse-pointer hit area (ux-guidelines.md#shared-component-patterns)"
@@ -76,5 +112,9 @@
 	},
 	"tooltip": {
 		"drift": "none"
+	},
+	"workspace": {
+		"source": "app",
+		"reason": "chat and inspector split (ux-guidelines.md#breakpoints)"
 	}
 }

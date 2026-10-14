@@ -1,3 +1,4 @@
+<!-- app: status icon with its word, never icon-only (ux-guidelines.md#shared-component-patterns) -->
 <script lang="ts">
 	import { cn } from '$lib/utils';
 	import { status, toneClass, type StatusKey } from './status';

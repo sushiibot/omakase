@@ -60,14 +60,14 @@ Document new reusable patterns there. Keep feature documents focused on domain b
 
 Use the normal `Button` for routine actions. Its compact face preserves the full touch target.
 Use `ScreenContent` for content geometry, `Section` for repeated groups, and a horizontal `Field` with stock `Switch` for toggle preferences.
-Use `ToggleGroup` for short exclusive preference choices.
+Use `RadioGroup` choice cards for short exclusive preference choices, and `ToggleGroup` for short view filters.
 Do not copy button sizing, page gutters, section headings, or control internals into feature classes.
 Review shared changes on desktop and touch layouts, in both themes.
 
 Adding UI:
 
-1. Check whether shadcn-svelte nova ships it, and add it with the CLI (`bunx shadcn-svelte add <name>`, the pinned dev dependency) into `src/lib/ui` before writing anything by hand. Start each file with the source header the drift check expects: `<!-- shadcn-svelte nova: ui/<name>/<file> -->` in Svelte files, `// shadcn-svelte nova: ui/<name>/<file>` in TypeScript.
-2. Add a `src/lib/ui/SYNC.json` entry for the new component: `"drift": "none"`, or one line saying what differs and citing the rule (`(ux-guidelines.md#<anchor>)`).
+1. Check whether shadcn-svelte nova ships it, and add it with the CLI (`bunx shadcn-svelte add <name>`, the pinned dev dependency) into `src/lib/ui` before writing anything by hand. Start each file with the source header the drift check expects: `<!-- shadcn-svelte nova: ui/<name>/<file> -->` in Svelte files, `// shadcn-svelte nova: ui/<name>/<file>` in TypeScript. A file the app owns, inside a stock dir or its own, starts with `<!-- app: <what it is> (ux-guidelines.md#<anchor>) -->` or `// app: ...` instead.
+2. Add a `src/lib/ui/SYNC.json` entry for every `src/lib/ui` dir. A stock dir records `"drift": "none"` or one line saying what differs, citing the rule (`(ux-guidelines.md#<anchor>)`). An app-owned dir records `"source": "app"` and a `"reason"` citing the rule.
 3. For a layout with no stock component, copy from the nearest shadcn-svelte block and name it in a header comment (`<!-- modeled on shadcn-svelte dashboard-01 ... -->`).
 4. Run `bun run lint`; the UI drift checks fail it. `bun run lint:drift` lists every hit, and `UI_DRIFT_STRICT=0` reports drift as warnings while fixing a batch.
 

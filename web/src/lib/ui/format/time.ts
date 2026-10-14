@@ -1,3 +1,4 @@
+// app: dates and times against a caller-supplied now (ux-guidelines.md#copy-accuracy-and-dates)
 // Times are formatted against a `now` the caller passes in, so screens, fixtures and screenshots
 // agree on what "today" is.
 

@@ -1,3 +1,4 @@
+// app: Page.Header, Page.Intro and Page.Body (ux-guidelines.md#shared-component-patterns)
 import Body from './page-body.svelte';
 import Header from './page-header.svelte';
 import Intro from './page-intro.svelte';

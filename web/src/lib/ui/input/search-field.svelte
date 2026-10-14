@@ -1,3 +1,4 @@
+<!-- app: labelled search input with a clear button (ux-guidelines.md#shared-component-patterns) -->
 <script lang="ts">
 	import Search from '@lucide/svelte/icons/search';
 	import X from '@lucide/svelte/icons/x';

@@ -1,3 +1,4 @@
+<!-- app: screen around the swipe pager (ux-guidelines.md#tabs-swipes-and-scroll-ownership) -->
 <script lang="ts">
 	import type { ComponentProps, Snippet } from 'svelte';
 	import { measureClass, type PageMeasure } from '$lib/ui/page';

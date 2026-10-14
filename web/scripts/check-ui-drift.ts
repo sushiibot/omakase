@@ -28,11 +28,14 @@ const RULE = {
 	maxWidth: 'raw max-w-* in a feature; the screen primitive owns the measure',
 	rawControl: 'raw <button>, <input>, <select> or <textarea> in a feature; use lib/ui',
 	syncShape: 'SYNC.json must be an object of { "<component>": { "drift": ... } }',
-	syncMissing: 'stock-named lib/ui dir without a SYNC.json entry',
-	syncOrphan: 'SYNC.json entry without a stock-named lib/ui dir',
+	syncMissing: 'lib/ui dir without a SYNC.json entry',
+	syncOrphan: 'SYNC.json entry without a lib/ui dir',
 	syncReason: 'SYNC.json drift reason must be "none" or cite (ux-guidelines.md#<anchor>)',
-	syncAnchor: 'SYNC.json drift reason cites a missing ux-guidelines.md anchor',
-	syncHeader: 'stock-named lib/ui file without its shadcn-svelte nova header'
+	syncApp:
+		'app-owned lib/ui dir needs { "source": "app", "reason": "... (ux-guidelines.md#<anchor>)" }',
+	syncAnchor: 'cites a missing ux-guidelines.md anchor',
+	syncHeader:
+		'lib/ui file without its shadcn-svelte nova header or an app header citing ux-guidelines.md'
 };
 
 export const LARGE_TARGET_FILES = new Set([
@@ -298,16 +301,6 @@ export const STOCK_NAMES = new Set([
 	'tooltip'
 ]);
 
-export const LOCAL_FILES = new Set([
-	// App-specific parts that live beside the stock component they build on; no nova source.
-	'input/search-field.svelte',
-	'radio-group/radio-group-card.svelte',
-	'sheet/routed-sheet.svelte',
-	'switch/switch-row.svelte',
-	'tabs/swipeable-tabs.svelte',
-	'tabs/index.ts'
-]);
-
 /** GitHub-style heading anchors of a markdown document, ignoring fenced code. */
 export function anchors(markdown: string): Set<string> {
 	const out = new Set<string>();
@@ -326,7 +319,14 @@ export function anchors(markdown: string): Set<string> {
 	return out;
 }
 
-/** `dirs` maps each stock-named lib/ui dir to its files' sources. */
+const citations = (text: string) =>
+	[...text.matchAll(/\(ux-guidelines\.md#([\w-]+)\)/g)].map((m) => m[1]);
+
+/**
+ * `dirs` maps each lib/ui dir to its files' sources; top-level files sit under `''`, which needs no
+ * SYNC.json entry. Stock-named dirs record their drift from nova; every other dir is app-owned.
+ * Each file opens with its nova header or an app header that cites the rule it serves.
+ */
 export function checkSync(
 	dirs: Record<string, Record<string, string>>,
 	syncJson: string,
@@ -342,34 +342,49 @@ export function checkSync(
 	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
 		return [{ where: 'src/lib/ui/SYNC.json', rule: RULE.syncShape }];
 	}
-	const sync = parsed as Record<string, { drift?: unknown } | null>;
+	const sync = parsed as Record<
+		string,
+		{ drift?: unknown; source?: unknown; reason?: unknown } | null
+	>;
 	const known = anchors(guidelines);
+	const cite = (text: string, where: string) => {
+		const cited = citations(text);
+		for (const anchor of cited.filter((c) => !known.has(c)))
+			out.push({ where: `${where} #${anchor}`, rule: RULE.syncAnchor });
+		return cited.length > 0;
+	};
 	for (const dir of Object.keys(dirs)) {
-		if (!(dir in sync)) out.push({ where: `src/lib/ui/${dir}`, rule: RULE.syncMissing });
+		if (dir && !(dir in sync)) out.push({ where: `src/lib/ui/${dir}`, rule: RULE.syncMissing });
 	}
 	for (const [name, entry] of Object.entries(sync)) {
 		const where = `src/lib/ui/SYNC.json ${name}`;
 		if (!(name in dirs)) out.push({ where, rule: RULE.syncOrphan });
+		if (!STOCK_NAMES.has(name)) {
+			const ok =
+				entry?.source === 'app' && typeof entry.reason === 'string' && cite(entry.reason, where);
+			if (!ok) out.push({ where, rule: RULE.syncApp });
+			continue;
+		}
 		const drift = entry?.drift;
 		if (drift === 'none') continue;
-		const cited =
-			typeof drift === 'string'
-				? [...drift.matchAll(/\(ux-guidelines\.md#([\w-]+)\)/g)].map((m) => m[1])
-				: [];
-		if (!cited.length) out.push({ where, rule: RULE.syncReason });
-		for (const anchor of cited.filter((c) => !known.has(c)))
-			out.push({ where: `${where} #${anchor}`, rule: RULE.syncAnchor });
+		if (!(typeof drift === 'string' && cite(drift, where)))
+			out.push({ where, rule: RULE.syncReason });
 	}
 	for (const [dir, files] of Object.entries(dirs)) {
 		for (const [file, source] of Object.entries(files)) {
-			if (LOCAL_FILES.has(`${dir}/${file}`)) continue;
+			const where = `src/lib/ui/${dir ? `${dir}/` : ''}${file}`;
+			const first = source.split('\n', 1)[0].trim();
+			const svelte = file.endsWith('.svelte');
+			const app = svelte ? /^<!-- app: (.+) -->$/.exec(first) : /^\/\/ app: (.+)$/.exec(first);
+			if (app) {
+				if (!cite(app[1], where)) out.push({ where, rule: RULE.syncHeader });
+				continue;
+			}
 			const path = `ui/${dir}/${file}`.replace(/[.]/g, '\\.');
-			const header = file.endsWith('.svelte')
+			const nova = svelte
 				? new RegExp(`^<!-- shadcn-svelte nova: ${path}( @ \\S+)? -->$`)
 				: new RegExp(`^// shadcn-svelte nova: ${path}( @ \\S+)?$`);
-			if (!header.test(source.split('\n', 1)[0].trim())) {
-				out.push({ where: `src/lib/ui/${dir}/${file}`, rule: RULE.syncHeader });
-			}
+			if (!(STOCK_NAMES.has(dir) && nova.test(first))) out.push({ where, rule: RULE.syncHeader });
 		}
 	}
 	return out;
@@ -383,17 +398,20 @@ function files(dir: string): string[] {
 	});
 }
 
-export function readStockDirs(uiDir: string): Record<string, Record<string, string>> {
+const sourceFile = (f: string) => /\.(svelte|ts)$/.test(f) && !f.endsWith('.test.ts');
+
+/** Every lib/ui dir's component and module sources, with top-level files under `''`. */
+export function readUiDirs(uiDir: string): Record<string, Record<string, string>> {
+	const read = (dir: string, names: string[]) =>
+		Object.fromEntries(names.map((f) => [f, readFileSync(join(dir, f), 'utf8')]));
 	const out: Record<string, Record<string, string>> = {};
+	const top: string[] = [];
 	for (const name of readdirSync(uiDir)) {
 		const dir = join(uiDir, name);
-		if (!STOCK_NAMES.has(name) || !statSync(dir).isDirectory()) continue;
-		out[name] = Object.fromEntries(
-			readdirSync(dir)
-				.filter((f) => /\.(svelte|ts)$/.test(f) && !f.endsWith('.test.ts'))
-				.map((f) => [f, readFileSync(join(dir, f), 'utf8')])
-		);
+		if (statSync(dir).isDirectory()) out[name] = read(dir, readdirSync(dir).filter(sourceFile));
+		else if (sourceFile(name)) top.push(name);
 	}
+	out[''] = read(uiDir, top);
 	return out;
 }
 
@@ -408,7 +426,7 @@ export function run(root: string, mode: DriftMode, log = console.error, ok = con
 		.map((v) => ({ where: `${v.file}:${v.line}`, rule: v.rule }));
 	violations.push(
 		...checkSync(
-			existsSync(ui) ? readStockDirs(ui) : {},
+			existsSync(ui) ? readUiDirs(ui) : {},
 			existsSync(syncPath) ? readFileSync(syncPath, 'utf8') : '{}',
 			readFileSync(join(root, 'docs/ux-guidelines.md'), 'utf8')
 		)

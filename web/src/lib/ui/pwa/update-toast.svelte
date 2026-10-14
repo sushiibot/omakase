@@ -1,3 +1,4 @@
+<!-- app: new-version toast with a reload action (ux-guidelines.md#notifications) -->
 <script lang="ts">
 	let { onreload }: { onreload: () => void } = $props();
 </script>

@@ -1,3 +1,4 @@
+// app: measure shared by a screen and its content and footer (ux-guidelines.md#shared-component-patterns)
 import { getContext, setContext } from 'svelte';
 import type { PageMeasure } from '$lib/ui/page';
 

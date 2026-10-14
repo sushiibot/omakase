@@ -1,3 +1,4 @@
+<!-- app: offline, reconnecting and agent-offline banner (ux-guidelines.md#never-silent-states) -->
 <script lang="ts" module>
 	export type ConnectionState =
 		| { kind: 'offline' }

@@ -1,3 +1,4 @@
+<!-- app: chat beside a docked or sheet inspector (ux-guidelines.md#breakpoints) -->
 <script lang="ts">
 	import { tick } from 'svelte';
 	import type { Snippet } from 'svelte';

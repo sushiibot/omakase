@@ -1,3 +1,4 @@
+// app: pane drag physics for the phone workspace (ux-guidelines.md#tabs-swipes-and-scroll-ownership)
 export type Pane = 'chat' | 'navigation' | 'inspector';
 
 export const motion = {

@@ -1,3 +1,4 @@
+<!-- app: loading, empty, no-match and refresh-failure states (ux-guidelines.md#loading-and-background-refresh) -->
 <script lang="ts" module>
 	import type { Snippet } from 'svelte';
 

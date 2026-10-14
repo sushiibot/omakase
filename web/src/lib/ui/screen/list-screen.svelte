@@ -1,3 +1,4 @@
+<!-- app: screen for repeated collections with search and sections (ux-guidelines.md#shared-component-patterns) -->
 <script lang="ts" module>
 	import type { Component } from 'svelte';
 

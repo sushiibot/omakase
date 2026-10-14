@@ -1,3 +1,4 @@
+// app: status tones and icons for StatePill (ux-guidelines.md#shared-component-patterns)
 import type { Component } from 'svelte';
 import CircleAlert from '@lucide/svelte/icons/circle-alert';
 import CircleCheck from '@lucide/svelte/icons/circle-check';

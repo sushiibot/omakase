@@ -1,3 +1,4 @@
+<!-- app: header, scrolling body, toast and footer for every screen (ux-guidelines.md#shared-component-patterns) -->
 <script lang="ts">
 	import type { ComponentProps, Snippet } from 'svelte';
 	import { measureClass, type PageMeasure } from '$lib/ui/page';

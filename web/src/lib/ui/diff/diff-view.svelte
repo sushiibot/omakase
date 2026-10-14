@@ -1,3 +1,4 @@
+<!-- app: line diff for memory and skill changes (ux-guidelines.md#long-content-on-narrow-screens) -->
 <script lang="ts" module>
 	export interface DiffLine {
 		kind: 'add' | 'del' | 'ctx';

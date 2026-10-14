@@ -1,3 +1,4 @@
+// app: docked and open state of the workspace panes (ux-guidelines.md#breakpoints)
 import { getContext, setContext, type Snippet } from 'svelte';
 
 export interface WorkspaceInspector {

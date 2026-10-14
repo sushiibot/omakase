@@ -1,3 +1,4 @@
+// app: edge swipe that opens the phone drawer (ux-guidelines.md#back-gesture-and-navigation)
 /** Touch-only navigation gestures. An edge start and a decisive horizontal drag keep scrolling safe. */
 export function drawerSwipe(shell: HTMLElement, drawer: HTMLDialogElement) {
 	let start: { x: number; y: number; close: boolean; horizontal: boolean } | undefined;

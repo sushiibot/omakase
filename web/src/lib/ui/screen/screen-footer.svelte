@@ -1,4 +1,4 @@
-<!-- modeled on shadcn-svelte card-footer, spanning the screen with its contents on the body measure -->
+<!-- app: modeled on shadcn-svelte card-footer, spanning the screen with its contents on the body measure (ux-guidelines.md#shared-component-patterns) -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { measureClass } from '$lib/ui/page';

@@ -1,3 +1,4 @@
+<!-- app: Page.Body on the enclosing screen measure (ux-guidelines.md#shared-component-patterns) -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { PageBody, type PageMeasure } from '$lib/ui/page';

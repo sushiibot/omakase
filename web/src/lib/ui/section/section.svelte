@@ -1,3 +1,4 @@
+<!-- app: section heading with optional description, count and aside (ux-guidelines.md#shared-component-patterns) -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { cn } from '$lib/utils';

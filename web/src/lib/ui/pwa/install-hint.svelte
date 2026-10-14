@@ -1,3 +1,4 @@
+<!-- app: install hint for the home-screen app (ux-guidelines.md#notifications) -->
 <script lang="ts">
 	import SquarePlus from '@lucide/svelte/icons/square-plus';
 	import X from '@lucide/svelte/icons/x';

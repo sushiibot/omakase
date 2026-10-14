@@ -1,3 +1,4 @@
+<!-- app: stock Sheet opened through history so Android back closes it (ux-guidelines.md#back-gesture-and-navigation) -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { Dialog as SheetPrimitive } from 'bits-ui';
