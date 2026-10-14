@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SearchField from '$lib/ui/search/search-field.svelte';
 	import { onMount } from 'svelte';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
@@ -6,9 +7,6 @@
 	import { Button } from '$lib/ui/button';
 	import { Input } from '$lib/ui/input';
 	import * as Sheet from '$lib/ui/sheet';
-	import Search from '@lucide/svelte/icons/search';
-	import X from '@lucide/svelte/icons/x';
-	import * as InputGroup from '$lib/ui/input-group';
 
 	let {
 		conversations,
@@ -25,7 +23,6 @@
 		oncreate: (title: string) => void;
 		onback: () => void;
 	} = $props();
-	let searchInput = $state<HTMLInputElement | null>(null);
 	let heading = $state<HTMLElement | null>(null);
 	onMount(() => heading?.focus({ preventScroll: true }));
 	let query = $state('');
@@ -70,27 +67,7 @@
 		<Button variant="outline" disabled={busy} onclick={() => (creating = true)}
 			><Plus />New conversation</Button
 		>
-		<InputGroup.Root>
-			<InputGroup.Input
-				type="search"
-				aria-label="Find a conversation"
-				placeholder="Find a conversation…"
-				bind:value={query}
-				bind:ref={searchInput}
-				class="[&::-webkit-search-cancel-button]:appearance-none"
-			/>
-			<InputGroup.Addon><Search /></InputGroup.Addon>
-			{#if query}<InputGroup.Addon align="inline-end">
-					<InputGroup.Button
-						size="icon-xs"
-						aria-label="Clear search"
-						onclick={() => {
-							query = '';
-							searchInput?.focus({ preventScroll: true });
-						}}><X /></InputGroup.Button
-					>
-				</InputGroup.Addon>{/if}
-		</InputGroup.Root>
+		<SearchField label="Find a conversation" bind:value={query} />
 		<ul class="flex flex-col gap-2">
 			{#each matches as conversation (conversation.id)}
 				<li>

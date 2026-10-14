@@ -21,7 +21,7 @@
 	)}
 	{...restProps}
 >
-	{@render children?.()}
+	<span class="flex min-w-0 flex-1 items-center gap-2">{@render children?.()}</span>
 	<ChevronRight
 		class="size-4 shrink-0 transition-transform duration-(--duration-short) group-data-[state=open]/disclosure:rotate-90 motion-reduce:transition-none"
 		aria-hidden="true"

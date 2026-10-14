@@ -557,21 +557,22 @@
 			: null;
 	});
 
-	const sheetLabels: Record<ChatSheet, string> = {
+	const commandsTitle = $derived(readOnly ? 'Conversation actions' : 'Chat commands');
+	const sheetLabels: Record<ChatSheet, string> = $derived({
 		attachments: 'Add attachments',
-		commands: 'Chat commands',
+		commands: commandsTitle,
 		new: 'Reset conversation context?',
 		viewer: 'Image',
 		model: 'Model and context',
 		context: 'Model and context',
 		'context-boundary': 'Conversation context'
-	};
+	});
 </script>
 
 {#snippet sheetBody()}
 	{#if shownSheet === 'commands'}
 		<Sheet.Header>
-			<Sheet.Title>Chat commands</Sheet.Title>
+			<Sheet.Title>{commandsTitle}</Sheet.Title>
 		</Sheet.Header>
 		<div class="flex flex-col gap-2 px-1 pb-4">
 			{@render commandActions?.()}
@@ -660,11 +661,10 @@
 {#snippet actions()}
 	{@render headerActions?.()}
 	{#if !readOnly}{@render voice?.()}{/if}
-	<!-- A read-only chat keeps the menu for its conversation actions, without the commands. -->
 	{#if onopensheet && (!readOnly || commandActions)}<Button
 			size="icon"
 			variant="ghost"
-			aria-label="Chat commands"
+			aria-label={commandsTitle}
 			onclick={() => onopensheet?.('commands')}><EllipsisVertical class="size-5" /></Button
 		>{/if}
 {/snippet}

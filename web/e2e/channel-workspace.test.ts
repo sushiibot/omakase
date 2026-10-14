@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { fixtureApp, horizontalOverflow } from './helpers';
+import { expectHitArea, outsideFace } from './hit-probe';
 
 test('channels reveal under chat and Back preserves the draft', async ({ page, context }) => {
 	await fixtureApp(context);
@@ -139,6 +140,11 @@ for (const desktop of [false, true]) {
 		await nav.getByRole('button', { name: 'Find and filter channels' }).click();
 		await expect(nav.getByRole('checkbox', { name: /archived/i })).toHaveCount(0);
 		await nav.getByRole('searchbox', { name: 'Find channels by name or preview' }).fill('Couch');
+		const clear = nav.getByRole('button', { name: 'Clear search', exact: true });
+		await expectHitArea(page, clear, { freeSides: [] });
+		// Its touch reach ends at the field's edge, short of the view filter 8px below.
+		expect(await outsideFace(clear, 'bottom', 3)).toBe(true);
+		expect(await outsideFace(clear, 'bottom', 6)).toBe(false);
 		await expect(archived).toHaveAttribute('aria-expanded', 'true');
 		await expect(nav.getByRole('link', { name: /Couch delivery/ })).toBeVisible();
 		await archived.click();

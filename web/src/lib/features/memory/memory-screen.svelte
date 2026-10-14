@@ -1,12 +1,10 @@
 <script lang="ts">
+	import SearchField from '$lib/ui/search/search-field.svelte';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import FileText from '@lucide/svelte/icons/file-text';
 	import { Button } from '$lib/ui/button';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import { ago } from '$lib/ui/format/time';
-	import Search from '@lucide/svelte/icons/search';
-	import X from '@lucide/svelte/icons/x';
-	import * as InputGroup from '$lib/ui/input-group';
 	import * as Item from '$lib/ui/item';
 	import { PageIntro } from '$lib/ui/page';
 	import ScreenState from '$lib/ui/screen/screen-state.svelte';
@@ -43,7 +41,6 @@
 		writesHref?: string;
 		onretry?: () => void;
 	} = $props();
-	let searchInput = $state<HTMLInputElement | null>(null);
 
 	let category = $state('long-term');
 	let search = $state('');
@@ -128,27 +125,7 @@
 
 {#snippet lead()}
 	<div class="flex flex-col gap-3">
-		<InputGroup.Root>
-			<InputGroup.Input
-				type="search"
-				aria-label="Search memory"
-				placeholder="Search memory…"
-				bind:value={search}
-				bind:ref={searchInput}
-				class="[&::-webkit-search-cancel-button]:appearance-none"
-			/>
-			<InputGroup.Addon><Search /></InputGroup.Addon>
-			{#if search}<InputGroup.Addon align="inline-end">
-					<InputGroup.Button
-						size="icon-xs"
-						aria-label="Clear search"
-						onclick={() => {
-							search = '';
-							searchInput?.focus({ preventScroll: true });
-						}}><X /></InputGroup.Button
-					>
-				</InputGroup.Addon>{/if}
-		</InputGroup.Root>
+		<SearchField label="Search memory" bind:value={search} />
 		{#if data?.truncated}<p role="status" class="text-sm text-muted-foreground">
 				Some files could not be shown in full because the memory browsing limit was reached.
 			</p>{/if}

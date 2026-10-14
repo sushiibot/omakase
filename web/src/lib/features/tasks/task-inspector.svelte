@@ -48,8 +48,8 @@
 		{ value: 'details', label: 'Details' },
 		{ value: 'activity', label: 'Activity' },
 		{ value: 'results', label: 'Results' }
-	];
-	let tab = $state('details');
+	] as const;
+	let tab = $state<'details' | 'activity' | 'results'>('details');
 	let editing = $state(false);
 	let title = $state(untrack(() => task.title));
 	let brief = $state(untrack(() => task.brief));

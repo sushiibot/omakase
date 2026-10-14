@@ -1,14 +1,13 @@
 <script lang="ts">
+	import SearchField from '$lib/ui/search/search-field.svelte';
 	import { Spinner } from '$lib/ui/spinner';
 	import Check from '@lucide/svelte/icons/check';
 	import X from '@lucide/svelte/icons/x';
 	import FoldVertical from '@lucide/svelte/icons/fold-vertical';
-	import Search from '@lucide/svelte/icons/search';
 	import type { ChatUsage, ModelFacts, ModelsResponse } from '$lib/core/realtime/events';
 	import { Button } from '$lib/ui/button';
 	import * as Collapsible from '$lib/ui/collapsible';
 	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
-	import * as InputGroup from '$lib/ui/input-group';
 	import * as Sheet from '$lib/ui/sheet';
 	import { cn } from '$lib/utils';
 	import { aggregateCost, modelName, usageRows } from '../render/usage';
@@ -55,7 +54,6 @@
 		compactDisabled?: boolean;
 		compacting?: boolean;
 	} = $props();
-	let searchInput = $state<HTMLInputElement | null>(null);
 
 	const uid = $props.id();
 	const context = $derived(models?.context);
@@ -276,28 +274,11 @@
 
 		{@render rows(listed, role === 'main' ? 'Models' : 'Fallback models')}
 
-		<InputGroup.Root class="mx-2 w-auto">
-			<InputGroup.Input
-				type="search"
-				aria-label="Search OpenRouter models"
-				placeholder="Search OpenRouter models…"
-				value={query}
-				bind:ref={searchInput}
-				oninput={(e) => onquery?.(e.currentTarget.value)}
-				class="[&::-webkit-search-cancel-button]:appearance-none"
-			/>
-			<InputGroup.Addon><Search /></InputGroup.Addon>
-			{#if query}<InputGroup.Addon align="inline-end">
-					<InputGroup.Button
-						size="icon-xs"
-						aria-label="Clear search"
-						onclick={() => {
-							onquery?.('');
-							searchInput?.focus({ preventScroll: true });
-						}}><X /></InputGroup.Button
-					>
-				</InputGroup.Addon>{/if}
-		</InputGroup.Root>
+		<SearchField
+			label="Search OpenRouter models"
+			class="mx-2 w-auto"
+			bind:value={() => query, (next) => onquery?.(next)}
+		/>
 		{#if searching}
 			<p role="status" class="px-2 text-sm text-muted-foreground">Searching…</p>
 		{:else if searchError}

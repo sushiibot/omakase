@@ -117,7 +117,7 @@
 {/snippet}
 
 {#snippet commandActions()}
-	<div class="flex flex-col border-b pb-2">
+	<div class={sendable ? 'flex flex-col border-b pb-2' : 'flex flex-col'}>
 		{#if thread}<Button
 				variant="ghost"
 				class="h-auto w-full items-start justify-start gap-3 px-3 py-2.5 text-left whitespace-normal any-pointer-coarse:after:hidden"

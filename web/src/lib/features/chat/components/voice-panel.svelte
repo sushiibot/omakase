@@ -1,8 +1,7 @@
 <script lang="ts">
+	import SearchField from '$lib/ui/search/search-field.svelte';
 	import Play from '@lucide/svelte/icons/play';
 	import Square from '@lucide/svelte/icons/square';
-	import Search from '@lucide/svelte/icons/search';
-	import X from '@lucide/svelte/icons/x';
 	import { Button } from '$lib/ui/button';
 	import * as Collapsible from '$lib/ui/collapsible';
 	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
@@ -15,7 +14,6 @@
 	import * as Sheet from '$lib/ui/sheet';
 	import * as NativeSelect from '$lib/ui/native-select';
 	import { Input } from '$lib/ui/input';
-	import * as InputGroup from '$lib/ui/input-group';
 	let {
 		models,
 		provider,
@@ -97,7 +95,6 @@
 		oninterrupt?: () => void;
 		micReady?: boolean;
 	} = $props();
-	let searchInput = $state<HTMLInputElement | null>(null);
 	const active = $derived(callState !== 'idle');
 	const selected = $derived(models.find((m) => m.id === provider));
 	const speech = $derived(speechModels.find((m) => m.id === speechModel));
@@ -250,31 +247,14 @@
 			</section>
 			<Collapsible.Root>
 				<DisclosureTrigger><span>Browse all OpenRouter speech models</span></DisclosureTrigger>
-				<Collapsible.Content hiddenUntilFound>
+				<Collapsible.Content>
 					<div class="flex flex-col gap-2">
-						<InputGroup.Root>
-							<InputGroup.Input
-								type="search"
-								aria-label="Search speech models"
-								placeholder="Search by name or model ID…"
-								bind:value={query}
-								bind:ref={searchInput}
-								disabled={active || loading}
-								class="[&::-webkit-search-cancel-button]:appearance-none"
-							/>
-							<InputGroup.Addon><Search /></InputGroup.Addon>
-							{#if query}<InputGroup.Addon align="inline-end">
-									<InputGroup.Button
-										size="icon-xs"
-										aria-label="Clear search"
-										disabled={active || loading}
-										onclick={() => {
-											query = '';
-											searchInput?.focus({ preventScroll: true });
-										}}><X /></InputGroup.Button
-									>
-								</InputGroup.Addon>{/if}
-						</InputGroup.Root>
+						<SearchField
+							label="Search speech models"
+							placeholder="Search speech models by name or ID…"
+							disabled={active || loading}
+							bind:value={query}
+						/>
 						{#each found as model (model.id)}
 							<Button
 								variant="ghost"

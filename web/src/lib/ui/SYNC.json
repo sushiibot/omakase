@@ -64,6 +64,10 @@
 		"source": "app",
 		"reason": "shared screens built on Page.* (ux-guidelines.md#shared-component-patterns)"
 	},
+	"search": {
+		"source": "app",
+		"reason": "the one search field over the stock InputGroup (ux-guidelines.md#shared-component-patterns)"
+	},
 	"section": {
 		"source": "app",
 		"reason": "section heading (ux-guidelines.md#shared-component-patterns)"

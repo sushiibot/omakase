@@ -37,12 +37,15 @@ export async function smallTargets(page: Page) {
 				if (r.width === 0) return null;
 				const after = getComputedStyle(e, '::after');
 				const extended = after.position === 'absolute' && after.content !== 'none';
-				const inField =
-					!!e.closest('[data-slot=input-group]') ||
-					[...(e.parentElement?.querySelectorAll('input') ?? [])].some((input) => {
-						const f = input.getBoundingClientRect();
-						return f.top <= r.top && f.bottom >= r.bottom && f.left <= r.left && f.right >= r.right;
-					});
+				// Inside a text field's box: the input's own, or its InputGroup's when the control sits in an addon.
+				const group = e.closest('[data-slot=input-group]');
+				const inField = [
+					...(group ? [group] : []),
+					...(e.parentElement?.querySelectorAll('input') ?? [])
+				].some((field) => {
+					const f = field.getBoundingClientRect();
+					return f.top <= r.top && f.bottom >= r.bottom && f.left <= r.left && f.right >= r.right;
+				});
 				// A Button whose hit area is switched off, a sidebar row, an Item in a group or a disclosure
 				// trigger is a contiguous row and sizes its own box. All but Button rows are promised 44px on touch.
 				const coarse = matchMedia('(any-pointer: coarse)').matches;
@@ -131,8 +134,8 @@ export async function smallTargets(page: Page) {
 							e.tagName === 'SELECT' ||
 							(e instanceof HTMLInputElement && !['checkbox', 'radio'].includes(e.type));
 						if (field) return m.w < 48 || m.h < 32;
-						if (m.kind === 'in-field') return m.h < 31.5;
 						if (m.covered) return true;
+						if (m.kind === 'in-field') return m.h < 31.5;
 						if (m.kind === 'row') return m.w < 47.5 || m.h < 39.5;
 						if (m.kind === 'sidebar-row' || m.kind === 'item-row' || m.kind === 'summary-row')
 							return m.w < 47.5 || m.h < 43.5;

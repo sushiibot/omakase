@@ -42,8 +42,8 @@
 		{ value: 'overview', label: 'Overview' },
 		{ value: 'conversation', label: 'Conversation' },
 		{ value: 'runs', label: 'Runs' }
-	];
-	let tab = $state('overview');
+	] as const;
+	let tab = $state<'overview' | 'conversation' | 'runs'>('overview');
 	let title = $state(untrack(() => task.title));
 	let brief = $state(untrack(() => task.brief));
 	let step = $state('');

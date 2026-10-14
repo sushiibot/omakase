@@ -1,16 +1,15 @@
 <!-- modeled on shadcn-svelte sidebar-07 NavMain (collapsible groups) and NavProjects (row actions) -->
 <script lang="ts">
+	import SearchField from '$lib/ui/search/search-field.svelte';
 	import { untrack } from 'svelte';
 	import Hash from '@lucide/svelte/icons/hash';
 	import ListChecks from '@lucide/svelte/icons/list-checks';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Search from '@lucide/svelte/icons/search';
-	import X from '@lucide/svelte/icons/x';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import * as Sidebar from '$lib/ui/sidebar';
 	import * as Collapsible from '$lib/ui/collapsible';
-	import * as InputGroup from '$lib/ui/input-group';
 	import * as ToggleGroup from '$lib/ui/toggle-group';
 	import { Button } from '$lib/ui/button';
 	import { Spinner } from '$lib/ui/spinner';
@@ -47,7 +46,6 @@
 		onvisit: (id: string) => void;
 		onoptions?: (channel: Channel) => void;
 	} = $props();
-	let searchInput = $state<HTMLInputElement | null>(null);
 	const active = $derived(channels.filter((c) => c.state !== 'archived'));
 	const archived = $derived(channels.filter((c) => c.state === 'archived'));
 	// Starting or clearing a search toggles Archived; a remount keeps whatever the owner chose.
@@ -201,27 +199,12 @@
 			>
 		</div>
 		{#if filtersOpen}<div class="flex flex-col gap-2 pt-2">
-				<InputGroup.Root class="bg-background">
-					<InputGroup.Input
-						type="search"
-						aria-label="Find channels by name or preview"
-						placeholder="Find a channel…"
-						bind:value={query}
-						bind:ref={searchInput}
-						class="[&::-webkit-search-cancel-button]:appearance-none"
-					/>
-					<InputGroup.Addon><Search /></InputGroup.Addon>
-					{#if query}<InputGroup.Addon align="inline-end">
-							<InputGroup.Button
-								size="icon-xs"
-								aria-label="Clear search"
-								onclick={() => {
-									query = '';
-									searchInput?.focus({ preventScroll: true });
-								}}><X /></InputGroup.Button
-							>
-						</InputGroup.Addon>{/if}
-				</InputGroup.Root>
+				<SearchField
+					label="Find channels by name or preview"
+					placeholder="Find channels…"
+					class="bg-background"
+					bind:value={query}
+				/>
 				<ToggleGroup.Root
 					type="single"
 					variant="outline"
