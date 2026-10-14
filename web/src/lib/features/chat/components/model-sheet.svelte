@@ -6,7 +6,7 @@
 	import Search from '@lucide/svelte/icons/search';
 	import type { ChatUsage, ModelFacts, ModelsResponse } from '$lib/core/realtime/events';
 	import { Button } from '$lib/ui/button';
-	import { Input } from '$lib/ui/input';
+	import * as InputGroup from '$lib/ui/input-group';
 	import * as Sheet from '$lib/ui/sheet';
 	import { cn } from '$lib/utils';
 	import { aggregateCost, modelName, usageRows } from '../render/usage';
@@ -273,20 +273,22 @@
 
 		{@render rows(listed, role === 'main' ? 'Models' : 'Fallback models')}
 
-		<label class="relative mx-2 block">
-			<span class="sr-only">Search OpenRouter models</span>
-			<Search
-				class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-				aria-hidden="true"
-			/>
-			<Input
+		<InputGroup.Root class="mx-2 w-auto">
+			<InputGroup.Input
 				type="search"
+				aria-label="Search OpenRouter models"
+				placeholder="Search OpenRouter models…"
 				value={query}
 				oninput={(e) => onquery?.(e.currentTarget.value)}
-				placeholder="Search OpenRouter models"
-				class="pl-9"
+				class="[&::-webkit-search-cancel-button]:appearance-none"
 			/>
-		</label>
+			<InputGroup.Addon><Search /></InputGroup.Addon>
+			{#if query}<InputGroup.Addon align="inline-end">
+					<InputGroup.Button size="icon-xs" aria-label="Clear search" onclick={() => onquery?.('')}
+						><X /></InputGroup.Button
+					>
+				</InputGroup.Addon>{/if}
+		</InputGroup.Root>
 		{#if searching}
 			<p role="status" class="px-2 text-sm text-muted-foreground">Searching…</p>
 		{:else if searchError}

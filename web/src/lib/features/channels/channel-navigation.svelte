@@ -6,9 +6,11 @@
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Search from '@lucide/svelte/icons/search';
+	import X from '@lucide/svelte/icons/x';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import * as Sidebar from '$lib/ui/sidebar';
 	import * as Collapsible from '$lib/ui/collapsible';
+	import * as InputGroup from '$lib/ui/input-group';
 	import * as ToggleGroup from '$lib/ui/toggle-group';
 	import { Button } from '$lib/ui/button';
 	import { Spinner } from '$lib/ui/spinner';
@@ -198,11 +200,23 @@
 			>
 		</div>
 		{#if filtersOpen}<div class="flex flex-col gap-2 pt-2">
-				<Sidebar.Input
-					aria-label="Find channels by name or preview"
-					placeholder="Find a channel…"
-					bind:value={query}
-				/>
+				<InputGroup.Root class="bg-background">
+					<InputGroup.Input
+						type="search"
+						aria-label="Find channels by name or preview"
+						placeholder="Find a channel…"
+						bind:value={query}
+						class="[&::-webkit-search-cancel-button]:appearance-none"
+					/>
+					<InputGroup.Addon><Search /></InputGroup.Addon>
+					{#if query}<InputGroup.Addon align="inline-end">
+							<InputGroup.Button
+								size="icon-xs"
+								aria-label="Clear search"
+								onclick={() => (query = '')}><X /></InputGroup.Button
+							>
+						</InputGroup.Addon>{/if}
+				</InputGroup.Root>
 				<ToggleGroup.Root
 					type="single"
 					variant="outline"

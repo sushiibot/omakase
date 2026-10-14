@@ -17,7 +17,9 @@
 <script lang="ts" generics="T">
 	import type { ComponentProps, Snippet } from 'svelte';
 	import type { PageMeasure } from '$lib/ui/page';
-	import SearchField from '$lib/ui/input/search-field.svelte';
+	import Search from '@lucide/svelte/icons/search';
+	import X from '@lucide/svelte/icons/x';
+	import * as InputGroup from '$lib/ui/input-group';
 	import { ItemGroup } from '$lib/ui/item';
 	import { cn } from '$lib/utils';
 	import Section from '$lib/ui/section/section.svelte';
@@ -72,7 +74,27 @@
 {#snippet content()}
 	<ScreenContent {embedded} {measure}>
 		{#if search !== undefined}
-			<SearchField label={searchLabel} bind:value={search} bind:ref={searchInput} />
+			<InputGroup.Root>
+				<InputGroup.Input
+					type="search"
+					aria-label={searchLabel}
+					placeholder="{searchLabel}…"
+					bind:value={search}
+					bind:ref={searchInput}
+					class="[&::-webkit-search-cancel-button]:appearance-none"
+				/>
+				<InputGroup.Addon><Search /></InputGroup.Addon>
+				{#if search}<InputGroup.Addon align="inline-end">
+						<InputGroup.Button
+							size="icon-xs"
+							aria-label="Clear search"
+							onclick={() => {
+								search = '';
+								searchInput?.focus({ preventScroll: true });
+							}}><X /></InputGroup.Button
+						>
+					</InputGroup.Addon>{/if}
+			</InputGroup.Root>
 		{/if}
 		{@render lead?.()}
 		<ScreenState {...state} {isEmpty}>

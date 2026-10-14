@@ -37,10 +37,12 @@ export async function smallTargets(page: Page) {
 				if (r.width === 0) return null;
 				const after = getComputedStyle(e, '::after');
 				const extended = after.position === 'absolute' && after.content !== 'none';
-				const inField = [...(e.parentElement?.querySelectorAll('input') ?? [])].some((input) => {
-					const f = input.getBoundingClientRect();
-					return f.top <= r.top && f.bottom >= r.bottom && f.left <= r.left && f.right >= r.right;
-				});
+				const inField =
+					!!e.closest('[data-slot=input-group]') ||
+					[...(e.parentElement?.querySelectorAll('input') ?? [])].some((input) => {
+						const f = input.getBoundingClientRect();
+						return f.top <= r.top && f.bottom >= r.bottom && f.left <= r.left && f.right >= r.right;
+					});
 				// A Button whose hit area is switched off, a sidebar row, an Item in a group or a disclosure
 				// summary is a contiguous row and sizes its own box. All but Button rows are promised 44px on touch.
 				const coarse = matchMedia('(any-pointer: coarse)').matches;

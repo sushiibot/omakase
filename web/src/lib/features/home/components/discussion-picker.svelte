@@ -6,7 +6,9 @@
 	import { Button } from '$lib/ui/button';
 	import { Input } from '$lib/ui/input';
 	import * as Sheet from '$lib/ui/sheet';
-	import SearchField from '$lib/ui/input/search-field.svelte';
+	import Search from '@lucide/svelte/icons/search';
+	import X from '@lucide/svelte/icons/x';
+	import * as InputGroup from '$lib/ui/input-group';
 
 	let {
 		conversations,
@@ -67,7 +69,25 @@
 		<Button variant="outline" disabled={busy} onclick={() => (creating = true)}
 			><Plus />New conversation</Button
 		>
-		<SearchField label="Find a conversation" bind:value={query} />
+		<InputGroup.Root>
+			<InputGroup.Input
+				type="search"
+				aria-label="Find a conversation"
+				placeholder="Find a conversation…"
+				bind:value={query}
+				class="[&::-webkit-search-cancel-button]:appearance-none"
+			/>
+			<InputGroup.Addon><Search /></InputGroup.Addon>
+			{#if query}<InputGroup.Addon align="inline-end">
+					<InputGroup.Button
+						size="icon-xs"
+						aria-label="Clear search"
+						onclick={() => {
+							query = '';
+						}}><X /></InputGroup.Button
+					>
+				</InputGroup.Addon>{/if}
+		</InputGroup.Root>
 		<ul class="flex flex-col gap-2">
 			{#each matches as conversation (conversation.id)}
 				<li>

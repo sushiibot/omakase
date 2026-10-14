@@ -4,7 +4,9 @@
 	import { Button } from '$lib/ui/button';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import { ago } from '$lib/ui/format/time';
-	import SearchField from '$lib/ui/input/search-field.svelte';
+	import Search from '@lucide/svelte/icons/search';
+	import X from '@lucide/svelte/icons/x';
+	import * as InputGroup from '$lib/ui/input-group';
 	import * as Item from '$lib/ui/item';
 	import { PageIntro } from '$lib/ui/page';
 	import ScreenState from '$lib/ui/screen/screen-state.svelte';
@@ -125,7 +127,25 @@
 
 {#snippet lead()}
 	<div class="flex flex-col gap-3">
-		<SearchField label="Search memory" bind:value={search} />
+		<InputGroup.Root>
+			<InputGroup.Input
+				type="search"
+				aria-label="Search memory"
+				placeholder="Search memory…"
+				bind:value={search}
+				class="[&::-webkit-search-cancel-button]:appearance-none"
+			/>
+			<InputGroup.Addon><Search /></InputGroup.Addon>
+			{#if search}<InputGroup.Addon align="inline-end">
+					<InputGroup.Button
+						size="icon-xs"
+						aria-label="Clear search"
+						onclick={() => {
+							search = '';
+						}}><X /></InputGroup.Button
+					>
+				</InputGroup.Addon>{/if}
+		</InputGroup.Root>
 		{#if data?.truncated}<p role="status" class="text-sm text-muted-foreground">
 				Some files could not be shown in full because the memory browsing limit was reached.
 			</p>{/if}

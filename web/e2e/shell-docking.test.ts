@@ -150,7 +150,7 @@ test('resizing across both breakpoints keeps nav state and moves focus out of th
 	await page.goto('/chat');
 	await nav(page).getByRole('button', { name: 'Find and filter channels' }).click();
 	const search = (scope: ReturnType<typeof nav>) =>
-		scope.getByRole('textbox', { name: 'Find channels by name or preview' });
+		scope.getByRole('searchbox', { name: 'Find channels by name or preview' });
 	await search(nav(page)).fill('Couch');
 	await expect(nav(page).getByRole('link', { name: /Couch delivery/ })).toBeVisible();
 

@@ -35,7 +35,7 @@
 		"reason": "text and date formatting helpers (ux-guidelines.md#copy-accuracy-and-dates)"
 	},
 	"input": {
-		"drift": "app-owned SearchField beside the stock Input (ux-guidelines.md#shared-component-patterns)"
+		"drift": "none"
 	},
 	"input-group": {
 		"drift": "none"

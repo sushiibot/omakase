@@ -138,7 +138,7 @@ for (const desktop of [false, true]) {
 
 		await nav.getByRole('button', { name: 'Find and filter channels' }).click();
 		await expect(nav.getByRole('checkbox', { name: /archived/i })).toHaveCount(0);
-		await nav.getByRole('textbox', { name: 'Find channels by name or preview' }).fill('Couch');
+		await nav.getByRole('searchbox', { name: 'Find channels by name or preview' }).fill('Couch');
 		await expect(archived).toHaveAttribute('aria-expanded', 'true');
 		await expect(nav.getByRole('link', { name: /Couch delivery/ })).toBeVisible();
 		await archived.click();

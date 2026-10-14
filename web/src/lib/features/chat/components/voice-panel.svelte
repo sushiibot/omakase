@@ -1,6 +1,8 @@
 <script lang="ts">
 	import Play from '@lucide/svelte/icons/play';
 	import Square from '@lucide/svelte/icons/square';
+	import Search from '@lucide/svelte/icons/search';
+	import X from '@lucide/svelte/icons/x';
 	import { Button } from '$lib/ui/button';
 	import type { SpeechModel, VoiceModel } from '../types';
 	import { speechPrice } from '../render/speech-price';
@@ -11,6 +13,7 @@
 	import * as Sheet from '$lib/ui/sheet';
 	import * as NativeSelect from '$lib/ui/native-select';
 	import { Input } from '$lib/ui/input';
+	import * as InputGroup from '$lib/ui/input-group';
 	let {
 		models,
 		provider,
@@ -248,14 +251,25 @@
 					>Browse all OpenRouter speech models</summary
 				>
 				<div class="flex flex-col gap-2">
-					<Input
-						class="h-12 text-base"
-						type="search"
-						aria-label="Search speech models"
-						placeholder="Search by name or model ID"
-						bind:value={query}
-						disabled={active || loading}
-					/>
+					<InputGroup.Root>
+						<InputGroup.Input
+							type="search"
+							aria-label="Search speech models"
+							placeholder="Search by name or model ID…"
+							bind:value={query}
+							disabled={active || loading}
+							class="[&::-webkit-search-cancel-button]:appearance-none"
+						/>
+						<InputGroup.Addon><Search /></InputGroup.Addon>
+						{#if query}<InputGroup.Addon align="inline-end">
+								<InputGroup.Button
+									size="icon-xs"
+									aria-label="Clear search"
+									disabled={active || loading}
+									onclick={() => (query = '')}><X /></InputGroup.Button
+								>
+							</InputGroup.Addon>{/if}
+					</InputGroup.Root>
 					{#each found as model (model.id)}
 						<Button
 							variant="ghost"

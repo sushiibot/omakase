@@ -33,7 +33,7 @@ test('Channels keeps Main first, a shared inbox and working channel search', asy
 	await expect(page.getByRole('region', { name: /^Archived/ })).toContainText('Couch delivery');
 	await openSharedInbox(page);
 	await expect(page.locator('details[data-inbox="shared"]')).toContainText('nightly-sync failed');
-	await page.getByRole('searchbox').fill('lease');
+	await page.getByRole('searchbox', { name: 'Search channels' }).fill('lease');
 	await expect(page.getByRole('heading', { name: '1 matching' })).toBeVisible();
 	await page.getByRole('link', { name: /Lease renewal/ }).click();
 	await expect(page).toHaveURL(/\/chats\/lease$/);
