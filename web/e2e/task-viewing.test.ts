@@ -26,10 +26,10 @@ test('task read receipts require the visible Conversation tab and uncovered work
 	);
 	await page.waitForTimeout(1200);
 	expect(seen).toEqual([]);
-	await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+	await page.getByRole('tab', { name: 'Conversation', exact: true }).click();
 	await expect(page.getByText('Task update while Overview is open', { exact: true })).toBeVisible();
 	await expect.poll(() => seen).toEqual([1]);
-	await page.getByRole('button', { name: 'Overview', exact: true }).click();
+	await page.getByRole('tab', { name: 'Overview', exact: true }).click();
 	await push(
 		page,
 		'proactive',
@@ -38,7 +38,7 @@ test('task read receipts require the visible Conversation tab and uncovered work
 	);
 	await page.waitForTimeout(1200);
 	expect(seen).toEqual([1]);
-	await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+	await page.getByRole('tab', { name: 'Conversation', exact: true }).click();
 	await expect.poll(() => seen).toEqual([1, 2]);
 	await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Keep this task draft');
 	await page.getByRole('button', { name: /^Menu/ }).click();

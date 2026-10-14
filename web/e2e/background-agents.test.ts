@@ -44,14 +44,14 @@ test('tasks live beside chat; mobile back restores the main draft', async ({ pag
 		'href',
 		'/tasks/t-login?view=conversation'
 	);
-	await panel.getByRole('button', { name: 'Results', exact: true }).click();
+	await panel.getByRole('tab', { name: 'Results', exact: true }).click();
 	await expect(panel.getByRole('heading', { name: 'Latest result' })).toBeVisible();
-	await panel.getByRole('button', { name: 'Activity', exact: true }).click();
+	await panel.getByRole('tab', { name: 'Activity', exact: true }).click();
 	await expect(panel.locator('a[href="/runs/01K6B2N8W3J5Q7R9T1V3X5Z7A9"]')).toHaveAttribute(
 		'href',
 		'/runs/01K6B2N8W3J5Q7R9T1V3X5Z7A9'
 	);
-	await panel.getByRole('button', { name: 'Details', exact: true }).click();
+	await panel.getByRole('tab', { name: 'Details', exact: true }).click();
 	await expect.poll(() => horizontalOverflow(page)).toEqual([]);
 	await expect.poll(() => smallTargets(page)).toEqual([]);
 	expect(await axe(page)).toEqual([]);
@@ -73,9 +73,9 @@ test('the task list saves a to-do without starting work and keeps its checklist'
 	await page.getByRole('textbox', { name: 'New checklist step' }).fill('Find appointment times');
 	await page.getByRole('button', { name: 'Add checklist step' }).click();
 	await expect(page.getByRole('checkbox', { name: 'Find appointment times' })).not.toBeChecked();
-	await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+	await page.getByRole('tab', { name: 'Conversation', exact: true }).click();
 	await expect(page.getByRole('button', { name: 'Start with Sushii' })).toBeVisible();
-	await page.getByRole('button', { name: 'Overview', exact: true }).click();
+	await page.getByRole('tab', { name: 'Overview', exact: true }).click();
 	await page.getByRole('button', { name: 'Mark done', exact: true }).click();
 	await expect(page.getByRole('button', { name: 'Reopen task' })).toBeVisible();
 });

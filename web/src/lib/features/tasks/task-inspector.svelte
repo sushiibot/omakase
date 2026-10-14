@@ -12,6 +12,7 @@
 	import { Input } from '$lib/ui/input';
 	import * as InputGroup from '$lib/ui/input-group';
 	import { PageHeader } from '$lib/ui/page';
+	import * as Tabs from '$lib/ui/tabs';
 	import { Textarea } from '$lib/ui/textarea';
 	import type { TaskRecord } from './types';
 	import { taskLabels } from './types';
@@ -43,7 +44,12 @@
 		onretry: () => void;
 	} = $props();
 	const uid = $props.id();
-	let tab = $state<'details' | 'activity' | 'results'>('details');
+	const sections = [
+		{ value: 'details', label: 'Details' },
+		{ value: 'activity', label: 'Activity' },
+		{ value: 'results', label: 'Results' }
+	];
+	let tab = $state('details');
 	let editing = $state(false);
 	let title = $state(untrack(() => task.title));
 	let brief = $state(untrack(() => task.brief));
@@ -90,22 +96,23 @@
 	}
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col" data-task-inspector>
-	{#snippet leading()}<Button
-			size="icon-sm"
-			variant="ghost"
-			class="-ms-1.5 text-muted-foreground"
-			aria-label="Back to tasks"
-			onclick={onback}><ChevronLeft /></Button
-		>{/snippet}
-	{#snippet subtitle()}{taskLabels[task.status]}{task.agent ? ` · ${task.agent}` : ''}{/snippet}
-	{#snippet actions()}<Button
-			size="icon-sm"
-			variant="ghost"
-			class="text-muted-foreground"
-			aria-label="Close task details"
-			onclick={onclose}><X /></Button
-		>{/snippet}
+{#snippet leading()}<Button
+		size="icon-sm"
+		variant="ghost"
+		class="-ms-1.5 text-muted-foreground"
+		aria-label="Back to tasks"
+		onclick={onback}><ChevronLeft /></Button
+	>{/snippet}
+{#snippet subtitle()}{taskLabels[task.status]}{task.agent ? ` · ${task.agent}` : ''}{/snippet}
+{#snippet actions()}<Button
+		size="icon-sm"
+		variant="ghost"
+		class="text-muted-foreground"
+		aria-label="Close task details"
+		onclick={onclose}><X /></Button
+	>{/snippet}
+
+<Tabs.Root bind:value={tab} class="min-h-0 flex-1 gap-0" data-task-inspector>
 	<PageHeader
 		title="Task details"
 		level={2}
@@ -113,25 +120,25 @@
 		{subtitle}
 		actions={onclose ? actions : undefined}
 	/>
-	<div class="flex shrink-0 border-b px-2" role="group" aria-label="Task sections">
-		{#each ['details', 'activity', 'results'] as value}<Button
-				variant="ghost"
-				class="min-w-0 flex-1 rounded-none border-x-0 border-t-0 border-b-2 px-2 any-pointer-coarse:h-10 any-pointer-coarse:after:hidden {tab ===
-				value
-					? 'border-primary text-foreground'
-					: 'border-transparent text-muted-foreground'}"
-				aria-pressed={tab === value}
-				onclick={() => (tab = value as typeof tab)}
-				>{value === 'details' ? 'Details' : value === 'activity' ? 'Activity' : 'Results'}</Button
-			>
-		{/each}
+	<div class="shrink-0 border-b px-4">
+		<Tabs.List
+			variant="line"
+			aria-label="Task sections"
+			class="-ms-1.5 any-pointer-coarse:group-data-horizontal/tabs:h-auto"
+		>
+			{#each sections as section (section.value)}
+				<Tabs.Trigger value={section.value} class="any-pointer-coarse:h-10"
+					>{section.label}</Tabs.Trigger
+				>
+			{/each}
+		</Tabs.List>
 	</div>
 	{#if error}<div role="alert" class="shrink-0 px-4 py-2 text-sm text-failed">
 			{error}<Button variant="ghost" onclick={onretry}>Reload</Button>
 		</div>{/if}
-	<div
-		class:hidden={tab !== 'details'}
-		class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"
+	<Tabs.Content
+		value="details"
+		class="min-h-0 overflow-y-auto overscroll-contain px-4 py-4 text-base"
 	>
 		<div class="flex flex-col gap-6">
 			<div class="flex flex-col gap-2">
@@ -257,10 +264,10 @@
 					>{/if}
 			</div>
 		</div>
-	</div>
-	<div
-		class:hidden={tab !== 'activity'}
-		class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"
+	</Tabs.Content>
+	<Tabs.Content
+		value="activity"
+		class="min-h-0 overflow-y-auto overscroll-contain px-4 py-4 text-base"
 	>
 		<h3 class="mb-2 text-sm font-semibold">Execution activity</h3>
 		<p class="mb-4 text-sm text-muted-foreground">
@@ -270,10 +277,10 @@
 		{#if task.runIds.length}{@render runs?.()}{:else}<p class="text-sm text-muted-foreground">
 				No execution activity yet. Ask Sushii to work on this task from Details.
 			</p>{/if}
-	</div>
-	<div
-		class:hidden={tab !== 'results'}
-		class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"
+	</Tabs.Content>
+	<Tabs.Content
+		value="results"
+		class="min-h-0 overflow-y-auto overscroll-contain px-4 py-4 text-base"
 	>
 		<h3 class="mb-2 text-sm font-semibold">Latest result</h3>
 		{#if task.result}<p class="text-ui [overflow-wrap:anywhere] whitespace-pre-wrap">
@@ -282,5 +289,5 @@
 				No result yet. Completed work will appear here.
 			</p>{/if}
 		<Button variant="outline" class="mt-4 w-full" href={fullHref}>Jump to conversation</Button>
-	</div>
-</div>
+	</Tabs.Content>
+</Tabs.Root>

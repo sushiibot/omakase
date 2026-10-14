@@ -11,6 +11,7 @@
 	import * as InputGroup from '$lib/ui/input-group';
 	import { measureClass, Body as PageBody } from '$lib/ui/page';
 	import Section from '$lib/ui/section/section.svelte';
+	import * as Tabs from '$lib/ui/tabs';
 	import { Textarea } from '$lib/ui/textarea';
 	import type { TaskRecord } from './types';
 	let {
@@ -37,7 +38,12 @@
 		onretry: () => void;
 	} = $props();
 	const uid = $props.id();
-	let tab = $state<'overview' | 'conversation' | 'runs'>('overview');
+	const sections = [
+		{ value: 'overview', label: 'Overview' },
+		{ value: 'conversation', label: 'Conversation' },
+		{ value: 'runs', label: 'Runs' }
+	];
+	let tab = $state('overview');
 	let title = $state(untrack(() => task.title));
 	let brief = $state(untrack(() => task.brief));
 	let step = $state('');
@@ -86,29 +92,26 @@
 		>{task.checklist.filter((c) => c.done).length}/{task.checklist.length} done</span
 	>{/snippet}
 
-<div class="flex h-full min-h-0 flex-col" data-task-detail>
-	<div class="shrink-0 border-b px-2 md:px-4" role="group" aria-label="Task sections">
-		<div class="{measureClass.reading} flex">
-			{#each ['overview', 'conversation', 'runs'] as value}<Button
-					variant="ghost"
-					class="min-w-0 flex-1 rounded-none border-x-0 border-t-0 border-b-2 px-2 any-pointer-coarse:h-10 any-pointer-coarse:after:hidden {tab ===
-					value
-						? 'border-primary text-foreground'
-						: 'border-transparent text-muted-foreground'}"
-					aria-pressed={tab === value}
-					onclick={() => (tab = value as typeof tab)}
-					>{value === 'overview'
-						? 'Overview'
-						: value === 'conversation'
-							? 'Conversation'
-							: 'Runs'}</Button
-				>{/each}
+<Tabs.Root bind:value={tab} class="h-full min-h-0 gap-0" data-task-detail>
+	<div class="shrink-0 border-b">
+		<div class="{measureClass.reading} px-4 md:px-6">
+			<Tabs.List
+				variant="line"
+				aria-label="Task sections"
+				class="-ms-1.5 any-pointer-coarse:group-data-horizontal/tabs:h-auto"
+			>
+				{#each sections as section (section.value)}
+					<Tabs.Trigger value={section.value} class="any-pointer-coarse:h-10"
+						>{section.label}</Tabs.Trigger
+					>
+				{/each}
+			</Tabs.List>
 		</div>
 	</div>
 	{#if error}<div role="alert" class="shrink-0 px-4 py-2 text-sm text-failed">
 			{error}<Button variant="ghost" onclick={onretry}>Reload</Button>
 		</div>{/if}
-	<div class:hidden={tab !== 'overview'} class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+	<Tabs.Content value="overview" class="min-h-0 overflow-y-auto overscroll-contain text-base">
 		<PageBody>
 			<form
 				class="flex flex-col gap-3"
@@ -207,8 +210,8 @@
 					>{/if}
 			</div>
 		</PageBody>
-	</div>
-	<div class:hidden={tab !== 'conversation'} class="flex min-h-0 flex-1 flex-col">
+	</Tabs.Content>
+	<Tabs.Content value="conversation" class="flex min-h-0 flex-col text-base">
 		{#if task.workConversationId}{@render conversation?.(tab === 'conversation')}{:else}<div
 				class="flex flex-col gap-3 px-4 py-8"
 			>
@@ -217,8 +220,8 @@
 				</p>
 				<Button disabled={busy} onclick={() => void start()}><Play />Start with Sushii</Button>
 			</div>{/if}
-	</div>
-	<div class:hidden={tab !== 'runs'} class="min-h-0 flex-1 overflow-y-auto">
+	</Tabs.Content>
+	<Tabs.Content value="runs" class="min-h-0 overflow-y-auto text-base">
 		<PageBody>
 			<p class="text-sm text-muted-foreground">
 				Each run records an execution attempt. Finishing a run does not automatically complete the
@@ -227,5 +230,5 @@
 			{#if !task.runIds.length}<p class="text-sm">No runs yet.</p>{/if}
 			{@render runs?.()}
 		</PageBody>
-	</div>
-</div>
+	</Tabs.Content>
+</Tabs.Root>
