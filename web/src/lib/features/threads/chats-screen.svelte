@@ -64,7 +64,7 @@
 			);
 			return [{ label: `${hits.length} matching`, items: hits }];
 		}
-		return [{ label: 'Channels', count: true, items: active }];
+		return [{ label: 'Topics', count: true, items: active }];
 	});
 </script>
 

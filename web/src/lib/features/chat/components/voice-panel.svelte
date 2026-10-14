@@ -97,6 +97,7 @@
 		oninterrupt?: () => void;
 		micReady?: boolean;
 	} = $props();
+	let searchInput = $state<HTMLInputElement | null>(null);
 	const active = $derived(callState !== 'idle');
 	const selected = $derived(models.find((m) => m.id === provider));
 	const speech = $derived(speechModels.find((m) => m.id === speechModel));
@@ -257,6 +258,7 @@
 								aria-label="Search speech models"
 								placeholder="Search by name or model ID…"
 								bind:value={query}
+								bind:ref={searchInput}
 								disabled={active || loading}
 								class="[&::-webkit-search-cancel-button]:appearance-none"
 							/>
@@ -266,7 +268,10 @@
 										size="icon-xs"
 										aria-label="Clear search"
 										disabled={active || loading}
-										onclick={() => (query = '')}><X /></InputGroup.Button
+										onclick={() => {
+											query = '';
+											searchInput?.focus({ preventScroll: true });
+										}}><X /></InputGroup.Button
 									>
 								</InputGroup.Addon>{/if}
 						</InputGroup.Root>

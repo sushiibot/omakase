@@ -55,6 +55,7 @@
 		compactDisabled?: boolean;
 		compacting?: boolean;
 	} = $props();
+	let searchInput = $state<HTMLInputElement | null>(null);
 
 	const uid = $props.id();
 	const context = $derived(models?.context);
@@ -281,13 +282,19 @@
 				aria-label="Search OpenRouter models"
 				placeholder="Search OpenRouter models…"
 				value={query}
+				bind:ref={searchInput}
 				oninput={(e) => onquery?.(e.currentTarget.value)}
 				class="[&::-webkit-search-cancel-button]:appearance-none"
 			/>
 			<InputGroup.Addon><Search /></InputGroup.Addon>
 			{#if query}<InputGroup.Addon align="inline-end">
-					<InputGroup.Button size="icon-xs" aria-label="Clear search" onclick={() => onquery?.('')}
-						><X /></InputGroup.Button
+					<InputGroup.Button
+						size="icon-xs"
+						aria-label="Clear search"
+						onclick={() => {
+							onquery?.('');
+							searchInput?.focus({ preventScroll: true });
+						}}><X /></InputGroup.Button
 					>
 				</InputGroup.Addon>{/if}
 		</InputGroup.Root>

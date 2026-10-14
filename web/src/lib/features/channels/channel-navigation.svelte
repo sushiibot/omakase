@@ -47,6 +47,7 @@
 		onvisit: (id: string) => void;
 		onoptions?: (channel: Channel) => void;
 	} = $props();
+	let searchInput = $state<HTMLInputElement | null>(null);
 	const active = $derived(channels.filter((c) => c.state !== 'archived'));
 	const archived = $derived(channels.filter((c) => c.state === 'archived'));
 	// Starting or clearing a search toggles Archived; a remount keeps whatever the owner chose.
@@ -206,6 +207,7 @@
 						aria-label="Find channels by name or preview"
 						placeholder="Find a channel…"
 						bind:value={query}
+						bind:ref={searchInput}
 						class="[&::-webkit-search-cancel-button]:appearance-none"
 					/>
 					<InputGroup.Addon><Search /></InputGroup.Addon>
@@ -213,7 +215,10 @@
 							<InputGroup.Button
 								size="icon-xs"
 								aria-label="Clear search"
-								onclick={() => (query = '')}><X /></InputGroup.Button
+								onclick={() => {
+									query = '';
+									searchInput?.focus({ preventScroll: true });
+								}}><X /></InputGroup.Button
 							>
 						</InputGroup.Addon>{/if}
 				</InputGroup.Root>

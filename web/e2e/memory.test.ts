@@ -47,6 +47,12 @@ test('Memory search distinguishes no matches and clears the active filter', asyn
 	await search.fill('  mEmOrY.Md  ');
 	await expect(panel.getByRole('listitem')).toHaveCount(1);
 	await expect(panel.getByRole('link', { name: /MEMORY\.md.*The index/ })).toBeVisible();
+	await page
+		.locator('[data-slot=input-group]')
+		.getByRole('button', { name: 'Clear search', exact: true })
+		.click();
+	await expect(search).toHaveValue('');
+	await expect(search).toBeFocused();
 });
 
 test('Changes search covers older matches, file paths, summaries and source titles', async ({

@@ -25,6 +25,7 @@
 		oncreate: (title: string) => void;
 		onback: () => void;
 	} = $props();
+	let searchInput = $state<HTMLInputElement | null>(null);
 	let heading = $state<HTMLElement | null>(null);
 	onMount(() => heading?.focus({ preventScroll: true }));
 	let query = $state('');
@@ -75,6 +76,7 @@
 				aria-label="Find a conversation"
 				placeholder="Find a conversation…"
 				bind:value={query}
+				bind:ref={searchInput}
 				class="[&::-webkit-search-cancel-button]:appearance-none"
 			/>
 			<InputGroup.Addon><Search /></InputGroup.Addon>
@@ -84,6 +86,7 @@
 						aria-label="Clear search"
 						onclick={() => {
 							query = '';
+							searchInput?.focus({ preventScroll: true });
 						}}><X /></InputGroup.Button
 					>
 				</InputGroup.Addon>{/if}

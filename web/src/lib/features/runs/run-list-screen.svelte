@@ -11,7 +11,7 @@
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
 	import RunRow from './components/run-row.svelte';
-	import { RUN_FILTERS, runTime, type RunFilter } from './format';
+	import { RUN_FILTERS, runConversationHref, runTime, type RunFilter } from './format';
 	import type { RunSummary } from './types';
 
 	let {
@@ -104,8 +104,8 @@
 	<p role="status" class="sr-only">Loading work…</p>
 {/snippet}
 
-{#snippet row(run: RunSummary)}
-	<RunRow {run} {now} href={runHref(run.runId)} />
+{#snippet row(run: RunSummary, reserveJump: boolean)}
+	<RunRow {run} {now} {reserveJump} href={runHref(run.runId)} />
 {/snippet}
 
 {#snippet after(value: string)}
@@ -145,6 +145,7 @@
 	{#snippet children(value)}
 		{@const shown = RUN_FILTERS.find((f) => f.value === value) ?? RUN_FILTERS[0]}
 		{@const sections = byDay(panelRuns(value), runTime, now)}
+		{@const reserveJump = panelRuns(value).some((r) => !!runConversationHref(r))}
 		<div class="flex flex-col gap-4 md:gap-6">
 			<p class="text-sm text-muted-foreground">{shown.description}</p>
 			{#if value === filter && remote.status === 'loading' && snapshots[value]}<p
@@ -175,7 +176,7 @@
 					<Section id={`${uid}-${value}-s${i}`} title={group.label} tone="list">
 						<ItemGroup class="gap-0 has-data-[size=sm]:gap-0">
 							{#each group.items as run (run.runId)}<div role="listitem">
-									{@render row(run)}
+									{@render row(run, reserveJump)}
 								</div>{/each}
 						</ItemGroup>
 					</Section>

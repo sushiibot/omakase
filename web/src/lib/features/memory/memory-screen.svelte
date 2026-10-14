@@ -43,6 +43,7 @@
 		writesHref?: string;
 		onretry?: () => void;
 	} = $props();
+	let searchInput = $state<HTMLInputElement | null>(null);
 
 	let category = $state('long-term');
 	let search = $state('');
@@ -133,6 +134,7 @@
 				aria-label="Search memory"
 				placeholder="Search memory…"
 				bind:value={search}
+				bind:ref={searchInput}
 				class="[&::-webkit-search-cancel-button]:appearance-none"
 			/>
 			<InputGroup.Addon><Search /></InputGroup.Addon>
@@ -142,6 +144,7 @@
 						aria-label="Clear search"
 						onclick={() => {
 							search = '';
+							searchInput?.focus({ preventScroll: true });
 						}}><X /></InputGroup.Button
 					>
 				</InputGroup.Addon>{/if}

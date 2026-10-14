@@ -13,8 +13,16 @@
 		run,
 		now,
 		href,
-		jump = true
-	}: { run: RunSummary; now: number; href: string; jump?: boolean } = $props();
+		jump = true,
+		reserveJump = false
+	}: {
+		run: RunSummary;
+		now: number;
+		href: string;
+		jump?: boolean;
+		/** Keep the jump slot on a row without a conversation, so a list's chevrons line up. */
+		reserveJump?: boolean;
+	} = $props();
 	const chatHref = $derived(jump ? runConversationHref(run) : undefined);
 </script>
 
@@ -40,8 +48,7 @@
 			</a>
 		{/snippet}
 	</Item.Root>
-	{#if jump}
-		<!-- A row without a conversation keeps an invisible copy, so every chevron lines up. -->
+	{#if chatHref || (jump && reserveJump)}
 		<Button
 			href={chatHref}
 			variant="ghost"

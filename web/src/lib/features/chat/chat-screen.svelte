@@ -581,33 +581,35 @@
 		</Sheet.Header>
 		<div class="flex flex-col gap-2 px-1 pb-4">
 			{@render commandActions?.()}
-			{#if commandsOffline}
-				<p
-					role="status"
-					class="mx-3 flex items-start gap-2 rounded-lg bg-waiting-soft px-3 py-2 text-sm text-waiting"
-				>
-					<ServerOff class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-					Can't run commands while the agent is offline.
-				</p>
+			{#if !readOnly}
+				{#if commandsOffline}
+					<p
+						role="status"
+						class="mx-3 flex items-start gap-2 rounded-lg bg-waiting-soft px-3 py-2 text-sm text-waiting"
+					>
+						<ServerOff class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+						Can't run commands while the agent is offline.
+					</p>
+				{/if}
+				<ul class="flex flex-col">
+					{#each commands as c (c.id)}
+						<li>
+							<Button
+								variant="ghost"
+								disabled={c.disabled}
+								onclick={() => (c.id === 'new' ? onopensheet?.('new') : runCommand(c.id))}
+								class="h-auto w-full items-start justify-start gap-3 px-3 py-2.5 text-left whitespace-normal any-pointer-coarse:after:hidden"
+							>
+								<c.icon class="mt-0.5 text-muted-foreground" aria-hidden="true" />
+								<span class="flex flex-col gap-0.5">
+									<span>{c.label}</span>
+									<span class="font-normal text-muted-foreground">{c.note}</span>
+								</span>
+							</Button>
+						</li>
+					{/each}
+				</ul>
 			{/if}
-			<ul class="flex flex-col">
-				{#each commands as c (c.id)}
-					<li>
-						<Button
-							variant="ghost"
-							disabled={c.disabled}
-							onclick={() => (c.id === 'new' ? onopensheet?.('new') : runCommand(c.id))}
-							class="h-auto w-full items-start justify-start gap-3 px-3 py-2.5 text-left whitespace-normal any-pointer-coarse:after:hidden"
-						>
-							<c.icon class="mt-0.5 text-muted-foreground" aria-hidden="true" />
-							<span class="flex flex-col gap-0.5">
-								<span>{c.label}</span>
-								<span class="font-normal text-muted-foreground">{c.note}</span>
-							</span>
-						</Button>
-					</li>
-				{/each}
-			</ul>
 		</div>
 	{:else if shownSheet === 'new'}
 		<Sheet.Header>
@@ -663,15 +665,14 @@
 
 {#snippet actions()}
 	{@render headerActions?.()}
-	{#if !readOnly}
-		{@render voice?.()}
-		{#if onopensheet}<Button
-				size="icon"
-				variant="ghost"
-				aria-label="Chat commands"
-				onclick={() => onopensheet?.('commands')}><EllipsisVertical class="size-5" /></Button
-			>{/if}
-	{/if}
+	{#if !readOnly}{@render voice?.()}{/if}
+	<!-- A read-only chat keeps the menu for its conversation actions, without the commands. -->
+	{#if onopensheet && (!readOnly || commandActions)}<Button
+			size="icon"
+			variant="ghost"
+			aria-label="Chat commands"
+			onclick={() => onopensheet?.('commands')}><EllipsisVertical class="size-5" /></Button
+		>{/if}
 {/snippet}
 
 {#snippet banner()}
