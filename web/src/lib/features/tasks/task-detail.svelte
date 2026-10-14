@@ -9,7 +9,7 @@
 	import * as Field from '$lib/ui/field';
 	import { Input } from '$lib/ui/input';
 	import * as InputGroup from '$lib/ui/input-group';
-	import { measureClass } from '$lib/ui/page';
+	import { measureClass, Body as PageBody } from '$lib/ui/page';
 	import Section from '$lib/ui/section/section.svelte';
 	import { Textarea } from '$lib/ui/textarea';
 	import type { TaskRecord } from './types';
@@ -82,6 +82,10 @@
 	}
 </script>
 
+{#snippet progress()}<span class="tabular-nums"
+		>{task.checklist.filter((c) => c.done).length}/{task.checklist.length} done</span
+	>{/snippet}
+
 <div class="flex h-full min-h-0 flex-col" data-task-detail>
 	<div class="shrink-0 border-b px-2 md:px-4" role="group" aria-label="Task sections">
 		<div class="{measureClass.reading} flex">
@@ -105,7 +109,7 @@
 			{error}<Button variant="ghost" onclick={onretry}>Reload</Button>
 		</div>{/if}
 	<div class:hidden={tab !== 'overview'} class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-		<div class="{measureClass.reading} flex flex-col gap-5 p-4 md:p-6">
+		<PageBody>
 			<form
 				class="flex flex-col gap-3"
 				onsubmit={(e) => {
@@ -133,9 +137,6 @@
 						disabled={busy || !title.trim()}>Save changes</Button
 					>{/if}
 			</form>
-			{#snippet progress()}<span class="tabular-nums"
-					>{task.checklist.filter((c) => c.done).length}/{task.checklist.length} done</span
-				>{/snippet}
 			<Section title="Checklist" aside={task.checklist.length ? progress : undefined}>
 				{#each task.checklist as item (item.id)}<Label
 						class="min-h-10 gap-3 border-b px-1 py-2 leading-snug font-normal any-pointer-coarse:min-h-11"
@@ -205,7 +206,7 @@
 						onclick={() => void onupdate({ status: 'cancelled' })}>Cancel task</Button
 					>{/if}
 			</div>
-		</div>
+		</PageBody>
 	</div>
 	<div class:hidden={tab !== 'conversation'} class="flex min-h-0 flex-1 flex-col">
 		{#if task.workConversationId}{@render conversation?.(tab === 'conversation')}{:else}<div
@@ -218,13 +219,13 @@
 			</div>{/if}
 	</div>
 	<div class:hidden={tab !== 'runs'} class="min-h-0 flex-1 overflow-y-auto">
-		<div class="{measureClass.reading} flex flex-col gap-3 p-4 md:p-6">
+		<PageBody>
 			<p class="text-sm text-muted-foreground">
 				Each run records an execution attempt. Finishing a run does not automatically complete the
 				task.
 			</p>
 			{#if !task.runIds.length}<p class="text-sm">No runs yet.</p>{/if}
 			{@render runs?.()}
-		</div>
+		</PageBody>
 	</div>
 </div>

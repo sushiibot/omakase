@@ -141,6 +141,7 @@
 				{#if ask.state === 'answering'}
 					<p role="status" class="text-sm text-muted-foreground">Sending your answer…</p>
 				{:else}
+					<!-- The field has no ::after for touch adjustment to prefer, so real taps on it drift to Send or a chip unless both sit 24px away. -->
 					<form
 						class="flex gap-2 any-pointer-coarse:mt-6 any-pointer-coarse:gap-6"
 						onsubmit={(e) => {

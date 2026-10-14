@@ -145,7 +145,7 @@
 	{#snippet children(value)}
 		{@const shown = RUN_FILTERS.find((f) => f.value === value) ?? RUN_FILTERS[0]}
 		{@const sections = byDay(panelRuns(value), runTime, now)}
-		<div class="flex flex-col gap-5">
+		<div class="flex flex-col gap-4 md:gap-6">
 			<p class="text-sm text-muted-foreground">{shown.description}</p>
 			{#if value === filter && remote.status === 'loading' && snapshots[value]}<p
 					role="status"
