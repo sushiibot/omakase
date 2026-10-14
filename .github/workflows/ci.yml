@@ -210,7 +210,7 @@ jobs:
     needs: [docker-build, typecheck, test, web, web-e2e, browser-smoke, e2e-system]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions: {}
-    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@31a017e60c169e5432238a3c1457dc05f654336e # pull-deploy
+    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@72b4e192ee2c4cd4486a7d04575fb24330fbe6a6 # pull-deploy
     with:
       service: private-bots/omakase
       image_version: ${{ needs.docker-build.outputs.image_version }}
@@ -223,7 +223,7 @@ jobs:
     needs: [deploy, docker-build-workspace]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions: {}
-    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@31a017e60c169e5432238a3c1457dc05f654336e # pull-deploy
+    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@72b4e192ee2c4cd4486a7d04575fb24330fbe6a6 # pull-deploy
     with:
       service: private-bots/omakase-workspace
       image_version: ${{ needs.docker-build-workspace.outputs.short_sha }}
