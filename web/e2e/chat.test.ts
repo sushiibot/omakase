@@ -507,8 +507,8 @@ test('a full photo store blocks attaching and says why', async ({ page, context 
 	await page
 		.locator('input[type=file]')
 		.setInputFiles({ name: 'a.png', mimeType: 'image/png', buffer: Buffer.from(png) });
-	await expect(page.getByText('Photo storage is full.', { exact: false })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Attach photos' })).toBeDisabled();
+	await expect(page.getByText('Attachment storage is full.', { exact: false })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Add attachments' })).toBeDisabled();
 	await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
 });
 
@@ -528,7 +528,7 @@ test('the daily photo limit names itself', async ({ page, context }) => {
 	await chatServer(context, { uploadStatus: 429 });
 	await open(page);
 	await attachPng(page);
-	await expect(page.getByText('Daily photo limit reached.', { exact: false })).toBeVisible();
+	await expect(page.getByText('Daily attachment limit reached.', { exact: false })).toBeVisible();
 });
 
 test('a message queued past the orphan window re-uploads its photos first', async ({
@@ -2388,3 +2388,32 @@ for (const width of [412, 1280]) {
 		});
 	}
 }
+
+test('document attachments upload unchanged and preserve their draft after reload', async ({
+	page,
+	context
+}) => {
+	const { posts, calls } = await chatServer(context);
+	await open(page);
+	await page.getByRole('button', { name: 'Add attachments' }).click();
+	const event = page.waitForEvent('filechooser');
+	await page.getByRole('button', { name: 'Upload file', exact: true }).click();
+	const chooser = await event;
+	expect(await chooser.element().getAttribute('accept')).toBe('');
+	await chooser.setFiles({
+		name: 'notes.pdf',
+		mimeType: 'application/pdf',
+		buffer: Buffer.from('%PDF-1.7\nowner notes')
+	});
+	await expect.poll(() => posts('/api/uploads').length).toBe(1);
+	const upload = calls.find((c) => c.path === '/api/uploads')!;
+	expect(upload.headers['content-type']).toBe('application/octet-stream');
+	expect(upload.headers['x-upload-name']).toBe('notes.pdf');
+	await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled();
+	await page.reload();
+	await expect(page.getByRole('button', { name: 'Remove file notes.pdf' })).toBeVisible();
+	await page.getByRole('button', { name: 'Send message' }).click();
+	await expect
+		.poll(() => posts('/api/chat/messages').at(0)?.body)
+		.toMatchObject({ text: '', uploadIds: [UPLOAD_ID] });
+});

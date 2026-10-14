@@ -36,9 +36,10 @@ function decodeUploadName(raw: string | null): string {
 /** POST /api/uploads. The caller has already checked the peer, the owner login and isSameOrigin. */
 export async function handleUploadPost(req: Request, store: UploadStore): Promise<Response> {
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
-  // image/* is not a CORS-simple type, so a cross-site form or fetch can't send it without a preflight.
+  // Images and application/octet-stream require a CORS preflight for cross-site fetches.
   const type = (req.headers.get("Content-Type") ?? "").split(";")[0]!.trim().toLowerCase();
-  if (!type.startsWith("image/")) return json({ error: "content-type must be an image type" }, 415);
+  const allowFiles = type === "application/octet-stream";
+  if (!type.startsWith("image/") && !allowFiles) return json({ error: "content-type must be an image type or application/octet-stream" }, 415);
   const lengthHeader = req.headers.get("Content-Length");
   if (lengthHeader !== null && !(/^\d+$/.test(lengthHeader) && Number(lengthHeader) <= UPLOAD_MAX_BYTES)) {
     return json({ error: "body too large" }, 413);
@@ -49,7 +50,7 @@ export async function handleUploadPost(req: Request, store: UploadStore): Promis
   if (!bytes) return json({ error: "body too large" }, 413);
   if (bytes.byteLength === 0) return json({ error: "empty body" }, 400);
   try {
-    const ref = await store.put({ bytes, name: decodeUploadName(req.headers.get("X-Upload-Name")), direction: "in", ...(clientKey ? { clientKey } : {}) });
+    const ref = await store.put({ bytes, name: decodeUploadName(req.headers.get("X-Upload-Name")), direction: "in", allowFiles, ...(clientKey ? { clientKey } : {}) });
     const body: UploadResponse = {
       id: ref.id,
       contentType: ref.contentType,

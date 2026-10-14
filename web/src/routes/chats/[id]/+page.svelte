@@ -124,6 +124,7 @@
 
 	type AnySheet = ChatSheet | Exclude<ThreadSheet, 'branch'>;
 	const ids: AnySheet[] = [
+		'attachments',
 		'commands',
 		'new',
 		'viewer',

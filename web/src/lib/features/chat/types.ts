@@ -165,6 +165,8 @@ export interface FileRef {
 }
 
 export interface PhotoDraft {
+	/** False for an opaque file attachment; omitted by older image fixtures. */
+	image?: boolean;
 	id: string;
 	name: string;
 	src: string;
@@ -193,7 +195,8 @@ export interface ThreadReport {
 	line: string;
 }
 
-export type ChatSheet = 'commands' | 'new' | 'viewer' | 'model' | 'context-boundary' | 'context';
+export type ChatSheet =
+	'attachments' | 'commands' | 'new' | 'viewer' | 'model' | 'context-boundary' | 'context';
 
 export interface ChatTray {
 	items: PendingApproval[];

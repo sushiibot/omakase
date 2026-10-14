@@ -7,6 +7,11 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Mic from '@lucide/svelte/icons/mic';
 	import Plus from '@lucide/svelte/icons/plus';
+	import Camera from '@lucide/svelte/icons/camera';
+	import Image from '@lucide/svelte/icons/image';
+	import FileUp from '@lucide/svelte/icons/file-up';
+	import RoutedSheet from '$lib/ui/sheet/routed-sheet.svelte';
+	import * as Sheet from '$lib/ui/sheet';
 	import X from '@lucide/svelte/icons/x';
 	import CircleAlert from '@lucide/svelte/icons/circle-alert';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
@@ -31,6 +36,9 @@
 		onstop,
 		onsend,
 		onattach,
+		attachmentsOpen = false,
+		onopenattachments,
+		oncloseattachments,
 		onremovephoto,
 		onretryphoto,
 		model,
@@ -61,6 +69,9 @@
 		onstop?: () => void;
 		onsend?: () => void;
 		onattach?: (files: File[]) => void;
+		attachmentsOpen?: boolean;
+		onopenattachments?: () => void;
+		oncloseattachments?: () => void;
 		onremovephoto?: (id: string) => void;
 		onretryphoto?: (id: string) => void;
 		/** The model the next turn uses; the chip shows it and opens the picker. */
@@ -86,12 +97,29 @@
 	} = $props();
 	const uid = $props.id();
 	let picker = $state<HTMLInputElement | null>(null);
+	let attachmentTrigger = $state<HTMLButtonElement | null>(null);
+	let localAttachmentsOpen = $state(false);
+	const showAttachments = $derived(attachmentsOpen || localAttachmentsOpen);
+	function closeAttachments() {
+		localAttachmentsOpen = false;
+		oncloseattachments?.();
+	}
+	function pickAttachment(source: 'camera' | 'photos' | 'files') {
+		if (!picker || quotaFull) return;
+		picker.accept = source === 'files' ? '' : 'image/*';
+		picker.multiple = source !== 'camera';
+		if (source === 'camera') picker.setAttribute('capture', 'environment');
+		else picker.removeAttribute('capture');
+		// Keep the native picker inside the user gesture, before asynchronous history changes.
+		picker.click();
+		closeAttachments();
+	}
 
 	const errors: Record<NonNullable<PhotoDraft['error']>, string> = {
 		upload: 'Upload failed',
 		type: 'Not a supported image (PNG, JPEG, GIF, WebP)',
 		size: 'Too large (10 MB max)',
-		daily: 'Daily photo limit reached. Try again tomorrow.',
+		daily: 'Daily attachment limit reached. Try again tomorrow.',
 		expired: 'Photo expired — re-attach'
 	};
 	const pending = $derived(
@@ -101,9 +129,9 @@
 	const blocked = $derived(
 		unavailable ??
 			(failed.length
-				? `Send is off: remove or retry ${failed.length === 1 ? 'the failed photo' : `${failed.length} failed photos`}.`
+				? `Send is off: remove or retry ${failed.length === 1 ? 'the failed attachment' : `${failed.length} failed attachments`}.`
 				: pending.length
-					? `Send is off until ${pending.length === 1 ? '1 photo finishes' : `${pending.length} photos finish`} uploading.`
+					? `Send is off until ${pending.length === 1 ? '1 attachment finishes' : `${pending.length} attachments finish`} uploading.`
 					: undefined)
 	);
 	const dictating = $derived(
@@ -200,7 +228,7 @@
 				<li class="flex items-center gap-2 text-sm">
 					<CircleAlert class="size-4 shrink-0 text-failed" aria-hidden="true" />
 					<span class="min-w-0 flex-1"
-						><span class="font-medium">Photo {photos.indexOf(photo) + 1}:</span>
+						><span class="font-medium">{photo.name}:</span>
 						{errors[photo.error ?? 'upload']}</span
 					>
 					{#if photo.error === 'upload'}
@@ -220,7 +248,7 @@
 	{#if quotaFull}
 		<p class="flex items-start gap-2 rounded-lg bg-failed-soft px-3 py-2 text-sm text-failed">
 			<CircleAlert class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-			Photo storage is full. Free space before sending more.
+			Attachment storage is full. Free space before sending more.
 		</p>
 	{/if}
 	<!-- One box the width of the message column: text on top, photo and Send inside it. -->
@@ -228,17 +256,27 @@
 		class="flex flex-col rounded-3xl border bg-card focus-within:ring-2 focus-within:ring-ring/40"
 	>
 		{#if photos.length}
-			<ul aria-label="Photos to send" class="flex gap-3 overflow-x-auto px-3 pt-4 pr-5 pb-1">
+			<ul aria-label="Attachments to send" class="flex gap-3 overflow-x-auto px-3 pt-4 pr-5 pb-1">
 				{#each photos as photo, i (photo.id)}
 					<li class="relative shrink-0">
-						<img
-							src={photo.src}
-							alt="Photo {i + 1}"
-							class={cn(
-								'size-18 rounded-xl border object-cover',
-								photo.state !== 'uploaded' && 'opacity-45'
-							)}
-						/>
+						{#if photo.image === false}
+							<div
+								class="flex size-18 flex-col items-center justify-center gap-1 rounded-xl border bg-muted px-1"
+								title={photo.name}
+							>
+								<FileUp class="size-5" aria-hidden="true" />
+								<span class="w-full truncate text-meta">{photo.name}</span>
+							</div>
+						{:else}
+							<img
+								src={photo.src}
+								alt="Photo {i + 1}"
+								class={cn(
+									'size-18 rounded-xl border object-cover',
+									photo.state !== 'uploaded' && 'opacity-45'
+								)}
+							/>
+						{/if}
 						{#if photo.state === 'preparing' || photo.state === 'uploading'}
 							<span
 								class="absolute inset-0 flex flex-col items-center justify-center gap-0.5 rounded-xl text-tab font-semibold text-foreground"
@@ -264,7 +302,9 @@
 						{/if}
 						<button
 							type="button"
-							aria-label="Remove photo {i + 1}"
+							aria-label={photo.image === false
+								? `Remove file ${photo.name}`
+								: `Remove photo ${i + 1}`}
 							class="absolute -top-4 -right-4 grid size-12 place-items-center"
 							onclick={() => onremovephoto?.(photo.id)}
 						>
@@ -301,12 +341,18 @@
 						input.value = '';
 					}}
 				/>
-				{@render round({
-					label: 'Attach photos',
-					disabled: quotaFull,
-					onclick: () => picker?.click(),
-					icon: attachIcon
-				})}
+				<button
+					bind:this={attachmentTrigger}
+					type="button"
+					aria-label="Add attachments"
+					aria-haspopup="dialog"
+					aria-expanded={showAttachments}
+					disabled={quotaFull}
+					onclick={() => (onopenattachments ? onopenattachments() : (localAttachmentsOpen = true))}
+					class="group/round grid size-12 shrink-0 place-items-center rounded-full outline-none select-none disabled:pointer-events-none"
+				>
+					<span class={roundFace('muted')}>{@render attachIcon()}</span>
+				</button>
 			{/if}
 			{#if onmodel && model}
 				<!-- A 36px pill inside the 48px target, like the round buttons. -->
@@ -428,3 +474,37 @@
 	{/if}
 	{@render status?.()}
 </form>
+
+<RoutedSheet
+	open={showAttachments}
+	label="Add attachments"
+	returnFocus={attachmentTrigger}
+	onclose={closeAttachments}
+>
+	<div class="flex flex-col gap-2 px-3 pt-1 pb-3">
+		<div class="flex items-center justify-between px-2">
+			<Sheet.Title>Add attachments</Sheet.Title>
+			<Button variant="ghost" size="icon" aria-label="Close" onclick={closeAttachments}
+				><X aria-hidden="true" /></Button
+			>
+		</div>
+		<Button
+			variant="ghost"
+			class="justify-start"
+			disabled={quotaFull}
+			onclick={() => pickAttachment('camera')}><Camera aria-hidden="true" />Take photo</Button
+		>
+		<Button
+			variant="ghost"
+			class="justify-start"
+			disabled={quotaFull}
+			onclick={() => pickAttachment('photos')}><Image aria-hidden="true" />Upload photo</Button
+		>
+		<Button
+			variant="ghost"
+			class="justify-start"
+			disabled={quotaFull}
+			onclick={() => pickAttachment('files')}><FileUp aria-hidden="true" />Upload file</Button
+		>
+	</div>
+</RoutedSheet>

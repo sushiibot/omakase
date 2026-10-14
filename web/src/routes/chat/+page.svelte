@@ -73,6 +73,7 @@
 	let now = $state(Date.now());
 
 	const sheets: Record<ChatSheet, ReturnType<typeof routedSheet>> = {
+		attachments: routedSheet('attachments'),
 		commands: routedSheet('commands'),
 		new: routedSheet('new'),
 		viewer: routedSheet('viewer'),

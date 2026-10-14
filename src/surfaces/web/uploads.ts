@@ -77,6 +77,8 @@ export interface PutInput {
   bytes: Uint8Array;
   name: string;
   direction: "in" | "out";
+  /** Explicit opaque-file upload; never served inline unless raster bytes are verified. */
+  allowFiles?: boolean;
   clientKey?: string;
   outboxId?: string;
 }
@@ -182,7 +184,7 @@ export class DiskUploadStore implements UploadStore {
       ext = img.type === "jpeg" ? "jpg" : img.type;
       width = img.width;
       height = img.height;
-    } else if (i.direction === "in") {
+    } else if (i.direction === "in" && (!i.allowFiles || sniffImageType(i.bytes))) {
       if (sniffImageType(i.bytes)) throw new UploadError(422, "unreadable_image", "the image is malformed or over the pixel cap");
       throw new UploadError(415, "unsupported_type", "only png, jpeg, gif and webp images are accepted");
     } else {

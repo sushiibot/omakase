@@ -561,6 +561,7 @@
 	});
 
 	const sheetLabels: Record<ChatSheet, string> = {
+		attachments: 'Add attachments',
 		commands: 'Chat commands',
 		new: 'Reset conversation context?',
 		viewer: 'Image',
@@ -729,6 +730,9 @@
 				onsend={send}
 				onstop={() => void onstop?.()}
 				onattach={(files) => onattach?.(files)}
+				attachmentsOpen={sheet === 'attachments'}
+				onopenattachments={onopensheet ? () => onopensheet?.('attachments') : undefined}
+				oncloseattachments={closeSheet}
 				onremovephoto={(id) => onremovephoto?.(id)}
 				onretryphoto={(id) => onretryphoto?.(id)}
 				model={models ? modelName(models.current ?? 'Default') : null}
@@ -842,7 +846,7 @@
 </Screen>
 
 <RoutedSheet
-	open={!!sheet && sheet !== 'context-boundary'}
+	open={!!sheet && sheet !== 'context-boundary' && sheet !== 'attachments'}
 	label={shownSheet ? sheetLabels[shownSheet] : ''}
 	onclose={closeSheet}>{@render sheetBody()}</RoutedSheet
 >

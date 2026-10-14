@@ -72,8 +72,20 @@ describe("POST /api/uploads", () => {
     expect(res.status).toBe(415);
   });
 
-  test("requires an image content type", async () => {
-    for (const type of ["text/plain", "application/octet-stream", "multipart/form-data; boundary=x", ""]) {
+  test("accepts documents as opaque downloads, never inline content", async () => {
+    const bytes = new TextEncoder().encode("%PDF-1.7\nowner document");
+    const res = await handler(upload(bytes, { "Content-Type": "application/octet-stream", "X-Upload-Name": "notes.pdf" }), GW);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { id: string; contentType: string };
+    expect(body.contentType).toBe("application/octet-stream");
+    const file = await handler(fetchFile(`/f/${body.id}`), GW);
+    expect(file.headers.get("Content-Type")).toBe("application/octet-stream");
+    expect(file.headers.get("Content-Disposition")).toContain("attachment;");
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(bytes);
+  });
+
+  test("requires an image or opaque file content type", async () => {
+    for (const type of ["text/plain", "multipart/form-data; boundary=x", ""]) {
       expect((await handler(upload(png(1, 1), { "Content-Type": type }), GW)).status).toBe(415);
     }
   });

@@ -192,3 +192,57 @@ test('search finds any tool-capable OpenRouter model, and picking it as the fall
 		})
 	).toBeVisible();
 });
+
+for (const colorScheme of ['light', 'dark'] as const) {
+	test(`attachment drawer preserves the draft and offers native pickers in ${colorScheme}`, async ({
+		page,
+		context
+	}) => {
+		await fixtureApp(context, { override: '' });
+		await page.emulateMedia({ colorScheme });
+		await page.goto('/chat');
+		const message = page.getByRole('textbox', { name: 'Message' });
+		await message.fill('Keep this draft');
+		const trigger = page.getByRole('button', { name: 'Add attachments' });
+		const drawer = page.getByRole('dialog', { name: 'Add attachments' });
+		await trigger.click();
+		await expect(drawer).toBeVisible();
+		await checkScreen(page);
+		for (const width of [320, 412, 1280]) {
+			await page.setViewportSize({ width, height: 915 });
+			await expect
+				.poll(async () => {
+					const box = await drawer.boundingBox();
+					const viewportWidth = await page.evaluate(() => innerWidth);
+					return (
+						!!box &&
+						box.x >= 0 &&
+						box.x + box.width <= width &&
+						(width < 768 || Math.abs(box.x + box.width / 2 - viewportWidth / 2) < 2)
+					);
+				})
+				.toBe(true);
+			await page.screenshot({ path: `/tmp/omakase-attachments-${width}-${colorScheme}.png` });
+		}
+		await page.setViewportSize({ width: 412, height: 915 });
+		await page.goBack();
+		await expect(drawer).toBeHidden();
+		await expect(trigger).toBeFocused();
+		for (const action of ['Take photo', 'Upload photo', 'Upload file']) {
+			await trigger.click();
+			const chooserEvent = page.waitForEvent('filechooser');
+			await drawer.getByRole('button', { name: action, exact: true }).click();
+			const chooser = await chooserEvent;
+			expect(chooser.isMultiple()).toBe(action !== 'Take photo');
+			if (action === 'Take photo')
+				expect(await chooser.element().getAttribute('capture')).toBe('environment');
+			else expect(await chooser.element().getAttribute('capture')).toBeNull();
+			await expect(drawer).toBeHidden();
+			await expect(message).toHaveValue('Keep this draft');
+		}
+		await trigger.click();
+		await page.keyboard.press('Escape');
+		await expect(drawer).toBeHidden();
+		await expect(trigger).toBeFocused();
+	});
+}

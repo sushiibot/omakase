@@ -4,6 +4,7 @@ import { HttpError } from '$lib/core/http';
 import { httpChatApi, uploadMissingIds, type ChatApi } from './api';
 import {
 	MESSAGE_TEXT_MAX,
+	UPLOAD_MAX_BYTES,
 	MESSAGE_UPLOADS_MAX,
 	type ChatEnvelope,
 	type ChatUsage,
@@ -213,8 +214,16 @@ export class ChatStore {
 					const photo = e.photos?.[i];
 					return {
 						name: photo?.name ?? 'Photo',
-						preview: photo ? URL.createObjectURL(photo.blob) : undefined,
-						ref: { id, contentType: 'image/jpeg', bytes: 0, name: 'Photo', inline: true }
+						preview: photo?.blob.type.startsWith('image/')
+							? URL.createObjectURL(photo.blob)
+							: undefined,
+						ref: {
+							id,
+							contentType: photo?.blob.type ?? 'application/octet-stream',
+							bytes: photo?.blob.size ?? 0,
+							name: photo?.name ?? 'File',
+							inline: photo?.blob.type.startsWith('image/') ?? false
+						}
 					};
 				}),
 				at: e.at,
@@ -458,6 +467,7 @@ export class ChatStore {
 			return {
 				id: d.id,
 				name: d.name,
+				image: d.blob.type.startsWith('image/'),
 				src: URL.createObjectURL(d.blob),
 				blob: d.blob,
 				file: d.blob,
@@ -508,13 +518,13 @@ export class ChatStore {
 			text: entry.text,
 			attachments: photos.map((p) => ({
 				name: p.name,
-				preview: p.src,
+				preview: p.image === false ? undefined : p.src,
 				ref: {
 					id: p.uploadId!,
-					contentType: p.blob?.type || 'image/jpeg',
+					contentType: p.blob?.type || 'application/octet-stream',
 					bytes: p.bytes ?? 0,
 					name: p.name,
-					inline: true
+					inline: p.image !== false
 				}
 			})),
 			at: entry.at,
@@ -641,6 +651,7 @@ export class ChatStore {
 		const restored: Photo[] = (entry.photos ?? []).map((p) => ({
 			id: ulid(),
 			name: p.name,
+			image: p.blob.type.startsWith('image/'),
 			src: URL.createObjectURL(p.blob),
 			blob: p.blob,
 			file: p.blob,
@@ -778,12 +789,13 @@ export class ChatStore {
 	attach(files: File[]): Promise<void>[] {
 		const room = MESSAGE_UPLOADS_MAX - this.photos.length;
 		if (files.length > room) {
-			this.showToast(`Up to ${MESSAGE_UPLOADS_MAX} photos per message.`);
+			this.showToast(`Up to ${MESSAGE_UPLOADS_MAX} attachments per message.`);
 		}
 		return files.slice(0, Math.max(0, room)).map((file) => {
 			const photo: Photo = {
 				id: ulid(),
-				name: photoName(file.name),
+				name: file.type.startsWith('image/') ? photoName(file.name) : file.name,
+				image: file.type.startsWith('image/'),
 				src: URL.createObjectURL(file),
 				state: 'preparing',
 				file,
@@ -805,8 +817,14 @@ export class ChatStore {
 		if (!blob) {
 			try {
 				this.#patchPhoto(id, { state: 'preparing', error: undefined, progress: undefined });
-				blob = await preparePhoto(photo.file);
-				this.#patchPhoto(id, { blob, name: photoName(photo.name, blob.type) });
+				if (photo.image === false) {
+					if (photo.file.size > UPLOAD_MAX_BYTES) throw new PhotoError('size');
+					blob = new Blob([photo.file], { type: 'application/octet-stream' });
+				} else blob = await preparePhoto(photo.file);
+				this.#patchPhoto(id, {
+					blob,
+					name: photo.image === false ? photo.name : photoName(photo.name, blob.type)
+				});
 				this.#saveDraft();
 			} catch (err) {
 				this.#patchPhoto(id, {

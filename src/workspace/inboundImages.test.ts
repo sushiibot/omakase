@@ -117,6 +117,23 @@ describe("owner uploads", () => {
     expect(uploadFileName(ID, "image/svg+xml")).toBe(`${ID}.bin`);
   });
 
+  test("an opaque document is saved for tools without becoming model image input", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ws-document-"));
+    const bytes = Buffer.from("%PDF-1.7\nowner notes");
+    try {
+      const { images, saved } = await loadUploadAttachments(
+        [{ ...up("application/octet-stream"), name: "notes.pdf" }],
+        { principalId: "drk", dir, request: async () => ({ ok: true, name: "notes.pdf", contentType: "application/octet-stream", dataBase64: bytes.toString("base64") }) },
+        true,
+      );
+      expect(images).toEqual([]);
+      expect([...saved]).toEqual([ID]);
+      expect(readFileSync(join(dir, `${ID}.bin`))).toEqual(bytes);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("a symlink left at the target name is replaced, not written through", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ws-uploads-"));
     try {
