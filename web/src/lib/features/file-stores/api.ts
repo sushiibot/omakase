@@ -21,7 +21,7 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
 		throw error;
 	}
 }
-export const fileStoresApi = {
+const httpFileStoresApi = {
 	list: () => call<{ stores: FileStore[] }>('/file-stores'),
 	save: (input: FileStoreInput) => call<{ store: FileStore }>('/file-stores', input),
 	test: (id: string) =>
@@ -35,3 +35,9 @@ export const fileStoresApi = {
 			revision: store.revision
 		})
 };
+
+export type FileStoresApi = typeof httpFileStoresApi;
+export let fileStoresApi: FileStoresApi = httpFileStoresApi;
+export function configureFileStores(api: FileStoresApi) {
+	fileStoresApi = api;
+}

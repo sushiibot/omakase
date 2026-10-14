@@ -70,7 +70,7 @@
 			: [
 					{
 						id: 'channels',
-						title: 'Channels',
+						title: 'Topics',
 						items: active.filter((c) => c.kind === 'channel')
 					},
 					{ id: 'work', title: 'Task channels', items: active.filter((c) => c.kind === 'task') }

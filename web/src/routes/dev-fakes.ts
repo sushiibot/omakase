@@ -16,6 +16,8 @@ import { configureChat, configureModels, createFixtureModelsApi } from '$lib/fea
 import { createFakeBackend } from '$lib/features/chat/fake';
 import { configureConnectors } from '$lib/features/connectors';
 import { createFixtureConnectorsApi } from '$lib/features/connectors/fake';
+import { configureFileStores } from '$lib/features/file-stores';
+import { createFixtureFileStoresApi } from '$lib/features/file-stores/fake';
 import { configureHistory } from '$lib/features/history';
 import { fixtureHistoryApi } from '$lib/features/history/fake';
 import { configureHome } from '$lib/features/home';
@@ -69,6 +71,7 @@ export function installFakes() {
 	configureBriefing(createFixtureBriefingApi());
 	configureConnectors(createFixtureConnectorsApi());
 	configureSettings(createFixtureSettingsApi());
+	configureFileStores(createFixtureFileStoresApi());
 	// Each thread answers from its own scripted bot, seeded with its history.
 	configureThreads({
 		api: threadsApi,

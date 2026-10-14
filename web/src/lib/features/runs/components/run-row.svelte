@@ -7,6 +7,7 @@
 	import StatePill from '$lib/ui/status/state-pill.svelte';
 	import { kindLabel, activityTitle, runConversationHref } from '../format';
 	import type { RunSummary } from '../types';
+	import { cn } from '$lib/utils';
 
 	let {
 		run,
@@ -39,14 +40,17 @@
 			</a>
 		{/snippet}
 	</Item.Root>
-	{#if chatHref}
+	{#if jump}
+		<!-- A row without a conversation keeps an invisible copy, so every chevron lines up. -->
 		<Button
 			href={chatHref}
 			variant="ghost"
 			size="sm"
 			aria-label="Jump to conversation"
 			title="Jump to conversation"
-			class="text-muted-foreground"
+			aria-hidden={chatHref ? undefined : 'true'}
+			tabindex={chatHref ? undefined : -1}
+			class={cn('text-muted-foreground', !chatHref && 'invisible')}
 		>
 			<CornerUpRight aria-hidden="true" /><span class="hidden sm:inline">Jump to conversation</span>
 		</Button>

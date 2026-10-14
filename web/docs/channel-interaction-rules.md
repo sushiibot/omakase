@@ -166,7 +166,7 @@ The `/chats` directory remains available for channel management and the shared i
 The right inspector renders task details, checklists, activity, and results.
 Task conversations open centrally through an explicit channel link.
 Project assignment is not available in the channel catalog yet.
-The navigator groups ordinary channels and task channels without inventing project membership.
+The navigator groups ordinary channels under Topics and task channels under Task channels, without inventing project membership.
 
 Mobile navigation first closes its shallow history entry, then pushes the destination route.
 A temporary local state keeps navigation visible until that route mounts.
