@@ -49,9 +49,9 @@ test("manual tasks persist, execute in their own conversation, and accept follow
   await expect(bubble(page, `re-${followup}`)).toContainText("Done.");
   await stack.restartWorkspace();
   await page.reload();
-  await page.getByRole("button", { name: "Conversation", exact: true }).click();
+  await page.getByRole("tab", { name: "Conversation", exact: true }).click();
   await expect(bubble(page, `re-${followup}`)).toContainText("Done.");
-  await page.getByRole("button", { name: "Overview", exact: true }).click();
+  await page.getByRole("tab", { name: "Overview", exact: true }).click();
   await expect(
     page.getByRole("checkbox", { name: "Verify the result" }),
   ).not.toBeChecked();
@@ -67,7 +67,7 @@ test("manual tasks persist, execute in their own conversation, and accept follow
   expect(task.status).toBe("needs-you");
   await page.getByRole("button", { name: "Mark done", exact: true }).click();
   await expect(page.getByRole("button", { name: "Reopen task" })).toBeVisible();
-  await page.getByRole("button", { name: "Conversation", exact: true }).click();
+  await page.getByRole("tab", { name: "Conversation", exact: true }).click();
   const acknowledgement = nonce();
   await textbox(page).fill(`Thanks for finishing #${acknowledgement}`);
   await page.getByRole("button", { name: "Send message", exact: true }).click();

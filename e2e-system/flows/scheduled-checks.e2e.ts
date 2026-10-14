@@ -76,7 +76,7 @@ test("a scheduled check prepares an unstarted task and delivers into its work co
     )
     .toBe(`task-${task.id}`);
   await page.goto(`/tasks/${task.id}`);
-  await page.getByRole("button", { name: "Conversation", exact: true }).click();
+  await page.getByRole("tab", { name: "Conversation", exact: true }).click();
   await expect(bubble(page, `re-w${tag}`)).toContainText(
     `Echo checked-${tag}.`,
     { timeout: 15_000 },
