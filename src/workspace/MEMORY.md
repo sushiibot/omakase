@@ -35,15 +35,28 @@ The model can search older conversations and read related topics through read-on
 It has no shell, write tool, connector mutation, or direct access to private agent files.
 The evidence tools expose redacted source text without granting access to credentials.
 
-The model returns proposals for `USER.md`, `MEMORY.md`, `memory/catalog.md`, and `memory/topics/<slug>.md`.
-The host checks allowed paths, source citations, size caps, secrets, and concurrent edits.
-Existing curated-memory checks also validate source tags, lexical grounding, and excessive entry removal.
-New topic content requires evidence supplied in the batch or read through `memory_read`.
-These checks establish provenance and structure. They do not prove that every inference is correct.
+The model returns structured additions, replacements, removals, and topic links for curated memory.
+Each edit names existing entry IDs and source IDs. Unmentioned entries remain unchanged, including older entries with unusual source tags.
+The host renders citations and inference labels. It checks allowed paths, source existence, size caps, secrets, and concurrent edits.
+One source can support several entries. Topic links require an existing or proposed destination, rather than a conversation citation.
+Topic documents still use full-file proposals. New topic content requires evidence supplied in the batch or read through `memory_read`.
+
+A separate model session reviews each edit and document against the supplied evidence.
+It checks meaning, attribution, negation, temporal corrections, and distinctions between facts, observations, and inferences.
+The reviewer has no tools and uses the existing model connection. Every proposed change requires a decision.
+Missing, duplicate, or invalid decisions cannot authorize a write. Word overlap and source-use counts do not decide factual support.
+Capture gets one repair attempt after a structural or semantic rejection.
+The complete update must pass before application, so a topic and its index cannot become inconsistent.
+Unresolved rejection leaves all evidence pending. There is no partial application in this protocol.
+
+The reviewer is fallible. This design separates structural guarantees from semantic judgments rather than claiming to prove truth.
+No additional vendor receives personal data. The review callback can support another decision model after evaluation.
+The old whole-file protocol remains available to internal callers without a review callback. Production always supplies the callback.
 
 The host applies proposals between chat turns and requests a context reload.
 It advances the evidence cursor only after an accepted application. Later batches remain pending.
 Rejected proposals leave memory and the cursor unchanged. New evidence or changed memory permits another attempt.
+Structured capture also retries unchanged rejected inputs after 30 minutes. This prevents transient reviewer failures from blocking capture indefinitely.
 `DREAMS.md` records applied changes, source IDs, and rejection reasons.
 
 ## Memory placement
@@ -63,3 +76,24 @@ A pattern needs separate supporting events. Repeated assistant summaries do not 
 `dreamDocuments.test.ts` covers sourced topics, historical investigation, cursor handling, rejected paths, and concurrent edits.
 Pi integration tests cover recall after reset and the background tool allowlist.
 They use scripted model replies. They test system behavior, not the model's spontaneous retrieval choices or semantic accuracy.
+
+## Semantic review evaluation
+
+`memoryUpdates.test.ts` checks structured edits, citations, review coverage, repair, topic links, and concurrent changes with scripted replies.
+These tests verify the pipeline. They do not measure a model's semantic accuracy.
+
+The synthetic cases in `fixtures/memory-review.ts` cover paraphrases, negation, attribution, purchases, corrections, temporary travel, and inferences.
+Run `bun scripts/eval-memory-review.ts --list` to inspect the cases without model calls.
+With an OpenRouter key in `OPENAI_API_KEY`, run `bun scripts/eval-memory-review.ts` to evaluate the configured `WORKSPACE_MODEL`.
+The evaluation uses temporary storage and synthetic data. It reports false acceptances, false rejections, and errors separately.
+It makes paid model calls. A passing small fixture set does not establish production accuracy.
+
+## Design sources
+
+- [Letta memory and dreaming](https://docs.letta.com/configuration/memory) describes model-managed persistent memory and background refinement.
+- [Mem0 extraction](https://docs.mem0.ai/core-concepts/memory-operations/add) uses model extraction with retained conversation context.
+- [LongMemEval](https://arxiv.org/abs/2410.10813) evaluates extraction, reasoning, temporal updates, and abstention.
+- [Selection versus extraction with Jev](https://arxiv.org/abs/2609.34227) studies raw-turn selection under different context budgets.
+  Its results concern retrieval selection, not factual verification. They support retaining raw evidence alongside curated memory.
+- [TypeSafe Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev) provides typed decisions with confidence estimates.
+  A confidence estimate alone does not establish correctness on personal-memory updates.

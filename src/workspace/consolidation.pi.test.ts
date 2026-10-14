@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { WorkspaceConfig } from "./config.ts";
 import { BackendSelector } from "./chatgptFallback.ts";
-import { CONSOLIDATION_AGENT, MARKERS, systemPrompt, createConsolidationJob } from "./consolidation.ts";
+import { CONSOLIDATION_AGENT, systemPrompt, createConsolidationJob } from "./consolidation.ts";
+import { memoryEntries, memorySources, MEMORY_REVIEW_SYSTEM } from "./memoryUpdates.ts";
 import { commitHome, scaffoldHome } from "./home.ts";
 import { runToolFreeJob } from "./jobSession.ts";
 import { RunLog } from "./runLog.ts";
@@ -78,8 +79,16 @@ function config(provider: "chatgpt" | "openrouter" = "chatgpt"): WorkspaceConfig
 
 const USER = "# USER.md\n\n- Prefers metric units. (src: 2026-09-01, discord:111)\n";
 const MEMORY = "# MEMORY.md\n\n- Deploys on push to main. (src: 2026-09-02, discord:222)\n- Deploys from main via CI. (src: 2026-09-10, discord:333)\n";
-const NEW_MEMORY = "# MEMORY.md\n\n- Deploys from main via CI on every push. (src: 2026-09-10, discord:333)\n- Uses uv for Python. (src: 2026-09-28)\n";
-const PROPOSAL = [MARKERS.userBegin, USER, MARKERS.userEnd, MARKERS.memoryBegin, NEW_MEMORY, MARKERS.memoryEnd, MARKERS.summaryBegin, "merged: deploy entries", MARKERS.summaryEnd].join("\n");
+const NOTE_TEXT = `- Started using uv for Python.\n${"- worked on the workspace\n".repeat(100)}`;
+const NEW_MEMORY = "# MEMORY.md\n- Deploys from main via CI on every push. (src: 2026-09-10, discord:333) (src: 2026-09-02, discord:222)\n- Uses uv for Python. (src: 2026-09-28)\n";
+const entries = memoryEntries({ "USER.md": USER, "MEMORY.md": MEMORY }).filter(e => e.file === "MEMORY.md");
+const noteId = [...memorySources({ "USER.md": USER, "MEMORY.md": MEMORY }, [{ file: "2026-09-28.md", date: "2026-09-28", text: NOTE_TEXT, endOffset: NOTE_TEXT.length }], new Map()).keys()].find(id => id.startsWith("note-"))!;
+const PROPOSAL = JSON.stringify({ operations: [
+  { op: "remove", id: entries[0]!.id, reason: "merged duplicate deployment information", sources: [entries[1]!.id] },
+  { op: "upsert", id: entries[1]!.id, file: "MEMORY.md", text: "Deploys from main via CI on every push.", kind: "fact", sources: [entries[1]!.id, entries[0]!.id] },
+  { op: "upsert", file: "MEMORY.md", text: "Uses uv for Python.", kind: "fact", sources: [noteId] },
+], documents: [], summary: "merged deploy entries" });
+const REVIEW = JSON.stringify({ decisions: [0, 1, 2].map(i => ({ id: `operation:${i}`, verdict: "supported", reason: "supported by provided sources" })) });
 
 beforeAll(() => {
   for (const [k, v] of Object.entries(GIT_ENV)) {
@@ -106,7 +115,7 @@ beforeEach(async () => {
   writeFileSync(join(home, "AGENTS.md"), `# AGENTS\n${AGENTS_MARKER}\n`);
   writeFileSync(join(home, "USER.md"), USER);
   writeFileSync(join(home, "MEMORY.md"), MEMORY);
-  writeFileSync(join(home, "memory", "2026-09-28.md"), `- Started using uv for Python.\n${"- worked on the workspace\n".repeat(100)}`);
+  writeFileSync(join(home, "memory", "2026-09-28.md"), NOTE_TEXT);
   await commitHome("seed", { home });
 });
 
@@ -120,27 +129,30 @@ afterEach(() => {
 describe("consolidation job on a real Pi session", () => {
   test("ChatGPT limit → OpenRouter retry; read-only evidence tools on the wire; applied; logged as job:consolidation", async () => {
     signInChatGpt();
-    stubFetch((url) => (isChatGpt(url) ? jsonResponse(429, USAGE_LIMIT_BODY) : isOpenRouter(url) ? openRouterReply(PROPOSAL) : undefined));
+    stubFetch((url) => (isChatGpt(url) ? jsonResponse(429, USAGE_LIMIT_BODY) : isOpenRouter(url) ? openRouterReply(bodies.length === 1 ? PROPOSAL : REVIEW) : undefined));
     const runs = new RunLog(config().stateDir);
 
     const outcome = await createConsolidationJob(config(), { runs, selector: new BackendSelector({ primaryEnabled: config().provider === "chatgpt" }) }).run({ trigger: "manual", force: false });
 
     expect(outcome.status).toBe("applied");
     expect(requests.filter(isChatGpt)).toHaveLength(1);
-    expect(requests.filter(isOpenRouter)).toHaveLength(1);
+    expect(requests.filter(isOpenRouter)).toHaveLength(2);
+    expect(bodies[1]!.tools ?? []).toEqual([]);
+    expect(JSON.stringify(bodies[1]!.messages)).toContain(MEMORY_REVIEW_SYSTEM.slice(0, 60));
+    expect(runs.listRuns({ agentName: "job:memory-review" })[0]).toMatchObject({ status: "done" });
     const body = bodies[0]!;
     expect((body.tools ?? []).map(t => (t as { function: { name: string } }).function.name).sort()).toEqual(["find", "grep", "ls", "memory_read", "memory_search", "read"]);
     const system = JSON.stringify(body.messages.filter((m) => m.role === "system"));
     expect(system).toContain(systemPrompt().slice(0, 60));
     expect(JSON.stringify(body)).not.toContain(AGENTS_MARKER);
-    expect(JSON.stringify(body.messages.at(-1))).toContain("<daily-note file=\\\"memory/2026-09-28.md\\\"");
+    expect(JSON.stringify(body.messages.at(-1))).toContain("Started using uv for Python");
 
     expect(readFileSync(join(root, "home", "MEMORY.md"), "utf8")).toBe(NEW_MEMORY);
     expect(readFileSync(join(root, "home", "DREAMS.md"), "utf8")).toContain(`- Model: ${OPENROUTER_MODEL}`);
 
     const [run] = runs.listRuns({ agentName: CONSOLIDATION_AGENT });
     expect(run).toMatchObject({ agentName: "job:consolidation", status: "done" });
-    expect(run!.task).toContain("Consolidate the user's memory files.");
+    expect(run!.task).toContain("Return only a JSON object");
     expect(run!.sessionFile.startsWith(`${jobSessionDir(config().agentDir)}/`)).toBe(true);
     expect(existsSync(run!.sessionFile)).toBe(true);
   });

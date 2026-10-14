@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { runnerGit } from "../agentRuntime/runnerGit.ts";
 import {
   MARKERS,
+  bullets,
+  tagsIn,
+  entryDiff,
   systemPrompt,
   buildPrompt,
   contentTokens,
@@ -19,6 +22,7 @@ import {
 } from "./consolidation.ts";
 import { MEMORY_MD_CAP, commitHome, scaffoldHome } from "./home.ts";
 import { containsSecret } from "./secretPatterns.ts";
+import { snapshotDocuments } from "./dreamDocuments.ts";
 
 const GIT_ENV = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
 const savedEnv: Record<string, string | undefined> = {};
@@ -53,6 +57,8 @@ const USER_HEAD = "# USER.md: facts about drk\n\nCurated by the agent.\n\n";
 const MEMORY_HEAD = "# MEMORY.md: durable memory\n\nCurated by the agent. Tags look like `(src: YYYY-MM-DD, <surface>:<messageId>)`.\n\n";
 
 const USER = `${USER_HEAD}- Prefers metric units. (src: 2026-09-01, discord:111)\n- Lives in Berlin. (src: migrated)\n`;
+const TRAVEL_TAG = "src: 2026-09-30, discord:1554649758726098966; discord:1554649834051604545";
+const TRAVEL_ENTRY = `- Has upcoming travel and expects frequent questions about the travel-notes repo. (${TRAVEL_TAG})`;
 const MEMORY =
   MEMORY_HEAD +
   [
@@ -408,6 +414,67 @@ describe("an untrusted proposal can only rearrange what the inputs hold", () => 
     expect(grounding(contentTokens("agent deploys nightly weekly"), line)).toBe(0.5);
     expect(grounding(contentTokens("agent nightly weekly monthly"), line)).toBe(0.25);
     expect(grounding(contentTokens("(src: 2026-09-10, discord:333)"), line)).toBe(0);
+  });
+});
+
+describe("multi-reference source tags", () => {
+  const beforeUser = `${USER}${TRAVEL_ENTRY}\n`;
+  const validate = (user: string) => validateProposal({
+    home,
+    before: { "USER.md": beforeUser, "MEMORY.md": MEMORY },
+    notes: [],
+    proposal: { user, memory: MEMORY, summary: "" },
+    minKeepRatio: 0.6,
+  });
+
+  beforeEach(() => writeFileSync(join(home, "USER.md"), beforeUser));
+
+  test("recognizes the reported bullet and excludes its complete tag from content", () => {
+    expect(bullets(beforeUser)).toHaveLength(3);
+    expect(tagsIn(TRAVEL_ENTRY)).toEqual([TRAVEL_TAG]);
+    expect(contentTokens(`(${TRAVEL_TAG})`).size).toBe(0);
+    expect(tagsIn("(src: 2026-09-30, discord:123; slack:456.789; web:abc-def_123)")).toHaveLength(1);
+  });
+
+  test("capture can drop a stale multi-reference entry without reporting a missing header", async () => {
+    const result = await runConsolidation(deps(reply(USER, MEMORY)), { capture: true });
+    expect(result.status).toBe("applied");
+    expect(read("USER.md")).toBe(USER);
+    expect(read("DREAMS.md")).toContain(`USER.md: ${TRAVEL_ENTRY}`);
+  });
+
+  test("preserving and grounded rewriting work, with changes included in the entry diff", () => {
+    expect(validate(beforeUser)).toEqual([]);
+    const rewritten = beforeUser.replace("Has upcoming travel and expects frequent questions about", "Expects travel questions about");
+    expect(validate(rewritten)).toEqual([]);
+    expect(entryDiff({ "USER.md": beforeUser, "MEMORY.md": MEMORY }, { "USER.md": rewritten, "MEMORY.md": MEMORY }).join("\n")).toContain("changed (1)");
+  });
+
+  test("multi-reference entries still enforce grounding, source budgets and exact provenance", () => {
+    expect(validate(beforeUser.replace("Has upcoming travel and expects frequent questions about the travel-notes repo.", "Owns a purple submarine.")).join("\n")).toContain("entry not grounded");
+    expect(validate(`${beforeUser}${TRAVEL_ENTRY}\n`).join("\n")).toContain("used more often than in the inputs");
+    expect(validate(beforeUser.replace("discord:1554649834051604545", "discord:999")).join("\n")).toContain("source tag(s) not present in the inputs");
+    expect(validate(beforeUser.replace("; discord:1554649834051604545", "")).join("\n")).toContain("source tag(s) not present in the inputs");
+  });
+
+  test("malformed reference lists remain invalid", () => {
+    for (const suffix of [";", "; discord:", "; arbitrary prose", "; discord:123;", "; discord:123\n; slack:456"]) {
+      const entry = `- Upcoming travel. (src: 2026-09-30, discord:123${suffix})`;
+      expect(bullets(entry)).toEqual([]);
+      expect(validate(`${beforeUser}${entry}\n`).join("\n")).toContain("neither a tagged entry");
+    }
+  });
+
+  test("capture retries unchanged inputs rejected under the single-reference policy", async () => {
+    // A rejection creates the state directory without consuming notes.
+    await runConsolidation(deps(reply(beforeUser, `${MEMORY}Prose.\n`)), { capture: true });
+    const notes = pendingNotes(home, {}, 24_000).chunks;
+    const oldInput = sha256(JSON.stringify(["source-tag-grounding-v2", beforeUser, MEMORY, notes.map(n => [n.file, n.endOffset, n.text])]));
+    const oldFingerprint = sha256(oldInput + JSON.stringify([undefined, undefined, undefined, snapshotDocuments(home)]));
+    writeFileSync(join(stateDir, "consolidation.json"), JSON.stringify({ notes: {}, lastRejected: { fingerprint: oldFingerprint, at: "2026-09-29T04:00:00Z" } }));
+    expect((await runConsolidation(deps(reply(USER, MEMORY)), { capture: true })).status).toBe("applied");
+    expect(prompts).toHaveLength(2);
+    expect(JSON.parse(readFileSync(join(stateDir, "consolidation.json"), "utf8")).lastRejected).toBeUndefined();
   });
 });
 

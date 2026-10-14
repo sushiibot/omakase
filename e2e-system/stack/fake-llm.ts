@@ -88,6 +88,9 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
   const tag = /#([a-z0-9]{4,16})\b/.exec(userText)?.[1];
   // Consolidation now receives source conversations. Their old E2E keywords are evidence,
   // not commands for this run. Return a valid no-change proposal before matching chat scripts.
+  if (userText.startsWith('Return only a JSON object: {"operations":[]')) {
+    return stream([JSON.stringify({ operations: [], documents: [], summary: "No durable changes." })], 0, undefined);
+  }
   if (/^Consolidate .*memory files\./.test(userText)) {
     const current = (name: string) => userText.split(`<current-file name="${name}">\n`)[1]?.split("\n</current-file>")[0] ?? `# ${name}`;
     return stream([
