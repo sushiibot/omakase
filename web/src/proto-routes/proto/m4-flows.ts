@@ -187,8 +187,17 @@ const threadFrames: Frame[] = [
 		screen: ThreadScreen,
 		props: thread(t.THREADS.trip),
 		...detail,
-		next: 'Tap “Shares memory”',
-		hits: { 'shares memory': 'th-4', archive: 'cl-1' }
+		next: 'Open ⋮ for shared memory',
+		hits: { 'chat commands': 'th-3m', archive: 'cl-1' }
+	},
+	{
+		id: 'th-3m',
+		label: 'Conversation actions',
+		screen: ThreadScreen,
+		props: thread(t.THREADS.trip, { sheet: 'commands' }),
+		...detail,
+		next: 'Tap “Shared memory”',
+		hits: { 'shared memory': 'th-4' }
 	},
 	{
 		id: 'th-4',
