@@ -59,6 +59,7 @@
 		{#if subtitle}
 			<!-- Clipped sideways only. A button here reaches from the title's bottom to the header's, never over either. -->
 			<div
+				data-slot="page-header-subtitle"
 				class={cn(
 					'overflow-x-clip text-xs text-ellipsis whitespace-nowrap text-muted-foreground [&_[data-slot=button]]:any-pointer-coarse:after:top-0 [&_[data-slot=button]]:any-pointer-coarse:after:-bottom-1',
 					breadcrumb && 'md:hidden'

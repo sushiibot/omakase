@@ -43,8 +43,8 @@
 {#snippet rows(section: TaskRecord[], id?: string, hidden = false)}
 	<Item.Group {id} {hidden} class="gap-0">
 		{#each section as task (task.id)}
-			<!-- gap-3 matches the checkbox's 12px side reach, so it ends where the row button starts. -->
-			<div role="listitem" class="flex min-w-0 items-center gap-3 ps-2">
+			<!-- gap-4 matches the checkbox's 16px coarse side reach, so it ends where the row button starts. -->
+			<div role="listitem" class="flex min-w-0 items-center gap-3 ps-2 any-pointer-coarse:gap-4">
 				<Checkbox
 					checked={task.status === 'done'}
 					disabled={busy}

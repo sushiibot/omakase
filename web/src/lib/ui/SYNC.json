@@ -12,7 +12,7 @@
 		"drift": "none"
 	},
 	"checkbox": {
-		"drift": "coarse-pointer hit area 44px tall, so stacked rows meet without overlapping (ux-guidelines.md#shared-component-patterns)"
+		"drift": "coarse-pointer hit area 48px wide and 40px tall, so 44px rows never overlap (ux-guidelines.md#shared-component-patterns)"
 	},
 	"collapsible": {
 		"drift": "none"

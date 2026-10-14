@@ -52,6 +52,8 @@ export async function smallTargets(page: Page) {
 				const itemRow =
 					coarse && e.getAttribute('data-slot') === 'item' && !!e.closest('[data-slot=item-group]');
 				const summaryRow = coarse && e.tagName === 'SUMMARY';
+				// A header subtitle control reaches only from the title to the header edge, 27px past its border.
+				const subtitle = coarse && !!e.closest('[data-slot=page-header-subtitle]');
 				if (!extended || after.display === 'none')
 					return {
 						w: r.width,
@@ -108,7 +110,7 @@ export async function smallTargets(page: Page) {
 				return {
 					w: r.width + reach.Left + reach.Right,
 					h: r.height + reach.Top + reach.Bottom,
-					kind: inField ? 'in-field' : 'extended',
+					kind: inField ? 'in-field' : subtitle ? 'subtitle' : 'extended',
 					covered,
 					lost
 				};
@@ -128,6 +130,7 @@ export async function smallTargets(page: Page) {
 							(e instanceof HTMLInputElement && !['checkbox', 'radio'].includes(e.type));
 						if (field) return m.w < 48 || m.h < 32;
 						if (m.kind === 'in-field') return m.h < 31.5;
+						if (m.kind === 'subtitle') return m.w < 47.5 || m.h < 26.5;
 						if (m.covered) return true;
 						if (m.kind === 'row') return m.w < 47.5 || m.h < 39.5;
 						if (m.kind === 'sidebar-row' || m.kind === 'item-row' || m.kind === 'summary-row')
