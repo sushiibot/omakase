@@ -212,7 +212,7 @@ jobs:
     # Posts the deploy result and its Grafana log link on this commit.
     permissions:
       statuses: write
-    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@7ba6ca54c6fa17cb03876f4b4c2da503f9b4f090 # pull-deploy
+    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@4246adf846f300a79038cbca1abbc432b720122a # pull-deploy
     with:
       service: private-bots/omakase
       image_version: ${{ needs.docker-build.outputs.image_version }}
@@ -227,7 +227,7 @@ jobs:
     # Posts the deploy result and its Grafana log link on this commit.
     permissions:
       statuses: write
-    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@7ba6ca54c6fa17cb03876f4b4c2da503f9b4f090 # pull-deploy
+    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@4246adf846f300a79038cbca1abbc432b720122a # pull-deploy
     with:
       service: private-bots/omakase-workspace
       image_version: ${{ needs.docker-build-workspace.outputs.short_sha }}
