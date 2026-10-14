@@ -89,10 +89,11 @@ test('Runs filters swipe on link rows without opening the row', async ({ page, c
 		.first()
 		.boundingBox();
 	expect(box).not.toBeNull();
+	// Cross halfway without relying on flick velocity: this checks link gesture ownership.
 	await swipe(
 		page,
-		[box!.x + box!.width - 50, box!.y + box!.height / 2],
-		[box!.x + 80, box!.y + box!.height / 2]
+		[box!.x + box!.width - 24, box!.y + box!.height / 2],
+		[box!.x + 24, box!.y + box!.height / 2]
 	);
 	await expect(page.getByRole('tab', { name: 'Scheduled', exact: true })).toHaveAttribute(
 		'aria-selected',
