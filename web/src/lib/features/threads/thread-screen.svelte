@@ -14,7 +14,7 @@
 	import * as Sheet from '$lib/ui/sheet';
 	import RoutedSheet from '$lib/ui/sheet/routed-sheet.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
-	import type { MemoryWrite, ThreadDetail, ThreadSheet } from './types';
+	import type { MemoryWrite, ThreadDetail, ThreadSheet, ThreadSummary } from './types';
 
 	type ChatProps = ComponentProps<typeof ChatScreen>;
 
@@ -61,6 +61,10 @@
 	} = $props();
 
 	const thread = $derived(detail?.summary);
+	const memoryStatus = (t: ThreadSummary) =>
+		t.memoryTracking === false
+			? 'Shares memory with Main'
+			: `Shares memory with Main · ${t.writes} ${t.writes === 1 ? 'write' : 'writes'}`;
 	const archived = $derived(thread?.state === 'archived');
 	const threadSheet = $derived(
 		sheet === 'thread-memory' || sheet === 'thread-close' ? sheet : undefined
@@ -108,29 +112,23 @@
 	</Item.Group>
 {/snippet}
 
-{#snippet headerActions()}
-	{#if thread}
-		{@const memory =
-			thread.memoryTracking === false
-				? 'Shares memory with Main'
-				: `Shares memory with Main · ${thread.writes} ${thread.writes === 1 ? 'write' : 'writes'}`}
-		<Button
-			variant="ghost"
-			class="gap-1 px-2"
-			aria-label={memory}
-			title={memory}
-			aria-haspopup="dialog"
-			onclick={() => onopensheet?.('thread-memory')}
-			><BookMarked class="size-5" />{#if thread.memoryTracking !== false}<span
-					class="text-sm tabular-nums">{thread.writes}</span
-				>{/if}</Button
-		>
-	{/if}
-	{@render chat?.headerActions?.()}
+{#snippet subtitle()}
+	{#if thread}{memoryStatus(thread)}{/if}
 {/snippet}
 
 {#snippet commandActions()}
 	<div class="flex flex-col border-b pb-2">
+		{#if thread}<Button
+				variant="ghost"
+				class="h-auto w-full items-start justify-start gap-3 px-3 py-2.5 text-left whitespace-normal any-pointer-coarse:after:hidden"
+				aria-haspopup="dialog"
+				onclick={() => onopensheet?.('thread-memory')}
+				><BookMarked class="mt-0.5 text-muted-foreground" /><span class="flex flex-col gap-0.5"
+					><span>Shared memory</span><span class="font-normal text-muted-foreground"
+						>{memoryStatus(thread)}</span
+					></span
+				></Button
+			>{/if}
 		<Button
 			variant="ghost"
 			class="h-auto w-full justify-start gap-3 px-3 py-2.5 text-left any-pointer-coarse:after:hidden"
@@ -172,7 +170,7 @@
 		sheet={chatSheet}
 		title={thread.title}
 		placeholder="Message in {thread.title}"
-		{headerActions}
+		{subtitle}
 		{commandActions}
 		readOnly={!sendable ? readOnly : undefined}
 		back={{ ...back, desktop: true }}

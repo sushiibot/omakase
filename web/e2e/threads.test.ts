@@ -145,7 +145,13 @@ test('a thread says it shares memory with Main, and back closes its sheet', asyn
 	for (let d = 1; d <= 7; d++)
 		await page.touchscreen.tap(title.x + title.width / 2, title.y + title.height - d);
 	await expect(page.getByRole('dialog')).toHaveCount(0);
-	await page.getByRole('button', { name: /Shares memory with Main · 2 writes/ }).click();
+	await expect(page.locator('[data-slot=page-header-subtitle]')).toHaveText(
+		'Shares memory with Main · 2 writes'
+	);
+	await page.getByRole('button', { name: 'Chat commands', exact: true }).click();
+	await page
+		.getByRole('button', { name: /^Shared memory Shares memory with Main · 2 writes/ })
+		.click();
 	const sheet = page.getByRole('dialog', { name: 'Memory shared with Main' });
 	await expect(sheet).toContainText('2 writes from this conversation');
 	await page.goBack();
