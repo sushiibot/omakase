@@ -209,8 +209,10 @@ jobs:
   deploy:
     needs: [docker-build, typecheck, test, web, web-e2e, browser-smoke, e2e-system]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions: {}
-    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@72b4e192ee2c4cd4486a7d04575fb24330fbe6a6 # pull-deploy
+    # Posts the deploy result and its Grafana log link on this commit.
+    permissions:
+      statuses: write
+    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@7ba6ca54c6fa17cb03876f4b4c2da503f9b4f090 # pull-deploy
     with:
       service: private-bots/omakase
       image_version: ${{ needs.docker-build.outputs.image_version }}
@@ -222,8 +224,10 @@ jobs:
   deploy-workspace:
     needs: [deploy, docker-build-workspace]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions: {}
-    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@72b4e192ee2c4cd4486a7d04575fb24330fbe6a6 # pull-deploy
+    # Posts the deploy result and its Grafana log link on this commit.
+    permissions:
+      statuses: write
+    uses: sushiibot/sushii-workflows/.github/workflows/pull-deploy.yml@7ba6ca54c6fa17cb03876f4b4c2da503f9b4f090 # pull-deploy
     with:
       service: private-bots/omakase-workspace
       image_version: ${{ needs.docker-build-workspace.outputs.short_sha }}
