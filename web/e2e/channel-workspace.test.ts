@@ -135,7 +135,17 @@ for (const desktop of [false, true]) {
 		await expect(options.getByRole('textbox', { name: 'Conversation name' })).toBeFocused();
 		await page.goBack();
 		await expect(options).toBeHidden();
-		if (!desktop) await page.getByRole('button', { name: /^Menu/ }).click();
+		if (!desktop) {
+			await page.getByRole('button', { name: /^Menu/ }).click();
+			// The chat slides aside to open the drawer; until it settles it overlaps the drawer's controls.
+			await expect
+				.poll(() =>
+					page
+						.locator('[data-chat-surface]')
+						.evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).m41)
+				)
+				.toBeCloseTo(320, 0);
+		}
 
 		await nav.getByRole('button', { name: 'Find and filter channels' }).click();
 		await expect(nav.getByRole('checkbox', { name: /archived/i })).toHaveCount(0);
