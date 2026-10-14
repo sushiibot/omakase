@@ -18,7 +18,7 @@ const request = {
 	choices: ['Friday afternoon', 'Monday morning']
 };
 
-test('a linked older question loads its history page, focuses its answer and preserves later reading position', async ({
+test('a linked older question loads its history page, focuses it and preserves later reading position', async ({
 	page,
 	context
 }) => {
@@ -33,7 +33,8 @@ test('a linked older question loads its history page, focuses its answer and pre
 	});
 	await page.goto('/chat?ask=older-decision');
 	const answer = page.getByRole('button', { name: 'Friday afternoon', exact: true });
-	await expect(answer).toBeFocused();
+	// The question takes focus, never a choice a held Enter could pick.
+	await expect(page.locator('[data-ask-id="older-decision"]')).toBeFocused();
 	await expect(answer).toBeInViewport();
 	expect(olderRequests).toBe(1);
 	await expect(page.locator('[data-request-search]')).toHaveCount(0);
@@ -107,7 +108,7 @@ test('a failed older request can retry and reveal the linked question', async ({
 		.locator('[data-request-search]')
 		.getByRole('button', { name: 'Retry', exact: true })
 		.click();
-	await expect(page.getByRole('button', { name: 'Friday afternoon', exact: true })).toBeFocused();
+	await expect(page.locator('[data-ask-id="older-decision"]')).toBeFocused();
 	expect(attempts).toBe(2);
 });
 
@@ -136,7 +137,7 @@ test('a linked question focuses when the live stream hydrates it after empty his
 		},
 		1
 	);
-	await expect(page.getByRole('button', { name: 'This evening', exact: true })).toBeFocused();
+	await expect(page.locator('[data-ask-id="delayed-decision"]')).toBeFocused();
 	await expect(page.locator('[data-request-search]')).toHaveCount(0);
 	expect(olderRequests).toBe(0);
 });

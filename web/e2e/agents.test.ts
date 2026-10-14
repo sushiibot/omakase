@@ -139,6 +139,11 @@ for (const width of [320, 390, 1280]) {
 		const approve = page.getByRole('button', { name: 'Approve', exact: true });
 		await expect(page.getByRole('heading', { name: 'Run a command' })).toBeFocused();
 		await expect(approve).not.toBeFocused();
+		// Enter repeats on keydown while held; with focus on the heading it decides nothing.
+		for (let i = 0; i < 4; i++) await page.keyboard.down('Enter');
+		await page.keyboard.up('Enter');
+		await expect(approve).toBeEnabled();
+		expect(posts).toEqual([]);
 		const detail = page.locator('[data-agent-detail="a-login"]');
 		await expect(detail.getByText('Needs approval')).toBeVisible();
 		await expect(detail.getByText('Codex · Desktop · Code/omakase/web')).toBeVisible();

@@ -242,14 +242,8 @@
 		const target = scroller.querySelector<HTMLElement>(selector);
 		if (!target) return false;
 		target.scrollIntoView({ block: 'center', behavior: 'instant' });
-		if (request.kind === 'turn') target.focus({ preventScroll: true });
-		// Land on the first decision, past any disclosure above it.
-		else
-			target
-				.querySelector<HTMLElement>(
-					'button:not(:disabled):not([data-slot=collapsible-trigger]), input:not(:disabled)'
-				)
-				?.focus({ preventScroll: true });
+		// The request itself, never a choice: Enter activates on keydown, so a held Enter would decide.
+		target.focus({ preventScroll: true });
 		return true;
 	}
 	function reviewRequest() {

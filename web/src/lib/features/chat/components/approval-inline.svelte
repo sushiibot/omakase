@@ -67,7 +67,8 @@
 	data-approval-id={pending.nonce}
 	data-surface="approval"
 	aria-labelledby="{uid}-title"
-	class="min-w-0 rounded-xl border border-approval/60 bg-approval-surface px-3 py-2"
+	tabindex="-1"
+	class="min-w-0 rounded-xl border border-approval/60 bg-approval-surface px-3 py-2 focus:outline-2 focus:outline-ring"
 >
 	<div class="flex items-center gap-2">
 		<ShieldCheck class="size-4 shrink-0 text-approval" aria-hidden="true" />

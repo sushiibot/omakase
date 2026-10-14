@@ -1961,7 +1961,7 @@ for (const width of [412, 1280]) {
 			'Waiting for your approval'
 		);
 		await page.locator('[data-channel-activity]').getByRole('button', { name: 'Review' }).click();
-		await expect(page.getByRole('button', { name: 'Deny send_email' })).toBeFocused();
+		await expect(request).toBeFocused();
 		expect((await request.boundingBox())!.height).toBeLessThan(320);
 		await page.screenshot({ path: `/tmp/chat-approval-pending-${width}.png` });
 		await page.getByRole('button', { name: 'Approve send_email' }).click();
@@ -2044,6 +2044,67 @@ for (const width of [320, 412, 1280]) {
 		await page.screenshot({ path: `/tmp/chat-grouped-tools-${width}.png` });
 	});
 }
+
+/** Enter activates a button on keydown, and holding it repeats the keydown. */
+async function holdEnter(page: Page) {
+	for (let i = 0; i < 4; i++) {
+		await page.keyboard.down('Enter');
+		await page.waitForTimeout(40);
+	}
+	await page.keyboard.up('Enter');
+}
+
+test('Review focuses the request, so a held Enter never decides it', async ({ page, context }) => {
+	const { posts } = await chatServer(context);
+	await open(page);
+	await push(page, 'delta', { turnId: 'hold-turn', offset: 0, text: 'Checking status.' });
+	await push(
+		page,
+		'ask',
+		{
+			key: 'hold-ask',
+			askId: 'hold-ask',
+			question: 'Allow command?',
+			choices: ['Yes', 'No'],
+			toolConfirmation: { tool: 'bash', input: 'rm -rf build', toolCallId: 'hold-call' }
+		},
+		1
+	);
+	const confirmation = page.locator('[data-surface="tool-confirmation"]');
+	await expect(confirmation.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+	await page.locator('[data-channel-activity]').getByRole('button', { name: 'Review' }).click();
+	await expect(confirmation).toBeFocused();
+	await holdEnter(page);
+	await expect(confirmation.getByRole('button', { name: 'Approve', exact: true })).toBeEnabled();
+	expect(posts('/api/chat/asks')).toEqual([]);
+	// The decision stays one Tab away and still answers.
+	await page.keyboard.press('Tab');
+	await page.keyboard.press('Enter');
+	await expect.poll(() => posts('/api/chat/asks').length).toBe(1);
+
+	await push(page, 'ask_resolved', { askId: 'hold-ask', answer: 'Yes' }, 2);
+	await push(
+		page,
+		'approval',
+		{
+			nonce: 'hold-approval',
+			view: {
+				tool: 'send_email',
+				agentId: 'main',
+				agentName: 'Main',
+				fields: [{ key: 'to', value: 'alex@example.com', kind: 'single', max: 100 }]
+			}
+		},
+		3
+	);
+	const approval = page.locator('[data-surface="approval"]');
+	await expect(approval).toBeVisible();
+	await page.locator('[data-channel-activity]').getByRole('button', { name: 'Review' }).click();
+	await expect(approval).toBeFocused();
+	await holdEnter(page);
+	await expect(approval.getByRole('button', { name: 'Approve send_email' })).toBeEnabled();
+	expect(posts('/api/chat/approvals')).toEqual([]);
+});
 
 for (const width of [412, 1280]) {
 	for (const theme of ['light', 'dark'] as const) {

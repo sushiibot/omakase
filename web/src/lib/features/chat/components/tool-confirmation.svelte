@@ -41,7 +41,8 @@
 		data-surface="tool-confirmation"
 		data-ask-id={ask.askId}
 		aria-labelledby="{uid}-title"
-		class="min-w-0 rounded-xl border border-approval/60 bg-approval-surface px-3 py-2 text-ui"
+		tabindex="-1"
+		class="min-w-0 rounded-xl border border-approval/60 bg-approval-surface px-3 py-2 text-ui focus:outline-2 focus:outline-ring"
 	>
 		<div class="flex min-h-8 items-center gap-2">
 			<ToolIcon kind={category.kind} />
@@ -88,7 +89,12 @@
 			</p>{/if}
 	</section>
 {:else}
-	<div data-surface="tool-confirmation" data-ask-id={ask.askId}>
+	<div
+		data-surface="tool-confirmation"
+		data-ask-id={ask.askId}
+		tabindex="-1"
+		class="rounded-lg focus:outline-2 focus:outline-ring"
+	>
 		<ToolRow
 			step={{
 				id: `confirmation:${ask.askId}`,
