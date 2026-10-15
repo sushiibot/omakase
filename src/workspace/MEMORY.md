@@ -44,8 +44,10 @@ Topic documents still use full-file proposals. New topic content requires eviden
 The OpenRouter Decisions API reviews each edit and document against the supplied evidence.
 It checks meaning, attribution, negation, temporal corrections, and distinctions between facts, observations, and inferences.
 The reviewer returns typed probabilities and has no tools. Every proposed change requires a decision.
-The host accepts a change only when its support probability is at least 0.95.
-This initial threshold needs evaluation against labeled memory changes. It does not guarantee 95% accuracy.
+The host accepts a change only when its support probability is at least 0.90.
+The previous 0.95 threshold rejected edits with scores such as 0.9444.
+This provisional threshold needs evaluation against labeled memory changes. It does not guarantee 90% accuracy.
+Lowering the threshold reduces rejections but can admit more unsupported changes.
 Missing, duplicate, or invalid decisions cannot authorize a write. Word overlap and source-use counts do not decide factual support.
 Capture gets one repair attempt after a structural or semantic rejection.
 API failures and invalid review responses stop the attempt and keep the evidence pending.

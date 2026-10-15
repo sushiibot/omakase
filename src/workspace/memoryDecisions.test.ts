@@ -31,7 +31,7 @@ test("native Decisions request covers operations and documents; policy and usage
     expect(body.questions.item_0.instructions).toContain("negation reversals");
     expect(body.questions.item_1.instructions).toContain("state.items[1]");
     expect(body.questions.item_0.instructions).not.toContain("Return JSON");
-    return Response.json(response({ item_0: { type: "noul", noul: 0.95 }, item_1: { type: "noul", noul: 0.949 } }));
+    return Response.json(response({ item_0: { type: "noul", noul: 0.90 }, item_1: { type: "noul", noul: 0.899 } }));
   }) as import("./memoryDecisions.ts").DecisionRequest;
   const result = await reviewMemoryDecisions(config, prompt, runs, request);
   expect(JSON.parse(result.text).decisions.map((d: any) => [d.id, d.verdict])).toEqual([

@@ -4,8 +4,9 @@ import { MEMORY_REVIEW_RULES } from "./memoryUpdates.ts";
 import type { RunRecorder } from "./runLog.ts";
 
 export const DEFAULT_MEMORY_REVIEW_MODEL = "perplexity/pplx-decider-v1.1-27b";
-// Conservative initial policy, to be calibrated against owner-labeled memory changes.
-export const MEMORY_SUPPORT_THRESHOLD = 0.95;
+// Provisional tolerance for semantic review, not a calibrated accuracy guarantee.
+// The former 0.95 cutoff rejected high-scoring edits (including 0.9444).
+export const MEMORY_SUPPORT_THRESHOLD = 0.90;
 const TIMEOUT_MS = 60_000;
 export type DecisionRequest = (url: URL, init: RequestInit) => Promise<Response>;
 const inputSchema = z.object({
