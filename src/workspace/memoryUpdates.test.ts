@@ -120,6 +120,7 @@ test.each([0.99, 0.9444, 0.90, 0.899, 0.1])("native decision review controls mem
   d.review = async (_system, prompt) => reviewMemoryDecisions({ apiKey: "test", baseUrl: "https://openrouter.ai/api/v1" }, prompt, new RunLog(d.stateDir), request);
   const result = await runConsolidation(d, { capture: true });
   expect(result.status).toBe(probability >= 0.90 ? "applied" : "rejected");
+  expect(result.alert).toBe(probability >= 0.90 ? undefined : "silent");
   expect(read("USER.md").includes("Prefers dairy-free meals.")).toBe(probability >= 0.90);
   if (probability < 0.90) expect(JSON.parse(readFileSync(join(d.stateDir, "consolidation.json"), "utf8")).notes).toEqual({});
 });
@@ -137,6 +138,7 @@ test("review outage cannot turn into a no-op repair that consumes pending eviden
   const result = await runConsolidation(d, { capture: true });
   expect(result.status).toBe("rejected");
   expect(result.reasons?.[0]).toContain("invalid memory review");
+  expect(result.alert).toBeUndefined();
   expect(proposals).toBe(1);
   expect(read("USER.md")).toBe(before["USER.md"]);
   expect(JSON.parse(readFileSync(join(d.stateDir, "consolidation.json"), "utf8")).notes).toEqual({});

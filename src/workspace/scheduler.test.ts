@@ -504,6 +504,27 @@ describe("job alerts", () => {
     expect(alerts.map((a) => a.kind)).toEqual(["failed", "recovered"]);
   });
 
+  test("quiet rejections retain diagnostics without failure/recovery noise or hiding outages", async () => {
+    const { s, alerts } = alerting();
+    let outcome: JobOutcome = { status: "rejected", alert: "silent", summary: "rejected: unsupported claim" };
+    s.register({ name: "memory-capture", run: async () => outcome });
+    const run = () => s.runJob("memory-capture", { trigger: "interval", force: false });
+    await run();
+    expect(readSchedulerState(stateDir).jobs["memory-capture"]).toMatchObject({ lastStatus: "rejected", lastSummary: outcome.summary });
+    outcome = { status: "applied" };
+    await run();
+    expect(alerts).toEqual([]);
+    outcome = { status: "rejected", summary: "review unavailable" };
+    await run();
+    outcome = { status: "rejected", alert: "silent" };
+    await run();
+    expect(alerts.map(a => a.kind)).toEqual(["failed"]);
+    expect(readSchedulerState(stateDir).alerts["memory-capture"]).toBeDefined();
+    outcome = { status: "applied" };
+    await run();
+    expect(alerts.map(a => a.kind)).toEqual(["failed", "recovered"]);
+  });
+
   test("a run past its max runtime is reported stuck once, left running, then reported once more when it fails", async () => {
     const { s, alerts } = alerting();
     let finish!: (o: JobOutcome) => void;

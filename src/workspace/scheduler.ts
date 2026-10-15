@@ -17,6 +17,8 @@ export interface JobContext {
 }
 
 export interface JobOutcome {
+  /** Expected validation deferrals stay in run history without changing the alert streak. */
+  alert?: "silent";
   status: string;
   summary?: string;
   /** The run-index id of the job's session run, when it had one. */
@@ -462,13 +464,13 @@ export class Scheduler {
       // A run cut short by shutdown is caught up on the next start, so its result says nothing about the job.
       if (this.stopped) return outcome;
       const status = outcome?.status ?? "error";
-      const kind = outcomeKind(status);
+      const kind = outcome?.alert === "silent" ? "neutral" : outcomeKind(status);
       if (kind === "failure") {
         const text = error ?? outcome?.summary ?? status;
         this.raise(name, { ...base, kind: "failed", error: alertErrorText(text), ...(runId ? { runId } : {}) });
       } else if (kind === "success") {
         this.clearStreak(name, { ...base, ...(runId ? { runId } : {}) });
-      } else if (!NEUTRAL_STATUSES.includes(status)) {
+      } else if (outcome?.alert !== "silent" && !NEUTRAL_STATUSES.includes(status)) {
         this.opts.log?.warn({ job: name, status }, "scheduled job returned an unknown status; the alert streak is unchanged");
       }
       return outcome;
