@@ -100,6 +100,22 @@ const toolResults = (s: AgentSession) =>
   s.messages.filter((m) => m.role === "toolResult").map((m) => JSON.stringify((m as { content: unknown }).content));
 
 describe("auto mode on a real Pi session", () => {
+  test("codemode nested bash is judged and a denial prevents execution", async () => {
+    const { session: s } = await session(true);
+    mainReplies.push(
+      { tool: { name: "codemode", args: { code: 'text(await tools.bash({command: "echo blocked > nested.txt"}));' } } },
+      { text: "done" },
+    );
+    judgeReplies.push({ text: "<verdict>deny</verdict> test denial" });
+    try {
+      await s.prompt("Check nested permissions");
+      expect(judgeBodies).toHaveLength(1);
+      expect(JSON.stringify(judgeBodies[0]!.messages)).toContain("echo blocked > nested.txt");
+      expect(existsSync(join(root, "home", "nested.txt"))).toBe(false);
+      expect(toolResults(s).join("")).toContain("test denial");
+    } finally { s.dispose(); }
+  });
+
   test("reads skip the judge, a benign bash is judged and runs, the judge never sees tool output", async () => {
     writeFileSync(join(root, "home", "notes.txt"), "PLANTED-TOOL-OUTPUT-7731");
     const { session: s, asked } = await session(true);

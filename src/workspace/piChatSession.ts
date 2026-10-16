@@ -60,7 +60,7 @@ const memoryLog = getLogger("workspace.memory");
 const autoModeLog = getLogger("workspace.automode");
 
 const PROVIDER_ID = "sushii-workspace-openrouter";
-const WORKSPACE_TOOLS = ["read", "edit", "write", "grep", "find", "ls", "bash", SEND_FILE_TOOL, ...MEMORY_TOOL_NAMES, ...ARTIFACT_TOOLS];
+const WORKSPACE_TOOLS = ["codemode", "read", "edit", "write", "grep", "find", "ls", "bash", SEND_FILE_TOOL, ...MEMORY_TOOL_NAMES, ...ARTIFACT_TOOLS];
 
 /** Pi's bash under the agent env allowlist, minus PI_* (PI_CODING_AGENT_DIR and PI_SESSION_FILE point at the agent dir).
  *  `WS_RUN_ID` is the run in progress at spawn time, so `ws-runs` can default to it. */
@@ -210,7 +210,7 @@ export function createPiChatSessionFactory(
     const ownerRequestTools = opts.ownerRequests?.tools(ownerRequestAsks(ui)) ?? [];
     const ownerRequestToolNames = ownerRequestTools.map(t => t.name);
     const wakeupToolNames = wakeupTools.map(t => t.name);
-    const { createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+    const { createCodemodeExtension, createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager } = await import("@earendil-works/pi-coding-agent");
     const economy = economyOf(config);
     const {
       modelRuntime,
@@ -301,6 +301,8 @@ export function createPiChatSessionFactory(
       // Only the factories below: the agent can write ~/.pi and <cwd>/.pi, so discovered extensions would run its code in-process.
       noExtensions: true,
       extensionFactories: [
+        // Compose existing tools only; model APIs stay on the host accounting and policy paths.
+        { name: "sushii-codemode", factory: createCodemodeExtension({ mode: "on", models: false }) },
         { name: "sushii-artifacts", factory: new ArtifactStore(config.stateDir).extension(opts.origin?.conversationId ?? "main") },
         ...(opts.tasks ? [{ name: "sushii-tasks", factory: taskAwareness(opts.tasks, opts.origin?.conversationId ?? "main") }] : []),
         ...(opts.ownerRequests ? [{ name: "sushii-owner-requests", factory: opts.ownerRequests.awareness() }] : []),

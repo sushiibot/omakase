@@ -50,10 +50,11 @@ test("scheduled-check tools remain available in real Pi main and topic sessions 
     const built = await createPiChatSessionFactory(config, { wakeups, origin: { surface: "web", conversationId } })({ sessionFile: null });
     const session = built.session as AgentSession;
     try {
-      for (const name of ["schedule_check", "list_scheduled_checks", "reschedule_check", "cancel_scheduled_check"])
+      for (const name of ["codemode", "schedule_check", "list_scheduled_checks", "reschedule_check", "cancel_scheduled_check"])
         expect(session.getActiveToolNames()).toContain(name);
       await reloadContext(session);
       expect(session.getActiveToolNames()).toContain("schedule_check");
+      expect(session.getActiveToolNames()).toContain("codemode");
       const tool = session.getToolDefinition("schedule_check")!;
       const result = await tool.execute("check", { key: "status", title: "Status", prompt: "Check status", at: "2099-01-01T10:00:00Z" }, undefined, undefined, {} as never);
       const check = JSON.parse(result.content.map(c => "text" in c ? c.text : "").join(""));

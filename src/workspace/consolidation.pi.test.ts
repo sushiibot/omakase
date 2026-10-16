@@ -148,7 +148,7 @@ describe("consolidation job on a real Pi session", () => {
     expect(decisionBodies[0].state.items).toHaveLength(3);
     expect(runs.listRuns({ agentName: "job:memory-review" })[0]).toMatchObject({ status: "done" });
     const body = bodies[0]!;
-    expect((body.tools ?? []).map(t => (t as { function: { name: string } }).function.name).sort()).toEqual(["find", "grep", "ls", "memory_read", "memory_search", "read"]);
+    expect((body.tools ?? []).map(t => (t as { function: { name: string } }).function.name).sort()).toEqual(["codemode", "find", "grep", "ls", "memory_read", "memory_search", "read"]);
     const system = JSON.stringify(body.messages.filter((m) => m.role === "system"));
     expect(system).toContain(systemPrompt().slice(0, 60));
     expect(JSON.stringify(body)).not.toContain(AGENTS_MARKER);

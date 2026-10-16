@@ -46,6 +46,8 @@ Your ENTIRE response MUST begin with <verdict>. Format:
 
 /** Tools the judge never sees: Pi's read-only built-ins, the bot-proxied lookups, and bot tools the bot gates itself. */
 export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
+  // Composition only: nested calls re-enter the tool pipeline and are judged individually.
+  "codemode",
   // This tool gates its own push with owner approval or a saved repo/branch permission.
   "github_push",
   "mcp_list_tools",

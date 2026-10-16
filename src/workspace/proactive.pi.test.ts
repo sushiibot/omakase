@@ -102,6 +102,49 @@ afterEach(() => {
 });
 
 describe("heartbeat on a real Pi session", () => {
+  test("tool-free jobs do not receive codemode", async () => {
+    const cfg = config();
+    script = [{ text: "done" }];
+    await runToolFreeJob(cfg, { agentName: "job:transform", systemPrompt: "Transform text.", prompt: "Summarize.",
+      runs: new RunLog(cfg.stateDir), selector: new BackendSelector({ primaryEnabled: false }),
+    });
+    expect(toolNames(bodies[0]!)).toEqual([]);
+  });
+
+  test("codemode batches permitted reads but cannot reach writes, gated stubs or credentials", async () => {
+    const cfg = config();
+    const calls: string[] = [];
+    const stubs = new ToolStubs({ principalId: "drk", request: async (_method, params) => {
+      calls.push((params as ToolCallParams).name);
+      return { ok: true, result: "search hits" };
+    } });
+    stubs.update([SEARCH, LINEAR]);
+    script = [
+      { tool: { name: "codemode", args: { code: `
+        const results = await Promise.allSettled([
+          tools.read({path: "MEMORY.md"}),
+          tools.web_search({query: "deploy"}),
+          tools.read({path: ${JSON.stringify(join(cfg.agentDir, "auth.json"))}})
+        ]);
+        text(results);
+        text({write: "write" in tools, bash: "bash" in tools, gated: "file_linear_issue" in tools, models: typeof models});
+      ` } } },
+      { text: "NO_REPLY" },
+    ];
+    await runToolFreeJob(cfg, { agentName: "job:heartbeat", systemPrompt: "Check sources.", prompt: "Check.",
+      runs: new RunLog(cfg.stateDir), selector: new BackendSelector({ primaryEnabled: false }), readOnlyTools: { toolStubs: stubs },
+    });
+    const results = bodies.at(-1)!.messages.filter(m => m.role === "tool").map(m => String(m.content)).join("\n");
+    expect(results).toContain("search hits");
+    expect(results).toContain("Deploys from main");
+    expect(results).toContain("rejected");
+    expect(results).not.toContain(AUTH_SECRET);
+    expect(results).toContain('{"write":false,"bash":false,"gated":false,"models":"undefined"}');
+    expect(results).toContain("Script completed");
+    expect(calls).toEqual(["web_search"]);
+    expect(readFileSync(join(cfg.home, "MEMORY.md"), "utf8")).toBe(MEMORY);
+  });
+
   test("dreaming searches full source evidence through read-only tools and cannot rewrite conversations", async () => {
     const cfg = config();
     mkdirSync(join(cfg.agentDir, "chat"), { recursive: true });
@@ -127,7 +170,7 @@ describe("heartbeat on a real Pi session", () => {
       await runToolFreeJob(cfg, { agentName: "job:consolidation", systemPrompt: "Investigate memory with read-only tools.", prompt: "Check the order.",
         runs: new RunLog(cfg.stateDir), selector: new BackendSelector({ primaryEnabled: false }), readOnlyTools: {}, evidenceTools: evidence.tools(reads),
       });
-      for (const body of bodies) expect(toolNames(body)).toEqual(["find", "grep", "ls", "memory_read", "memory_search", "read"]);
+      for (const body of bodies) expect(toolNames(body)).toEqual(["codemode", "find", "grep", "ls", "memory_read", "memory_search", "read"]);
       expect(readFileSync(source, "utf8")).toBe(original);
       expect(reads.get(id)?.text).toContain("cannellini beans 1 can");
       const result = JSON.stringify(bodies.at(-1)!.messages);
@@ -175,7 +218,7 @@ describe("heartbeat on a real Pi session", () => {
 
     expect(outcome.status).toBe("sent");
     expect(bodies).toHaveLength(6);
-    for (const b of bodies) expect(toolNames(b)).toEqual(["find", "grep", "ls", "read", "web_search"]);
+    for (const b of bodies) expect(toolNames(b)).toEqual(["codemode", "find", "grep", "ls", "read", "web_search"]);
     expect(readFileSync(join(cfg.home, "MEMORY.md"), "utf8")).toBe(MEMORY);
     expect(JSON.stringify(bodies.at(-1)!.messages)).not.toContain(AUTH_SECRET);
     const results = bodies.at(-1)!.messages.filter((m) => m.role === "tool").map((m) => JSON.stringify(m.content));
@@ -217,7 +260,7 @@ describe("heartbeat on a real Pi session", () => {
     const [run] = runs.listRuns({ agentName: "job:heartbeat" });
     expect(outcome).toEqual({ status: "no_reply", runId: run!.runId });
     expect(delivered).toEqual([]);
-    expect(toolNames(bodies[0]!)).toEqual(["find", "grep", "ls", "read"]);
+    expect(toolNames(bodies[0]!)).toEqual(["codemode", "find", "grep", "ls", "read"]);
     expect(run).toMatchObject({ status: "done" });
   });
 });

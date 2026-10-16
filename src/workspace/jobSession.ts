@@ -101,7 +101,7 @@ export function jobSystemPrompt(home: string, base: string, files: readonly stri
  * once on OpenRouter after a ChatGPT limit/auth failure, on the shared selector: a job's failure moves the chat too.
  */
 export async function runToolFreeJob(config: WorkspaceConfig, input: ToolFreeJobInput): Promise<ToolFreeJobResult> {
-  const { createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+  const { createCodemodeExtension, createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager } = await import("@earendil-works/pi-coding-agent");
   const { modelRuntime, model: openrouterModel } = await createOpenRouterModel({
     agentDir: config.agentDir,
     providerId: PROVIDER_ID,
@@ -145,6 +145,8 @@ export async function runToolFreeJob(config: WorkspaceConfig, input: ToolFreeJob
     appendSystemPromptOverride: () => [],
     extensionFactories: [
       ...guards,
+      // Compose existing tools only; model APIs stay on the host accounting and policy paths.
+      ...(withTools ? [{ name: "sushii-codemode", factory: createCodemodeExtension({ mode: "on", models: false }) }] : []),
       {
         name: "sushii-model-fallback",
         factory: createModelFallbackExtension({
@@ -186,12 +188,12 @@ export async function runToolFreeJob(config: WorkspaceConfig, input: ToolFreeJob
       settingsManager,
       sessionManager,
       ...(withTools
-        ? { tools: [...JOB_READ_TOOLS, ...evidenceNames, ...(stubs ? jobStubTools : [])], customTools: evidenceTools, excludeTools: ["ask_question"] }
+        ? { tools: ["codemode", ...JOB_READ_TOOLS, ...evidenceNames, ...(stubs ? jobStubTools : [])], customTools: evidenceTools, excludeTools: ["ask_question"] }
         : { tools: [], noTools: "all" as const }),
     }));
     sessionRef.current = session;
     if (model.provider === CHATGPT_PROVIDER) restoreChatGptThinking(session);
-    const builtins = withTools ? [...JOB_READ_TOOLS, ...evidenceNames] : [];
+    const builtins = withTools ? ["codemode", ...JOB_READ_TOOLS, ...evidenceNames] : [];
     // The tools allowlist keeps approval-gated stubs out of the session even though the binding registers them.
     const allowed = (names: string[]) => names.filter((n) => jobStubTools.includes(n));
     assertExactTools(session, [...builtins, ...allowed(stubs?.registeredNames() ?? [])], input.agentName, [...builtins, ...allowed(stubs?.offered() ?? [])]);
