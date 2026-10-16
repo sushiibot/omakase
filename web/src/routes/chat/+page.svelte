@@ -232,6 +232,9 @@
 		onexpand={() => browserSheet.openWith()}
 		onclose={() => browserSheet.close()}
 		onframe={(seq) => browser.ack(seq)}
+		controlling={browser.controlling}
+		controlError={browser.controlError}
+		oncontrol={(action, input) => browser.control(action, input)}
 	/>
 {/snippet}
 

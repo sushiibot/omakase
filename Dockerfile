@@ -49,6 +49,36 @@ ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium \
     AGENT_BROWSER_SKILLS_DIR=/opt/agent-browser/skill-data \
     AGENT_BROWSER_ARGS="--no-sandbox,--disable-dev-shm-usage"
 
+# Browser assets are versioned and downloaded during the build, never at first login.
+ARG UBOL_VERSION=2026.1012.1545
+ARG UBO_VERSION=1.75.0
+ARG CAMOUFOX_VERSION=156.0.1-beta.36
+RUN apt-get update && apt-get install -y --no-install-recommends python3-venv unzip libgtk-3-0 libdbus-glib-1-2 libasound2 \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv /opt/camoufox \
+    && /opt/camoufox/bin/pip install --no-cache-dir camoufox==0.5.8 playwright==1.62.0 Pillow==12.2.0
+RUN set -eu; \
+    curl -fsSL -o /tmp/ubol.zip "https://github.com/uBlockOrigin/uBOL-home/releases/download/${UBOL_VERSION}/uBOLite_${UBOL_VERSION}.chromium.zip"; \
+    echo '73909c8f26d608b00a99f446192630868bea4f947ba293c29bbd18ae948d903b  /tmp/ubol.zip' | sha256sum -c -; \
+    unzip -q /tmp/ubol.zip -d /opt/ublock-lite; \
+    curl -fsSL -o /tmp/ubo.zip "https://github.com/gorhill/uBlock/releases/download/${UBO_VERSION}/uBlock0_${UBO_VERSION}.firefox.signed.xpi"; \
+    echo '5b74415860456370644bd80f16125e865b0e6c356bb5dfcfb84069967eaa5287  /tmp/ubo.zip' | sha256sum -c -; \
+    unzip -q /tmp/ubo.zip -d /opt/ublock-origin; \
+    case "${TARGETARCH}" in \
+      amd64) CF_ARCH=x86_64; CF_SHA=72637885ee67c93466ad377831c647192f8f08fb5c6fd9279de1320b49dd2b53 ;; \
+      arm64) CF_ARCH=arm64; CF_SHA=8b5fd083721c807ee2a752265683482477105052fa0e21739388b527ae067c15 ;; \
+      *) exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/camoufox.zip "https://github.com/daijro/camoufox/releases/download/v${CAMOUFOX_VERSION}/camoufox-${CAMOUFOX_VERSION}-lin.${CF_ARCH}.zip"; \
+    echo "$CF_SHA  /tmp/camoufox.zip" | sha256sum -c -; \
+    unzip -q /tmp/camoufox.zip -d /opt/camoufox-browser -x 'fonts/M/*' 'fonts/W/*'; \
+    chmod -R a+rX /opt/camoufox-browser /opt/ublock-lite /opt/ublock-origin; \
+    chmod a+x /opt/camoufox-browser/camoufox; \
+    rm /tmp/ubol.zip /tmp/ubo.zip /tmp/camoufox.zip
+ENV AGENT_BROWSER_EXTENSIONS=/opt/ublock-lite
+RUN apt-get update && apt-get install -y --no-install-recommends xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Workspace: same toolchain, run as uid 1000 with user-space installs under HOME

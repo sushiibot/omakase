@@ -198,3 +198,79 @@ test('preview fits desktop and narrow phones without covering the composer', asy
 		await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 	}
 });
+
+test('owner sign-in pauses the agent, sends input outside chat, and returns control', async ({
+	browser
+}) => {
+	for (const width of [320, 1280]) {
+		const context = await browser.newContext({
+			viewport: { width, height: 915 },
+			screen: { width, height: 915 },
+			deviceScaleFactor: 1,
+			isMobile: width < 600,
+			hasTouch: width < 600
+		});
+		const page = await context.newPage();
+		const stream = await preview(page);
+		const controls: any[] = [];
+		let owner = false;
+		await page.route('**/api/browser/control', async (route) => {
+			const body = route.request().postDataJSON();
+			controls.push(body);
+			if (body.action === 'takeover') owner = true;
+			if (body.action === 'resume') owner = false;
+			const status = {
+				...initial,
+				control: owner ? 'owner' : 'agent',
+				engine: 'chromium',
+				profile: 'owner'
+			};
+			stream.set(status);
+			await route.fulfill({ json: { status } });
+		});
+		await page.goto('/chat');
+		await page.getByRole('button', { name: 'Expand browser preview' }).click();
+		const viewer = page.getByRole('dialog', { name: /example\.com/ });
+		await viewer.getByRole('button', { name: 'Take control', exact: true }).click();
+		await expect(viewer.getByRole('button', { name: 'Return to agent' })).toBeVisible();
+		await viewer.getByRole('button', { name: 'Next field', exact: true }).click();
+		await viewer.getByLabel('Text or password').fill('private-test-password');
+		await viewer.getByRole('button', { name: 'Send text' }).click();
+		await expect(viewer.getByLabel('Text or password')).toHaveValue('');
+		expect(
+			controls.some((c) => c.input?.kind === 'text' && c.input.text === 'private-test-password')
+		).toBe(true);
+		await viewer.getByRole('button', { name: 'Enter', exact: true }).click();
+		await checkScreen(page);
+		await page.setViewportSize({ width, height: 915 });
+		await page.evaluate(
+			() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+		);
+		expect(await page.evaluate(() => innerWidth)).toBe(width);
+		await page.screenshot({ path: `/tmp/browser-takeover-${width}.png` });
+		await viewer.getByRole('button', { name: 'Zoom browser screen' }).click();
+		const browserPage = viewer.getByRole('button', {
+			name: 'Browser page: select a field or button'
+		});
+		const box = await browserPage.boundingBox();
+		expect(box!.x).toBeGreaterThanOrEqual(0);
+		await viewer.getByRole('button', { name: 'Fit browser screen' }).click();
+		stream.disconnect();
+		await expect(viewer).toContainText('Reconnecting');
+		await expect(viewer.getByRole('button', { name: 'Next field', exact: true })).toBeDisabled();
+		await expect(viewer.getByRole('button', { name: 'Next field', exact: true })).toBeEnabled({
+			timeout: 5000
+		});
+		if (width === 320) {
+			await page.setViewportSize({ width, height: 480 });
+			await viewer.getByLabel('Text or password').fill('short-viewport');
+			await viewer.getByRole('button', { name: 'Send text' }).click();
+			await page.screenshot({ path: '/tmp/browser-takeover-keyboard.png' });
+			await checkScreen(page);
+		}
+		await viewer.getByRole('button', { name: 'Return to agent' }).click();
+		await expect(viewer.getByRole('button', { name: 'Take control', exact: true })).toBeVisible();
+		await expect(viewer.getByLabel('Text or password')).toBeHidden();
+		await context.close();
+	}
+});

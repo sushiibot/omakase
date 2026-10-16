@@ -7,7 +7,7 @@ import type { WebConfig } from "./config.ts";
 
 const status = { id: "browser-one", conversationId: "main", state: "active" as const, runId: "run", action: "Reading page" };
 test("browser upgrades require exact browser origin; cross-site and anonymous requests cannot view", async () => {
-  const routes = createBrowserRoutes({ isConnected: () => true, browserRead: async () => ({ status }) });
+  const routes = createBrowserRoutes({ isConnected: () => true, browserRead: async () => ({ status }), browserControl: async () => ({ status }) });
   const request = (headers: Record<string, string> = {}) => new Request("https://agent.example/api/browser/connect", { headers: { Upgrade: "websocket", ...headers } });
   expect((await routes.handle(request(), "/api/browser/connect"))?.status).toBe(403);
   expect((await routes.handle(request({ Origin: "https://evil.example", "Sec-Fetch-Site": "same-origin" }), "/api/browser/connect"))?.status).toBe(403);
@@ -46,4 +46,16 @@ test("a completed session sends Finished and ends the viewer without stopping ot
   await Bun.sleep(10);
   expect(sent).toMatchObject([{ type: "status", status: { state: "ended" } }]);
   expect(closed).toBe(true);
+});
+
+test("owner controls require same-origin JSON, bounded validated input and exact session", async () => {
+  const calls: unknown[] = [];
+  const routes = createBrowserRoutes({ isConnected: () => true, browserRead: async () => ({ status }), browserControl: async q => { calls.push(q); return { status }; } });
+  const body = { conversationId: "main", id: "sushii-00000000-0000-0000-0000-000000000000", action: "takeover" };
+  const request = (value: unknown, origin = "https://agent.example") => new Request("https://agent.example/api/browser/control", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(value) });
+  expect((await routes.handle(request(body, "https://evil.example"), "/api/browser/control"))?.status).toBe(403);
+  expect((await routes.handle(request({ ...body, action: "input", input: { kind: "eval", text: "bad" } }), "/api/browser/control"))?.status).toBe(400);
+  expect((await routes.handle(request({ ...body, action: "input", input: { kind: "text", text: "x".repeat(4097) } }), "/api/browser/control"))?.status).toBe(400);
+  expect((await routes.handle(request(body), "/api/browser/control"))?.status).toBe(200);
+  expect(calls).toEqual([body]);
 });

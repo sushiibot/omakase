@@ -160,7 +160,7 @@ Bun.serve({
   idleTimeout: 120,
   async fetch(req) {
     const url = new URL(req.url);
-    if (url.pathname === "/browser-preview") return new Response("<!doctype html><html><title>Browser preview test</title><body><h1>Browser preview test</h1><button>Continue</button></body></html>", { headers: { "content-type": "text/html" } });
+    if (url.pathname === "/browser-preview") return new Response("<!doctype html><html><title>Browser preview test</title><body><h1>Browser preview test</h1><form><label>Name<input name=\"name\"></label><button>Continue</button></form></body></html>", { headers: { "content-type": "text/html" } });
     if (req.method === "POST" && url.pathname === "/__release") {
       const tag = url.searchParams.get("tag") ?? "";
       const release = held.get(tag);

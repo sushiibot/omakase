@@ -29,7 +29,7 @@ function setup() {
 }
 
 async function command(tool: ToolDefinition, args: string[], signal?: AbortSignal) {
-  return tool.execute("test", { args }, signal, undefined, undefined as never);
+  return tool.execute("test", { args, profile: "temporary" }, signal, undefined, undefined as never);
 }
 
 test("sessions belong to separate conversations and close at settlement without closing another browser", async () => {
@@ -109,11 +109,9 @@ test("managed commands and Bash cannot hijack other sessions or close every brow
   const binding = s.manager.bind("main", () => null);
   await expect(command(binding.tool(), ["close", "--all"])).rejects.toThrow("managed local session");
   await expect(command(binding.tool(), ["open", "https://example.com", "--cdp=9222"])).rejects.toThrow("managed local session");
-  let env: unknown;
-  const bash = binding.wrapBash({ execute: async () => { env = binding.env(); return { content: [], details: {} }; } } as unknown as ToolDefinition);
-  await expect(bash.execute("test", { command: "agent-browser --session personal close" }, undefined, undefined, undefined as never)).rejects.toThrow("provided AGENT_BROWSER_SESSION");
-  await bash.execute("test", { command: "agent-browser open https://example.com" }, undefined, undefined, undefined as never);
-  expect(env).toMatchObject({ AGENT_BROWSER_SESSION: (await s.manager.read("main", false)).status?.id });
+  const bash = binding.wrapBash({ execute: async () => ({ content: [], details: {} }) } as unknown as ToolDefinition);
+  await expect(bash.execute("test", { command: "agent-browser --session personal close" }, undefined, undefined, undefined as never)).rejects.toThrow("browser tool");
+  await expect(bash.execute("test", { command: "agent-browser open https://example.com" }, undefined, undefined, undefined as never)).rejects.toThrow("browser tool");
   await binding.finish();
   expect(s.calls.some((c) => c.args.includes("--all"))).toBe(false);
 });
@@ -127,4 +125,79 @@ test("failed and cancelled launches remain owned until cleanup", async () => {
   const id = (await s.manager.read("main", false)).status!.id;
   await binding.finish();
   expect(s.calls).toContainEqual({ session: id, args: ["close"] });
+});
+
+test("saved profiles queue, survive close, and are separate between engines", async () => {
+  const s = setup();
+  const a = s.manager.bind("main", () => "a");
+  const b = s.manager.bind("topic-a", () => "b");
+  const c = s.manager.bind("topic-b", () => "c");
+  const run = (binding: typeof a, engine = "chromium") => binding.tool().execute("open", { args: ["open", "https://example.com"], engine }, undefined, undefined, undefined as never);
+  await run(a);
+  let started = false;
+  const waiting = run(b).then(() => { started = true; });
+  await Bun.sleep(30);
+  expect(started).toBe(false);
+  expect((await s.manager.read("topic-a", false)).status?.action).toContain("Waiting");
+  await run(c, "camoufox");
+  expect((await s.manager.read("topic-b", false)).status?.engine).toBe("camoufox");
+  await a.finish();
+  await waiting;
+  expect(started).toBe(true);
+  expect((await s.manager.read("topic-a", false)).status?.profile).toBe("owner");
+});
+
+test("owner takeover pauses agent actions and validates session and conversation for input", async () => {
+  const s = setup();
+  const binding = s.manager.bind("main", () => "run");
+  await command(binding.tool(), ["open", "https://example.com"]);
+  const id = (await s.manager.read("main", false)).status!.id;
+  const inputs: unknown[] = [];
+  s.driver.input = async (_id, input) => { inputs.push(input); };
+  const input = { conversationId: "main", id, action: "input" as const, input: { kind: "text" as const, text: "private" } };
+  await expect(s.manager.control(input)).rejects.toThrow("Take control");
+  await s.manager.control({ conversationId: "main", id, action: "takeover" });
+  let continued = false;
+  const pending = command(binding.tool(), ["snapshot", "-i"]).then(() => { continued = true; });
+  await Bun.sleep(20);
+  expect(continued).toBe(false);
+  await expect(s.manager.control({ ...input, conversationId: "other" })).rejects.toThrow("unavailable");
+  await s.manager.control(input);
+  expect(inputs).toEqual([input.input]);
+  await s.manager.control({ conversationId: "main", id, action: "resume" });
+  await pending;
+  expect(continued).toBe(true);
+  expect(readFileSync(join(s.dir, "browser-sessions.json"), "utf8")).not.toContain("private");
+});
+
+test("sign-in survives settlement, returning control closes it, and cancelled handoffs can be cleaned up", async () => {
+  const s = setup();
+  const binding = s.manager.bind("main", () => "run");
+  await command(binding.tool(), ["open", "https://example.com"]);
+  const id = (await s.manager.read("main", false)).status!.id;
+  await s.manager.control({ conversationId: "main", id, action: "takeover" });
+  await binding.finish();
+  expect((await s.manager.read("main", false)).status?.state).toBe("active");
+  await s.manager.control({ conversationId: "main", id, action: "resume" });
+  expect((await s.manager.read("main", false)).status?.state).toBe("ended");
+  await expect(s.manager.control({ conversationId: "main", id, action: "takeover" })).rejects.toThrow("unavailable");
+  const abort = new AbortController();
+  const handoff = command(binding.tool(), ["handoff"], abort.signal);
+  await Bun.sleep(30);
+  abort.abort();
+  await expect(handoff).rejects.toThrow("cancelled");
+});
+
+test("profile wait cancellation never closes another run's browser", async () => {
+  const s = setup();
+  const a = s.manager.bind("main", () => "a");
+  const b = s.manager.bind("topic", () => "b");
+  await a.tool().execute("open", { args: ["open", "about:blank"] }, undefined, undefined, undefined as never);
+  const abort = new AbortController();
+  const waiting = b.tool().execute("open", { args: ["open", "about:blank"] }, abort.signal, undefined, undefined as never);
+  await Bun.sleep(20); abort.abort();
+  await expect(waiting).rejects.toThrow("cancelled");
+  await b.finish();
+  expect(s.calls.filter(c => c.args[0] === "close")).toHaveLength(0);
+  expect((await s.manager.read("main", false)).status?.state).toBe("active");
 });

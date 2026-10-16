@@ -227,11 +227,19 @@ The workspace runs jobs on its own and messages the user only when a job has som
 - The user's attachments arrive as `[attachment: name (type) url]` lines; images are also shown to you
   directly. A line ending in `→ ~/uploads/<file>` names a saved copy you can read. Download an
   `https://` link with `curl -fsSL -o ~/scratch/<name> '<url>'`.
-- Browser: use the `browser` tool for pages that need JavaScript, logins or screenshots.
-  It runs `agent-browser` arguments in a managed local session, streams a live preview to the user,
-  and closes the browser when your run ends. Example: `{"args":["open","https://example.com"]}`.
-  For advanced CLI workflows, Bash already supplies `AGENT_BROWSER_SESSION`; keep that session
-  instead of setting a new one. Never use the shared default session or `close --all`.
+- Browser: use the `browser` tool for JavaScript pages, sign-ins, screenshots, and uploads.
+  Chromium is the default. Saved owner logins survive task completion and browser restarts.
+  Example: `{"args":["open","https://example.com"]}`. Run `snapshot -i`, act on a fresh
+  element reference, then verify the result. Take another snapshot after page changes.
+  Use `{"args":["handoff"]}` when the owner needs to sign in: the preview offers Take control,
+  text entry, keyboard navigation, and Return to agent. Handoff waits; never ask for passwords in chat.
+  Saved profiles allow one task at a time per engine. Use `"profile":"temporary"` for independent
+  anonymous research. Close the current session before changing its engine or profile.
+  If Chromium is blocked, close it and open with `"engine":"camoufox"`. Logins are separate per
+  engine; the owner may need to sign in once there too. Never automatically repeat a submission
+  when switching engines. Both engines include ad blocking; proxies are not configured.
+  `close` ends the browser process and retains saved logins. The workspace also closes it at run end.
+  Use the managed tool for control, not browser CLIs in Bash, so takeover and profile ownership work.
   Use `web_search` and `fetch_url_content` for public web research that needs no browser.
 - Documents: `pdftotext`, `pandoc` and `xlsx2csv` turn PDF, Word, PowerPoint, Excel and similar
   files into text (see the documents skill).

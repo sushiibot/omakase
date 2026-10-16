@@ -25,7 +25,14 @@ test("a real browser streams through the workspace and bot, hides without stoppi
     await region.getByRole("button", { name: "Expand browser preview" }).click();
     const viewer = page.getByRole("dialog");
     await expect(viewer.getByRole("img")).toBeVisible();
-    await page.waitForTimeout(2000);
+    await viewer.getByRole("button", { name: "Take control", exact: true }).click();
+    await expect.poll(async () => (await (await page.request.get(endpoint)).json()).status?.control).toBe("owner");
+    await viewer.getByRole("button", { name: "Next field", exact: true }).click();
+    await viewer.getByLabel("Text or password").fill("owner-test");
+    await viewer.getByRole("button", { name: "Send text" }).click();
+    await viewer.getByRole("button", { name: "Enter", exact: true }).click();
+    await expect.poll(async () => (await (await page.request.get(endpoint)).json()).status?.url).toContain("name=owner-test");
+    await viewer.getByRole("button", { name: "Return to agent" }).click();
     await expect(viewer).toContainText("Live");
     await page.goBack();
     await expect(viewer).toBeHidden();

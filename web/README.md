@@ -40,7 +40,8 @@ See [Live voice](docs/live-voice.md) for API credentials, costs, lifecycle, and 
 ## Browser preview
 
 Main and topic chats show the local browser screen above the conversation.
-The preview supports hide, show, full-screen viewing, zoom, and automatic cleanup.
+The preview supports saved logins, sign-in takeover, hide, show, full-screen viewing, zoom, and automatic cleanup.
+Chromium is the default browser; Camoufox is an optional fallback.
 See [Browser preview](docs/browser-preview.md) for lifecycle, transport, and verification.
 The standalone Browser takeover screen remains a development preview.
 

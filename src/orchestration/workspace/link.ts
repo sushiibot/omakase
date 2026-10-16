@@ -1,7 +1,7 @@
 import { MAINTENANCE, maintenanceParams, maintenanceResult, type MaintenanceRequest } from "../maintenanceContracts.ts";
 import { artifactReadParams, artifactList, artifactDocument } from "../artifactContracts.ts";
 import { TASKS_MANAGE, tasksParams, tasksResult, type TaskRequest } from "../taskContracts.ts";
-import { BROWSER_READ, browserReadParams, browserReadResult, type BrowserReadResult } from "../browserContracts.ts";
+import { BROWSER_READ, BROWSER_CONTROL, browserControlParams, type BrowserControlRequest, browserReadParams, browserReadResult, type BrowserReadResult } from "../browserContracts.ts";
 import { memoryParams, memoryOverview, memoryDetail } from "../memoryContracts.ts";
 import { ownerUpdateParams, runsStopParams, runsStopResult } from "../contracts.ts";
 import { AGENT_RESULT, agentResultParams, agentResultReply, type AgentResultParams } from "../machines/contracts.ts";
@@ -364,6 +364,10 @@ export class WorkspaceLink {
 
   async runsGet(q: Omit<z.input<typeof runsGetParams>, "principalId">): Promise<RunsGetResult> {
     return this.read(RPC_METHODS.runsGet, runsGetParams, runsGetResult, q, RUNS_TIMEOUT_MS);
+  }
+
+  async browserControl(request: BrowserControlRequest): Promise<BrowserReadResult> {
+    return this.read(BROWSER_CONTROL, browserControlParams, browserReadResult, { request }, 130_000);
   }
 
   async browserRead(conversationId: string, frames = false): Promise<BrowserReadResult> {

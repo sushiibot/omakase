@@ -1,5 +1,5 @@
 import { HttpError, request } from '$lib/core/http';
-import type { BrowserPreviewFrame, BrowserPreviewStatus } from './preview-types';
+import type { BrowserPreviewFrame, BrowserPreviewStatus, BrowserInput } from './preview-types';
 
 // Hiding survives navigation within the app, but never hides a different browser task.
 const hiddenTasks = new Set<string>();
@@ -11,6 +11,8 @@ export class BrowserPreview {
 	expanded = $state(false);
 	reconnecting = $state(false);
 	stale = $state(false);
+	controlling = $state(false);
+	controlError = $state('');
 	#socket: WebSocket | null = null;
 	#timer?: ReturnType<typeof setTimeout>;
 	#finishTimer?: ReturnType<typeof setTimeout>;
@@ -180,6 +182,32 @@ export class BrowserPreview {
 			this.#socket.send(JSON.stringify({ type: 'ack', seq }));
 		}
 	}
+	async control(action: 'takeover' | 'resume' | 'input', input?: BrowserInput) {
+		if (!this.status || this.controlling) return false;
+		this.controlling = true;
+		this.controlError = '';
+		const id = this.status.id;
+		try {
+			const result = await request<{ status: BrowserPreviewStatus | null }>(
+				'POST',
+				'/browser/control',
+				{
+					conversationId: this.conversation,
+					id,
+					action,
+					...(input ? { input } : {})
+				}
+			);
+			if (this.status?.id === id) this.#apply(result.status);
+			return true;
+		} catch {
+			this.controlError = 'Browser control failed. Refresh the preview and try again.';
+			return false;
+		} finally {
+			this.controlling = false;
+		}
+	}
+
 	hide() {
 		this.hidden = true;
 		if (this.status) {

@@ -1,13 +1,13 @@
 import type { ServerWebSocket } from "bun";
 import { TOPIC_ID_RE } from "../../orchestration/contracts.ts";
-import type { BrowserReadResult } from "../../orchestration/browserContracts.ts";
+import { browserControlRequest, type BrowserReadResult } from "../../orchestration/browserContracts.ts";
 import type { WorkspaceLink } from "../../orchestration/workspace/link.ts";
 import type { RequestTimeouts } from "./server.ts";
 import type { VoiceSocketData } from "./voice/session.ts";
-import { json } from "./http.ts";
+import { json, isJson, readJson } from "./http.ts";
 import { unavailableFor } from "./readRoutes.ts";
 
-type BrowserLink = Pick<WorkspaceLink, "isConnected" | "browserRead">;
+type BrowserLink = Pick<WorkspaceLink, "isConnected" | "browserRead" | "browserControl">;
 
 /** Read-only relay: clients may acknowledge frames, never inject browser input. */
 export class BrowserRelay {
@@ -69,6 +69,22 @@ export function createBrowserRoutes(link: BrowserLink) {
   const relays = new Set<BrowserRelay>();
   return {
     async handle(req: Request, path: string, server?: RequestTimeouts): Promise<Response | null> {
+      if (path === "/api/browser/control") {
+        if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
+        const url = new URL(req.url);
+        let origin: URL;
+        try { origin = new URL(req.headers.get("Origin") ?? ""); }
+        catch { return json({ error: "forbidden" }, 403); }
+        if (origin.host !== url.host || !["https:", "http:"].includes(origin.protocol) ||
+          (req.headers.has("Sec-Fetch-Site") && req.headers.get("Sec-Fetch-Site") !== "same-origin")) return json({ error: "forbidden" }, 403);
+        if (!isJson(req)) return json({ error: "JSON required" }, 415);
+        const body = await readJson(req, 24_000);
+        if (body instanceof Response) return body;
+        const q = browserControlRequest.safeParse(body);
+        if (!q.success) return json({ error: "Invalid browser control" }, 400);
+        try { return json(await link.browserControl(q.data)); }
+        catch { return json({ error: "Browser control unavailable. Refresh the preview and try again." }, 409); }
+      }
       if (path !== "/api/browser/status" && path !== "/api/browser/connect") return null;
       if (req.method !== "GET") return json({ error: "method not allowed" }, 405);
       const url = new URL(req.url);
