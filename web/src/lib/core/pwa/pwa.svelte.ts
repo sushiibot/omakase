@@ -1,3 +1,4 @@
+import { isNativeApp } from '$lib/core/native/vault.svelte';
 import { dev } from '$app/environment';
 import { resyncPush } from './push';
 import { serviceWorkerUrl } from './trusted-types';
@@ -41,8 +42,8 @@ class Pwa {
 		addEventListener('offline', () => (this.online = false));
 
 		const standalone = matchMedia('(display-mode: standalone)');
-		this.standalone = standalone.matches;
-		standalone.addEventListener('change', (e) => (this.standalone = e.matches));
+		this.standalone = isNativeApp() || standalone.matches;
+		standalone.addEventListener('change', (e) => (this.standalone = isNativeApp() || e.matches));
 
 		// app.html captures an early prompt before this module loads.
 		this.installPrompt = window.__installPrompt ?? null;
@@ -52,7 +53,13 @@ class Pwa {
 		});
 		addEventListener('appinstalled', () => (this.installPrompt = null));
 
-		void this.#registerServiceWorker();
+		if (!isNativeApp()) void this.#registerServiceWorker();
+		else if ('serviceWorker' in navigator) {
+			void navigator.serviceWorker
+				.getRegistrations()
+				.then((items) => Promise.all(items.map((item) => item.unregister())))
+				.catch(() => {});
+		}
 	}
 
 	async install(): Promise<'accepted' | 'dismissed' | 'failed'> {

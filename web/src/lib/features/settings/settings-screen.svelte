@@ -4,6 +4,7 @@
 </script>
 
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import BellRing from '@lucide/svelte/icons/bell-ring';
 	import RotateCw from '@lucide/svelte/icons/rotate-cw';
 	import { Button } from '$lib/ui/button';
@@ -21,6 +22,7 @@
 	import OwnerNameField from './components/owner-name-field.svelte';
 
 	let {
+		nativeSettings,
 		back,
 		me,
 		ownerName,
@@ -49,6 +51,7 @@
 		oninstall,
 		onreload
 	}: {
+		nativeSettings?: Snippet;
 		back?: { href: string; label: string; onclick?: (e: MouseEvent) => void };
 		me: RemoteLike & { data?: { login: string; displayName?: string } };
 		/** What the agent calls you; absent in screens that don't show it. */
@@ -167,6 +170,8 @@
 					{/if}
 				</Field.Group>
 			</Section>
+
+			{@render nativeSettings?.()}
 
 			<Section id="appearance" title="Appearance">
 				<RadioGroup.Root

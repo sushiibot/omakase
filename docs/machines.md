@@ -4,6 +4,10 @@ The machine daemon runs on a PC or file server. It connects out to the gateway's
 
 The main agent gets `machine_files`. It can list connected machines, list shared folders, read text files, and search literal text. `coding_agent` starts Codex or Claude Code agents on a connected machine. The conversation that started an agent shows its controls.
 
+Android vaults use the [Capacitor app](../mobile/README.md) and the existing owner web authentication.
+They need no machine token. They advertise `list`, `read`, and guarded Markdown `write` operations while the app is open.
+The daemon shares described below remain read-only.
+
 ## Configure the gateway
 
 Set `SUSHII_MACHINES_JSON` in the gateway environment. Use a separate random token for each machine. Generate one with `openssl rand -hex 32`.

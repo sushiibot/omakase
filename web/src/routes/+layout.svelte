@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../app.css';
+	import { vault } from '$lib/core/native/vault.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { features } from '$lib/core/features.svelte';
@@ -118,6 +119,7 @@
 
 	onMount(() => {
 		markBooted();
+		void vault.start();
 		pwa.start();
 		void threadsStore().list.ensure();
 		if (page.url.pathname !== '/chat') {

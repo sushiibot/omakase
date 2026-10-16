@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { vault } from '$lib/core/native/vault.svelte';
+	import { VaultSettings } from '$lib/features/settings';
 	import { onMount } from 'svelte';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import { SettingsScreen, settingsStore } from '$lib/features/settings';
@@ -9,7 +11,21 @@
 
 <svelte:head><title>Settings · sushii</title></svelte:head>
 
+{#snippet nativeSettings()}
+	{#if vault.available}
+		<VaultSettings
+			name={vault.name}
+			connected={vault.connected}
+			busy={vault.busy}
+			error={vault.error}
+			onchoose={() => void vault.choose()}
+			ondisconnect={() => void vault.disconnect()}
+		/>
+	{/if}
+{/snippet}
+
 <SettingsScreen
+	{nativeSettings}
 	me={settings.me}
 	ownerName={settings.ownerName}
 	nameSave={settings.nameSave}
