@@ -14,12 +14,14 @@
 {#snippet nativeSettings()}
 	{#if vault.available}
 		<VaultSettings
-			name={vault.name}
+			folders={vault.folders}
+			multipleFolders={vault.multipleFolders}
+			markdownOnly={vault.markdownOnly}
 			connected={vault.connected}
 			busy={vault.busy}
 			error={vault.error}
 			onchoose={() => void vault.choose()}
-			ondisconnect={() => void vault.disconnect()}
+			ondisconnect={(id) => void vault.disconnect(id)}
 		/>
 	{/if}
 {/snippet}

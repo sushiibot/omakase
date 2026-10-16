@@ -1,7 +1,13 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { request } from '$lib/core/http';
 
+interface Folder {
+	id: string;
+	name: string;
+	available: boolean;
+}
 interface VaultStatus {
+	folders?: Folder[];
 	version: number;
 	id: string;
 	name?: string;
@@ -10,7 +16,7 @@ interface VaultStatus {
 interface VaultPlugin {
 	status(): Promise<VaultStatus>;
 	choose(): Promise<VaultStatus>;
-	disconnect(): Promise<void>;
+	disconnect(params?: { rootId: string }): Promise<void>;
 	execute(params: Record<string, unknown>): Promise<unknown>;
 }
 const plugin = registerPlugin<VaultPlugin>('ObsidianVault');
@@ -18,7 +24,9 @@ export const isNativeApp = () => Capacitor.getPlatform() === 'android';
 
 class Vault {
 	available = $state(false);
-	name = $state<string>();
+	markdownOnly = $state(false);
+	folders = $state<Folder[]>([]);
+	multipleFolders = $state(false);
 	connected = $state(false);
 	busy = $state(false);
 	error = $state<string>();
@@ -40,12 +48,18 @@ class Vault {
 	private async resume() {
 		try {
 			this.status = await plugin.status();
-			if (this.status.version !== 1)
-				throw new Error('Update the Android app to connect your vault.');
-			this.name = this.status.name;
+			this.markdownOnly = this.status.version === 1;
+			this.multipleFolders = this.status.version >= 3;
+			if (![1, 2, 3].includes(this.status.version))
+				throw new Error('Update the Android app to connect a folder.');
+			this.folders =
+				this.status.folders ??
+				(this.status.name
+					? [{ id: 'vault', name: this.status.name, available: this.status.connected }]
+					: []);
 			if (this.status.connected && !document.hidden) this.run();
 		} catch (e) {
-			this.error = e instanceof Error ? e.message : 'Could not open the vault.';
+			this.error = e instanceof Error ? e.message : 'Could not open the folder.';
 		}
 	}
 	async choose() {
@@ -54,7 +68,11 @@ class Vault {
 		this.stop();
 		try {
 			this.status = await plugin.choose();
-			this.name = this.status.name;
+			this.folders =
+				this.status.folders ??
+				(this.status.name
+					? [{ id: 'vault', name: this.status.name, available: this.status.connected }]
+					: []);
 		} catch (e) {
 			this.error = e instanceof Error ? e.message : 'Could not select the folder.';
 		} finally {
@@ -62,18 +80,19 @@ class Vault {
 			await this.resume();
 		}
 	}
-	async disconnect() {
+	async disconnect(rootId: string) {
 		this.busy = true;
 		this.stop();
 		try {
-			await plugin.disconnect();
+			await plugin.disconnect({ rootId });
 			this.status = undefined;
-			this.name = undefined;
+			this.folders = [];
 			this.error = undefined;
 		} catch (e) {
 			this.error = e instanceof Error ? e.message : 'Could not disconnect.';
 		} finally {
 			this.busy = false;
+			await this.resume();
 		}
 	}
 	private stop() {
@@ -109,7 +128,18 @@ class Vault {
 				const result = await request<{ session: string }>(
 					'POST',
 					'/machines/phone/connect',
-					{ id: this.status!.id, name: this.status!.name ?? 'Obsidian vault' },
+					{
+						id: this.status!.id,
+						name: this.status!.name ?? 'Local files',
+						version: this.status!.version,
+						...(this.multipleFolders
+							? {
+									roots: this.folders
+										.filter((f) => f.available)
+										.map(({ id, name }) => ({ id, name }))
+								}
+							: {})
+					},
 					{ signal }
 				);
 				session = result.session;
@@ -128,7 +158,7 @@ class Vault {
 						try {
 							result = await plugin.execute(call.params);
 						} catch (e) {
-							error = (e instanceof Error ? e.message : 'Vault operation failed.').slice(0, 1000);
+							error = (e instanceof Error ? e.message : 'File operation failed.').slice(0, 1000);
 						}
 						// Never repeat native operations if delivering their response fails.
 						await request(

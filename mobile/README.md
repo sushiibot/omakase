@@ -1,8 +1,8 @@
 # Android app
 
 The Capacitor app loads `https://agent.sushii.bot` and uses the existing owner authentication.
-The gateway and agent stay on the server. The phone exposes one selected Obsidian vault while the app is open.
-There is no background service, vault scanner, or periodic file synchronization.
+The gateway and agent stay on the server. The phone exposes the local folders you select while the app is open.
+There is no background service, file scanner, or periodic file synchronization.
 
 ## Download from GitHub Actions
 
@@ -50,53 +50,58 @@ The app does not register the PWA service worker. The browser PWA remains availa
 The wrapper requires network access at startup. Connect the phone to the private network before opening it.
 Browser push notifications are not supported inside this WebView. Native push is outside this feature.
 
-## Connect a vault
+## Connect folders
 
 1. Open the Android app.
 2. Open Settings.
-3. Select **Connect vault**.
-4. Select the existing Obsidian vault in the Android folder picker.
+3. Select **Add folder**.
+4. Select the folder to share in the Android folder picker.
 5. Grant access to the folder.
-6. Keep omakase open while the agent works on notes.
+6. Keep omakase open while the agent works on files.
 
-The folder permission persists across app restarts. **Disconnect vault** releases it.
-Changing folders replaces the previous permission. A canceled picker keeps the previous folder.
+Folder permissions persist across app restarts. Add up to 16 folders.
+Each folder has its own **Disconnect** button. Disconnecting one folder keeps the others available.
+Selecting the same folder again refreshes its permission without adding a duplicate. Canceling the picker changes nothing.
 
 ## File operations
 
 The agent uses `machine_files` with `action: "list_machines"` to discover the phone.
-The phone has an ID beginning with `phone-` and one root named `vault`.
+The phone has an ID beginning with `phone-`. Each folder has a stable root ID from `list_machines`.
+Existing installations keep their original `vault` root and folder permission. New folders use IDs beginning with `folder-`.
 It advertises `list`, `read`, and `write`. PC shares remain read-only.
 
 ```json
-{ "action": "list", "machineId": "phone-<uuid>", "rootId": "vault", "path": "." }
-{ "action": "read", "machineId": "phone-<uuid>", "rootId": "vault", "path": "Notes.md" }
-{ "action": "write", "machineId": "phone-<uuid>", "rootId": "vault", "path": "Notes.md", "content": "Updated note", "expectedHash": "<hash-from-read>" }
+{ "action": "list", "machineId": "phone-<uuid>", "rootId": "<root-id-from-list_machines>", "path": "." }
+{ "action": "read", "machineId": "phone-<uuid>", "rootId": "<root-id-from-list_machines>", "path": "example.txt" }
+{ "action": "write", "machineId": "phone-<uuid>", "rootId": "<root-id-from-list_machines>", "path": "example.txt", "content": "Updated file", "expectedHash": "<hash-from-read>" }
 ```
 
-Use `expectedHash: null` to create a new note. Parent folders must already exist.
-Reads return the full UTF-8 note and its SHA-256 hash. Notes have a 256 KiB limit.
+Use `expectedHash: null` to create a new file. Parent folders must already exist.
+Reads return the full file and its SHA-256 hash. Files have a 256 KiB limit.
+Use `encoding: "utf8"` for text (the default), or `encoding: "base64"` for binary reads and writes.
 Listings return 200 entries per page. Use `nextOffset` as the next request's `offset`.
-Hidden paths, including `.obsidian`, are excluded. Attachments, deletion, renaming, and search are not supported.
+All file types and hidden paths inside the selected folder are available. Deletion, renaming, creating folders, and search are not supported.
+The bridge name remains unchanged so existing folder permissions survive the update.
+Older APKs still support Markdown only; the agent sees their advertised file types.
 
-The native plugin checks the current hash before overwriting a note.
+The native plugin checks the current hash before overwriting a file.
 Android document providers do not support an atomic compare-and-save operation.
-An edit from Obsidian during the final write can still conflict. Avoid simultaneous edits to the same note.
+An edit from another app during the final write can still conflict. Avoid simultaneous edits to the same file.
 
 The transport never retries native writes automatically. A timeout or disconnect can leave the outcome unknown.
-After an uncertain write, read the note before deciding whether to retry.
+After an uncertain write, read the file before deciding whether to retry.
 
 ## Recovery copies
 
-Before overwriting a note, the app saves its old contents in private storage.
-It keeps the latest 50 copies in `files/vault-backups`. Each `.path` file identifies the corresponding note.
+Before overwriting a file, the app saves its old contents in private storage.
+It keeps the latest 50 copies in `files/vault-backups`. Each `.path` file records the folder ID and relative file path. Older backups contain only the relative path from the original folder.
 To extract backups from a debug installation, run:
 
 ```sh
 adb exec-out run-as app.omakase.mobile tar -cf - files/vault-backups > vault-backups.tar
 ```
 
-Backups are local to the app. They do not replace your normal vault backup.
+Backups are local to the app. They do not replace your normal file backup.
 
 ## Validation
 
@@ -112,14 +117,15 @@ Gateway tests cover request correlation, reconnects, timeouts, and path validati
 Browser tests simulate the native bridge to check connection controls and operation delivery.
 Java tests cover relative paths and content hashes.
 
-Before using important notes, test the installed APK with a disposable vault:
+Before using important files, test the installed APK with a disposable folder:
 
-1. Select a folder containing a Markdown note.
-2. Ask the agent to list and read that note.
-3. Ask the agent to create a new note.
-4. Ask the agent to update the original note.
-5. Check both notes in Obsidian.
-6. Change the note after a read, then check that a write with the old hash fails.
+1. Select a folder containing a text file.
+2. Ask the agent to list and read that file.
+3. Ask the agent to create a new file.
+4. Ask the agent to update the original file.
+5. Check both files with another app.
+6. Change the file after a read, then check that a write with the old hash fails.
 7. Background the app and check that new operations fail or time out.
-8. Reopen the app and check that the vault reconnects.
-9. Disconnect the vault and check that access stops.
+8. Reopen the app and check that the folder reconnects.
+9. Add a second folder and check that both appear to the agent.
+10. Disconnect one folder and check that only its access stops.

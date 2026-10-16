@@ -9,10 +9,11 @@ function post(action: string, body: unknown) {
 test("phone HTTP transport dispatches and replies to a machine file operation", async () => {
   const hub = new MobileVaults();
   const call = async (action: string, body: unknown) => { const { req, path } = post(action, body); return (await mobileVaultRoute(hub, req, path))!; };
-  const { session } = await (await call("connect", { id, name: "Notes" })).json();
-  const result = hub.request({ action: "read", machineId: id, rootId: "vault", path: "note.md" });
+  const { session } = await (await call("connect", { id, name: "Local files", version: 3, roots: [{ id: "vault", name: "Documents" }] })).json();
+  const result = hub.request({ action: "read", machineId: id, rootId: "vault", path: "config.json" });
   const { requests } = await (await call("poll", { session })).json();
   expect(requests).toHaveLength(1);
+  expect(hub.list()[0]!.fileTypes).toBe("all");
   await call("result", { session, id: requests[0].id, result: { content: "note" } });
   expect(await result).toEqual({ content: "note" });
   await call("disconnect", { session });

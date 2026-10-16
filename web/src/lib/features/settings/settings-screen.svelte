@@ -1,6 +1,7 @@
 <script lang="ts" module>
 	export type ThemeChoice = 'system' | 'light' | 'dark';
-	export type PushState = 'checking' | 'unsupported' | 'blocked' | 'unavailable' | 'off' | 'on';
+	export type PushState =
+		'checking' | 'unsupported' | 'native-unconfigured' | 'blocked' | 'unavailable' | 'off' | 'on';
 </script>
 
 <script lang="ts">
@@ -88,6 +89,7 @@
 		{
 			checking: 'Checking…',
 			unsupported: "This browser can't receive notifications",
+			'native-unconfigured': 'Not set up in the Android app',
 			blocked: 'Blocked in Android settings',
 			unavailable: 'Not available right now',
 			off: 'Off for this device',
@@ -95,7 +97,11 @@
 		}[push]
 	);
 	const pushToggleDisabled = $derived(
-		pushBusy || push === 'checking' || push === 'unsupported' || push === 'blocked'
+		pushBusy ||
+			push === 'checking' ||
+			push === 'unsupported' ||
+			push === 'native-unconfigured' ||
+			push === 'blocked'
 	);
 	// The group runs left to right; Up and Down move it too, as in the WAI-ARIA radio pattern.
 	// Caught on capture, because the items handle and swallow arrow keys themselves.
@@ -214,7 +220,9 @@
 					</Field.Field>
 					<div class="flex flex-col items-start gap-2">
 						<Field.Description id="{uid}-push-help">
-							Only when the agent needs you, a run fails, or something you asked about finishes.
+							{#if push === 'native-unconfigured'}Use the browser app for notifications until native
+								Android push is configured.{:else}Only when the agent needs you, a run fails, or
+								something you asked about finishes.{/if}
 						</Field.Description>
 						<Button
 							variant="outline"

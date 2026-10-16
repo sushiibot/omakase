@@ -4,8 +4,8 @@ The machine daemon runs on a PC or file server. It connects out to the gateway's
 
 The main agent gets `machine_files`. It can list connected machines, list shared folders, read text files, and search literal text. `coding_agent` starts Codex or Claude Code agents on a connected machine. The conversation that started an agent shows its controls.
 
-Android vaults use the [Capacitor app](../mobile/README.md) and the existing owner web authentication.
-They need no machine token. They advertise `list`, `read`, and guarded Markdown `write` operations while the app is open.
+Android folders use the [Capacitor app](../mobile/README.md) and the existing owner web authentication.
+They need no machine token. Each granted folder has its own stable root ID and can be disconnected separately. Access includes all file types inside each selected folder, including hidden files. They advertise `list`, `read`, and guarded `write` operations while the app is open.
 The daemon shares described below remain read-only.
 
 ## Configure the gateway

@@ -1,8 +1,10 @@
+import { Capacitor } from '@capacitor/core';
 import { api } from '$lib/core/api';
 import { HttpError } from '$lib/core/http';
 import { base64UrlToBytes, sameKey } from '$lib/core/sw/handlers';
 
-export type PushStatus = 'unsupported' | 'blocked' | 'unavailable' | 'off' | 'on';
+export type PushStatus =
+	'unsupported' | 'native-unconfigured' | 'blocked' | 'unavailable' | 'off' | 'on';
 
 export class PushSetupError extends Error {
 	constructor(
@@ -15,7 +17,12 @@ export class PushSetupError extends Error {
 }
 
 export function pushSupported(): boolean {
-	return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+	return (
+		!Capacitor.isNativePlatform() &&
+		'serviceWorker' in navigator &&
+		'PushManager' in window &&
+		'Notification' in window
+	);
 }
 
 async function registration(): Promise<ServiceWorkerRegistration> {
@@ -33,6 +40,7 @@ async function registration(): Promise<ServiceWorkerRegistration> {
 }
 
 export async function currentPushStatus(): Promise<PushStatus> {
+	if (Capacitor.isNativePlatform()) return 'native-unconfigured';
 	if (!pushSupported()) return 'unsupported';
 	if (Notification.permission === 'denied') return 'blocked';
 	// getRegistration() answers at once, while `ready` waits for the first install to finish.
@@ -94,6 +102,11 @@ async function subscriptionFor(
 }
 
 export async function enablePush(): Promise<void> {
+	if (Capacitor.isNativePlatform())
+		throw new PushSetupError(
+			'native-unconfigured',
+			'Android notifications are not configured. Use the browser app for notifications.'
+		);
 	if (!pushSupported()) {
 		throw new PushSetupError('unsupported', "This browser can't receive notifications.");
 	}

@@ -36,7 +36,7 @@ describe("foreground phone vault", () => {
     hub.stop();
   });
   test("validates paths, actions and write preconditions", () => {
-    for (const path of ["../secret.md", "/note.md", ".obsidian/config.md", "folder/../note.md", "a\\note.md", "folder//note.md", "a\u0000.md"]) {
+    for (const path of ["../secret.md", "/note.md", "folder/../note.md", "a\\note.md", "folder//note.md", "a\u0000.md", "a\u007f.md"]) {
       expect(vaultRequest.safeParse({ ...read, path }).success).toBe(false);
     }
     expect(vaultRequest.safeParse({ ...read, action: "write", content: "x" }).success).toBe(false);
@@ -58,4 +58,66 @@ describe("foreground phone vault", () => {
     expect(hub.list()).toEqual([]);
     expect(() => hub.request(read)).toThrow("offline");
   });
+});
+
+test("general folders deliver text, hidden paths and binary files with advertised capabilities", async () => {
+  const hub = new MobileVaults();
+  const { session } = hub.connect(id, "Documents", 2);
+  expect(hub.list()[0]).toMatchObject({ fileTypes: "all", encodings: ["utf8", "base64"] });
+  for (const params of [
+    { ...read, path: ".config/settings.json" },
+    { ...read, path: "image.png", encoding: "base64" },
+    { ...read, action: "write", path: "file.bin", encoding: "base64", content: "AP8=", expectedHash: null },
+    { ...read, action: "write", path: "plain.txt", content: "hello", expectedHash: "a".repeat(64) },
+  ]) {
+    const pending = hub.request(params);
+    const batch = await hub.poll(session, signal());
+    expect(batch.requests[0]!.params).toMatchObject(params);
+    hub.result(session, batch.requests[0]!.id, { ok: true });
+    expect(await pending).toEqual({ ok: true });
+  }
+  hub.stop();
+});
+test("binary and text writes enforce byte limits and encoding before reaching the phone", () => {
+  const hub = new MobileVaults(); hub.connect(id, "Documents", 2);
+  const write = { ...read, action: "write", path: "file.bin", expectedHash: null };
+  expect(() => hub.request({ ...write, encoding: "base64", content: "%%%=" })).toThrow("base64");
+  expect(() => hub.request({ ...write, encoding: "base64", content: Buffer.alloc(262145).toString("base64") })).toThrow("256 KiB");
+  expect(() => hub.request({ ...write, content: "é".repeat(131073) })).toThrow("256 KiB");
+  expect(() => hub.request({ ...write, content: "a\0b" })).toThrow("binary");
+  expect(vaultRequest.safeParse({ ...read, encoding: "hex" }).success).toBe(false);
+  hub.stop();
+});
+test("old APKs keep their original restricted capabilities", () => {
+  const hub = new MobileVaults(); hub.connect(id, "Notes");
+  expect(hub.list()[0]).toMatchObject({ fileTypes: "Markdown", encodings: ["utf8"] });
+  expect(() => hub.request({ ...read, path: ".private/note.md" })).toThrow("Update");
+  expect(() => hub.request({ ...read, encoding: "base64" })).toThrow("Update");
+  hub.stop();
+});
+
+test("multiple folder grants route separately and removed roots are refused", async () => {
+  const hub = new MobileVaults();
+  const roots = [{ id: "vault", name: "Notes" }, { id: "folder-22222222-2222-4222-8222-222222222222", name: "Projects" }];
+  const { session } = hub.connect(id, "Local files", 3, roots);
+  expect(hub.list()[0]!.roots.map(r => r.id)).toEqual(roots.map(r => r.id));
+  const second = { ...read, rootId: roots[1]!.id, path: "config.json" };
+  const pending = hub.request(second);
+  const batch = await hub.poll(session, signal());
+  expect(batch.requests[0]!.params.rootId).toBe(roots[1]!.id);
+  hub.result(session, batch.requests[0]!.id, { content: "{}" });
+  expect(await pending).toEqual({ content: "{}" });
+  hub.connect(id, "Local files", 3, [roots[1]!]);
+  expect(() => hub.request(read)).toThrow("Folder is not connected");
+  expect(hub.list()[0]!.roots).toHaveLength(1);
+  hub.stop();
+});
+test("multiple-folder registration requires bounded, unique grants", () => {
+  const hub = new MobileVaults();
+  const root = { id: "vault", name: "Notes" };
+  expect(() => hub.connect(id, "Files", 3)).toThrow();
+  expect(() => hub.connect(id, "Files", 3, [])).toThrow();
+  expect(() => hub.connect(id, "Files", 3, [root, root])).toThrow("Duplicate");
+  expect(() => hub.connect(id, "Files", 3, Array(17).fill(root))).toThrow();
+  expect(hub.list()).toEqual([]);
 });
