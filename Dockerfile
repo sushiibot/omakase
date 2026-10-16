@@ -76,6 +76,10 @@ RUN set -eu; \
     chmod a+x /opt/camoufox-browser/camoufox; \
     rm /tmp/ubol.zip /tmp/ubo.zip /tmp/camoufox.zip
 ENV AGENT_BROWSER_EXTENSIONS=/opt/ublock-lite
+# Chromium compiles unpacked DNR rules into the extension's _metadata directory.
+# Keep extension code read-only while allowing the workspace uid to build that cache.
+RUN mkdir -p /opt/ublock-lite/_metadata \
+    && chown -R 1000:1000 /opt/ublock-lite/_metadata
 RUN apt-get update && apt-get install -y --no-install-recommends xvfb \
     && rm -rf /var/lib/apt/lists/*
 
