@@ -808,7 +808,7 @@ export type RegisterParams = z.infer<typeof registerParams>;
 
 // Owner-managed remote MCP connections. Credentials never appear in responses.
 export const CONNECTOR_ERROR_CODE = -32042;
-export const connectorTool = z.object({ name: z.string(), description: z.string(), change: z.enum(["added", "removed", "changed"]).optional() });
+export const connectorTool = z.object({ name: z.string(), description: z.string(), inputSchema: z.record(z.string(), z.unknown()).optional(), outputSchema: z.record(z.string(), z.unknown()).optional(), change: z.enum(["added", "removed", "changed"]).optional() });
 export const connectorServer = z.object({
   id: z.string(), name: z.string(), url: z.string(), status: z.enum(["connected", "error", "signed-out"]),
   problem: z.string().optional(), tools: z.number(), changed: z.boolean(), enabled: z.boolean(),

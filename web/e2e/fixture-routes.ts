@@ -66,6 +66,21 @@ export async function fixtureRoutes(
 		const m = (re: RegExp) => re.exec(path);
 		let hit: RegExpExecArray | null;
 
+		if (path === '/maintenance')
+			return route.fulfill({
+				json: {
+					view: {
+						responsibility: {
+							title: 'Keep upcoming plans accurate',
+							enabled: true,
+							lastReadAt: null,
+							lastReviewAt: null,
+							lastError: null
+						},
+						proposals: []
+					}
+				}
+			});
 		if (path === '/machines') return route.fulfill({ json: { machines: [] } });
 		if (path.startsWith('/agents')) return route.fulfill({ json: { agents: [] } });
 		if (path === '/tasks')

@@ -1,3 +1,4 @@
+import { MAINTENANCE_INSTRUCTIONS, MAINTENANCE_TOOLS, type MaintenanceService } from "./maintenance/service.ts";
 import { ArtifactStore, ARTIFACT_TOOLS } from "./artifacts.ts";
 import { OwnerRequests, ownerRequestAsks } from "./ownerRequests.ts";
 import { memoryEvidence, MEMORY_TOOL_NAMES, RECALL_INSTRUCTIONS } from "./memoryEvidence.ts";
@@ -189,6 +190,7 @@ export function createPiChatSessionFactory(
     choice?: ModelChoice;
     github?: GitHubCredentials;
     connectors?: ConnectorManager;
+    maintenance?: MaintenanceService;
     browsers?: BrowserManager;
     /** The Main turn in progress, stamped on each main run so the bot can join its replies and files. */
     mainTurnId?: () => string | undefined;
@@ -284,7 +286,7 @@ export function createPiChatSessionFactory(
     const browser = opts.browsers?.bind(opts.origin?.conversationId ?? "main", () => observerRef.current?.currentRunId() ?? null);
     const browserTools = browser ? ["browser"] : [];
     const pushTools = opts.github ? [GITHUB_PUSH_TOOL] : [];
-    const connectorTools = opts.connectors ? CONNECTOR_TOOLS : [];
+    const connectorTools = [...(opts.connectors ? CONNECTOR_TOOLS : []), ...(opts.maintenance ? MAINTENANCE_TOOLS : [])];
     const delegate = opts.subagents?.offersDelegate(0) ? ["delegate"] : [];
     const loopState: LoopGuardState = { nudged: false };
     const ownerName = () => config.ownerName;
@@ -296,13 +298,14 @@ export function createPiChatSessionFactory(
       // Read on every reload, so a name changed in the app reaches the next session.
       appendSystemPromptOverride: (base) => {
         const line = ownerNameLine(config.ownerName);
-        return [...base, ...(line ? [line] : []), "For substantial reports, research and documents, use save_artifact to persist the deliverable and include its returned Markdown link in your reply. Use find_artifacts to recover or read an existing document before updating it. Keep the reply concise; the full report belongs in the artifact.", RECALL_INSTRUCTIONS];
+        return [...base, ...(line ? [line] : []), "For substantial reports, research and documents, use save_artifact to persist the deliverable and include its returned Markdown link in your reply. Use find_artifacts to recover or read an existing document before updating it. Keep the reply concise; the full report belongs in the artifact.", RECALL_INSTRUCTIONS, ...(opts.maintenance ? [MAINTENANCE_INSTRUCTIONS] : [])];
       },
       // Only the factories below: the agent can write ~/.pi and <cwd>/.pi, so discovered extensions would run its code in-process.
       noExtensions: true,
       extensionFactories: [
         // Compose existing tools only; model APIs stay on the host accounting and policy paths.
         { name: "sushii-codemode", factory: createCodemodeExtension({ mode: "on", models: false }) },
+        ...(opts.maintenance ? [{ name: "sushii-maintenance", factory: opts.maintenance.extension() }] : []),
         { name: "sushii-artifacts", factory: new ArtifactStore(config.stateDir).extension(opts.origin?.conversationId ?? "main") },
         ...(opts.tasks ? [{ name: "sushii-tasks", factory: taskAwareness(opts.tasks, opts.origin?.conversationId ?? "main") }] : []),
         ...(opts.ownerRequests ? [{ name: "sushii-owner-requests", factory: opts.ownerRequests.awareness() }] : []),

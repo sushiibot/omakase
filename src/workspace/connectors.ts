@@ -1,3 +1,4 @@
+import { Check } from "typebox/value";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { lookup } from "node:dns/promises";
@@ -67,6 +68,7 @@ type Saved = {
   token?: string;
   client?: OAuthClientInformationMixed;
   tokens?: OAuthTokens;
+  generation?: string;
   snapshot: Tool[];
   snapshotAt: string;
   history: ConnectorServer["history"];
@@ -233,6 +235,8 @@ export class ConnectorManager {
     const toolList: ConnectorServer["toolList"] = current.map((t) => ({
       name: t.name,
       description: t.description ?? "",
+      inputSchema: t.inputSchema,
+      ...(t.outputSchema ? { outputSchema: t.outputSchema } : {}),
       ...(!accepted.has(t.name)
         ? { change: "added" as const }
         : JSON.stringify(t) !== JSON.stringify(accepted.get(t.name))
@@ -424,6 +428,7 @@ export class ConnectorManager {
     const prior = this.live.get(s.id);
     if (prior && prior !== live) await prior.client.close().catch(() => {});
     s.enabled = true;
+    s.generation = randomUUID();
     if (this.saved.has(s.id)) this.event(s, "Reconnected with new credentials. Previous tool snapshot retained.");
     else {
       s.snapshot = live.tools;
@@ -472,6 +477,28 @@ export class ConnectorManager {
       })) });
     }
     return servers;
+  }
+
+  /** Host-only provider adapter boundary. This is never registered as a model tool. */
+  async maintenanceTool(serverId: string, name: string) {
+    const selected = await this.selected(serverId, name);
+    if (selected.s.url !== "https://api.fastmail.com/mcp")
+      throw new ConnectorError("Calendar maintenance currently supports the official Fastmail connector.");
+    return { url: selected.s.url, generation: selected.s.generation ?? selected.s.snapshotAt, tool: selected.tool };
+  }
+
+  async maintenanceCall(serverId: string, name: "read_email" | "search_events" | "update_event", args: Record<string, unknown>, expectedSchema: string, generation: string) {
+    const selected = await this.selected(serverId, name);
+    if (selected.s.url !== "https://api.fastmail.com/mcp" || (selected.s.generation ?? selected.s.snapshotAt) !== generation || JSON.stringify(selected.tool.inputSchema) !== expectedSchema)
+      throw new ConnectorError("The calendar connector changed. Prepare a fresh proposal.");
+    if (!Check(selected.tool.inputSchema, args)) throw new ConnectorError("The calendar request does not match the current tool schema.");
+    const result = await selected.live.client.callTool({ name, arguments: args }, undefined, { timeout: 60_000 });
+    if (result.isError) throw new ConnectorError("Fastmail could not complete the calendar maintenance request.");
+    if (result.structuredContent) return result.structuredContent;
+    const blocks = result.content as Array<{ type: string; text?: string }>;
+    const content = blocks.filter(b => b.type === "text").map(b => b.text ?? "").join("\n");
+    try { return JSON.parse(content) as unknown; }
+    catch { throw new ConnectorError("Fastmail returned an unsupported response. No verified update is available."); }
   }
 
   /** Scheduled reviews receive declared or conservatively inferred read-only tools. */

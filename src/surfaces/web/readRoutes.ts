@@ -1,3 +1,4 @@
+import { maintenanceRequest } from "../../orchestration/maintenanceContracts.ts";
 import { connectorRequest, CONNECTOR_ERROR_CODE } from "../../orchestration/contracts.ts";
 import { z } from "zod";
 import type { Database } from "bun:sqlite";
@@ -44,6 +45,7 @@ export interface ReadRouteDeps {
   now?: () => number;
   memory?: Pick<WorkspaceLink, "memoryRead">;
   artifacts?: Pick<WorkspaceLink, "artifactsRead">;
+  maintenance?: Pick<WorkspaceLink, "maintenance">;
   connectors?: Pick<WorkspaceLink, "connectors">;
 }
 
@@ -276,6 +278,18 @@ export function createReadRoutes(deps: ReadRouteDeps): ReadRoutes {
 
   return {
     async handle(req, path) {
+      if (path === "/api/maintenance") {
+        if (!deps.maintenance) return notFound();
+        let raw: unknown = { action: "list" };
+        if (req.method === "POST") {
+          if (!isJson(req)) return json({ error: "expected application/json" }, 415);
+          raw = await readJson(req);
+          if (raw instanceof Response) return raw;
+        } else if (req.method !== "GET") return json({ error: "method not allowed" }, 405);
+        const parsed = maintenanceRequest.safeParse(raw);
+        if (!parsed.success || (req.method === "POST" && parsed.data.action === "list")) return badRequest("invalid maintenance request");
+        return answer("maintenance/manage", async () => cappedJson(await fromWorkspace(() => deps.maintenance!.maintenance(parsed.data))));
+      }
       if (path === "/api/artifacts" || path.startsWith("/api/artifacts/")) {
         if (!deps.artifacts) return notFound();
         if (req.method !== "GET") return json({ error: "method not allowed" }, 405);

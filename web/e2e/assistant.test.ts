@@ -78,16 +78,16 @@ for (const width of [320, 1440]) {
 		await expect(page.getByRole('heading', { name: 'Findings' })).toBeVisible();
 		await page.goBack();
 		await expect(overview.getByRole('heading', { name: 'Continue', exact: true })).toBeVisible();
-		await page.getByRole('tab', { name: 'Following', exact: true }).click();
+		await page.getByRole('tab', { name: 'Tasks', exact: true }).click();
 		await expect(page.getByRole('heading', { name: 'Your ongoing work' })).toBeVisible();
 		await expect(page).toHaveURL(/view=following/);
 		await page
-			.getByRole('tabpanel', { name: 'Following' })
+			.getByRole('tabpanel', { name: 'Tasks' })
 			.getByRole('link', { name: /Review the deployment notes/ })
 			.click();
 		await expect(page).toHaveURL(/\/tasks\/t-notes/);
 		await page.goBack();
-		await expect(page.getByRole('tab', { name: 'Following', exact: true })).toHaveAttribute(
+		await expect(page.getByRole('tab', { name: 'Tasks', exact: true })).toHaveAttribute(
 			'aria-selected',
 			'true'
 		);

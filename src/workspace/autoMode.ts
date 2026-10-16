@@ -61,6 +61,9 @@ export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "send_file",
   "save_artifact",
   "find_artifacts",
+  // Local proposal preparation only; external execution has a separate owner endpoint.
+  "calendar_maintenance_list",
+  "calendar_maintenance_prepare",
   "web_search",
   "fetch_url_content",
   "search_logs",

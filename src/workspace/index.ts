@@ -1,3 +1,5 @@
+import { MaintenanceService } from "./maintenance/service.ts";
+import { FastmailCalendar } from "./maintenance/calendar.ts";
 import { ArtifactStore } from "./artifacts.ts";
 import { OwnerRequests } from "./ownerRequests.ts";
 import { exitAfterBackoff } from "../crashBackoff.ts";
@@ -174,6 +176,7 @@ async function main(): Promise<void> {
   taskStore.setProjectionLease(() => subagents.watch.mainWrite(["TASKS.md"]));
   const connectors = new ConnectorManager(config.agentDir, undefined, undefined, new ConnectorDecisions(config, runs).classify);
   await connectors.start();
+  const maintenance = new MaintenanceService(config.stateDir, new FastmailCalendar(connectors));
   const personalOptions = {
     ownerName: () => config.ownerName,
     boundaryReport: { home: config.home, context: loadedContextFiles },
@@ -185,7 +188,7 @@ async function main(): Promise<void> {
     conversationId: "main",
     tz: config.tz,
     uploads: { dir: join(config.home, UPLOADS_DIR) },
-    factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, wakeups, ownerRequests, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = personalTurn?.currentTurnId(); return turnId ? turns.get(turnId) : null; }, mainTurnId: () => personalTurn?.currentTurnId() }),
+    factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, wakeups, ownerRequests, toolStubs, selector, subagents, choice, github, connectors, maintenance, browsers, parentTurn: () => { const turnId = personalTurn?.currentTurnId(); return turnId ? turns.get(turnId) : null; }, mainTurnId: () => personalTurn?.currentTurnId() }),
     memory: {
       compactionTrigger,
       reload: reloadContext,
@@ -262,7 +265,7 @@ async function main(): Promise<void> {
         ...personalOptions,
         stateDir: join(config.stateDir, "topics", id),
         conversationId: id,
-        factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, wakeups, ownerRequests, toolStubs, selector, subagents, choice, github, connectors, browsers, parentTurn: () => { const turnId = topic.currentTurnId(); return turnId ? { turnId, origin: { surface: "web", conversationId: id } } : null; }, origin: { surface: "web", conversationId: id }, sessionDir: join(config.agentDir, "topics", id), agentName: `topic:${id}`, mainTurnId: () => topic.currentTurnId() }),
+        factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, wakeups, ownerRequests, toolStubs, selector, subagents, choice, github, connectors, maintenance, browsers, parentTurn: () => { const turnId = topic.currentTurnId(); return turnId ? { turnId, origin: { surface: "web", conversationId: id } } : null; }, origin: { surface: "web", conversationId: id }, sessionDir: join(config.agentDir, "topics", id), agentName: `topic:${id}`, mainTurnId: () => topic.currentTurnId() }),
         context: { ...personalOptions.context, busy: () => subagents.isBusy({ surface: "web", conversationId: id }) },
       });
       return topic;
@@ -300,6 +303,7 @@ async function main(): Promise<void> {
   // Coalesce extraction after chat activity; immediate recall uses the source index and never waits for this.
   scheduler.register({ name: "memory-capture", schedule: { when: { kind: "every", minutes: 5 } }, maxRunMs: 60 * 60_000, run: runMemory });
   wireProactiveJobs(scheduler, {
+    maintenance,
     evidenceTools: () => connectors.readOnlyTools(),
     connectedSources: async () => JSON.stringify(await connectors.discoverReadOnly()),
     scheduledChecks: () => `Pending one-time checks: ${JSON.stringify(wakeups.list().map(({ key, title, at, conversationId, taskId }) => ({ key, title, at, conversationId, taskId })))}. These items already have follow-ups. Do not repeat them unless something urgent changed. Reuse existing unanswered requests.`,
@@ -354,6 +358,7 @@ async function main(): Promise<void> {
       ...taskStore.handlers(config.principalId),
       ...browsers.handlers(config.principalId),
       ...connectors.handlers(config.principalId),
+      ...maintenance.handlers(config.principalId),
       ...chatExportHandlers({ principalId: config.principalId, reader: new ChatExportReader({ agentDir: config.agentDir }) }),
       // Session roots come from the host's own agent dir (process env set by the deploy), never from a run record.
       ...runsHandlers({ principalId: config.principalId, stateDir: config.stateDir, home: config.home, tz: config.tz, agentDirs: [config.agentDir] }),

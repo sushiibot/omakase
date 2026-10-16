@@ -111,7 +111,7 @@ async function main() {
     home: webChat.home,
     uploads,
     browser: createBrowserRoutes(workspace.link),
-    reads: { db, link: workspace.link, connectors: workspace.link, memory: workspace.link, artifacts: workspace.link, workspaceEnabled: personalConfig.dmWorkspaceEnabled },
+    reads: { db, link: workspace.link, connectors: workspace.link, memory: workspace.link, artifacts: workspace.link, maintenance: workspace.link, workspaceEnabled: personalConfig.dmWorkspaceEnabled },
     dictation: createDictationRoutes({ transcribe: transcribeAudio }),
     voice: webVoice,
     settings: createSettingsRoutes({ ownerName, onChange: (name) => workspace.link.ownerUpdate(name) }),

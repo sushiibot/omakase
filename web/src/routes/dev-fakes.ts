@@ -1,3 +1,5 @@
+import { configureMaintenance } from '$lib/features/maintenance';
+import { createFixtureMaintenanceApi } from '$lib/features/maintenance/fake';
 import { configureChannels } from '$lib/features/channels';
 import { createFixtureChannelsApi } from '$lib/features/channels/fake';
 import { configureTasks } from '$lib/features/tasks';
@@ -36,6 +38,7 @@ import { configureThreads } from '$lib/features/threads';
 import { createFixtureThreadsApi } from '$lib/features/threads/fake';
 
 export function installFakes() {
+	configureMaintenance(createFixtureMaintenanceApi());
 	const fake = createFakeBackend();
 	const threadsApi = createFixtureThreadsApi();
 	const tasksApi = createFixtureTasksApi();

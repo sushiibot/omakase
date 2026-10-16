@@ -214,3 +214,10 @@ The default schedule runs every 120 minutes, from 08:00 to 22:00 in the workspac
 `WORKSPACE_HEARTBEAT_EVERY` controls the interval; `off` disables heartbeat. `WORKSPACE_HEARTBEAT_ACTIVE` controls active hours.
 The shared default limit is six proactive messages per day. Runs stop when that limit is reached.
 A run with nothing useful to report returns `NO_REPLY` and sends no message.
+
+## Calendar maintenance
+
+Home includes exact calendar-note proposals and their outcomes. Watching shows the pausable responsibility.
+The full-page reader at `/assistant/updates/[id]` shows the source, original notes, and proposed notes.
+Approve, Dismiss, Check result, and conditional Undo use the owner-only `/api/maintenance` endpoint.
+See [Calendar maintenance](../docs/calendar-maintenance.md) for provider scope, persistence, execution, and recovery limits.

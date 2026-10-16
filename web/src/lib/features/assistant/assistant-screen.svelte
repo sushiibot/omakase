@@ -29,7 +29,11 @@
 		loading = false,
 		onopen,
 		banner,
-		toast
+		toast,
+		maintenanceCount = 0,
+		maintenanceAttention,
+		maintenanceUpdates,
+		maintenanceWatching
 	}: {
 		tab?: string;
 		groups: HomeGroups;
@@ -44,6 +48,10 @@
 		onopen: (id: string) => void;
 		banner?: Snippet;
 		toast?: Snippet;
+		maintenanceCount?: number;
+		maintenanceAttention?: Snippet;
+		maintenanceUpdates?: Snippet;
+		maintenanceWatching?: Snippet;
 	} = $props();
 	const work = $derived(homeWork(tasks, groups));
 	const channelWaiting = $derived(channels.filter((c) => c.kind !== 'main' && c.pending.total > 0));
@@ -66,12 +74,12 @@
 	);
 	const tabs = [
 		{ value: 'overview', label: 'Overview' },
-		{ value: 'following', label: 'Following' },
+		{ value: 'following', label: 'Tasks' },
+		{ value: 'watching', label: 'Watching' },
 		{ value: 'history', label: 'History' }
 	];
 </script>
 
-{#snippet actions()}<Button href="/chat" variant="outline"><MessageSquare />Ask</Button>{/snippet}
 {#snippet taskRow(task: TaskRecord)}
 	<Button
 		href={`/tasks/${encodeURIComponent(task.id)}`}
@@ -106,7 +114,6 @@
 	label="Home views"
 	{tabs}
 	bind:value={tab}
-	{actions}
 	{banner}
 	{toast}
 	measure="reading"
@@ -119,6 +126,7 @@
 					/>
 				</div>{/if}
 			{#if view === 'overview'}
+				{@render maintenanceAttention?.()}
 				{#if attentionCount}
 					<Section title="Needs you" count={attentionCount}>
 						<div class="space-y-2">
@@ -145,11 +153,12 @@
 							{#each taskWaiting as task (task.id)}{@render taskRow(task)}{/each}
 						</div>
 					</Section>
-				{:else if !loading && !notices.length}
+				{:else if !loading && !notices.length && !maintenanceCount}
 					<p class="flex items-center gap-2 text-sm text-muted-foreground">
 						<Check class="size-4" />Nothing needs your attention.
 					</p>
 				{/if}
+				{@render maintenanceUpdates?.()}
 				{#if recent.length}
 					<Section title="Continue">
 						<div class="grid gap-2 sm:grid-cols-2">
@@ -222,6 +231,8 @@
 						><div><Button href="/chat"><MessageSquare />Start a conversation</Button></div></Section
 					>
 				{/if}
+			{:else if view === 'watching'}
+				{@render maintenanceWatching?.()}
 			{:else if view === 'following'}
 				<Section
 					title="Your ongoing work"

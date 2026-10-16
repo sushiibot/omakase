@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { MaintenanceSummary, maintenanceStore } from '$lib/features/maintenance';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import SplitScreen from '$lib/ui/screen/split-screen.svelte';
@@ -15,10 +16,11 @@
 	import InboxSheet from '../chats/inbox-sheet.svelte';
 
 	const tab = $derived(
-		['following', 'history'].includes(page.url.searchParams.get('view') ?? '')
+		['following', 'watching', 'history'].includes(page.url.searchParams.get('view') ?? '')
 			? page.url.searchParams.get('view')!
 			: 'overview'
 	);
+	const maintenance = maintenanceStore();
 	const inbox = createInbox('/assistant');
 	const channels = channelsStore();
 	const tasks = tasksStore();
@@ -35,6 +37,11 @@
 	);
 	const notices = $derived.by(() => {
 		const result: { label: string; retry: () => void }[] = [];
+		if (maintenance.remote.error)
+			result.push({
+				label: 'Couldn’t load calendar maintenance.',
+				retry: () => void maintenance.remote.refetch()
+			});
 		if (documents.error)
 			result.push({ label: "Couldn't load documents.", retry: () => void documents.refetch() });
 		if (documents.data?.truncated)
@@ -58,9 +65,17 @@
 	});
 	onMount(() => {
 		void documents.ensure();
+		void maintenance.remote.refetch();
 		void threads.list.ensure();
-		const stops = [documents.watch(), channels.watch(), tasks.watch(), threads.list.watch()];
+		const stops = [
+			maintenance.remote.watch(),
+			documents.watch(),
+			channels.watch(),
+			tasks.watch(),
+			threads.list.watch()
+		];
 		const timer = setInterval(() => {
+			if (!document.hidden && !maintenance.busy) void maintenance.remote.refetch();
 			if (!document.hidden && documents.status !== 'loading') void documents.refetch();
 		}, 30_000);
 		return () => {
@@ -89,6 +104,12 @@
 				void goto(url, { replaceState: true, noScroll: true, keepFocus: true, state: page.state });
 			}
 		}
+		maintenanceCount={maintenance.remote.data?.view.proposals.filter((p) =>
+			['pending', 'uncertain', 'executing', 'undoing'].includes(p.status)
+		).length ?? 0}
+		{maintenanceAttention}
+		{maintenanceUpdates}
+		{maintenanceWatching}
 		groups={inbox.home.groups}
 		tasks={tasks.tasks}
 		documents={documents.data?.artifacts ?? []}
@@ -113,3 +134,21 @@
 			inspector
 		/>{/snippet}
 </SplitScreen>
+
+{#snippet maintenanceAttention()}<MaintenanceSummary
+		mode="needs"
+		view={maintenance.remote.data?.view}
+		onpause={() => {}}
+	/>{/snippet}
+{#snippet maintenanceUpdates()}<MaintenanceSummary
+		mode="updates"
+		view={maintenance.remote.data?.view}
+		onpause={() => {}}
+	/>{/snippet}
+{#snippet maintenanceWatching()}<MaintenanceSummary
+		mode="watching"
+		view={maintenance.remote.data?.view}
+		busy={maintenance.busy}
+		error={maintenance.error}
+		onpause={(paused) => void maintenance.act({ action: 'pause', paused })}
+	/>{/snippet}

@@ -351,3 +351,19 @@ describe("config", () => {
     expect(() => loadWorkspaceConfig({ ...base, WORKSPACE_PROACTIVE_DAILY_CAP: "lots" })).toThrow(WorkspaceConfigError);
   });
 });
+
+test("calendar observation continues when notification budget is capped, with proposal-only tools", async () => {
+  const { MaintenanceService } = await import("./maintenance/service.ts");
+  const maintenance = new MaintenanceService(join(root, "maintenance"), {
+    binding: async () => "test", event: async () => { throw new Error("not called"); }, email: async () => { throw new Error("not called"); }, update: async () => { throw new Error("must never run"); },
+  });
+  const d = deps({ maintenance });
+  for (let i = 0; i < 6; i++) d.limiter.record(`other-${i}`, clock);
+  reply = "NO_REPLY";
+  await createHeartbeatJob(HEARTBEAT, d).run({ force: false, trigger: "interval" });
+  expect(runnerCalls).toHaveLength(1);
+  expect(runnerCalls[0]!.evidenceTools?.map(t => t.name)).toEqual(["calendar_maintenance_list", "calendar_maintenance_prepare"]);
+  expect(runnerCalls[0]!.prompt).toContain("Keep upcoming plans accurate");
+  expect(delivered).toHaveLength(0);
+  expect(maintenance.view().responsibility.lastReviewAt).not.toBeNull();
+});
