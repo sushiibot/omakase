@@ -148,6 +148,7 @@ The deployment jobs use this repository's configured infrastructure and secrets.
 ## Further reading
 
 - [Proactive assistant research and plan](docs/plans/proactive-assistant.md)
+- [Assistant Home design and build specification](docs/plans/assistant-build.md)
 - [Web app](web/README.md)
 - [Remote machines](docs/machines.md)
 - [Tasks](web/docs/tasks.md)

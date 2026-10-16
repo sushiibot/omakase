@@ -3,6 +3,9 @@
 Status: proposed design, not an implemented feature. Research reviewed on October 16, 2026.
 Code baseline: `18aefe8`. The owner selected a separate Assistant Home screen.
 
+The [build specification](assistant-build.md) defines the implementation sequence and expands Home to cover the whole assistant.
+Its holistic Home layout supersedes the feature-focused layout below.
+
 The assistant discovers useful work from connected sources and conversations. It prepares concrete actions before requesting approval.
 It learns which help is useful. It executes actions within explicit standing permissions.
 The first complete example is email tickets reconciled with a personal calendar.
