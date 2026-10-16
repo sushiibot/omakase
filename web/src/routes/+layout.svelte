@@ -3,6 +3,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { features } from '$lib/core/features.svelte';
+	import { restorePageScroll } from '$lib/core/nav/scroll';
 	import { previousPathIs } from '$lib/core/nav/back';
 	import { activeNav, navFor } from '$lib/core/nav/nav';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
@@ -27,6 +28,8 @@
 	import Shell from '$lib/ui/shell/shell.svelte';
 
 	let { children } = $props();
+
+	restorePageScroll();
 
 	// Before any route renders, so a cold deep link to any screen has live data.
 	hub.start();

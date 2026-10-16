@@ -22,6 +22,8 @@ declare global {
 			| 'voice'
 			| 'browser-preview';
 		interface PageState {
+			/** Position of this history entry in the page-scroll cache. */
+			scrollEntry?: string;
 			sheet?: SheetId;
 			/** What the sheet is about, such as a message id. */
 			sheetArg?: string;

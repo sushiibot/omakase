@@ -38,7 +38,11 @@ export function routedSheet(id: App.SheetId): RoutedSheet {
 			return page.state.sheet === id ? page.state.sheetArg : undefined;
 		},
 		openWith(arg) {
-			const state: App.PageState = arg === undefined ? { sheet: id } : { sheet: id, sheetArg: arg };
+			const state: App.PageState = {
+				scrollEntry: page.state.scrollEntry,
+				sheet: id,
+				...(arg === undefined ? {} : { sheetArg: arg })
+			};
 			if (page.state.sheet) replaceState('', state);
 			else pushState('', state);
 		},

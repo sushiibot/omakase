@@ -20,6 +20,7 @@
 </script>
 
 <DetailScreen
+	hasContent={!!document}
 	title={document?.title ?? 'Document'}
 	back={{ href: '/artifacts', label: 'Artifacts' }}
 	state={{

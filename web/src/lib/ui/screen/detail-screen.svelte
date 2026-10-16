@@ -9,19 +9,30 @@
 
 	let {
 		state,
+		hasContent = false,
 		children,
 		...screenProps
 	}: Omit<ScreenProps, 'children' | 'stickToBottom' | 'scroller' | 'footerLayout'> & {
 		/** Leave out for a screen whose content is always there. */
 		state?: Omit<StateProps, 'children'>;
+		/** Keep existing content mounted during a background refresh. */
+		hasContent?: boolean;
 		children: Snippet;
 	} = $props();
+	const effectiveState = $derived(
+		state && hasContent && (state.remote.status === 'loading' || state.remote.status === 'error')
+			? { ...state, remote: { status: 'ready' as const } }
+			: state
+	);
 </script>
 
 <Screen {...screenProps} footerLayout="page">
-	{#if state}
-		<ScreenState {...state}>{@render children()}</ScreenState>
+	{#if effectiveState}
+		<ScreenState {...effectiveState}>{@render children()}</ScreenState>
 	{:else}
 		{@render children()}
+	{/if}
+	{#if hasContent && state?.remote.status === 'error'}
+		<ScreenState {...state}>{#snippet children()}{/snippet}</ScreenState>
 	{/if}
 </Screen>

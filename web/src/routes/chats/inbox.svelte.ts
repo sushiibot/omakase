@@ -129,7 +129,7 @@ export function createInbox() {
 		const open = () => {
 			if (done) return;
 			done = true;
-			replaceState(resolve('/chats'), {});
+			replaceState(resolve('/chats'), { scrollEntry: page.state.scrollEntry });
 			sheet.openWith(target);
 		};
 		const timer = setTimeout(open, DEEP_LINK_WAIT_MS);

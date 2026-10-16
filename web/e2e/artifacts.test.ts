@@ -112,3 +112,111 @@ test('long artifact renders Markdown before and after navigating to a shorter do
 	await page.reload();
 	await expect(page.getByRole('heading', { name: 'Next steps' })).toBeVisible();
 });
+
+for (const width of [412, 1440]) {
+	test(`back and forward restore artifact reading positions after delayed loads at ${width}px`, async ({
+		page,
+		context
+	}) => {
+		await fixtureApp(context);
+		await page.setViewportSize({ width, height: 915 });
+		const otherId = '00000000-0000-4000-8000-000000000002';
+		const paragraphs = Array.from(
+			{ length: 60 },
+			(_, i) => `Paragraph ${i}. ${'Report details. '.repeat(12)}`
+		).join('\n\n');
+		const first = {
+			...document,
+			content: `# First report\n\n${paragraphs}\n\n[Related document](/artifacts/${otherId})\n\n${paragraphs}`
+		};
+		const second = {
+			...document,
+			id: otherId,
+			title: 'Related report',
+			content: `# Second report\n\n[Original document](/artifacts/${id})\n\n${paragraphs}`
+		};
+		await context.route('**/api/artifacts/*', async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 250));
+			await route.fulfill({
+				json: new URL(route.request().url()).pathname.endsWith(otherId) ? second : first
+			});
+		});
+		const top = () => page.locator('main').evaluate((el) => el.scrollTop);
+		await page.goto(`/artifacts/${id}`);
+		const related = page.getByRole('link', { name: /Related document/ });
+		await related.scrollIntoViewIfNeeded();
+		const firstTop = await top();
+		expect(firstTop).toBeGreaterThan(1000);
+		await related.click();
+		await expect(page.getByRole('heading', { name: 'Second report', exact: true })).toBeVisible();
+		await expect.poll(top).toBe(0);
+		await page.locator('main').evaluate((el) => {
+			el.scrollTop = 800;
+		});
+		await page.goBack();
+		await expect(page.getByRole('heading', { name: 'First report', exact: true })).toBeVisible();
+		await expect.poll(top).toBeCloseTo(firstTop, 0);
+		await page.goForward();
+		await expect(page.getByRole('heading', { name: 'Second report', exact: true })).toBeVisible();
+		await expect.poll(top).toBeCloseTo(800, 0);
+		await page.reload();
+		await expect(page.getByRole('heading', { name: 'Second report', exact: true })).toBeVisible();
+		await expect.poll(top).toBeCloseTo(800, 0);
+		// A fresh visit to the same URL gets its own position, not the older entry's offset.
+		await page.getByRole('link', { name: /Original document/ }).click();
+		await expect(page.getByRole('heading', { name: 'First report', exact: true })).toBeVisible();
+		await expect.poll(top).toBe(0);
+		await page.locator('main').evaluate((el) => {
+			el.scrollTop = 400;
+		});
+		await page.goBack();
+		await expect(page.getByRole('heading', { name: 'Second report', exact: true })).toBeVisible();
+		await page.goBack();
+		await expect(page.getByRole('heading', { name: 'First report', exact: true })).toBeVisible();
+		await expect.poll(top).toBeCloseTo(firstTop, 0);
+	});
+}
+
+test('returning from an external link keeps the artifact mounted during refresh and refresh failure', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	const long = {
+		...document,
+		content:
+			'# Reading report\n\n' +
+			Array.from({ length: 80 }, () => 'A paragraph of report findings. '.repeat(8)).join('\n\n')
+	};
+	let refresh = false;
+	let release!: () => void;
+	let started!: () => void;
+	const pending = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const refreshing = new Promise<void>((resolve) => {
+		started = resolve;
+	});
+	await context.route('**/api/artifacts/*', async (route) => {
+		if (refresh) {
+			started();
+			await pending;
+			await route.fulfill({ status: 503, json: { error: 'Temporarily unavailable' } });
+		} else await route.fulfill({ json: long });
+	});
+	await page.goto(`/artifacts/${id}`);
+	await expect(page.getByRole('heading', { name: 'Reading report' })).toBeVisible();
+	const main = page.locator('main');
+	await main.evaluate((el) => {
+		el.scrollTop = 1400;
+	});
+	refresh = true;
+	await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+	await refreshing;
+	await expect(page.locator('article')).toBeVisible();
+	await expect.poll(() => main.evaluate((el) => el.scrollTop)).toBeCloseTo(1400, 0);
+	release();
+	await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+	await expect(page.locator('article')).toBeVisible();
+	await expect.poll(() => main.evaluate((el) => el.scrollTop)).toBeCloseTo(1400, 0);
+});

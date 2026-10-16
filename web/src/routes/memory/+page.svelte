@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
-	import { keepScroll } from '$lib/core/nav/scroll';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import { MemoryScreen, memoryStore } from '$lib/features/memory';
 
@@ -18,12 +17,6 @@
 			unwatch();
 		};
 	});
-	keepScroll(
-		'memory',
-		() =>
-			document.querySelector<HTMLElement>('[data-tab-panel]:not([aria-hidden=true])') ??
-			document.querySelector('main')
-	);
 </script>
 
 <svelte:head><title>Memory · sushii</title></svelte:head>

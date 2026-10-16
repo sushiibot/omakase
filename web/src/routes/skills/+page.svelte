@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
-	import { keepScroll } from '$lib/core/nav/scroll';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import { SkillsScreen, skillsStore } from '$lib/features/skills';
 
@@ -17,7 +16,6 @@
 			unwatch();
 		};
 	});
-	keepScroll('skills', () => document.querySelector('main'));
 </script>
 
 <svelte:head><title>Skills · sushii</title></svelte:head>

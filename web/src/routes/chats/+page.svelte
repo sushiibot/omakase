@@ -3,7 +3,6 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { leaveSheet, routedSheet } from '$lib/core/nav/sheet';
-	import { keepScroll } from '$lib/core/nav/scroll';
 	import { offlineBrowsing } from '$lib/core/storage/offline.svelte';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import {
@@ -48,7 +47,6 @@
 			unwatch();
 		};
 	});
-	keepScroll('chats', () => document.querySelector('main'));
 
 	async function start(name: string) {
 		const id = await threads.branch('', name);
