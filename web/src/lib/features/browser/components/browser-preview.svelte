@@ -135,89 +135,87 @@
 		showCloseButton={false}
 		class="gap-0 bg-background pt-(--safe-top) pb-(--safe-bottom) text-foreground outline-none data-[side=bottom]:top-0 data-[side=bottom]:bottom-(--kb) data-[side=bottom]:border-t-0"
 	>
-			<div class="flex h-(--header-height) shrink-0 items-center gap-2 border-b px-3">
-				<Sheet.Title class="min-w-0 flex-1 truncate text-sm font-medium"
-					>{hostname} · {label}</Sheet.Title
-				>
-				<Button
-					variant="ghost"
-					aria-label={zoomed ? 'Fit browser screen' : 'Zoom browser screen'}
-					aria-pressed={zoomed}
-					onclick={() => (zoomed = !zoomed)}
-					>{#if zoomed}<ZoomOut aria-hidden="true" />{:else}<ZoomIn
-							aria-hidden="true"
-						/>{/if}</Button
-				>
-				<Button
-					variant="ghost"
-					class="size-12 px-0"
-					aria-label="Close browser screen"
-					onclick={onclose}><X aria-hidden="true" /></Button
-				>
-			</div>
-			<Dialog.Description class="sr-only"
-				>Watch the browser, or take control to sign in. The agent waits while you have control.</Dialog.Description
+		<div class="flex h-(--header-height) shrink-0 items-center gap-2 border-b px-3">
+			<Sheet.Title class="min-w-0 flex-1 truncate text-sm font-medium"
+				>{hostname} · {label}</Sheet.Title
 			>
-			<div
-				class="flex min-h-0 flex-1 overflow-auto overscroll-contain bg-muted"
-				class:items-center={!zoomed}
-				class:items-start={zoomed}
+			<Button
+				variant="ghost"
+				aria-label={zoomed ? 'Fit browser screen' : 'Zoom browser screen'}
+				aria-pressed={zoomed}
+				onclick={() => (zoomed = !zoomed)}
+				>{#if zoomed}<ZoomOut aria-hidden="true" />{:else}<ZoomIn aria-hidden="true" />{/if}</Button
 			>
-				{#if frame}
-					{#if ownerControl}
-						<button
-							type="button"
-							aria-label="Browser page: select a field or button"
-							class={zoomed
-								? 'shrink-0 self-start outline-offset-2'
-								: 'flex h-full w-full items-center justify-center outline-offset-2'}
-							onclick={clickPage}
-							disabled={controlling || reconnecting || stale}
-						>
-							<img
-								src={source}
-								alt={`Browser at ${hostname}`}
-								class={zoomed ? 'max-w-none shrink-0' : 'max-h-full w-full object-contain'}
-								width={zoomed ? frame.width : undefined}
-								height={zoomed ? frame.height : undefined}
-								onload={() => onframe(frame!.seq)}
-							/>
-						</button>
-					{:else}
+			<Button
+				variant="ghost"
+				class="size-12 px-0"
+				aria-label="Close browser screen"
+				onclick={onclose}><X aria-hidden="true" /></Button
+			>
+		</div>
+		<Sheet.Description class="sr-only"
+			>Watch the browser, or take control to sign in. The agent waits while you have control.</Sheet.Description
+		>
+		<div
+			class="flex min-h-0 flex-1 overflow-auto overscroll-contain bg-muted"
+			class:items-center={!zoomed}
+			class:items-start={zoomed}
+		>
+			{#if frame}
+				{#if ownerControl}
+					<button
+						type="button"
+						aria-label="Browser page: select a field or button"
+						class={zoomed
+							? 'shrink-0 self-start outline-offset-2'
+							: 'flex h-full w-full items-center justify-center outline-offset-2'}
+						onclick={clickPage}
+						disabled={controlling || reconnecting || stale}
+					>
 						<img
 							src={source}
-							alt={`Agent browser at ${hostname}`}
+							alt={`Browser at ${hostname}`}
 							class={zoomed ? 'max-w-none shrink-0' : 'max-h-full w-full object-contain'}
 							width={zoomed ? frame.width : undefined}
 							height={zoomed ? frame.height : undefined}
 							onload={() => onframe(frame!.seq)}
 						/>
-					{/if}
-				{:else}<p role="status" class="m-auto text-sm text-muted-foreground">
-						Waiting for the browser screen…
-					</p>{/if}
+					</button>
+				{:else}
+					<img
+						src={source}
+						alt={`Agent browser at ${hostname}`}
+						class={zoomed ? 'max-w-none shrink-0' : 'max-h-full w-full object-contain'}
+						width={zoomed ? frame.width : undefined}
+						height={zoomed ? frame.height : undefined}
+						onload={() => onframe(frame!.seq)}
+					/>
+				{/if}
+			{:else}<p role="status" class="m-auto text-sm text-muted-foreground">
+					Waiting for the browser screen…
+				</p>{/if}
+		</div>
+		{#if oncontrol && status?.state === 'active'}
+			<BrowserControls
+				{status}
+				busy={controlling}
+				unavailable={reconnecting || stale || !frame}
+				error={controlError}
+				control={oncontrol}
+			/>
+		{/if}
+		<div class="shrink-0 border-t px-3">
+			<div class="flex items-center justify-between gap-2">
+				<p class="truncate text-sm">{status?.action ?? 'Browser finished'}</p>
+				<Button variant="ghost" aria-expanded={details} onclick={() => (details = !details)}
+					>Details</Button
+				>
 			</div>
-			{#if oncontrol && status?.state === 'active'}
-				<BrowserControls
-					{status}
-					busy={controlling}
-					unavailable={reconnecting || stale || !frame}
-					error={controlError}
-					control={oncontrol}
-				/>
-			{/if}
-			<div class="shrink-0 border-t px-3">
-				<div class="flex items-center justify-between gap-2">
-					<p class="truncate text-sm">{status?.action ?? 'Browser finished'}</p>
-					<Button variant="ghost" aria-expanded={details} onclick={() => (details = !details)}
-						>Details</Button
-					>
-				</div>
-				{#if details}<p class="pb-3 text-meta [overflow-wrap:anywhere] text-muted-foreground">
-						{status?.url ?? 'No page address'} · {status?.engine === 'camoufox'
-							? 'Camoufox'
-							: 'Chromium'} · {ownerControl ? 'You have control' : 'Viewing'}
-					</p>{/if}
-			</div>
+			{#if details}<p class="pb-3 text-meta [overflow-wrap:anywhere] text-muted-foreground">
+					{status?.url ?? 'No page address'} · {status?.engine === 'camoufox'
+						? 'Camoufox'
+						: 'Chromium'} · {ownerControl ? 'You have control' : 'Viewing'}
+				</p>{/if}
+		</div>
 	</Sheet.Content>
 </Sheet.Root>
