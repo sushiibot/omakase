@@ -6,6 +6,7 @@ import { BrowserManager, localBrowserDriver } from "./browser.ts";
 import { runsStopParams, RPC_METHODS } from "../orchestration/contracts.ts";
 // First: initialises OTel (when OTEL_EXPORTER_OTLP_ENDPOINT is set) before anything creates spans.
 import { otelSDK } from "../telemetry.ts";
+import { ConnectorDecisions } from "./connectorDecisions.ts";
 import { ConnectorManager } from "./connectors.ts";
 import { join } from "node:path";
 import { NotConnectedError, OrchestrationClient } from "../orchestration/transport/client.ts";
@@ -171,7 +172,7 @@ async function main(): Promise<void> {
   });
   watchRef = subagents.watch;
   taskStore.setProjectionLease(() => subagents.watch.mainWrite(["TASKS.md"]));
-  const connectors = new ConnectorManager(config.agentDir);
+  const connectors = new ConnectorManager(config.agentDir, undefined, undefined, new ConnectorDecisions(config, runs).classify);
   await connectors.start();
   const personalOptions = {
     ownerName: () => config.ownerName,
@@ -300,6 +301,7 @@ async function main(): Promise<void> {
   scheduler.register({ name: "memory-capture", schedule: { when: { kind: "every", minutes: 5 } }, maxRunMs: 60 * 60_000, run: runMemory });
   wireProactiveJobs(scheduler, {
     evidenceTools: () => connectors.readOnlyTools(),
+    connectedSources: async () => JSON.stringify(await connectors.discoverReadOnly()),
     scheduledChecks: () => `Pending one-time checks: ${JSON.stringify(wakeups.list().map(({ key, title, at, conversationId, taskId }) => ({ key, title, at, conversationId, taskId })))}. These items already have follow-ups. Do not repeat them unless something urgent changed. Reuse existing unanswered requests.`,
     config,
     runs,

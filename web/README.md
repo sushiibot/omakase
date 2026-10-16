@@ -179,7 +179,21 @@ Updates retain the document ID and increase its version number. Only the latest 
 Each document supports up to 256 KiB of text. Library scans stop after 2,000 documents and show a limit notice.
 Read positions are device-local; documents are shared across the owner's devices.
 
-Heartbeat and scheduled reviews can discover connected MCP tools that declare `readOnlyHint: true`.
-The workspace checks that annotation again before each call. Unannotated and writable tools are unavailable to these reviews.
-Heartbeat checks relevant recent email, calendar events and other connected sources for useful changes.
-Existing schedule windows and notification limits still apply. Connectors must already be connected in the owner app.
+Heartbeat and scheduled reviews can use MCP tools that declare `readOnlyHint: true`.
+For tools without this annotation, the Decisions API assesses the name, description, and input schema.
+This uses `WORKSPACE_MEMORY_REVIEW_MODEL`, independently of the chat model. Scores of at least 0.95 permit background reads; this inference is not a guarantee.
+Explicitly writable tools remain blocked. Ambiguous tools and failed assessments remain unavailable.
+
+Assessments persist for up to 30 days. A changed server identity, tool definition, model, or classification policy requires another assessment.
+The workspace refreshes each tool definition and checks eligibility before each call.
+Discovery labels eligible tools with their source: `server` or `decision-model`.
+Classification results appear in runs named `job:connector-review`.
+
+Heartbeat discovers connected tools before each prompt. It then instructs the agent to check relevant recent email, calendars, and other sources.
+Recent proactive messages remain in its context for 24 hours to help prevent repeated alerts.
+Connectors must already be connected in the owner app.
+
+The default schedule runs every 120 minutes, from 08:00 to 22:00 in the workspace timezone, independently of chat activity.
+`WORKSPACE_HEARTBEAT_EVERY` controls the interval; `off` disables heartbeat. `WORKSPACE_HEARTBEAT_ACTIVE` controls active hours.
+The shared default limit is six proactive messages per day. Runs stop when that limit is reached.
+A run with nothing useful to report returns `NO_REPLY` and sends no message.

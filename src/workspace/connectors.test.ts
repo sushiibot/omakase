@@ -22,7 +22,7 @@ test("DNS safety accepts public addresses and rejects private or mapped addresse
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
-function setup() {
+function setup(classify?: import("./connectorDecisions.ts").ConnectorClassifier) {
   const dir = mkdtempSync(join(tmpdir(), "connectors-"));
   dirs.push(dir);
   let tools: Tool[] = [{ name: "read_email", description: "Read email", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } }];
@@ -36,7 +36,7 @@ function setup() {
     },
   } as unknown as Client;
   const connect = async () => ({ client, tools, transport: {} as StreamableHTTPClientTransport });
-  const manager = new ConnectorManager(dir, connect);
+  const manager = new ConnectorManager(dir, connect, undefined, classify);
   const registered = new Map<string, ToolDefinition>();
   manager.extension({ registerTool: (t: ToolDefinition) => registered.set(t.name, t) } as unknown as ExtensionAPI);
   const call = (id: string, name: string, confirm: boolean | (() => Promise<boolean>) = true) =>
@@ -243,4 +243,37 @@ test("scheduled MCP discovery excludes writes and rechecks annotations before ca
   s.setTools([{ name: "read_email", inputSchema: { type: "object" }, annotations: { readOnlyHint: false } }]);
   await expect(call("read_email")).rejects.toThrow("read-only");
   expect(s.calls).toEqual(["read_email"]);
+});
+
+
+test("inferred reads reach heartbeat, explicit writes never do, and changed definitions are reclassified", async () => {
+  const s = setup(async (_server, tools) => new Set(tools.filter(t => t.description === "Read mail").map(t => t.name)));
+  const server = await s.add();
+  s.setTools([
+    { name: "search", description: "Read mail", inputSchema: { type: "object" } },
+    { name: "write", description: "Read mail", inputSchema: { type: "object" }, annotations: { readOnlyHint: false } },
+  ]);
+  const inventory = await s.manager.discoverReadOnly();
+  expect(inventory[0]!.tools.map(t => [t.name, t.readOnlySource])).toEqual([["search", "decision-model"]]);
+  const call = (tool: string) => s.manager.readOnlyTools()[1]!.execute("call", { serverId: server.id, tool, arguments: {} }, undefined, undefined, {} as ExtensionToolContext);
+  await call("search");
+  await expect(call("write")).rejects.toThrow("read-only");
+  s.setTools([{ name: "search", description: "Read and mark read", inputSchema: { type: "object" } }]);
+  await expect(call("search")).rejects.toThrow("read-only");
+  expect(s.calls).toEqual(["search"]);
+});
+
+test("disconnect during inference prevents the external call", async () => {
+  let classifyStarted!: () => void;
+  const started = new Promise<void>(resolve => { classifyStarted = resolve; });
+  let finish!: (value: Set<string>) => void;
+  const s = setup(async () => { classifyStarted(); return new Promise(resolve => { finish = resolve; }); });
+  const server = await s.add();
+  s.setTools([{ name: "search", inputSchema: { type: "object" } }]);
+  const pending = s.manager.readOnlyTools()[1]!.execute("call", { serverId: server.id, tool: "search", arguments: {} }, undefined, undefined, {} as ExtensionToolContext);
+  await started;
+  await s.manager.manage({ action: "disconnect", id: server.id });
+  finish(new Set(["search"]));
+  await expect(pending).rejects.toThrow("connection changed");
+  expect(s.calls).toEqual([]);
 });

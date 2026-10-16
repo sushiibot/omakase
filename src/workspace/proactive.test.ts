@@ -116,6 +116,29 @@ describe("heartbeat", () => {
     expect(input!.systemPrompt).toContain("Tue, 29/09/2026, 12:00 (UTC)");
   });
 
+  test("heartbeat discovers connected sources before prompting, including on silent runs", async () => {
+    let scans = 0;
+    reply = "NO_REPLY";
+    await createHeartbeatJob(HEARTBEAT, deps({ connectedSources: async () => { scans++; return '[{"name":"Mail","tools":[{"name":"search"}]}]'; } })).run(scheduled);
+    expect(scans).toBe(1);
+    expect(runnerCalls[0]!.prompt).toContain('"name":"Mail"');
+    expect(runnerCalls[0]!.prompt).toContain("on every run before deciding NO_REPLY");
+    expect(delivered).toEqual([]);
+  });
+
+  test("unavailable discovery still permits local checks without claiming external checks", async () => {
+    await createHeartbeatJob(HEARTBEAT, deps({ connectedSources: async () => { throw new Error("offline"); } })).run(scheduled);
+    expect(runnerCalls[0]!.prompt).toContain("Connected-source discovery unavailable");
+  });
+
+  test("recent delivered alerts survive restart and inform subsequent checks", async () => {
+    const d = deps();
+    d.limiter.record("heartbeat", new Date(clock.getTime() - 3 * 60 * 60_000), "Your parcel needs collection.");
+    await createHeartbeatJob(HEARTBEAT, deps()).run(scheduled);
+    expect(runnerCalls[0]!.prompt).toContain("Your parcel needs collection.");
+    expect(runnerCalls[0]!.prompt).toContain("do not repeat unless materially changed");
+  });
+
   test("heartbeat sees existing scheduled checks while keeping its read-only tool boundary", async () => {
     await createHeartbeatJob(HEARTBEAT, deps({ scheduledChecks: () => "Pending one-time checks: deployment-status at 2026-10-12T22:30:00Z. Do not repeat them unless something urgent changed." })).run(scheduled);
     expect(runnerCalls[0]!.prompt).toContain("deployment-status at 2026-10-12T22:30:00Z");
