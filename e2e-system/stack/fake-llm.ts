@@ -100,10 +100,15 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
     ], 0, undefined);
   }
   if (last?.role === "tool") {
+    if (userText.includes("E2E-ARTIFACT")) {
+      const result = JSON.parse(textOf(last.content));
+      return stream([result.link], 10, tag);
+    }
     if (userText.includes("E2E-LIST-CHECKS") || userText.includes("E2E-OWNER-DECISION") || userText.includes("E2E-CHANNEL-REQUESTS")) return stream([textOf(last.content)], 10, tag);
     if (userText.includes("E2E-BROWSER")) return stream(["Browser is open. ", "Browser task finished."], 50, tag, 0, false, 1);
     return stream([`Tool finished. Result: ${textOf(last.content).slice(0, 160).replace(/\n/g, " ")}`], 50, tag);
   }
+  if (userText.includes("E2E-ARTIFACT")) return toolCall("save_artifact", { title: `Report ${tag}`, content: `# Findings ${tag}\n\nDurable report evidence ${tag}.` });
   if (userText.includes("E2E-EXTERNAL-FILES")) {
     const cli = resolve(import.meta.dir, "../../bin/external-files.ts");
     return toolCall("bash", { command: "bun '" + cli.replace(/'/g, "'\\''") + "' stores" });

@@ -181,3 +181,32 @@ test('channel fixtures share thread mutations and add only tasks with work conve
 	);
 	expect((await api.list()).channels.every((channel) => channel.unread === null)).toBe(true);
 });
+
+test('read positions persist per channel and new messages become unread again', async () => {
+	const values = new Map<string, string>();
+	const saved = {
+		getItem: (key: string) => values.get(key) ?? null,
+		setItem: (key: string, value: string) => {
+			values.set(key, value);
+		}
+	};
+	const catalog = {
+		channels: [channelFixture('main', 'Main', { lastMessageSeq: 7 })],
+		archiveAfterDays: 7
+	};
+	const api = { list: async () => catalog };
+	const store = new ChannelsStore({ api, storage: saved, hub: realtime().hub });
+	await store.list.ensure();
+	const channel = store.list.data!.channels.find((c) => c.lastMessageSeq !== null)!;
+	expect(store.visible().find((c) => c.id === channel.id)?.hasNewMessages).toBe(true);
+	store.markRead(channel.id, channel.lastMessageSeq);
+	expect(store.visible().find((c) => c.id === channel.id)?.hasNewMessages).toBe(false);
+	const reopened = new ChannelsStore({ api, storage: saved, hub: realtime().hub });
+	await reopened.list.ensure();
+	expect(reopened.visible().find((c) => c.id === channel.id)?.hasNewMessages).toBe(false);
+	reopened.markRead(channel.id, channel.lastMessageSeq! - 1);
+	expect(reopened.readSequences[channel.id]).toBe(channel.lastMessageSeq!);
+	catalog.channels[0] = { ...channel, lastMessageSeq: 8 };
+	await reopened.list.refetch();
+	expect(reopened.visible()[0].hasNewMessages).toBe(true);
+});

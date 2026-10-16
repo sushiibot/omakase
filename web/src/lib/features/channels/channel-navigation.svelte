@@ -106,7 +106,11 @@
 			isActive={selected === channel.id}
 			class={cn(
 				'any-pointer-coarse:h-11',
-				pending > 0 && 'font-semibold',
+				pending > 0 || channel.hasNewMessages
+					? 'font-semibold text-sidebar-foreground'
+					: selected === channel.id
+						? 'text-sidebar-foreground'
+						: 'text-muted-foreground',
 				pending > 0 && !onoptions && 'pr-8',
 				onoptions &&
 					(pending > 0
@@ -121,6 +125,7 @@
 					data-sveltekit-replacestate={replacing ? '' : undefined}
 					aria-current={selected === channel.id ? 'page' : undefined}
 					title={channel.title}
+					data-unread={channel.hasNewMessages ? 'true' : undefined}
 					onclick={(e) => {
 						if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey)
 							onvisit(channel.id);
@@ -131,9 +136,9 @@
 						/>{/if}
 					<span class="min-w-0 flex-1 truncate"
 						>{channel.title}<span class="sr-only"
-							>{channel.state === 'archived' ? ', archived' : ''}{pending > 0
-								? ` ${pending} requests need you`
-								: ''}</span
+							>{channel.state === 'archived' ? ', archived' : ''}{channel.hasNewMessages
+								? ', new messages'
+								: ''}{pending > 0 ? ` ${pending} requests need you` : ''}</span
 						></span
 					>
 					{#if !pending && channel.activity.running}<Spinner

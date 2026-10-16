@@ -102,9 +102,14 @@
 				class="rounded bg-muted px-1 font-mono text-code [overflow-wrap:anywhere]">{node.text}</code
 			>{:else if node.kind === 'link'}<a
 				href={node.href}
-				target="_blank"
+				target={node.href.startsWith('/artifacts/') ? undefined : '_blank'}
 				rel="noopener noreferrer"
-				class="[overflow-wrap:anywhere] text-brand underline">{@render inlines(node.children)}</a
+				class={node.href.startsWith('/artifacts/')
+					? 'my-2 inline-flex max-w-full flex-col justify-center rounded-md border bg-muted px-4 py-2 [overflow-wrap:anywhere] text-foreground no-underline'
+					: '[overflow-wrap:anywhere] text-brand underline'}
+				>{#if node.href.startsWith('/artifacts/')}<span class="text-meta text-muted-foreground"
+						>Document</span
+					>{/if}{@render inlines(node.children)}</a
 			>{:else if node.kind === 'image'}<img
 				src={node.src}
 				alt={node.alt}

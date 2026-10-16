@@ -57,6 +57,8 @@ export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "ls",
   // Exposure equals reading the file and quoting it; the only recipient is the owner.
   "send_file",
+  "save_artifact",
+  "find_artifacts",
   "web_search",
   "fetch_url_content",
   "search_logs",

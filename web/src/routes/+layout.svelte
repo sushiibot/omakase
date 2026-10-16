@@ -85,6 +85,23 @@
 		const id = currentId;
 		if (id) untrack(() => catalog.visit(id));
 	});
+	$effect(() => {
+		const id = currentId;
+		const sequence =
+			catalog.list.data?.channels.find((channel) => channel.id === id)?.lastMessageSeq ?? null;
+		if (!id) return;
+		if (
+			page.url.pathname.startsWith('/tasks/') &&
+			page.url.searchParams.get('view') !== 'conversation'
+		)
+			return;
+		const read = () => {
+			if (document.visibilityState === 'visible') untrack(() => catalog.markRead(id, sequence));
+		};
+		read();
+		document.addEventListener('visibilitychange', read);
+		return () => document.removeEventListener('visibilitychange', read);
+	});
 	async function startChannel(title: string) {
 		const id = await threadsStore().branch('', title);
 		if (!id) return;

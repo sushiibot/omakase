@@ -33,6 +33,13 @@ const chats: NavEntry = {
 /** The More screen, top to bottom. */
 const moreEntries: NavEntry[] = [
 	{
+		id: 'artifacts',
+		href: '/artifacts',
+		label: 'Artifacts',
+		icon: BookMarked,
+		description: 'Saved reports and documents'
+	},
+	{
 		id: 'tasks',
 		href: '/tasks',
 		label: 'Tasks',
@@ -132,6 +139,7 @@ const workspace: NavEntry = {
 export function workspaceFor(on: FeatureCheck): NavEntry[] {
 	const entries = moreFor(on);
 	return [
+		'artifacts',
 		'memory',
 		'history',
 		'connectors',

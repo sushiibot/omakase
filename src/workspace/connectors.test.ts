@@ -221,3 +221,26 @@ test("removed connectors cannot execute tools", async () => {
   await expect(s.call(server.id, "read_email", false)).rejects.toThrow("disconnected or removed");
   expect(s.calls).toEqual([]);
 });
+
+test("scheduled MCP discovery excludes writes and rechecks annotations before calling", async () => {
+  const s = setup();
+  const server = await s.add();
+  s.setTools([
+    { name: "read_email", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } },
+    { name: "send_email", inputSchema: { type: "object" }, annotations: { readOnlyHint: false } },
+    { name: "unknown", inputSchema: { type: "object" } },
+  ]);
+  const tools = s.manager.readOnlyTools();
+  const context = {} as ExtensionToolContext;
+  const discovered = await tools[0]!.execute("list", {}, undefined, undefined, context);
+  expect(JSON.stringify(discovered)).toContain("read_email");
+  expect(JSON.stringify(discovered)).not.toContain("send_email");
+  expect(JSON.stringify(discovered)).not.toContain("unknown");
+  const call = (tool: string) => tools[1]!.execute("call", { serverId: server.id, tool, arguments: {} }, undefined, undefined, context);
+  await call("read_email");
+  await expect(call("send_email")).rejects.toThrow("read-only");
+  await expect(call("unknown")).rejects.toThrow("read-only");
+  s.setTools([{ name: "read_email", inputSchema: { type: "object" }, annotations: { readOnlyHint: false } }]);
+  await expect(call("read_email")).rejects.toThrow("read-only");
+  expect(s.calls).toEqual(["read_email"]);
+});

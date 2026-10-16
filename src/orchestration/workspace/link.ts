@@ -1,3 +1,4 @@
+import { artifactReadParams, artifactList, artifactDocument } from "../artifactContracts.ts";
 import { TASKS_MANAGE, tasksParams, tasksResult, type TaskRequest } from "../taskContracts.ts";
 import { BROWSER_READ, browserReadParams, browserReadResult, type BrowserReadResult } from "../browserContracts.ts";
 import { memoryParams, memoryOverview, memoryDetail } from "../memoryContracts.ts";
@@ -370,6 +371,10 @@ export class WorkspaceLink {
 
   async tasksManage(request: TaskRequest) {
     return this.read(TASKS_MANAGE, tasksParams, tasksResult, { request }, RUNS_TIMEOUT_MS);
+  }
+
+  async artifactsRead(id?: string, query?: string) {
+    return id === undefined ? this.read("artifacts/read", artifactReadParams, artifactList, { query }, RUNS_TIMEOUT_MS) : this.read("artifacts/read", artifactReadParams, artifactDocument.nullable(), { id }, RUNS_TIMEOUT_MS);
   }
 
   async memoryRead(id?: string) {

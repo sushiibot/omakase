@@ -1,3 +1,4 @@
+import { ArtifactStore, ARTIFACT_TOOLS } from "./artifacts.ts";
 import { OwnerRequests, ownerRequestAsks } from "./ownerRequests.ts";
 import { memoryEvidence, MEMORY_TOOL_NAMES, RECALL_INSTRUCTIONS } from "./memoryEvidence.ts";
 import { ownerNameLine } from "../orchestration/ownerLabel.ts";
@@ -59,7 +60,7 @@ const memoryLog = getLogger("workspace.memory");
 const autoModeLog = getLogger("workspace.automode");
 
 const PROVIDER_ID = "sushii-workspace-openrouter";
-const WORKSPACE_TOOLS = ["read", "edit", "write", "grep", "find", "ls", "bash", SEND_FILE_TOOL, ...MEMORY_TOOL_NAMES];
+const WORKSPACE_TOOLS = ["read", "edit", "write", "grep", "find", "ls", "bash", SEND_FILE_TOOL, ...MEMORY_TOOL_NAMES, ...ARTIFACT_TOOLS];
 
 /** Pi's bash under the agent env allowlist, minus PI_* (PI_CODING_AGENT_DIR and PI_SESSION_FILE point at the agent dir).
  *  `WS_RUN_ID` is the run in progress at spawn time, so `ws-runs` can default to it. */
@@ -295,11 +296,12 @@ export function createPiChatSessionFactory(
       // Read on every reload, so a name changed in the app reaches the next session.
       appendSystemPromptOverride: (base) => {
         const line = ownerNameLine(config.ownerName);
-        return [...base, ...(line ? [line] : []), RECALL_INSTRUCTIONS];
+        return [...base, ...(line ? [line] : []), "For substantial reports, research and documents, use save_artifact to persist the deliverable and include its returned Markdown link in your reply. Use find_artifacts to recover or read an existing document before updating it. Keep the reply concise; the full report belongs in the artifact.", RECALL_INSTRUCTIONS];
       },
       // Only the factories below: the agent can write ~/.pi and <cwd>/.pi, so discovered extensions would run its code in-process.
       noExtensions: true,
       extensionFactories: [
+        { name: "sushii-artifacts", factory: new ArtifactStore(config.stateDir).extension(opts.origin?.conversationId ?? "main") },
         ...(opts.tasks ? [{ name: "sushii-tasks", factory: taskAwareness(opts.tasks, opts.origin?.conversationId ?? "main") }] : []),
         ...(opts.ownerRequests ? [{ name: "sushii-owner-requests", factory: opts.ownerRequests.awareness() }] : []),
         ...(opts.wakeups ? [{ name: "sushii-scheduled-checks", factory: opts.wakeups.awareness() }] : []),

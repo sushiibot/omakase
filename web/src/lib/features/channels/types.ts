@@ -15,6 +15,8 @@ export interface Channel {
 	lastMessageSeq: number | null;
 	/** No durable read receipts exist yet. */
 	unread: null;
+	/** New messages since this device last opened the conversation. */
+	hasNewMessages?: boolean;
 	archived?: { at: string; by: 'you' | 'idle' | null };
 }
 export interface ChannelCatalog {

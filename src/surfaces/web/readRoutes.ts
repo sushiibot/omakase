@@ -43,6 +43,7 @@ export interface ReadRouteDeps {
   workspaceEnabled: boolean;
   now?: () => number;
   memory?: Pick<WorkspaceLink, "memoryRead">;
+  artifacts?: Pick<WorkspaceLink, "artifactsRead">;
   connectors?: Pick<WorkspaceLink, "connectors">;
 }
 
@@ -275,6 +276,18 @@ export function createReadRoutes(deps: ReadRouteDeps): ReadRoutes {
 
   return {
     async handle(req, path) {
+      if (path === "/api/artifacts" || path.startsWith("/api/artifacts/")) {
+        if (!deps.artifacts) return notFound();
+        if (req.method !== "GET") return json({ error: "method not allowed" }, 405);
+        const match = /^\/api\/artifacts\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(path);
+        if (path !== "/api/artifacts" && !match) return notFound();
+        const query = new URL(req.url).searchParams.get("q") ?? "";
+        if (query.length > 200) return json({ error: "query too long" }, 400);
+        return answer("artifacts/read", async () => {
+          const result = await fromWorkspace(() => deps.artifacts!.artifactsRead(match?.[1], query));
+          return result === null ? notFound() : cappedJson(result);
+        });
+      }
       if (path === "/api/memory" || path.startsWith("/api/memory/")) {
         if (!deps.memory) return notFound();
         if (req.method !== "GET") return json({ error: "method not allowed" }, 405);

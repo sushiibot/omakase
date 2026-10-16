@@ -1,3 +1,4 @@
+import { ArtifactStore } from "./artifacts.ts";
 import { OwnerRequests } from "./ownerRequests.ts";
 import { exitAfterBackoff } from "../crashBackoff.ts";
 import { TaskStore } from "./taskStore.ts";
@@ -298,6 +299,7 @@ async function main(): Promise<void> {
   // Coalesce extraction after chat activity; immediate recall uses the source index and never waits for this.
   scheduler.register({ name: "memory-capture", schedule: { when: { kind: "every", minutes: 5 } }, maxRunMs: 60 * 60_000, run: runMemory });
   wireProactiveJobs(scheduler, {
+    evidenceTools: () => connectors.readOnlyTools(),
     scheduledChecks: () => `Pending one-time checks: ${JSON.stringify(wakeups.list().map(({ key, title, at, conversationId, taskId }) => ({ key, title, at, conversationId, taskId })))}. These items already have follow-ups. Do not repeat them unless something urgent changed. Reuse existing unanswered requests.`,
     config,
     runs,
@@ -353,6 +355,7 @@ async function main(): Promise<void> {
       ...chatExportHandlers({ principalId: config.principalId, reader: new ChatExportReader({ agentDir: config.agentDir }) }),
       // Session roots come from the host's own agent dir (process env set by the deploy), never from a run record.
       ...runsHandlers({ principalId: config.principalId, stateDir: config.stateDir, home: config.home, tz: config.tz, agentDirs: [config.agentDir] }),
+      ...new ArtifactStore(config.stateDir).handlers(config.principalId),
       ...memoryHandlers({ home: config.home, principalId: config.principalId }),
       ...historyHandlers({ principalId: config.principalId, home: config.home, stateDir: config.stateDir }),
       ...historySearchHandlers(new HistorySearch({ principalId: config.principalId, home: config.home })),

@@ -120,7 +120,8 @@ Each topic has a separate persisted workspace session and chat stream.
 The sidebar reads `/api/channels`, including task work conversations.
 All uses stable names; Recent uses explicit visits saved on this device.
 Needs you counts unresolved request handles. Opening a channel does not resolve them.
-The catalog has no read receipts, so navigation does not invent unread counts.
+Read positions persist on each device. New messages use brighter, heavier channel labels.
+Opening a visible conversation marks its latest message read. Pending requests remain highlighted.
 Task channel links open `/tasks/:id?view=conversation`; `/tasks/:id` retains the planning view.
 See [Topic threads](docs/topic-threads.md) for routing, shared memory, lifecycle, and tests.
 
@@ -165,3 +166,20 @@ See [Tasks](docs/tasks.md) for lifecycle, migration, routing, and verification.
 Codex and Claude Code agents on connected machines appear in the side panel's Agents tab, as cards
 under the message that started them, and at `/agents/:id`. See [Agents](docs/agents.md) for placement,
 the transcript, approvals, navigation, and the precedent behind them.
+
+## Artifacts
+
+Workspace includes an Artifacts library for saved Markdown reports and documents.
+The agent uses `save_artifact` to create or update a document and returns its stable link in chat.
+Chat shows that link as a document card. The reader links back to the source conversation.
+The library searches titles and document content. `find_artifacts` gives the agent the same search and read access.
+
+Documents persist in the workspace state directory, separately from chat sessions.
+Updates retain the document ID and increase its version number. Only the latest content is retained.
+Each document supports up to 256 KiB of text. Library scans stop after 2,000 documents and show a limit notice.
+Read positions are device-local; documents are shared across the owner's devices.
+
+Heartbeat and scheduled reviews can discover connected MCP tools that declare `readOnlyHint: true`.
+The workspace checks that annotation again before each call. Unannotated and writable tools are unavailable to these reviews.
+Heartbeat checks relevant recent email, calendar events and other connected sources for useful changes.
+Existing schedule windows and notification limits still apply. Connectors must already be connected in the owner app.

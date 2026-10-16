@@ -462,3 +462,15 @@ test('file diffs render escaped additions and deletions, including truncation', 
 	expect(html).toContain('bg-add');
 	expect(html).toContain('bg-del');
 });
+
+test('artifact links render as document cards inside the app', async () => {
+	const href = '/artifacts/00000000-0000-4000-8000-000000000001';
+	const { els, text } = await dom(Markdown, { text: `[Quarterly report](${href})` });
+	const link = els.find((el) => el.tag === 'a')!;
+	expect(link.attrs.href).toBe(href);
+	expect(link.attrs.target).toBeUndefined();
+	expect(text).toContain('Document');
+	expect(text).toContain('Quarterly report');
+	const invalid = await dom(Markdown, { text: '[Bad](/artifacts/../../settings)' });
+	expect(invalid.els.some((el) => el.tag === 'a')).toBe(false);
+});

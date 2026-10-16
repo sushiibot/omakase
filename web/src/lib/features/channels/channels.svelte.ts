@@ -5,6 +5,7 @@ import { selectChannels } from './navigation';
 import type { Channel, ChannelCatalog, ChannelFilter, ChannelView } from './types';
 
 export const CHANNEL_VISITS_KEY = 'channels:recent:v1';
+export const CHANNEL_READS_KEY = 'channels:read:v1';
 const MAX_VISITS = 100;
 export interface ChannelVisitsStorage {
 	getItem(key: string): string | null;
@@ -42,6 +43,7 @@ function readVisits(storage: ChannelVisitsStorage | null): string[] {
 export class ChannelsStore {
 	readonly list: Remote<ChannelCatalog>;
 	recentIds = $state.raw<string[]>([]);
+	readSequences = $state.raw<Record<string, number>>({});
 	#hub: Hub;
 	#storage: ChannelVisitsStorage | null;
 	#watchers = 0;
@@ -56,9 +58,42 @@ export class ChannelsStore {
 		this.#hub = realtime;
 		this.#storage = storage;
 		this.recentIds = readVisits(storage);
+		try {
+			const saved: unknown = JSON.parse(storage?.getItem(CHANNEL_READS_KEY) ?? '{}');
+			if (saved && typeof saved === 'object' && !Array.isArray(saved))
+				this.readSequences = Object.fromEntries(
+					Object.entries(saved).filter(
+						([id, seq]) => id.length <= 80 && Number.isSafeInteger(seq) && Number(seq) >= 0
+					)
+				);
+		} catch {
+			/* Invalid device state starts with no read receipts. */
+		}
 	}
 	visible(view: ChannelView = 'all', filter: ChannelFilter = {}): Channel[] {
-		return selectChannels(this.list.data?.channels ?? [], view, this.recentIds, filter);
+		return selectChannels(this.list.data?.channels ?? [], view, this.recentIds, filter).map(
+			(channel) => ({
+				...channel,
+				hasNewMessages:
+					channel.lastMessageSeq !== null &&
+					channel.lastMessageSeq > (this.readSequences[channel.id] ?? 0)
+			})
+		);
+	}
+	markRead(id: string, sequence: number | null): void {
+		if (
+			sequence === null ||
+			!Number.isSafeInteger(sequence) ||
+			sequence < 0 ||
+			(this.readSequences[id] ?? -1) >= sequence
+		)
+			return;
+		this.readSequences = { ...this.readSequences, [id]: sequence };
+		try {
+			this.#storage?.setItem(CHANNEL_READS_KEY, JSON.stringify(this.readSequences));
+		} catch {
+			/* Session-only when storage is unavailable. */
+		}
 	}
 	visit(id: string): void {
 		if (!id || id.length > 80 || this.recentIds[0] === id) return;
@@ -82,11 +117,13 @@ export class ChannelsStore {
 	watch(): () => void {
 		const stopFocus = this.list.watch();
 		if (this.#watchers++ === 0) {
-			this.#unsubscribe = this.#hub.subscribe({ types: ['threads'] }, (batch) => {
+			this.#unsubscribe = this.#hub.subscribe({ types: ['threads', 'reply', 'user'] }, (batch) => {
 				if (
 					batch.some(
 						(event) =>
 							event.type === 'threads' ||
+							event.type === 'reply' ||
+							event.type === 'user' ||
 							event.type === 'hello' ||
 							event.type === 'reset' ||
 							(event.type === 'workspace' && event.data.state === 'online')
