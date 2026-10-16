@@ -26,7 +26,9 @@ describe("foreground phone vault", () => {
     const assertion = result.catch(error => error);
     await hub.poll(old.session, signal());
     const next = hub.connect(id, "Notes");
-    expect((await assertion).message).toContain("disconnected");
+    const error = await assertion;
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("disconnected");
     expect(() => hub.result(old.session, "old", {})).toThrow("expired");
     const abort = new AbortController();
     const pending = hub.poll(next.session, abort.signal); abort.abort();

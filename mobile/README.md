@@ -18,6 +18,7 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The debug APK is suitable for personal sideloading. Keep the same signing key for later updates.
+Local builds reuse `mobile/.local/debug.keystore` when that file exists. Otherwise, Gradle uses the standard Android debug key.
 Uninstalling the app removes its folder permission and private recovery backups.
 
 To use another server, supply an HTTPS origin:
