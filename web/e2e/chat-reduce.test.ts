@@ -7,6 +7,7 @@ import {
 	createState,
 	dropApproval,
 	mergeHistory,
+	previewHistory,
 	openTurns,
 	PENDING_TURN_ID,
 	restartHistory,
@@ -944,4 +945,33 @@ test('session boundaries preserve rotation kinds and snapshots through live redu
 		data: { ...boundary, summaryTruncated: undefined, initialContext: undefined }
 	});
 	expect(part(replay)).toEqual(part(live));
+});
+
+test('early history previews deduplicate local sends without settling them or changing replay state', () => {
+	const state = createState();
+	addLocalSend(state, {
+		clientId: 'pending-message',
+		text: 'Sent from this device',
+		attachments: [],
+		at: '2026-10-01T00:00:00Z',
+		delivery: 'sending'
+	});
+	const original = structuredClone(state);
+	const history = [
+		{
+			type: 'user' as const,
+			id: '1',
+			clientId: 'pending-message',
+			text: 'Sent from this device',
+			attachments: [],
+			at: '2026-10-01T00:00:00Z'
+		}
+	];
+	expect(previewHistory(state, history)).toHaveLength(1);
+	expect(state).toEqual(original);
+	expect(previewHistory(state, history)).toHaveLength(1);
+	expect(mergeHistory(state, history)).toEqual([
+		{ type: 'delivered', clientId: 'pending-message' }
+	]);
+	expect(state.items).toHaveLength(1);
 });

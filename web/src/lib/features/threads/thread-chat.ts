@@ -59,6 +59,7 @@ export const liveThreadChat: ThreadChatDeps = (detail) => {
 	const base = `/threads/${encodeURIComponent(detail.summary.id)}/chat`;
 	return {
 		approvals: true,
+		initialHistory: detail.history,
 		hub: createHub({
 			transport: fetchSse({ url: `/api${base}/stream` }),
 			carries: `thread:${detail.summary.id}`

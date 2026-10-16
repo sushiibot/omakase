@@ -5,7 +5,7 @@ import { SqliteChatLog } from "./chatLog.ts";
 import { WebInboundStore } from "./inbound.ts";
 import { WebWorkspaceAdapter } from "./workspaceAdapter.ts";
 import { createPresence } from "./presence.ts";
-import { createChatRoutes } from "./chatRoutes.ts";
+import { createChatRoutes, type ChatRouteDeps } from "./chatRoutes.ts";
 import { WebThreads } from "./threadRoutes.ts";
 import { mintWebActor } from "./actor.ts";
 import type {
@@ -18,7 +18,7 @@ afterEach(() => {
   for (const c of cleanups.splice(0)) c();
 });
 const actor = mintWebActor("owner@example.com", "Owner");
-function setup() {
+function setup(uploads?: ChatRouteDeps["uploads"]) {
   const db = new Database(":memory:");
   applySchema(db);
   const log = new SqliteChatLog(db);
@@ -68,7 +68,7 @@ function setup() {
     answerAsk: async () => ({ status: "answered" as const, answer: "yes" }),
   };
   const tools = { decide: () => "decided" as const };
-  const chat = { link, tools, workspaceEnabled: true };
+  const chat = { link, tools, workspaceEnabled: true, ...(uploads ? { uploads } : {}) };
   const routes = createChatRoutes({ ...chat, log, inbound, adapter, presence });
   const threads = new WebThreads({
     db,
@@ -483,4 +483,22 @@ test("Main rename persists in the catalog and list without creating a topic", as
   expect(managed).toEqual([]);
   expect((await call("/api/threads/main/rename", { title: " " }))!.status).toBe(400);
   expect((await call("/api/threads/main/close", {}))!.status).toBe(404);
+});
+
+
+test("topic metadata includes the same upload references as chat history", async () => {
+  const file = { id: "photo-1", contentType: "image/png", bytes: 100, name: "trip.png", inline: true };
+  const h = setup({
+    lookup: (ids) => new Map(ids.filter((id) => id === file.id).map((id) => [id, file])),
+    storeDelivery: async () => ({ files: [], dropped: 0 }),
+    markReferenced: () => ({ missing: [] }),
+  });
+  const { id } = await h.create();
+  h.threads.channel(id).log.append("user", {
+    key: "photo-message", text: "Trip photo", uploadIds: [file.id], at: new Date().toISOString(),
+  }, "photo-message");
+  const detail = await (await h.call(`/api/threads/${id}`))!.json();
+  const history = await (await h.call(`/api/threads/${id}/chat/history`))!.json();
+  expect(detail.history).toEqual(history.items);
+  expect(detail.history.at(-1).attachments[0].file).toEqual(file);
 });

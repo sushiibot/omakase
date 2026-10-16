@@ -912,3 +912,14 @@ export function openTurns(s: ChatState) {
 			i.kind === 'assistant' && !!i.turn && live(i)
 	);
 }
+
+/** Render an early snapshot without settling outbox entries or changing live replay/dedupe state. */
+export function previewHistory(s: ChatState, history: WebHistoryItem[]): ChatItem[] {
+	const preview = {
+		...s,
+		items: s.items.map((item) => ({ ...item })),
+		keys: new Set(s.keys)
+	};
+	mergeHistory(preview, history);
+	return preview.items;
+}

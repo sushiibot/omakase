@@ -475,7 +475,7 @@ export class WebThreads {
         history: historyPage(
           c.log,
           { limit: 40 },
-          { maxBytes: 2 * 1024 * 1024 },
+          { maxBytes: 2 * 1024 * 1024, ...(this.deps.chat.uploads ? { uploads: this.deps.chat.uploads } : {}) },
         ).items,
       });
     if (req.method !== "POST")

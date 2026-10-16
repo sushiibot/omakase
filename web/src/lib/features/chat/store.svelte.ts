@@ -8,6 +8,7 @@ import {
 	MESSAGE_UPLOADS_MAX,
 	type ChatEnvelope,
 	type ChatUsage,
+	type WebHistoryItem,
 	type WorkspaceState
 } from '$lib/core/realtime/events';
 import {
@@ -29,6 +30,7 @@ import {
 	dropApproval,
 	markAsk,
 	mergeHistory,
+	previewHistory,
 	openTurns,
 	removeLocal,
 	setDelivery,
@@ -73,6 +75,8 @@ interface Photo extends PhotoDraft {
 }
 
 export interface ChatStoreDeps {
+	/** Recent messages already fetched with topic metadata, displayed while live history loads. */
+	initialHistory?: WebHistoryItem[];
 	/** This hub serves only this conversation, including its approvals. */
 	approvals?: boolean;
 	hub?: Hub;
@@ -141,6 +145,7 @@ export class ChatStore {
 	#cleanup: (() => void)[] = [];
 	#cacheTimer: ReturnType<typeof setTimeout> | undefined;
 	#offlineHistory = false;
+	#initialHistory: WebHistoryItem[] | undefined;
 
 	constructor(
 		readonly conversationId: ConversationId,
@@ -152,6 +157,11 @@ export class ChatStore {
 		this.#outbox = deps.outbox ?? outbox;
 		this.#drafts = deps.drafts ?? drafts;
 		this.#greeted = new Promise((r) => (this.#greet = r));
+		this.#initialHistory = deps.initialHistory;
+		if (this.#initialHistory) {
+			this.history = 'ready';
+			this.#commit();
+		}
 	}
 
 	readonly #ownsApprovals: boolean;
@@ -292,10 +302,13 @@ export class ChatStore {
 	#commit() {
 		const s = this.#s;
 		this.items = [...s.items];
-		this.messages = toMessages(s.items, {
-			stopping: s.stopping,
-			historyGap: this.history === 'error' || this.olderError
-		});
+		this.messages = toMessages(
+			this.#initialHistory ? previewHistory(s, this.#initialHistory) : s.items,
+			{
+				stopping: s.stopping,
+				historyGap: this.history === 'error' || this.olderError
+			}
+		);
 		this.approvals = s.approvals.map((a) => ({ nonce: a.nonce, view: a.view }));
 		this.timedOut = s.timedOut;
 		this.cursor = s.cursor;
@@ -375,7 +388,7 @@ export class ChatStore {
 	// ── History ──
 
 	async #loadHistory() {
-		this.history = 'loading';
+		this.history = this.#initialHistory ? 'ready' : 'loading';
 		this.olderError = false;
 		this.#commit();
 		const r = await this.#api.history({ limit: HISTORY_PAGE });
@@ -383,6 +396,7 @@ export class ChatStore {
 		this.#hub.flush();
 		const fx: Effect[] = [];
 		if (r.ok) {
+			this.#initialHistory = undefined;
 			this.#offlineHistory = !!r.cached;
 			fx.push(...mergeHistory(this.#s, r.page.items));
 			this.#before = r.page.before;

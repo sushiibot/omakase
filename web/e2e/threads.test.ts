@@ -579,3 +579,30 @@ test('opening a conversation from row options removes the sheet history entry', 
 	await expect(options).toBeHidden();
 	await expect(page.getByRole('button', { name: 'Options for October trip' })).toBeVisible();
 });
+
+for (const delayed of ['stream', 'history'] as const) {
+	test(`topic messages are readable before live ${delayed} completes`, async ({
+		page,
+		context
+	}) => {
+		await fixtureApp(context);
+		let release!: () => void;
+		const held = new Promise<void>((resolve) => (release = resolve));
+		await context.route(`**/api/threads/oct-trip/chat/${delayed}*`, async (route) => {
+			await held;
+			if (delayed === 'history') {
+				await route.fulfill({ json: { items: [reply], before: null } });
+			} else await route.fallback();
+		});
+		try {
+			await page.goto('/chats/oct-trip');
+			await expect(page.getByText('Picking up the trip here.')).toBeVisible({ timeout: 1500 });
+		} finally {
+			release();
+		}
+		if (delayed === 'history') {
+			await expect(page.getByText(reply.text)).toBeVisible();
+			await expect(page.getByText('Picking up the trip here.')).toHaveCount(0);
+		} else await expect(page.getByText('Picking up the trip here.')).toHaveCount(1);
+	});
+}
