@@ -596,7 +596,8 @@ for (const delayed of ['stream', 'history'] as const) {
 		});
 		try {
 			await page.goto('/chats/oct-trip');
-			await expect(page.getByText('Picking up the trip here.')).toBeVisible({ timeout: 1500 });
+			// The response stays held until this assertion, independent of CI rendering speed.
+			await expect(page.getByText('Picking up the trip here.')).toBeVisible();
 		} finally {
 			release();
 		}
