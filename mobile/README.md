@@ -4,6 +4,23 @@ The Capacitor app loads `https://agent.sushii.bot` and uses the existing owner a
 The gateway and agent stay on the server. The phone exposes one selected Obsidian vault while the app is open.
 There is no background service, vault scanner, or periodic file synchronization.
 
+## Download from GitHub Actions
+
+Open [Android APK](https://github.com/sushiibot/omakase/actions/workflows/android.yml) and select a successful run on `main`.
+Download its `omakase-android-<run number>` artifact, extract the ZIP, and install `omakase.apk` on your phone.
+The artifact also contains a SHA-256 checksum. Downloads require a GitHub login and expire after 7 days.
+
+The workflow runs when Android files change on `main`. Use **Run workflow** on `main` to request another build.
+Web changes reach the app through its live server URL and do not require a new APK.
+Pull requests run Android tests and build checks, without the persistent signing key or a downloadable artifact.
+No GitHub release is created.
+
+CI uses the `ANDROID_DEBUG_KEYSTORE_BASE64` repository secret to preserve the signing identity across builds.
+It contains the base64-encoded `mobile/.local/debug.keystore` from the initial local build.
+Keep that file private and retain a backup. CI fails when the secret is missing.
+Each CI run increases the Android version code so later APKs can update the installed app.
+The APK remains a debug build for personal use.
+
 ## Build and install
 
 Install Bun, a Java 21 JDK, and the Android SDK with platform 36 and build tools 35 and 36.
