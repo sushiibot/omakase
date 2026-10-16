@@ -232,6 +232,12 @@
 					>
 				{/if}
 			{:else if view === 'watching'}
+				<Section title="What I’m keeping track of">
+					<p class="text-sm text-muted-foreground">
+						Ongoing responsibilities, their sources, and when I last checked. Review suggested
+						changes in Needs you.
+					</p>
+				</Section>
 				{@render maintenanceWatching?.()}
 			{:else if view === 'following'}
 				<Section

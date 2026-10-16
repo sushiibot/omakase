@@ -255,6 +255,7 @@ export function deliveryView(p: ChatDeliverParams, toolCount: number | null = nu
       ...(p.replyTo ? { replyTo: p.replyTo } : {}),
       ...(p.files?.length ? { files: p.files } : {}),
       ...(p.job ? { job: p.job } : {}),
+      ...(p.maintenance ? { maintenance: p.maintenance } : {}),
     },
   };
 }

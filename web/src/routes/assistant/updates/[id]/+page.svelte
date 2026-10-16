@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { closeShownNotifications } from '$lib/core/pwa/notifications';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import { MaintenanceScreen, maintenanceStore } from '$lib/features/maintenance';
 	const store = maintenanceStore();
+	$effect(() => {
+		if (page.params.id)
+			void closeShownNotifications(new Set([`maintenance:${page.params.id}`])).catch(() => {});
+	});
 	const proposal = $derived(store.remote.data?.view.proposals.find((p) => p.id === page.params.id));
 	onMount(() => {
 		store.error = null;

@@ -196,7 +196,7 @@ export class WebWorkspaceAdapter implements SurfaceAdapter<WebInbound, WebHandle
     const anchor = turnId ? this.deps.log.turnAnchor(turnId) : null;
     const { seq, created } = this.deps.log.appendResult(reply.kind, data, key, anchor ?? undefined);
     if (created) {
-      void this.notify(seq, { kind: reply.kind, text });
+      void this.notify(seq, reply.maintenance ? { kind: "maintenance", ...reply.maintenance } : { kind: reply.kind, text });
       for (const listener of this.replyListeners) {
         try { listener({ ...reply, text }); } catch (err) { log.warn({ err }, "reply listener failed"); }
       }

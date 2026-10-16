@@ -61,6 +61,7 @@ export interface ReplyView {
   files?: DeliverFile[];
   /** On a proactive message: the scheduled job that sent it. */
   job?: DeliverJob;
+  maintenance?: { id: string; title: string };
 }
 
 export interface ToolConfirmation {

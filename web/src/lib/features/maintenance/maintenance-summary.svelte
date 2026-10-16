@@ -79,12 +79,12 @@
 {:else if mode === 'watching' && view}
 	<Section
 		title={view.responsibility.title}
-		description="Look for useful details in recent email and propose additions to existing Fastmail events without invitees. Every update needs your approval."
+		description="Keep useful details with your upcoming plans, such as door times, seats, and entry instructions."
 	>
 		<div class="flex flex-wrap items-center justify-between gap-3">
 			<p class="text-sm text-muted-foreground">
 				{view.responsibility.enabled
-					? 'Active during heartbeat reviews'
+					? 'Active · Checked periodically'
 					: 'Paused'}{#if view.responsibility.lastReviewAt}
 					· Last review ran {new Date(view.responsibility.lastReviewAt).toLocaleString()}{/if}
 			</p>
@@ -95,13 +95,23 @@
 				>{view.responsibility.enabled ? 'Pause' : 'Resume'}</Button
 			>
 		</div>
+		<dl class="grid gap-3 text-sm sm:grid-cols-2">
+			<div>
+				<dt class="text-muted-foreground">Sources</dt>
+				<dd>Email and calendar · Fastmail</dd>
+			</div>
+			<div>
+				<dt class="text-muted-foreground">Changes</dt>
+				<dd>Suggest additions to event notes. Always ask first.</dd>
+			</div>
+		</dl>
+		<p class="text-sm text-muted-foreground">
+			Currently supports existing events without invitees. Calendar upkeep is the first
+			responsibility available here.
+		</p>
 		{#if view.responsibility.lastReadAt}<p class="text-sm text-muted-foreground">
-				Last event and source email verified {new Date(
-					view.responsibility.lastReadAt
-				).toLocaleString()}.
-			</p>{:else}<p class="text-sm text-muted-foreground">
-				No event and source email verified yet.
-			</p>{/if}
+				Last source details verified {new Date(view.responsibility.lastReadAt).toLocaleString()}.
+			</p>{:else}<p class="text-sm text-muted-foreground">No source details verified yet.</p>{/if}
 		{#if view.responsibility.lastError}<p role="alert" class="text-sm text-destructive">
 				{view.responsibility.lastError}
 			</p>{/if}
@@ -109,7 +119,7 @@
 		<Button href="/connectors" variant="link">Manage connected sources</Button>
 	</Section>
 	{#if view.proposals.length}
-		<Section title="Recent proposals">
+		<Section title="Calendar proposals">
 			{#each view.proposals.slice(0, 30) as proposal (proposal.id)}
 				<Button
 					href={`/assistant/updates/${proposal.id}`}

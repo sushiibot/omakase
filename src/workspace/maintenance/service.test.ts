@@ -123,3 +123,28 @@ test("an interrupted Undo is reconciled as undone, without repeating it", async 
   await restarted.command({ action: "reconcile", id: p.id, revision: 1 });
   expect(restarted.view().proposals[0]?.status).toBe("undone"); expect(s.writes()).toBe(2);
 });
+
+test("proposal notifications are durably queued once, including retries after restart", async () => {
+  const s = setup(); const sent: string[] = [];
+  s.store.setNotifier(p => { sent.push(p.id); });
+  const p = await s.store.prepare(input);
+  await s.store.prepare(input);
+  expect(sent).toEqual([p.id]);
+  const restarted = new MaintenanceService(s.dir, s.port, () => new Date("2026-10-16T12:00:00Z"));
+  restarted.setNotifier(p => { sent.push(p.id); });
+  expect(sent).toEqual([p.id]);
+});
+test("failed notification enqueue is retried, but dismissed proposals are not notified", async () => {
+  const s = setup(); let attempts = 0;
+  s.store.setNotifier(() => { attempts++; throw new Error("disk full"); });
+  const p = await s.store.prepare(input);
+  expect(p.status).toBe("pending"); expect(attempts).toBe(1);
+  const sent: string[] = [];
+  const restarted = new MaintenanceService(s.dir, s.port, () => new Date("2026-10-16T12:00:00Z"));
+  restarted.setNotifier(p => { sent.push(p.id); });
+  expect(sent).toEqual([p.id]);
+  const other = setup(); const dismissed = await other.store.prepare(input);
+  await other.store.command({ action: "dismiss", id: dismissed.id, revision: 1 });
+  other.store.setNotifier(p => { sent.push(p.id); });
+  expect(sent).toEqual([p.id]);
+});

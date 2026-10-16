@@ -10,6 +10,7 @@ export type PushEvent =
   | { kind: "ask"; askId: string; question: string }
   | { kind: "auth" }
   | { kind: "reply" | "proactive"; text: string }
+  | { kind: "maintenance"; id: string; title: string }
   | { kind: "inbox"; key: string; text: string }
   | { kind: "alert"; alert: Pick<JobAlert, "job" | "error"> & { kind: "failed" | "stuck" } }
   /** Replaces the job's failure notification in the tray, silently. */
@@ -41,6 +42,8 @@ export function pushFor(event: PushEvent): PushPayload {
       return { title: TITLE, body: plainPushBody(event.text) || "Sent a file", url: "/chat", tag: "chat", renotify: false };
     case "proactive":
       return { title: TITLE, body: plainPushBody(event.text) || "Sent a file", url: "/chat", tag: "chat" };
+    case "maintenance":
+      return { title: "Calendar update ready", body: literalPushBody(event.title), url: `/assistant/updates/${event.id}`, tag: `maintenance:${event.id}`, renotify: false };
     case "inbox":
       return { title: TITLE, body: plainPushBody(event.text), url: `/inbox?item=${encodeURIComponent(`msg:${event.key}`)}`, tag: `msg:${event.key}` };
     case "alert": {

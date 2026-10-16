@@ -55,6 +55,12 @@ const ROUTES: Route[] = [
 	{ path: at('/'), query: { approve: (v) => NONCE.test(v), ask: (v) => ASK_ID.test(v) } },
 	{ path: at('/home'), query: { item: (v) => HOME_ITEM.test(v) } },
 	{ path: at('/chat') },
+	{
+		path: (p) =>
+			/^\/assistant\/updates\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+				p
+			)
+	},
 	{ path: at('/more') },
 	{ path: at('/settings') },
 	{ path: at('/runs') },

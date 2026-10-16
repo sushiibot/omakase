@@ -111,6 +111,16 @@ function setup(opts: { sent?: number; uploads?: WebUploadPort; db?: Database; ap
 const deliver = (o: Partial<ChatDeliverParams> = {}): ChatDeliverParams => ({ outboxId: "o1", principalId: P, kind: "reply", text: "hello", origin: WEB, ...o });
 
 describe("web adapter deliveries", () => {
+  test("a proposal push opens its review and delivery replay does not notify again", async () => {
+    const h = setup();
+    const id = "00000000-0000-4000-8000-000000000001";
+    const msg = deliver({ outboxId: `maintenance-${id}`, kind: "proactive", text: "Review update", maintenance: { id, title: "Friday show" } });
+    await h.link.deliver(msg);
+    await h.link.deliver(msg);
+    await tick();
+    expect(h.pushes).toEqual([{ title: "Calendar update ready", body: "Friday show", url: `/assistant/updates/${id}`, tag: `maintenance:${id}`, renotify: false }]);
+    expect(h.home.messages()).toHaveLength(0);
+  });
   test("a job's message goes to the inbox, not the chat, once per outbox id", async () => {
     const h = setup();
     const job = { name: "heartbeat", runId: "01J0000000000000000000000A" };

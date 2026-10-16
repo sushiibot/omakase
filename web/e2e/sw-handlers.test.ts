@@ -350,3 +350,11 @@ test('decodes a VAPID key and compares keys', () => {
 	expect(sameKey(new Uint8Array(65).buffer, key)).toBe(false);
 	expect(sameKey(null, key)).toBe(false);
 });
+
+test('proposal notifications only open a valid review route', () => {
+	const path = '/assistant/updates/00000000-0000-4000-8000-000000000001';
+	expect(safeTarget(path, ORIGIN)).toBe(path);
+	expect(safeTarget(path + '/approve', ORIGIN)).toBe('/');
+	expect(safeTarget(path + '?approve=true', ORIGIN)).toBe('/');
+	expect(safeTarget('/assistant/updates/not-an-id', ORIGIN)).toBe('/');
+});
