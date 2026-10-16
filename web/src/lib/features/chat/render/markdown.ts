@@ -56,6 +56,8 @@ export const MAX_DEPTH = 12;
 /** micromark's emphasis resolution is quadratic on delimiter-heavy input (a 20k-char run of `*`
  *  takes seconds), so longer text renders unparsed rather than freezing the chat. */
 export const MARKDOWN_PARSE_MAX = 16_000;
+/** Saved documents accept up to 256 KiB; they are parsed once, without streaming. */
+export const DOCUMENT_PARSE_MAX = 256 * 1024;
 /** Container markers (`>`, list bullets, `1.`) stacked on one line. mdast-util-from-markdown walks
  *  the tree recursively, so a few thousand of them overflow the stack before MAX_DEPTH applies. */
 export const CONTAINER_DEPTH_MAX = 32;
@@ -335,9 +337,9 @@ export function emphasisDelimiters(text: string): number {
 }
 
 /** True when `text` must render unparsed: too long, too deeply nested, or too many delimiters. */
-export function exceedsParseLimits(text: string): boolean {
+export function exceedsParseLimits(text: string, maxLength = MARKDOWN_PARSE_MAX): boolean {
 	return (
-		text.length > MARKDOWN_PARSE_MAX ||
+		text.length > maxLength ||
 		containerDepthExceeds(text) ||
 		emphasisDelimiters(text) > EMPHASIS_DELIMITER_MAX
 	);
@@ -349,8 +351,17 @@ const parseRoot = (text: string) =>
 /** Parses agent markdown (CommonMark + GFM) to a render tree. Raw HTML is kept as literal text.
  *  Never throws: input the parser can't handle safely comes back as one plain-text block. */
 export function parseMarkdown(text: string, ctx: RenderContext = {}): MdBlockNode[] {
+	return parseWithinLimits(text, ctx, MARKDOWN_PARSE_MAX);
+}
+
+/** Document-sized input, with the same complexity limits and safe rendering rules as chat. */
+export function parseDocumentMarkdown(text: string, ctx: RenderContext = {}): MdBlockNode[] {
+	return parseWithinLimits(text, ctx, DOCUMENT_PARSE_MAX);
+}
+
+function parseWithinLimits(text: string, ctx: RenderContext, maxLength: number): MdBlockNode[] {
 	const plain: MdBlockNode[] = [{ kind: 'plain', text }];
-	if (exceedsParseLimits(text)) return plain;
+	if (exceedsParseLimits(text, maxLength)) return plain;
 	try {
 		const root = parseRoot(text);
 		return new Renderer(root, ctx).blocks(root.children, 0);

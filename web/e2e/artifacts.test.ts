@@ -73,3 +73,42 @@ test('channel labels dim after opening and remain read after reload', async ({ p
 	await expect(link).toBeVisible();
 	await expect(link).not.toHaveAttribute('data-unread', 'true');
 });
+
+test('long artifact renders Markdown before and after navigating to a shorter document', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	const shortId = '00000000-0000-4000-8000-000000000002';
+	const long = {
+		...document,
+		content:
+			'# Long report\n\n' +
+			'Detailed report findings. '.repeat(800) +
+			'\n\n## Next steps\n\n**Review** the evidence.\n\n| Item | Status |\n| --- | --- |\n| Report | Ready |'
+	};
+	const short = { ...document, id: shortId, title: 'Short report', content: '# Summary\n\nReady.' };
+	await context.route('**/api/artifacts**', (route) => {
+		const path = new URL(route.request().url()).pathname;
+		return route.fulfill({
+			json: path.endsWith(id)
+				? long
+				: path.endsWith(shortId)
+					? short
+					: { artifacts: [long, short], truncated: false }
+		});
+	});
+	await page.goto(`/artifacts/${id}`);
+	await expect(page.getByRole('heading', { name: 'Long report', exact: true })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Next steps' })).toBeVisible();
+	await expect(page.locator('article strong')).toHaveText('Review');
+	await expect(page.getByRole('table')).toContainText('Ready');
+	await page.getByRole('link', { name: 'Artifacts', exact: true }).click();
+	await page.getByRole('link', { name: /Short report/ }).click();
+	await expect(page.getByRole('heading', { name: 'Summary', exact: true })).toBeVisible();
+	await page.goBack();
+	await page.getByRole('link', { name: /Quarterly report/ }).click();
+	await expect(page.getByRole('heading', { name: 'Next steps' })).toBeVisible();
+	await page.reload();
+	await expect(page.getByRole('heading', { name: 'Next steps' })).toBeVisible();
+});

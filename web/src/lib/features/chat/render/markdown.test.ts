@@ -2,6 +2,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
 	CONTAINER_DEPTH_MAX,
+	DOCUMENT_PARSE_MAX,
+	parseDocumentMarkdown,
 	EMPHASIS_DELIMITER_MAX,
 	MARKDOWN_PARSE_MAX,
 	MAX_DEPTH,
@@ -266,5 +268,43 @@ describe('structure', () => {
 		expect(walk(tree).flatMap((n) => (n.kind === 'link' ? [n.href] : []))).toEqual([
 			'https://ok.example/'
 		]);
+	});
+});
+
+describe('saved documents', () => {
+	test('long reports retain headings, tables, emphasis and reference links beyond the chat limit', () => {
+		const text =
+			'# Findings\n\n' +
+			'A detailed finding for the report. '.repeat(600) +
+			'\n\n## Recommendation\n\n**Proceed** with [evidence][source].\n\n| Item | Status |\n| --- | --- |\n| Review | Done |\n\n[source]: https://example.com/report';
+		expect(text.length).toBeGreaterThan(MARKDOWN_PARSE_MAX);
+		expect(parseMarkdown(text)[0].kind).toBe('plain');
+		const nodes = walk(parseDocumentMarkdown(text));
+		for (const kind of ['heading', 'strong', 'link', 'table'] as const)
+			expect(nodes.map((n) => n.kind)).toContain(kind);
+		expect(nodes).toContainEqual({
+			kind: 'link',
+			href: 'https://example.com/report',
+			children: [{ kind: 'text', text: 'evidence' }]
+		});
+	});
+
+	test('document size and complexity limits still fall back to plain text', () => {
+		for (const text of [
+			'a'.repeat(DOCUMENT_PARSE_MAX + 1),
+			'*'.repeat(EMPHASIS_DELIMITER_MAX + 1),
+			'>'.repeat(CONTAINER_DEPTH_MAX + 1) + ' text'
+		]) {
+			expect(parseDocumentMarkdown(text)).toEqual([{ kind: 'plain', text }]);
+		}
+	});
+
+	test('large documents keep HTML literal and block unsafe links', () => {
+		const text =
+			'Report text. '.repeat(1500) +
+			'\n\n<script>alert(1)</script>\n\n[unsafe](javascript:alert(1))';
+		const nodes = walk(parseDocumentMarkdown(text));
+		expect(nodes.some((n) => n.kind === 'link')).toBe(false);
+		expect(nodes).toContainEqual({ kind: 'text', text: '<script>alert(1)</script>' });
 	});
 });

@@ -3,6 +3,7 @@
 	import CodeCopyButton from './code-copy-button.svelte';
 	import {
 		fromLegacyBlocks,
+		parseDocumentMarkdown,
 		legacyPlainText,
 		type MdBlockNode,
 		type MdInlineNode
@@ -15,7 +16,8 @@
 		text,
 		blocks,
 		files = [],
-		streaming = false
+		streaming = false,
+		document = false
 	}: {
 		/** Raw markdown from the agent. Takes precedence over `blocks`. */
 		text?: string;
@@ -26,6 +28,8 @@
 		/** While true, `text` is still growing: it is re-parsed at most once a frame, only from its
 		 *  last unfinished block, and a caret follows the last line. */
 		streaming?: boolean;
+		/** Saved, non-streaming document: permit the artifact size limit. */
+		document?: boolean;
 	} = $props();
 
 	// A string, so a new but equal `files` array does not trigger a re-parse.
@@ -77,6 +81,7 @@
 			imageIds: imageKey ? imageKey.split(' ') : []
 		};
 		if (text === undefined) return fromLegacyBlocks(blocks ?? [], ctx);
+		if (document && !streaming) return parseDocumentMarkdown(text, ctx);
 		if (!streaming) return stream.finish(text, ctx, imageKey);
 		return stream.update(frameText ?? text, ctx, imageKey);
 	});

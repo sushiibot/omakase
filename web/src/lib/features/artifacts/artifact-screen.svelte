@@ -41,7 +41,7 @@
 				><Button variant="link" href={conversation}>Open source chat</Button>
 			</div>
 			<article aria-label={document.title} class="text-body">
-				<Markdown text={document.content} />
+				<Markdown text={document.content} document />
 			</article>
 		</ScreenContent>{/if}
 </DetailScreen>
