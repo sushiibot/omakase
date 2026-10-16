@@ -146,11 +146,8 @@
 				onclick={() => (zoomed = !zoomed)}
 				>{#if zoomed}<ZoomOut aria-hidden="true" />{:else}<ZoomIn aria-hidden="true" />{/if}</Button
 			>
-			<Button
-				variant="ghost"
-				class="size-12 px-0"
-				aria-label="Close browser screen"
-				onclick={onclose}><X aria-hidden="true" /></Button
+			<Button variant="ghost" size="icon" aria-label="Close browser screen" onclick={onclose}
+				><X aria-hidden="true" /></Button
 			>
 		</div>
 		<Sheet.Description class="sr-only"
@@ -163,12 +160,15 @@
 		>
 			{#if frame}
 				{#if ownerControl}
-					<button
+					<Button
 						type="button"
+						variant="ghost"
 						aria-label="Browser page: select a field or button"
-						class={zoomed
-							? 'shrink-0 self-start outline-offset-2'
-							: 'flex h-full w-full items-center justify-center outline-offset-2'}
+						class={`rounded-none border-0 p-0 hover:bg-transparent active:translate-y-0 disabled:opacity-100 any-pointer-coarse:after:inset-0 ${
+							zoomed
+								? 'h-auto shrink-0 self-start'
+								: 'flex h-full w-full items-center justify-center'
+						}`}
 						onclick={clickPage}
 						disabled={controlling || reconnecting || stale}
 					>
@@ -180,7 +180,7 @@
 							height={zoomed ? frame.height : undefined}
 							onload={() => onframe(frame!.seq)}
 						/>
-					</button>
+					</Button>
 				{:else}
 					<img
 						src={source}

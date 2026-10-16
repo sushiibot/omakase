@@ -13,6 +13,7 @@ const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(req) {
   }
   if (url.pathname === "/login") return new Response("signed in", { headers: { "Set-Cookie": "login=retained; HttpOnly; Max-Age=3600; SameSite=Lax; Path=/" } });
   if (url.pathname === "/account") return new Response(req.headers.get("cookie")?.includes("login=retained") ? "signed in" : "signed out");
+  if (url.pathname === '/blocking') return new Response(`<html><title>Blocking smoke</title><label>Name<input id="name" style="position:absolute;left:40px;top:40px;width:200px;height:40px"></label><button>Continue</button><img id="ordinary" src="/ordinary.gif?${Math.random()}" onload="this.dataset.done='yes'" onerror="this.dataset.done='yes'"><img id="ad" src="/ads/banners/smoke.gif?${Math.random()}" onload="this.dataset.done='yes'" onerror="this.dataset.done='yes'"></html>`, { headers: { 'Content-Type': 'text/html' } });
   return new Response('<!doctype html><html><title>Login smoke</title><body><label>Name<input id="name" style="position:absolute;left:40px;top:40px;width:200px;height:40px"></label><button>Continue</button></body></html>', { headers: { "Content-Type": "text/html" } });
 } });
 const url = `http://127.0.0.1:${server.port}`;
@@ -29,7 +30,8 @@ try {
     const blockerDeadline = Date.now() + 15_000;
     do {
       ordinaryImages = 0; adImages = 0;
-      await run("eval", "Promise.all(['/ordinary.gif', '/ads/banners/smoke.gif'].map(path => new Promise(resolve => { const image = new Image(); image.onload = image.onerror = () => resolve(true); image.src = path + '?probe=' + Math.random(); })))");
+      await run("open", `${url}/blocking`);
+      await run("wait", 'body:has(#ordinary[data-done]):has(#ad[data-done])');
       if (ordinaryImages === 1 && adImages === 0) break;
       await Bun.sleep(250);
     } while (Date.now() < blockerDeadline);

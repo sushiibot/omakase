@@ -638,8 +638,8 @@
 			<Sidebar.Root
 				collapsible="none"
 				class={inspector.open
-					? 'h-full border-s pt-(--safe-top)'
-					: 'invisible h-full w-0 overflow-hidden'}
+					? 'relative h-full border-s pt-(--safe-top)'
+					: 'invisible relative h-full w-0 overflow-hidden'}
 				style="--sidebar-width: 20rem"
 			>
 				<aside
