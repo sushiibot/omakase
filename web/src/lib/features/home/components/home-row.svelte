@@ -21,12 +21,14 @@
 		item,
 		now,
 		selected = false,
+		dialog = true,
 		onopen,
 		ondone
 	}: {
 		item: HomeItem;
 		now: number;
 		selected?: boolean;
+		dialog?: boolean;
 		onopen?: (id: string) => void;
 		/** Set for inbox rows: a sideways swipe marks the item done. The peek's Done button does the same. */
 		ondone?: (id: string) => void;
@@ -155,7 +157,7 @@
 	{/if}
 	<Button
 		variant="ghost"
-		aria-haspopup="dialog"
+		aria-haspopup={dialog ? 'dialog' : undefined}
 		aria-current={selected || undefined}
 		onclick={click}
 		onpointerdown={down}

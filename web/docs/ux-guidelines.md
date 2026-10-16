@@ -10,6 +10,16 @@ The clickable prototype (`src/proto-routes/proto`) renders feature screens from 
 
 ## Conversations, work and activity
 
+Home is a separate overview of decisions, recent visits, completed outcomes, and ongoing work.
+Keep Continue based on explicit visits. Group execution attempts only by persisted task/run links.
+Hide unavailable agenda sections until their APIs exist. Home does not duplicate the Activity log.
+At wide desktop widths, review uses a side region. On smaller screens, use full-screen review with a Back button.
+Keep bottom sheets for short, self-contained choices; evidence and approval review need room to read.
+Review and its discussion picker use URL entries. Linked pages push above them. Back returns one step at a time.
+Refresh retains the selected item. A cold review link falls back to the list. Escape closes desktop review.
+Restore the list tab, list scroll, and review scroll when returning.
+Check: `pw` (`e2e/assistant.test.ts`).
+
 A conversation contains messages and reply cycles. Main and topic conversations keep their identity across context refreshes.
 A task represents a delegated assignment, separate agent assignment or scheduled objective. An agent performs the task.
 A turn contains one reply cycle, its tool calls and any steering messages. A run records one execution attempt.

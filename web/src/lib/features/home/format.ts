@@ -5,6 +5,7 @@ export function peekTitle(peek: HomePeek): string {
 	const item = peek.item;
 	if (!item) {
 		if (peek.result) return 'Done';
+		if (peek.missing === 'loading') return 'Loading review';
 		return peek.missing === 'offline' ? "Can't check this now" : 'Already handled';
 	}
 	switch (item.kind) {

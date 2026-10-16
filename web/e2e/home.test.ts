@@ -305,10 +305,7 @@ test('a failed job peeks with its error, and Dismiss takes it off Home', async (
 	await expect(page.getByText('nightly-sync failed')).toBeHidden();
 });
 
-test('Ask the agent steps back to the chat under the inbox, with the alert quoted', async ({
-	page,
-	context
-}) => {
+test('Ask the agent pushes chat above review, with the alert quoted', async ({ page, context }) => {
 	await homeServer(context);
 	await page.goto('/chat');
 	await (await openDrawer(page)).getByRole('link', { name: 'Channels' }).click();
@@ -319,12 +316,17 @@ test('Ask the agent steps back to the chat under the inbox, with the alert quote
 	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue(
 		/^> Scheduled job nightly-sync failed\n> rsync/
 	);
-	await page.goForward();
+	await page.goBack();
+	await expect(page).toHaveURL(/\/chats\?item=/);
+	await expect(sheet(page)).toBeVisible();
+	await page.goBack();
+	await expect(sheet(page).getByRole('heading', { name: 'nightly-sync failed' })).toBeVisible();
+	await page.goBack();
 	await expect(page).toHaveURL(/\/chats$/);
 	await expect(sheet(page)).toBeHidden();
 });
 
-test('from a cold inbox link, Ask the agent opens the chat in place of the inbox', async ({
+test('from a cold inbox link, discussion preserves the review in history', async ({
 	page,
 	context
 }) => {
@@ -335,7 +337,8 @@ test('from a cold inbox link, Ask the agent opens the chat in place of the inbox
 	await sheet(page).getByRole('button', { name: 'Main chat', exact: true }).click();
 	await expect(page).toHaveURL(/\/chat$/);
 	await page.goBack();
-	await expect(page).not.toHaveURL(/\/(inbox|chat)/);
+	await expect(page).toHaveURL(/\/chats\?item=/);
+	await expect(sheet(page)).toBeVisible();
 });
 
 for (const [link, item, text] of [
@@ -348,7 +351,8 @@ for (const [link, item, text] of [
 		await page.goto(link);
 		await expect(sheet(page)).toBeVisible();
 		await expect(sheet(page).getByText(text).first()).toBeVisible();
-		await expect(page).toHaveURL(/\/chats$/);
+		expect(new URL(page.url()).pathname).toBe('/chats');
+		expect(new URL(page.url()).search).toBe(new URL(link, 'https://example.test').search);
 	});
 }
 
@@ -469,7 +473,7 @@ test('a cold link to a job alert that has cleared says Already handled', async (
 	await homeServer(context, { fixtures: 'empty' });
 	await page.goto('/inbox?item=job%3Anightly-sync');
 	await expect(sheet(page).getByRole('heading', { name: 'Already handled' })).toBeVisible();
-	await expect(page).toHaveURL(/\/chats$/);
+	await expect(page).toHaveURL(/\/chats\?item=job%3Anightly-sync$/);
 });
 
 test('opening a run tells the bot once, and it stays in the inbox as read on every device', async ({

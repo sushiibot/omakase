@@ -1,3 +1,4 @@
+import House from '@lucide/svelte/icons/house';
 import PanelsTopLeft from '@lucide/svelte/icons/panels-top-left';
 import ListChecks from '@lucide/svelte/icons/list-checks';
 import Activity from '@lucide/svelte/icons/activity';
@@ -22,6 +23,8 @@ export interface NavEntry extends NavItem {
 /** Which fixture previews are visible; the prototype passes `allOn`. */
 export type FeatureCheck = (feature: ClientFeature | undefined) => boolean;
 export const allOn: FeatureCheck = () => true;
+
+const assistant: NavEntry = { id: 'assistant', href: '/assistant', label: 'Home', icon: House };
 
 const chats: NavEntry = {
 	id: 'chats',
@@ -154,6 +157,7 @@ export function workspaceFor(on: FeatureCheck): NavEntry[] {
 /** Stable primary destinations. Optional previews live inside Workspace. */
 export function navFor(_on: FeatureCheck): NavEntry[] {
 	return [
+		assistant,
 		chats,
 		moreEntries.find((entry) => entry.id === 'tasks')!,
 		moreEntries.find((entry) => entry.id === 'runs')!,
@@ -171,7 +175,7 @@ export function activeNav(routeId: string | null): string | undefined {
 	const section = sectionOf(pathOf(routeId));
 	if (section === '/chat' || section === '/inbox') return 'chats';
 	if (section === '/workspace' || section === '/more') return 'workspace';
-	const entry = [chats, ...moreEntries].find((e) => e.href === section);
+	const entry = [assistant, chats, ...moreEntries].find((e) => e.href === section);
 	return entry && workspaceFor(allOn).some((item) => item.id === entry.id)
 		? 'workspace'
 		: entry?.id;

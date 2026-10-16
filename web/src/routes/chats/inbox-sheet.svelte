@@ -3,13 +3,18 @@
 	import { DiscussionPicker, HomeScreen } from '$lib/features/home';
 	import type { Inbox } from './inbox.svelte';
 
-	let { inbox, threads }: { inbox: Inbox; threads: { id: string; title: string }[] } = $props();
+	let {
+		inbox,
+		threads,
+		inspector = false
+	}: { inspector?: boolean; inbox: Inbox; threads: { id: string; title: string }[] } = $props();
 	const home = $derived(inbox.home);
 	const data = $derived(inbox.data);
 </script>
 
 {#snippet discussion()}
 	<DiscussionPicker
+		embedded={inspector}
 		conversations={threads}
 		busy={inbox.discussionBusy}
 		error={inbox.discussionError}
@@ -20,6 +25,7 @@
 {/snippet}
 
 <HomeScreen
+	{inspector}
 	embedded
 	sheetOnly
 	groups={home.groups}

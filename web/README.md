@@ -113,6 +113,23 @@ See [Tabs, swipes, and scroll ownership](docs/ux-guidelines.md#tabs-swipes-and-s
 and [Loading and background refresh](docs/ux-guidelines.md#loading-and-background-refresh)
 for layout rules, loading patterns, research sources, and regression checks.
 
+## Assistant Home
+
+Home (`/assistant`) brings existing requests, documents, and work into a separate overview.
+Needs you shows live approvals, questions, failed work, and channel requests.
+Review opens beside the feed on wide desktops and as a full-screen view with a Back button on smaller screens.
+Approval still uses the existing exact request and its normal confirmation controls.
+
+Continue uses explicit visits to conversations and documents on this device.
+Ready for you shows recent documents and inbox outcomes. In progress groups runs under their
+linked active task. Following shows ongoing tasks; History shows finished tasks and links to Activity.
+Review links retain their item across refresh. Linked pages push above review; Back returns one step at a time.
+A review opened directly falls back to its parent list. Each source can fail and retry independently. Home keeps available content visible.
+Existing chat, inbox, document, and task links remain valid. The launch route still opens chat.
+
+Calendar proposals, Coming up, scoped automatic writes, and learned responsibilities require
+new backend records. They are not represented by sample data or enabled by this Home release.
+
 ## Channels
 
 Topic conversations appear as channels in the owner web app.

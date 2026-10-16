@@ -48,7 +48,7 @@ export interface HomePeek {
 	id: string;
 	/** Missing: the item is no longer there (or could not be checked). */
 	item?: HomeItem;
-	missing?: 'handled' | 'offline';
+	missing?: 'handled' | 'offline' | 'loading';
 	/** An approval decision being sent from the sheet. */
 	submitting?: boolean;
 	/** What happened to what you did here; failures can be retried. */

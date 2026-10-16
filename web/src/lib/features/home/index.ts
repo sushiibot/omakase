@@ -14,3 +14,4 @@ export type {
 } from './types';
 export { inboxConversation, UNASSIGNED_CONVERSATION } from './conversation-inbox';
 export { default as DiscussionPicker } from './components/discussion-picker.svelte';
+export { default as HomeRow } from './components/home-row.svelte';

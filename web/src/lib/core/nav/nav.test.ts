@@ -5,6 +5,7 @@ describe('workspace navigation', () => {
 	test('live destinations stay available while optional tools remain inside Workspace', () => {
 		const liveOnly = () => false;
 		expect(navFor(liveOnly).map((entry) => entry.href)).toEqual([
+			'/assistant',
 			'/chats',
 			'/tasks',
 			'/runs',
@@ -40,6 +41,7 @@ describe('workspace navigation', () => {
 			'/(owner)/browser'
 		])
 			expect(activeNav(route)).toBe('workspace');
+		expect(activeNav('/assistant')).toBe('assistant');
 		expect(activeNav('/tasks/[id]')).toBe('tasks');
 		expect(activeNav('/runs/[id]')).toBe('runs');
 		expect(activeNav('/settings')).toBe('settings');

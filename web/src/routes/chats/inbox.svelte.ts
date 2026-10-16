@@ -1,9 +1,9 @@
-import { onMount, tick, untrack } from 'svelte';
-import { goto, replaceState } from '$app/navigation';
+import { onMount, untrack } from 'svelte';
+import { afterNavigate, goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { page } from '$app/state';
-import { returnTo } from '$lib/core/nav/back';
-import { leaveSheet, routedSheet } from '$lib/core/nav/sheet';
+import { previousPathIs } from '$lib/core/nav/back';
+import type { RoutedSheet } from '$lib/core/nav/sheet';
 import { closeShownNotifications } from '$lib/core/pwa/notifications';
 import { pwa } from '$lib/core/pwa/pwa.svelte';
 import { hub } from '$lib/core/realtime/hub.svelte';
@@ -21,26 +21,78 @@ import type { ConnectionState } from '$lib/ui/connection-banner.svelte';
 export const inboxDisclosure = $state({ expanded: false });
 
 /** Home's records, peek sheet and discussion flow for the Channels inbox; call during component init. */
-export function createInbox() {
+export function createInbox(destination: '/chats' | '/assistant' = '/chats') {
 	const home = needsYou();
 	home.open();
-	const sheet = routedSheet('peek');
+	// Review is a real URL entry: linked pages push above it, and reload keeps the item.
+	let closing = false;
+	afterNavigate(() => {
+		closing = false;
+	});
+	const sheet: RoutedSheet = {
+		get open() {
+			return deepLinkItem(page.url.searchParams) !== null;
+		},
+		get arg() {
+			return deepLinkItem(page.url.searchParams) ?? undefined;
+		},
+		openWith(id) {
+			if (!id) return;
+			const url = new URL(page.url);
+			url.searchParams.delete('approve');
+			url.searchParams.delete('ask');
+			url.searchParams.delete('discuss');
+			url.searchParams.set('item', id);
+			void goto(url, {
+				noScroll: true,
+				keepFocus: true,
+				replaceState: this.open,
+				state: {
+					...page.state,
+					reviewOrigin: this.open ? page.state.reviewOrigin : page.url.pathname + page.url.search
+				}
+			});
+		},
+		close() {
+			if (!this.open || closing) return;
+			closing = true;
+			if (page.url.searchParams.get('discuss') === '1') {
+				stopDiscussing();
+				return;
+			}
+			if (page.state.reviewOrigin || previousPathIs(destination)) history.back();
+			else {
+				const url = new URL(page.url);
+				for (const key of ['item', 'approve', 'ask']) url.searchParams.delete(key);
+				void goto(url, { replaceState: true, noScroll: true, keepFocus: true });
+			}
+		}
+	};
 	const conversations = threadsStore();
-	let discussing = $state<HomeItem>();
+	const discussing = $derived(
+		page.url.searchParams.get('discuss') === '1'
+			? Object.values(home.groups)
+					.flat()
+					.find((item) => item.id === sheet.arg)
+			: undefined
+	);
 	let discussionBusy = $state(false);
 	let discussionError = $state<string | null>(null);
 	$effect(() => {
 		if (!sheet.open) {
-			discussing = undefined;
 			discussionError = null;
 		}
 	});
-	const DEEP_LINK_WAIT_MS = 5000;
+	let waitedForReview = $state(false);
 
 	let now = $state(Date.now());
 	onMount(() => {
+		const reviewWait = setTimeout(() => (waitedForReview = true), 5000);
 		const t = setInterval(() => (now = Date.now()), 30_000);
-		return () => clearInterval(t);
+		return () => {
+			clearInterval(t);
+			clearTimeout(reviewWait);
+		};
 	});
 
 	const unreachable = $derived(
@@ -83,7 +135,7 @@ export function createInbox() {
 	function checked(id: string): boolean {
 		if (unreachable) return false;
 		// Approvals and asks come from the stream's pending list, which is complete once greeted.
-		if (id.startsWith('approval:') || id.startsWith('ask:')) return true;
+		if (id.startsWith('approval:') || id.startsWith('ask:')) return greeted;
 		// The last load failed, or none has finished: the item may still be there.
 		if (data.status === 'error' || data.data === undefined) return false;
 		// With Home off on the bot there is nothing more to wait for.
@@ -99,7 +151,13 @@ export function createInbox() {
 		return {
 			id,
 			item,
-			missing: item ? undefined : checked(id) ? 'handled' : 'offline',
+			missing: item
+				? undefined
+				: checked(id)
+					? 'handled'
+					: !unreachable && !waitedForReview && (!greeted || data.status === 'loading')
+						? 'loading'
+						: 'offline',
 			submitting: nonce ? home.submitting.includes(nonce) : false,
 			result: home.results[id]
 		};
@@ -120,53 +178,9 @@ export function createInbox() {
 		});
 	});
 
-	// A push opens /?approve=, /?ask= or /?item=; once Home knows what is waiting, the item opens
-	// in its sheet, or the sheet says it was already handled. It never waits for good.
-	onMount(() => {
-		const target = deepLinkItem(page.url.searchParams);
-		if (!target) return;
-		let done = false;
-		const open = () => {
-			if (done) return;
-			done = true;
-			replaceState(resolve('/chats'), { scrollEntry: page.state.scrollEntry });
-			sheet.openWith(target);
-		};
-		const timer = setTimeout(open, DEEP_LINK_WAIT_MS);
-		const stop = $effect.root(() => {
-			$effect(() => {
-				const settled = data.status === 'ready' || data.status === 'error';
-				if ((greeted && settled) || unreachable) open();
-			});
-		});
-		return () => {
-			clearTimeout(timer);
-			stop();
-		};
-	});
-
-	// A navigation that replaced the sheet's shallow entry would leave back on a stale page, so the
-	// sheet's entry is popped first and the new screen pushed after it.
-	async function leaveTo(href: string) {
-		if (sheet.open) {
-			const popped = new Promise((r) => addEventListener('popstate', r, { once: true }));
-			sheet.close();
-			await popped;
-			await tick();
-		}
-		await goto(href);
-	}
-
-	// The chat is usually the entry under the inbox: step back to it rather than stack another.
-	const openChat = async () => {
-		if (sheet.open) {
-			const popped = new Promise((r) => addEventListener('popstate', r, { once: true }));
-			sheet.close();
-			await popped;
-			await tick();
-		}
-		await returnTo(resolve('/chat'));
-	};
+	// Forward navigation keeps review underneath. Back returns to its exact URL and state.
+	const leaveTo = (href: string) => goto(href);
+	const openChat = () => goto(resolve('/chat'));
 
 	function done(id: string) {
 		const item = items.find((i) => i.id === id);
@@ -182,8 +196,20 @@ export function createInbox() {
 	}
 
 	function discuss(item: HomeItem) {
-		discussing = item;
 		discussionError = null;
+		const url = new URL(page.url);
+		url.searchParams.set('item', item.id);
+		url.searchParams.set('discuss', '1');
+		void goto(url, { noScroll: true, keepFocus: true, state: page.state });
+	}
+	function stopDiscussing() {
+		discussionError = null;
+		if (previousPathIs(destination)) history.back();
+		else {
+			const url = new URL(page.url);
+			url.searchParams.delete('discuss');
+			void goto(url, { replaceState: true, noScroll: true, keepFocus: true, state: page.state });
+		}
 	}
 
 	function discussionQuote(item: HomeItem): string {
@@ -225,8 +251,7 @@ export function createInbox() {
 			if (!sheet.open || discussing?.id !== item.id) return;
 			const quote = discussionQuote(item);
 			store.setDraft(store.draft ? `${store.draft}\n\n${quote}` : quote);
-			await leaveSheet(sheet);
-			if (id === 'main') await returnTo(resolve('/chat'));
+			if (id === 'main') await goto(resolve('/chat'));
 			else await goto(resolve('/chats/[id]', { id }));
 		} catch (error) {
 			discussionError =
@@ -264,10 +289,7 @@ export function createInbox() {
 		get discussionError() {
 			return discussionError;
 		},
-		stopDiscussing() {
-			discussing = undefined;
-			discussionError = null;
-		},
+		stopDiscussing,
 		leaveTo,
 		openChat,
 		done,

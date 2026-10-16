@@ -76,7 +76,7 @@
 		"drift": "none"
 	},
 	"sheet": {
-		"drift": "motion duration tokens and reduced-motion override (ux-guidelines.md#motion); app-owned RoutedSheet so Android back closes it (ux-guidelines.md#back-gesture-and-navigation)"
+		"drift": "desktop review region (ux-guidelines.md#conversations-work-and-activity); motion duration tokens and reduced-motion override (ux-guidelines.md#motion); app-owned RoutedSheet so Android back closes it (ux-guidelines.md#back-gesture-and-navigation)"
 	},
 	"shell": {
 		"source": "app",

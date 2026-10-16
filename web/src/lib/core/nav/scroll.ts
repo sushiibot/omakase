@@ -5,13 +5,17 @@ import { onMount } from 'svelte';
 type Position = { key: string; top: number; left: number };
 const STORAGE = 'page-scroll:v1';
 const RESUME = 'page-scroll:resume:v1';
-const selector = 'main, main [data-tab-panel]';
+const selector = 'main, main [data-tab-panel], [data-review-scroll]';
 const positions = new Map<string, Position[]>();
 
 function scrollers(): Map<string, HTMLElement> {
 	return new Map(
 		[...document.querySelectorAll<HTMLElement>(selector)].map((el) => [
-			el.tagName === 'MAIN' ? 'main' : `tab:${el.dataset.tabPanel}`,
+			el.dataset.reviewScroll
+				? `review:${el.dataset.reviewScroll}`
+				: el.tagName === 'MAIN'
+					? 'main'
+					: `tab:${el.dataset.tabPanel}`,
 			el
 		])
 	);

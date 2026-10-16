@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as Card from '$lib/ui/card';
 	import SearchField from '$lib/ui/search/search-field.svelte';
 	import { onMount } from 'svelte';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
@@ -9,6 +10,7 @@
 	import * as Sheet from '$lib/ui/sheet';
 
 	let {
+		embedded = false,
 		conversations,
 		busy = false,
 		error = null,
@@ -16,6 +18,7 @@
 		oncreate,
 		onback
 	}: {
+		embedded?: boolean;
 		conversations: { id: string; title: string }[];
 		busy?: boolean;
 		error?: string | null;
@@ -37,12 +40,27 @@
 </script>
 
 <div class="flex flex-col gap-4 p-4">
-	<Sheet.Title bind:ref={heading} tabindex={-1} class="outline-none">
-		Discuss in a conversation
-	</Sheet.Title>
-	<Sheet.Description>
-		Choose where to discuss this item. It opens as a draft for you to review.
-	</Sheet.Description>
+	{#if embedded}
+		<Card.Title
+			role="heading"
+			aria-level={2}
+			bind:ref={heading}
+			tabindex={-1}
+			class="text-base font-semibold outline-none"
+		>
+			Discuss in a conversation
+		</Card.Title>
+		<p class="text-sm text-muted-foreground">
+			Choose where to discuss this item. It opens as a draft for you to review.
+		</p>
+	{:else}
+		<Sheet.Title bind:ref={heading} tabindex={-1} class="outline-none">
+			Discuss in a conversation
+		</Sheet.Title>
+		<Sheet.Description>
+			Choose where to discuss this item. It opens as a draft for you to review.
+		</Sheet.Description>
+	{/if}
 	{#if creating}
 		<form
 			class="flex flex-col gap-3"

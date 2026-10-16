@@ -283,7 +283,7 @@ test('an unknown run says it was not found instead of loading forever', async ({
 	await expect(page).toHaveURL(/\/runs$/);
 });
 
-test('View activity from a Home peek replaces the sheet, and the run stays in the inbox as read', async ({
+test('View activity keeps review below the run, and the inbox item stays read', async ({
 	page,
 	context
 }) => {
@@ -293,6 +293,9 @@ test('View activity from a Home peek replaces the sheet, and the run stays in th
 	await page.getByRole('button', { name: /Draft the quarterly expenses summary/ }).click();
 	await page.getByRole('dialog').getByRole('button', { name: 'View activity' }).click();
 	await expect(page).toHaveURL(new RegExp(`/runs/${RUN.expenses}$`));
+	await page.goBack();
+	await expect(page).toHaveURL(/\/chats\?item=run/);
+	await expect(page.getByRole('dialog')).toBeVisible();
 	await page.goBack();
 	await expect(page).toHaveURL(/\/chats$/);
 	await expect(page.getByRole('dialog')).toBeHidden();

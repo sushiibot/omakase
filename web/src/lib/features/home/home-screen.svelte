@@ -9,7 +9,7 @@
 	import { Button } from '$lib/ui/button';
 	import ListScreen, { type ListSection } from '$lib/ui/screen/list-screen.svelte';
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
-	import RoutedSheet from '$lib/ui/sheet/routed-sheet.svelte';
+	import ReviewSheet from '$lib/ui/sheet/review-sheet.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
 	import { status } from '$lib/ui/status/status';
 	import HomeRow from './components/home-row.svelte';
@@ -19,6 +19,7 @@
 	import type { HomeData, HomeGroup, HomeGroups, HomeItem, HomePeek } from './types';
 
 	let {
+		inspector = false,
 		embedded = false,
 		sheetOnly = false,
 		hideSheet = false,
@@ -50,6 +51,7 @@
 		onopenchat,
 		onreload
 	}: {
+		inspector?: boolean;
 		embedded?: boolean;
 		sheetOnly?: boolean;
 		hideSheet?: boolean;
@@ -213,28 +215,32 @@
 	/>
 {/if}
 
+{#snippet detail()}
+	{#if peekContent}{@render peekContent()}
+	{:else if shownPeek}
+		<Peek
+			embedded={inspector}
+			peek={shownPeek}
+			{now}
+			{onclose}
+			{ondecide}
+			{onanswer}
+			{ondismiss}
+			{ondone}
+			{onreply}
+			{onopenrun}
+			{onopenchat}
+			{onaskagent}
+		/>
+	{/if}
+{/snippet}
+
 {#if !hideSheet}
-	<RoutedSheet
-		open={!!peek}
-		label={peekLabel ?? (shownPeek ? peekTitle(shownPeek) : '')}
-		onclose={() => onclose?.()}
+	<ReviewSheet
+		desktop={inspector ? 'panel' : 'dialog'}
+		id={peek?.id}
+		backLabel={inspector ? 'Back to Home' : 'Back to inbox'}
+		label={peekLabel ?? (shownPeek ? peekTitle(shownPeek) : 'Review item')}
+		onclose={() => onclose?.()}>{@render detail()}</ReviewSheet
 	>
-		{#if peekContent}
-			{@render peekContent()}
-		{:else if shownPeek}
-			<Peek
-				peek={shownPeek}
-				{now}
-				{onclose}
-				{ondecide}
-				{onanswer}
-				{ondismiss}
-				{ondone}
-				{onreply}
-				{onopenrun}
-				{onopenchat}
-				{onaskagent}
-			/>
-		{/if}
-	</RoutedSheet>
 {/if}

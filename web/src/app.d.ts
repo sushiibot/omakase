@@ -24,6 +24,8 @@ declare global {
 		interface PageState {
 			/** Position of this history entry in the page-scroll cache. */
 			scrollEntry?: string;
+			/** Parent URL when a full-screen review was opened within the app. */
+			reviewOrigin?: string;
 			sheet?: SheetId;
 			/** What the sheet is about, such as a message id. */
 			sheetArg?: string;

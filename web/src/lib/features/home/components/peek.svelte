@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as Card from '$lib/ui/card';
 	import type { LocationReply } from '$lib/features/chat';
 	import CircleAlert from '@lucide/svelte/icons/circle-alert';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
@@ -11,6 +12,7 @@
 	import RecordPeek from './record-peek.svelte';
 
 	let {
+		embedded = false,
 		peek,
 		now,
 		onclose,
@@ -23,6 +25,7 @@
 		onopenchat,
 		onaskagent
 	}: {
+		embedded?: boolean;
 		peek: HomePeek;
 		now: number;
 		onclose?: () => void;
@@ -41,13 +44,23 @@
 </script>
 
 <section aria-labelledby="{uid}-t" class="flex flex-col gap-4 px-4 pt-2 pb-5">
-	<Sheet.Title id="{uid}-t" class="px-1 [overflow-wrap:anywhere]">
-		{title}
-	</Sheet.Title>
+	{#if embedded}<Card.Title
+			role="heading"
+			aria-level={2}
+			id="{uid}-t"
+			class="px-1 text-base font-semibold [overflow-wrap:anywhere]"
+		>
+			{title}
+		</Card.Title>{:else}
+		<Sheet.Title id="{uid}-t" class="px-1 [overflow-wrap:anywhere]">
+			{title}
+		</Sheet.Title>
+	{/if}
 
 	{#if peek.item?.kind === 'approval'}
 		<div class="@container -mx-2">
 			<ApprovalTray
+				details
 				items={[peek.item.approval]}
 				state={peek.submitting ? 'submitting' : 'ready'}
 				onapprove={(nonce, location) => ondecide?.(nonce, 'approve', location)}
@@ -74,7 +87,9 @@
 		</div>
 	{:else if !peek.result}
 		<p role="status" class="px-1 text-sm">
-			{#if peek.missing === 'offline'}
+			{#if peek.missing === 'loading'}
+				Loading this item…
+			{:else if peek.missing === 'offline'}
 				The app can't reach the agent, so this can't be checked right now. If it's still waiting, it
 				shows on Home once the app reconnects.
 			{:else}
