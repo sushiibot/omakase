@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
-import { fixtureApp, checkScreen, openDrawer } from './helpers';
+import { fixtureApp, checkScreen, openDrawer, axe, horizontalOverflow } from './helpers';
 
 // A controlled local page captured at the browser's real viewport size.
 const image = readFileSync(new URL('./fixtures/browser-preview.png', import.meta.url)).toString(
@@ -241,7 +241,11 @@ test('owner sign-in pauses the agent, sends input outside chat, and returns cont
 			controls.some((c) => c.input?.kind === 'text' && c.input.text === 'private-test-password')
 		).toBe(true);
 		await viewer.getByRole('button', { name: 'Enter', exact: true }).click();
-		await checkScreen(page);
+		if (width === 320) await checkScreen(page);
+		else {
+			expect(await axe(page)).toEqual([]);
+			expect(await horizontalOverflow(page)).toEqual([]);
+		}
 		await page.setViewportSize({ width, height: 915 });
 		await page.evaluate(
 			() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))

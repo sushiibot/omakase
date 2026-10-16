@@ -79,6 +79,10 @@ ENV AGENT_BROWSER_EXTENSIONS=/opt/ublock-lite
 RUN apt-get update && apt-get install -y --no-install-recommends xvfb \
     && rm -rf /var/lib/apt/lists/*
 
+# fpgen stores its model beside the package; fetch it before dropping root.
+RUN /opt/camoufox/bin/python -c "from camoufox.fingerprints import generate_fingerprint; generate_fingerprint(os='linux')" \
+    && chmod -R a+rX /opt/camoufox/lib/python*/site-packages/fpgen/data
+
 WORKDIR /app
 
 # Workspace: same toolchain, run as uid 1000 with user-space installs under HOME

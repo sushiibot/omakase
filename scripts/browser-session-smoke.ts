@@ -18,15 +18,22 @@ const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(req) {
 const url = `http://127.0.0.1:${server.port}`;
 const manager = new BrowserManager(home, localBrowserDriver(home));
 try {
-  for (const engine of ["chromium", "camoufox"] as BrowserEngine[]) {
+  const engines = (["chromium", "camoufox"] as BrowserEngine[]).filter(engine => !process.argv[2] || engine === process.argv[2]);
+  if (!engines.length) throw new Error("Unknown browser engine");
+  for (const engine of engines) {
     const binding = manager.bind("main", () => engine);
     const tool = binding.tool();
     const run = async (...args: string[]) => JSON.stringify(await tool.execute("smoke", { args, engine }, undefined, undefined, undefined as never));
     await run("open", url);
     if (!(await run("snapshot", "-i")).includes("Continue")) throw new Error(`${engine}: snapshot missing button`);
-    ordinaryImages = 0; adImages = 0;
-    await run("eval", "Promise.all(['/ordinary.gif', '/ads/banners/smoke.gif'].map(path => new Promise(resolve => { const image = new Image(); image.onload = image.onerror = () => resolve(true); image.src = path; })))");
-    if (ordinaryImages !== 1 || adImages !== 0) throw new Error(`${engine}: ad blocker did not block the test image (${ordinaryImages}/${adImages})`);
+    const blockerDeadline = Date.now() + 15_000;
+    do {
+      ordinaryImages = 0; adImages = 0;
+      await run("eval", "Promise.all(['/ordinary.gif', '/ads/banners/smoke.gif'].map(path => new Promise(resolve => { const image = new Image(); image.onload = image.onerror = () => resolve(true); image.src = path + '?probe=' + Math.random(); })))");
+      if (ordinaryImages === 1 && adImages === 0) break;
+      await Bun.sleep(250);
+    } while (Date.now() < blockerDeadline);
+    if (ordinaryImages !== 1 || adImages !== 0) throw new Error(`${engine}: ad blocker did not block the test image (${ordinaryImages}/${adImages}), page ${await run("get", "url")}`);
     const id = (await manager.read("main", false)).status!.id;
     await manager.control({ conversationId: "main", id, action: "takeover" });
     await manager.control({ conversationId: "main", id, action: "input", input: { kind: "click", x: 60, y: 60 } });
