@@ -92,7 +92,15 @@ test("a failing scheduled job shows on Home and pushes; its recovery clears it a
     await page.goto(`/inbox?item=job:${JOB}`);
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByText("E2E-JOBFAIL").first()).toBeVisible();
+    await expect(page).toHaveURL(/\/chats\?item=job:e2e-alert$/);
+    // Review identity survives reload; native browser Back returns to the inbox.
+    await page.reload();
+    await expect(sheet.getByText("E2E-JOBFAIL").first()).toBeVisible();
+    await page.goBack();
     await expect(page).toHaveURL(/\/chats$/);
+    await expect(sheet).toBeHidden();
+    await page.goForward();
+    await expect(sheet.getByText("E2E-JOBFAIL").first()).toBeVisible();
 
     schedule("E2E-NOREPLY check something");
     await requestRun();
