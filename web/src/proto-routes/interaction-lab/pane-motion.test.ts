@@ -15,11 +15,11 @@ test('short drags return, long drags open, and direction applies symmetrically',
 	expect(releasePane(-240, 0, 320, 360)).toBe('inspector');
 });
 
-test('a flick opens a pane and a reversal closes an almost-open pane', () => {
+test('a flick opens a pane and a reversal cancels opening', () => {
 	expect(releasePane(60, 0.8, 320, 360)).toBe('navigation');
 	expect(releasePane(-60, -0.9, 320, 360)).toBe('inspector');
-	expect(releasePane(230, -0.7, 320, 360)).toBe('chat');
-	expect(releasePane(-250, 0.8, 320, 360)).toBe('chat');
+	expect(releasePane(100, -0.7, 320, 360)).toBe('chat');
+	expect(releasePane(-100, 0.8, 320, 360)).toBe('chat');
 });
 
 test('pane offsets stop at their boundaries', () => {
@@ -47,3 +47,16 @@ test('closing ignores tiny flicks and outward reversals, and cannot switch to th
 	expect(releasePane(-200, -1, 320, 360, 'navigation')).toBe('chat');
 	expect(releasePane(200, 1, 320, 360, 'inspector')).toBe('chat');
 });
+
+for (const width of [240, 320, 360]) {
+	test(`short opening gestures at ${width}px respect distance and direction`, () => {
+		for (const sign of [1, -1]) {
+			const pane = sign === 1 ? 'navigation' : 'inspector';
+			expect(releasePane(sign * 64, 0, width, width)).toBe(pane);
+			expect(releasePane(sign * 32, sign * 0.4, width, width)).toBe(pane);
+			expect(releasePane(sign * 28, 0, width, width)).toBe('chat');
+			expect(releasePane(sign * 10, sign * 2, width, width)).toBe('chat');
+			expect(releasePane(sign * 40, -sign * 2, width, width)).toBe('chat');
+		}
+	});
+}

@@ -6,6 +6,8 @@ export const motion = {
 	axisRatio: 1.5,
 	edge: 24,
 	projectionMs: 160,
+	openDistance: 64,
+	openFlickDistance: 32,
 	closeDistance: 64,
 	closeFlickDistance: 32,
 	settleMs: 200
@@ -46,8 +48,15 @@ export function releasePane(
 			? 'chat'
 			: startedFrom;
 	}
-	const projected = offset + speed * motion.projectionMs;
-	if (projected > navigationWidth / 2) return 'navigation';
-	if (projected < -inspectorWidth / 2) return 'inspector';
+	const side = offset > 0 ? 'navigation' : 'inspector';
+	const width = side === 'navigation' ? navigationWidth : inspectorWidth;
+	const distance = Math.abs(offset);
+	const outwardSpeed = side === 'navigation' ? speed : -speed;
+	const threshold = Math.min(motion.openDistance, width / 4);
+	if (
+		distance >= Math.min(motion.openFlickDistance, threshold) &&
+		distance + outwardSpeed * motion.projectionMs >= threshold
+	)
+		return side;
 	return 'chat';
 }
