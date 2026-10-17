@@ -21,6 +21,7 @@ export interface Config {
    *  to the global default. See orchestration/teams.ts. */
   teams: Record<string, TeamConfig>;
   exaApiKey: string | undefined;
+  googleMapsApiKey: string | undefined;
   /** Seeds the synthesized owner principal when principals.json is absent (see resolveOwnerPrincipals).
    *  Tools run as this user id. */
   ownerDiscordId: string | undefined;
@@ -169,6 +170,7 @@ export const config: Config = {
   principals: loadPrincipals(),
   teams: loadedTeams,
   exaApiKey: process.env["EXA_API_KEY"],
+  googleMapsApiKey: process.env["GOOGLE_MAPS_API_KEY"],
   ownerDiscordId: process.env["OWNER_DISCORD_ID"],
   linearApiKey: process.env["LINEAR_API_KEY"],
   linearTeamId: process.env["LINEAR_TEAM_ID"],

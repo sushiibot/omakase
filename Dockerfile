@@ -113,6 +113,9 @@ RUN printf '%s\n' '#!/bin/sh' 'exec bun /app/bin/ws-consolidate.ts "$@"' > /usr/
 # `ws-schedule`: lists the scheduled jobs, or queues a run of one for the workspace's scheduler.
 RUN printf '%s\n' '#!/bin/sh' 'exec bun /app/bin/ws-schedule.ts "$@"' > /usr/local/bin/ws-schedule \
     && chmod 755 /usr/local/bin/ws-schedule
+# Maps uses the workspace's private RPC bridge; the Google key stays on the gateway.
+RUN printf '%s\n' '#!/bin/sh' 'exec bun /app/bin/maps.ts "$@"' > /usr/local/bin/maps \
+    && chmod 755 /usr/local/bin/maps
 # External file access uses the workspace's private RPC bridge; no NAS credentials in the CLI.
 RUN printf '%s\n' '#!/bin/sh' 'exec bun /app/bin/external-files.ts "$@"' > /usr/local/bin/external-files \
     && chmod 755 /usr/local/bin/external-files

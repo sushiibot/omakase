@@ -1,6 +1,7 @@
 import { MAINTENANCE_INSTRUCTIONS, MAINTENANCE_TOOLS, type MaintenanceService } from "./maintenance/service.ts";
 import { ArtifactStore, ARTIFACT_TOOLS } from "./artifacts.ts";
 import { OwnerRequests, ownerRequestAsks } from "./ownerRequests.ts";
+import { mapsSocket } from "./maps.ts";
 import { memoryEvidence, MEMORY_TOOL_NAMES, RECALL_INSTRUCTIONS } from "./memoryEvidence.ts";
 import { ownerNameLine } from "../orchestration/ownerLabel.ts";
 import { taskAwareness } from "./taskAwareness.ts";
@@ -68,7 +69,7 @@ const WORKSPACE_TOOLS = ["codemode", "read", "edit", "write", "grep", "find", "l
 export function createWorkspaceBashTool(cwd: string, currentRunId: () => string | null = () => null, github?: Pick<GitHubCredentials, "envFor">, browser?: BrowserBinding, stateDir?: string) {
   const extraEnv = (): Record<string, string> => {
     const runId = currentRunId();
-    return { ...(runId ? { WS_RUN_ID: runId } : {}), ...(stateDir ? { EXTERNAL_FILES_SOCKET: externalFilesSocket(stateDir) } : {}), ...browser?.env() };
+    return { ...(runId ? { WS_RUN_ID: runId } : {}), ...(stateDir ? { EXTERNAL_FILES_SOCKET: externalFilesSocket(stateDir), MAPS_SOCKET: mapsSocket(stateDir) } : {}), ...browser?.env() };
   };
   const prepareEnv = github ? (command: string, dir: string) => github.envFor(command, dir) : undefined;
   return createAgentBashTool(cwd, extraEnv, { dropPrefixes: ["PI_"], exposeSessionEnvironment: false, prepareEnv });

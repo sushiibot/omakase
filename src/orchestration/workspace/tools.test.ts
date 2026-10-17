@@ -161,6 +161,23 @@ const LINEAR_SCHEMA = {
 
 const ALL_ON: ToolAvailability = { exa: true, grafanaBaseUrl: true, linear: true };
 
+test("maps CLI dispatch requires the owner connection and adds no model-facing tool", async () => {
+  const calls: unknown[] = [];
+  const { tools, log } = setup({ maps: { action: async args => { calls.push(args); return { places: [] }; } } });
+  const c = conn();
+  expect(tools.manifest().some(t => t.name === "maps")).toBe(false);
+  const args = { action: "search", query: "private location" };
+  expect(await tools.handleCall(c, call("maps", args))).toEqual({ ok: true, result: '{"places":[]}' });
+  expect(calls).toEqual([args]);
+  expect(JSON.stringify(log.lines)).not.toContain("private location");
+  expect(await tools.handleCall({ ...c, principalId: "other" }, call("maps", args))).toMatchObject({ ok: false, error: "principal mismatch" });
+  tools.onSocketClosed(c);
+  expect(await tools.handleCall(c, call("maps", args))).toMatchObject({ ok: false });
+  const disabled = setup({ ownerUserId: () => undefined, maps: { action: async () => { throw new Error("must not run"); } } });
+  expect(await disabled.tools.handleCall(conn(), call("maps", args))).toMatchObject({ ok: false, error: "Maps is unavailable." });
+  expect(calls.length).toBe(1);
+});
+
 describe("manifest", () => {
   test("a fully configured bot offers exactly the proxied tools, with their schemas and approvals", () => {
     const { tools } = setup({ registry: createToolRegistry(undefined, () => ALL_ON) });

@@ -110,6 +110,18 @@ describe("run log", () => {
 });
 
 describe("reloadContext", () => {
+  test("bash receives the custom Maps socket without inheriting the Google key", async () => {
+    const before = process.env.GOOGLE_MAPS_API_KEY;
+    process.env.GOOGLE_MAPS_API_KEY = "must-not-reach-shell";
+    try {
+      const tool = await createWorkspaceBashTool(root, () => null, undefined, undefined, root);
+      const result = await tool.execute("t", { command: 'printf "%s|%s" "$MAPS_SOCKET" "$GOOGLE_MAPS_API_KEY"' }, undefined, undefined, {} as never);
+      expect(result.content.map(c => "text" in c ? c.text : "").join("").trim()).toBe(`${root}/maps.sock|`);
+    } finally {
+      if (before === undefined) delete process.env.GOOGLE_MAPS_API_KEY;
+      else process.env.GOOGLE_MAPS_API_KEY = before;
+    }
+  });
   test("auto-compaction stays enabled despite disabled disk settings, including after reload", async () => {
     const config = testConfig();
     mkdirSync(config.agentDir, { recursive: true });

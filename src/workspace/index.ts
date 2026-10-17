@@ -30,6 +30,7 @@ import { memoryEvidence } from "./memoryEvidence.ts";
 import { createConsolidationJob, waitIdle } from "./consolidation.ts";
 import { ToolStubs, TOOL_TIMEOUT_MS } from "./toolStubs.ts";
 import { startExternalFilesBridge } from "./externalFiles.ts";
+import { startMapsBridge } from "./maps.ts";
 import { GitHubCredentials } from "./githubCredentials.ts";
 import { AuthLogin, ReauthNotifier, piChatGptLogin } from "./authLogin.ts";
 import { BackendSelector } from "./chatgptFallback.ts";
@@ -404,9 +405,28 @@ async function main(): Promise<void> {
     return JSON.parse(result.result);
   });
 
+  const maps = await startMapsBridge(config.stateDir, async (args, runId) => {
+    const run = runId ? runs.getRun(runId) : null;
+    if (runId && (!run || run.status !== "running")) throw new Error("The requesting run is no longer active.");
+    if (!client?.connected) throw new Error("The workspace is disconnected from the gateway. Try again after it reconnects.");
+    let raw: unknown;
+    try {
+      raw = await client.request(RPC_METHODS.toolCall, {
+        principalId: config.principalId, callId: ulid(), name: "maps", args,
+        agentId: run?.parentRunId ? run.runId : "main", agentName: run?.agentName ?? "maps-cli",
+        ...(run?.parentRunId ? { parentRunId: run.parentRunId } : {}),
+      }, { timeoutMs: 25_000 });
+    } catch { throw new Error("Maps connection interrupted. No automatic retry was made."); }
+    const result = raw as import("../orchestration/contracts.ts").ToolCallResult;
+    if (result?.ok === false) throw new Error(result.error);
+    if (result?.ok !== true || typeof result.result !== "string") throw new Error("Maps request failed.");
+    return JSON.parse(result.result);
+  });
+
   const shutdown = async (signal: string) => {
     log.info({ signal }, "workspace shutting down");
     await externalFiles.close();
+    await maps.close();
     agentResults.close();
     client?.close();
     await wakeups.stop();

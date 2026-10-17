@@ -99,6 +99,7 @@ The main configuration values are:
 | `ORCH_SECRET` | Shared secret for gateway–workspace authentication. |
 | `ORCH_PORT`, `ORCH_URL` | Gateway transport port and workspace connection URL. The default port is `8788`. |
 | `DM_WORKSPACE_ENABLED` | Routes web chat to the workspace. Defaults to `false`. |
+| `GOOGLE_MAPS_API_KEY` | Gateway-only Google key for the workspace `maps` CLI. Optional. |
 
 The [gateway configuration](src/config.ts), [web configuration](src/surfaces/web/config.ts), and
 [workspace configuration](src/workspace/config.ts) define all variables and defaults.
@@ -109,6 +110,35 @@ Optional integrations include web push, GitHub App credentials, Exa, Grafana, Li
 Use **Connectors → Accounts & rules** to connect Gmail or Fastmail accounts.
 The gateway stores credentials and exposes mail reads and draft saves. It cannot send mail through these tools.
 See [mail setup](docs/mail.md) for Google OAuth configuration, permissions, and limits.
+
+## Maps CLI
+
+The workspace includes `maps` and a `location-research` skill.
+The CLI sends requests through a private workspace socket and the authenticated gateway connection.
+The gateway calls Google Places API (New) and Routes API directly. No additional model-facing tools or MCP server are required.
+
+Enable Places API (New) and Routes API in a Google Cloud project with billing.
+Restrict the API key to those APIs. Set `GOOGLE_MAPS_API_KEY` in the gateway environment, then restart the gateway.
+Do not put the key in the workspace environment. Set Google Cloud quotas to control usage.
+
+From the workspace shell:
+
+```sh
+maps search "ramen in Capitol Hill, Seattle" --limit 5 --open-now
+maps place PLACE_ID --reviews
+maps directions "Amsterdam Centraal" "Rijksmuseum, Amsterdam" --mode transit --departure 2026-10-20T18:00:00+02:00
+maps --help
+```
+
+Commands return JSON with source attribution and a fetch timestamp.
+Search defaults to five results and allows up to twenty per request. Pagination and review retrieval require explicit flags.
+The gateway limits calls to thirty per minute and four concurrent requests. It makes no automatic retries and stores no response cache.
+The CLI works through the existing shell tool, whose output remains subject to normal session transcript handling.
+
+Google returns at most five relevance-sorted reviews, not a complete review history.
+The skill covers source attribution, current hours, location bias, review limits, and complementary web research.
+Before enabling the integration, review Google's [content retention and attribution requirements](https://developers.google.com/maps/documentation/places/web-service/policies)
+against the deployment's session retention and model-provider configuration.
 
 ## MCP connections
 

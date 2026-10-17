@@ -1,5 +1,7 @@
 import { mailManifest, toolPolicyManifest } from "../../integrations/mail/manifest.ts";
 import { fileStoreManifest } from "./fileStores/service.ts";
+import { GoogleMaps } from "./maps.ts";
+import { config } from "../../config.ts";
 import { machineFileManifest } from "../machines/control.ts";
 import { CODING_AGENT_TOOL, codingAgentManifest } from "../machines/agents.ts";
 import { taskManifest } from "../../surfaces/web/taskRoutes.ts";
@@ -97,6 +99,8 @@ export interface WorkspaceToolsOptions {
   log?: AuditLog;
   /** The owner's display name, for the text the agent reads. */
   ownerName?: () => string | null;
+  /** Gateway service behind the maps CLI, deliberately absent from the tool manifest. */
+  maps?: Pick<GoogleMaps, "action">;
 }
 
 interface PendingApproval {
@@ -154,6 +158,7 @@ export function hasInvisible(value: unknown): boolean {
 }
 
 export class WorkspaceTools {
+  private readonly maps: Pick<GoogleMaps, "action">;
   private readonly opts: WorkspaceToolsOptions;
   private readonly registry: ToolRegistry;
   private readonly timers: Timers;
@@ -170,6 +175,7 @@ export class WorkspaceTools {
 
   constructor(opts: WorkspaceToolsOptions) {
     this.opts = opts;
+    this.maps = opts.maps ?? new GoogleMaps(() => config.googleMapsApiKey);
     this.registry = opts.registry ?? createToolRegistry();
     this.timers = opts.timers ?? realTimers;
     this.now = opts.now ?? Date.now;
@@ -292,6 +298,11 @@ export class WorkspaceTools {
     if (mailManifest.some(t => t.name === p.name)) {
       if (!this.mail || this.closed.has(conn)) return { ok: false, error: "Mail is unavailable." };
       return { ok: true, result: JSON.stringify(await this.mail(p.name, p.args ?? {})) };
+    }
+    // Private CLI dispatch, like external_files. This name is never advertised to the model.
+    if (p.name === "maps") {
+      if (conn.role !== "workspace" || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Maps is unavailable." };
+      return { ok: true, result: JSON.stringify(await this.maps.action(p.args)) };
     }
     if (p.name === "external_files") {
       if (!this.externalFiles || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "External files are unavailable." };

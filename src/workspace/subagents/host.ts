@@ -756,7 +756,7 @@ export class SubagentHost {
       const builtins = spawn.def.writer ? spawn.def.tools : spawn.def.tools.filter((t) => t !== "bash");
       browser = builtins.includes("bash") ? this.opts.browsers?.bind(spawn.turn?.origin?.conversationId ?? this.opts.runs.getRun(spawn.runId)?.conversationId ?? "main", () => spawn.runId) : undefined;
       const extra = [...(nested ? [DELEGATE_TOOL] : []), ...(browser ? ["browser"] : [])];
-      const rawBash = builtins.includes("bash") ? await createWorkspaceBashTool(cwd, () => spawn.runId, this.opts.github, browser) : undefined;
+      const rawBash = builtins.includes("bash") ? await createWorkspaceBashTool(cwd, () => spawn.runId, this.opts.github, browser, this.opts.config.stateDir) : undefined;
       const customTools = [...(rawBash ? [browser ? browser.wrapBash(rawBash) : rawBash] : []), ...(browser ? [browser.tool()] : [])];
       ({ session } = await createAgentSession({
         cwd,
