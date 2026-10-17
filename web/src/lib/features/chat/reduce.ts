@@ -461,6 +461,13 @@ export function applyEvent(s: ChatState, ev: ChatEnvelope, now = Date.now()): Ef
 			applyPending(s, ev.data.pending);
 			break;
 		}
+		case 'rewind': {
+			const key = `rewind:${ev.data.clientId}`;
+			if (s.keys.has(key)) break;
+			fx.push(...restartHistory(s));
+			s.keys.add(key);
+			break;
+		}
 		case 'reset': {
 			fx.push(...restartHistory(s));
 			s.cursor = ev.data.headSeq;

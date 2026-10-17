@@ -23,6 +23,7 @@ export interface ChatApi {
 	discardMessage(clientId: string): Promise<'discarded' | 'routed' | 'unknown'>;
 	/** Routes a queued message now: it joins the running turn instead of waiting for it to end. */
 	steerMessage(clientId: string): Promise<PostMessageResponse>;
+	rewindMessage?(clientId: string, replacement?: { clientId: string; text: string }): Promise<void>;
 	stop(turnId?: string): Promise<void>;
 	command(command: 'new' | 'compact'): Promise<void>;
 	answerAsk(askId: string, body: PostAskBody): Promise<PostAskResponse>;
@@ -78,6 +79,13 @@ export function createHttpChatApi(base = '/chat'): ChatApi {
 		},
 		async steerMessage(clientId) {
 			return json(await send('POST', `${base}/messages/${encodeURIComponent(clientId)}/steer`));
+		},
+		async rewindMessage(clientId, replacement) {
+			await send(
+				'POST',
+				`${base}/messages/${encodeURIComponent(clientId)}/rewind`,
+				replacement ? { replacement } : {}
+			);
 		},
 		async stop(turnId) {
 			await send('POST', `${base}/stop`, turnId ? { turnId } : {});

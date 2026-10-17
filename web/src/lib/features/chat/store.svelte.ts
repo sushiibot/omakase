@@ -1,5 +1,6 @@
 import { locationOutcome, type LocationReply } from './location';
 import type { ChatMessage, PendingApproval, PhotoDraft } from './types';
+import { clearResponses } from '$lib/core/storage/offline-cache';
 import { HttpError } from '$lib/core/http';
 import { httpChatApi, uploadMissingIds, type ChatApi } from './api';
 import {
@@ -358,7 +359,7 @@ export class ChatStore {
 				this.reset = true;
 				setTimeout(() => (this.reset = false), 10_000);
 				this.#buffer = [];
-				void this.#loadHistory();
+				void clearResponses().then(() => this.#loadHistory());
 				break;
 			case 'timedOut':
 				if (this.#timeoutTimer) clearTimeout(this.#timeoutTimer);
@@ -737,6 +738,32 @@ export class ChatStore {
 		const clientId = this.#clientIdOf(messageId);
 		const entry = clientId && this.#pending.get(clientId);
 		if (entry) void this.#deliver(entry);
+	}
+
+	async rewind(messageId: string, text?: string): Promise<void> {
+		const clientId = this.#clientIdOf(messageId);
+		if (!clientId || !this.#api.rewindMessage) throw new Error('This message cannot be changed.');
+		if (this.#pending.size) throw new Error('Wait for pending messages to finish first.');
+		try {
+			await this.#api.rewindMessage(
+				clientId,
+				text === undefined ? undefined : { clientId: ulid(), text }
+			);
+			// SSE also reloads other devices; refresh here when the stream is reconnecting.
+			for (const effect of applyEvent(this.#s, { type: 'rewind', data: { clientId } }))
+				this.#effect(effect);
+			this.#commit();
+		} catch (error) {
+			if (
+				error instanceof HttpError &&
+				error.body &&
+				typeof error.body === 'object' &&
+				'error' in error.body &&
+				typeof error.body.error === 'string'
+			)
+				throw new Error(error.body.error);
+			throw error;
+		}
 	}
 
 	/** Deletes an unsent message. One the bot may hold is withdrawn there first, so it is never delivered. */

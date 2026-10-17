@@ -316,6 +316,7 @@ export interface AppVersions {
 /** Payload of each SSE event, by event name. */
 export interface ChatEventMap {
 	app_update: AppVersions;
+	rewind: { clientId: string };
 	hello: {
 		headSeq: number;
 		workspace: WorkspaceState;
@@ -390,6 +391,7 @@ export type ChatEventType = keyof ChatEventMap;
 export const FIRST_FRAME_EVENTS = ['hello', 'reset'] as const;
 /** Stored in web_events with a `seq` (the SSE `id:`), replayed on reconnect. */
 export const DURABLE_EVENTS = [
+	'rewind',
 	'user',
 	'status',
 	'reply',

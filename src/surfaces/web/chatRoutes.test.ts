@@ -1036,3 +1036,60 @@ test("a message the gateway posts for the agent is marked, and never counts as t
   expect(lastOwnerMessageAt(h.log)).toBe(ownerAt);
   await h.routes.idle();
 });
+
+describe("rewind delivered messages", () => {
+  test("rewinds the agent, deletes the tail, preserves other conversations and resends edited text", async () => {
+    const link = Object.assign(new FakeLink(), { rewind: async (id: string) => { expect(id).toBe(CLIENT2); return { ok: true }; } });
+    const s = setup({ link });
+    await post(s.handler, "/api/chat/messages", { clientId: CLIENT, text: "keep" });
+    await s.routes.idle();
+    await post(s.handler, "/api/chat/messages", { clientId: CLIENT2, text: "change" });
+    await s.routes.idle();
+    s.log.append("reply", { key: "reply", text: "old answer", files: [] }, "reply");
+    const other = new SqliteChatLog(s.db, { conversationId: "thread:other" });
+    other.append("user", { key: "other", text: "other thread", uploadIds: [], at: "now" }, "other");
+    const replacement = "01J9Z3W8K2M4N6P8Q0R2S4T6VA";
+    const res = await post(s.handler, `/api/chat/messages/${CLIENT2}/rewind`, { replacement: { clientId: replacement, text: "edited" } });
+    expect(res.status).toBe(200);
+    await s.routes.idle();
+    expect(s.log.find("user", CLIENT)).not.toBeNull();
+    expect(s.log.find("user", CLIENT2)).toBeNull();
+    expect(s.log.find("reply", "reply")).toBeNull();
+    expect(other.find("user", "other")).not.toBeNull();
+    expect(s.inbound.get(CLIENT2)?.state).toBe("discarded");
+    expect(link.sent.at(-1)?.text).toBe("edited");
+    expect((await post(s.handler, "/api/chat/messages", { clientId: CLIENT2, text: "change" })).status).toBe(410);
+    s.db.close();
+  });
+
+  test("a workspace refusal leaves the transcript intact", async () => {
+    const link = Object.assign(new FakeLink(), { rewind: async () => ({ ok: false, error: "still working" }) });
+    const s = setup({ link });
+    await post(s.handler, "/api/chat/messages", { clientId: CLIENT, text: "keep" });
+    await s.routes.idle();
+    expect((await post(s.handler, `/api/chat/messages/${CLIENT}/rewind`, {})).status).toBe(409);
+    expect(s.log.find("user", CLIENT)?.data.text).toBe("keep");
+    s.db.close();
+  });
+});
+
+test("rewind locks out concurrent sends, preserves attachments, and restores the retention guard", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const link = Object.assign(new FakeLink(), { rewind: async () => { await gate; return { ok: true }; } });
+  const s = setup({ link });
+  const seq = s.log.append("user", { key: CLIENT, text: "photo", uploadIds: [PHOTO], at: "now" }, CLIENT);
+  s.inbound.insert({ clientId: CLIENT, text: "photo", uploadIds: [PHOTO], seq, createdAt: Date.now() });
+  s.inbound.markRouted(CLIENT, Date.now());
+  const response = post(s.handler, `/api/chat/messages/${CLIENT}/rewind`, { replacement: { clientId: CLIENT2, text: "revised photo" } });
+  await Bun.sleep(1);
+  const blocked = await post(s.handler, "/api/chat/messages", { clientId: "01J9Z3W8K2M4N6P8Q0R2S4T6VA", text: "race" });
+  expect(blocked.status).toBe(409);
+  release();
+  expect((await response).status).toBe(200);
+  await s.routes.idle();
+  expect(s.log.find("user", CLIENT2)?.data.uploadIds).toEqual([PHOTO]);
+  s.db.run("DELETE FROM web_events");
+  expect(s.log.find("user", CLIENT2)).not.toBeNull();
+  s.db.close();
+});

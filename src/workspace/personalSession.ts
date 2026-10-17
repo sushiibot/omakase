@@ -17,6 +17,7 @@ import {
   chatAckParams,
   chatMessageParams,
   chatNewParams,
+  chatRewindParams,
   type ChatAbortResult,
   type ChatDeliverParams,
   type ChatEventPayload,
@@ -94,7 +95,7 @@ export type ChatSession = Pick<
   | "getContextUsage"
   | "messages"
   | "dispose"
->;
+> & { rewind?(messageId: string): Promise<{ ok: boolean; error?: string }> };
 
 /** Opens `sessionFile` when given, else creates a fresh chat session, its extensions bound to `ui`. */
 export type ChatSessionFactory = (input: { sessionFile: string | null; ui?: ExtensionUIContext; checkpoint?: () => Promise<void> }) => Promise<{
@@ -511,6 +512,18 @@ export class PersonalSession {
         const params = chatAbortParams.parse(p);
         this.assertPrincipal(params.principalId);
         return this.handleAbort(params.turnId);
+      },
+      [RPC_METHODS.chatRewind]: async (p) => {
+        const q = chatRewindParams.parse(p);
+        this.assertPrincipal(q.principalId);
+        if (!this.isIdle() || this.hasUnackedDeliveries() || this.opts.context?.busy?.()) return { ok: false, error: "Stop the conversation’s work before changing its history." };
+        return this.enqueue(async () => {
+          const s = this.requireSession();
+          if (s.isStreaming || s.isCompacting || this.run || this.pendingContext.length || this.opts.context?.busy?.()) return { ok: false, error: "The conversation is still working. Try again when it finishes." };
+          const result = await s.rewind?.(q.messageId) ?? { ok: false, error: "Rewinding is unavailable in this session." };
+          if (result.ok) { this.flushedThisCycle = this.opts.memory?.flushRanThisCycle?.(s) ?? false; this.lastFlushDoneAt = -1; this.touch(); }
+          return result;
+        });
       },
       [RPC_METHODS.chatNew]: async (p) => {
         this.assertPrincipal(chatNewParams.parse(p).principalId);

@@ -178,6 +178,20 @@ export class SqliteChatLog implements ChatLog {
     return { head, reset, close: () => void this.sinks.delete(sink) };
   }
 
+  /** Remove the chosen owner message and everything after it in this conversation only. */
+  rewindFrom(seq: number, clientId: string): void {
+    this.transaction(() => {
+      this.db.run(`UPDATE web_inbound SET state = 'discarded' WHERE conversation_id = ? AND seq >= ?`, [this.conversationId, seq]);
+      // The retention trigger protects chat from pruning, including accidental DELETEs.
+      // Suspend it only inside this explicit erase transaction, restoring its exact definition.
+      const trigger = this.db.query<{ sql: string }, []>("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'web_events_keep_chat'").get();
+      if (trigger) this.db.run("DROP TRIGGER web_events_keep_chat");
+      this.db.run(`DELETE FROM web_events WHERE ${this.scope} AND coalesce(sort_seq, seq) >= ?`, [seq]);
+      if (trigger) this.db.run(trigger.sql);
+      this.append("rewind", { clientId });
+    });
+  }
+
   head(): number {
     return this.q.head.get()?.seq ?? 0;
   }

@@ -111,6 +111,7 @@
 		onretrysend,
 		onsteersend,
 		ondeletesend,
+		onrewind,
 		onanswer,
 		onapprove,
 		ondeny,
@@ -214,6 +215,7 @@
 		onretrysend?: (messageId: string) => void;
 		onsteersend?: (messageId: string) => void;
 		ondeletesend?: (messageId: string) => void;
+		onrewind?: (messageId: string, text?: string) => Promise<void>;
 		onanswer?: (askId: string, answer: string) => void;
 		onapprove?: (nonce: string, location?: LocationReply) => void;
 		ondeny?: (nonce: string) => void;
@@ -817,6 +819,7 @@
 				onretrysend={(id) => onretrysend?.(id)}
 				onsteersend={(id) => onsteersend?.(id)}
 				ondeletesend={(id) => ondeletesend?.(id)}
+				{onrewind}
 				onanswer={(askId, answer) => onanswer?.(askId, answer)}
 				onretryhistory={() => onretryhistory?.()}
 				{onspeak}

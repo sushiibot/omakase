@@ -9,6 +9,7 @@ import {
   chatMessageParams,
   chatAbortParams,
   chatNewParams,
+  chatRewindParams,
   chatCommandParams,
   chatAckParams,
   type ChatOrigin,
@@ -230,6 +231,11 @@ export class TopicSessions {
         return (await this.session(q.origin)).handlers()[
           RPC_METHODS.chatMessage
         ]!(q);
+      },
+      [RPC_METHODS.chatRewind]: async (p) => {
+        const q = chatRewindParams.parse(p);
+        if (q.principalId !== this.opts.principalId) throw new Error("principal mismatch");
+        return (await this.session(q.origin)).handlers()[RPC_METHODS.chatRewind]!(q);
       },
       [RPC_METHODS.chatNew]: async (p) => {
         const q = chatNewParams.parse(p);

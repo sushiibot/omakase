@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Pencil from '@lucide/svelte/icons/pencil';
+	import { Textarea } from '$lib/ui/textarea';
 	import Mic from '@lucide/svelte/icons/mic';
 	import Volume2 from '@lucide/svelte/icons/volume-2';
 	import ContextDivider from './context-divider.svelte';
@@ -48,6 +50,7 @@
 		onretrysend,
 		onsteersend,
 		ondeletesend,
+		onrewind,
 		onanswer,
 		onretryhistory,
 		oncopy,
@@ -81,6 +84,7 @@
 		/** Posts a message held for a running turn right now, steering that turn with it. */
 		onsteersend?: (messageId: string) => void;
 		ondeletesend?: (messageId: string) => void;
+		onrewind?: (messageId: string, text?: string) => Promise<void>;
 		onanswer?: (askId: string, answer: string) => void;
 		onretryhistory?: () => void;
 		/** Copy under each message; without it messages have no action row. */
@@ -108,6 +112,40 @@
 		agentActivity?: Snippet<[string[]]>;
 	} = $props();
 
+	let revision = $state<{ id: string; mode: 'edit' | 'delete'; text: string } | null>(null);
+	let revising = $state(false);
+	let revisionError = $state('');
+	function beginRevision(message: ChatMessage, mode: 'edit' | 'delete') {
+		if (revising) return;
+		revisionError = '';
+		revision = {
+			id: message.id,
+			mode,
+			text: message.parts
+				.filter((p) => p.type === 'text')
+				.map((p) => p.text)
+				.join('\n')
+		};
+	}
+	function focusRevision(node: HTMLFormElement) {
+		(node.querySelector('textarea') ?? node).focus();
+		node.scrollIntoView({ block: 'nearest' });
+	}
+	async function submitRevision() {
+		if (!revision || !onrewind || revising) return;
+		revising = true;
+		revisionError = '';
+		try {
+			await onrewind(revision.id, revision.mode === 'edit' ? revision.text : undefined);
+			revision = null;
+		} catch (error) {
+			revisionError =
+				error instanceof Error ? error.message : 'Could not change history. Try again.';
+		} finally {
+			revising = false;
+		}
+	}
+
 	// Keep disclosure state when a lone call becomes a group.
 	let expanded = $state<Record<string, boolean>>({});
 	// The newest finished reply keeps its actions in view; older ones show them on hover or focus.
@@ -127,7 +165,28 @@
 			icon: copied === message.id ? Check : Copy,
 			onclick: () => oncopy(message)
 		};
-		if (message.role === 'user') return [copy];
+		if (message.role === 'user') {
+			const out = [copy];
+			if (
+				onrewind &&
+				(!message.delivery || message.delivery === 'sent' || message.delivery === 'steered') &&
+				!!message.clientId
+			) {
+				out.push({
+					id: 'edit',
+					label: 'Edit and resend',
+					icon: Pencil,
+					onclick: () => beginRevision(message, 'edit')
+				});
+				out.push({
+					id: 'delete',
+					label: 'Delete from here',
+					icon: Trash2,
+					onclick: () => beginRevision(message, 'delete')
+				});
+			}
+			return out;
+		}
 		const out = [copy];
 		if (onspeak && !message.streaming && hasText(message))
 			out.push({
@@ -190,7 +249,9 @@
 		{@const held = message.delivery === 'queued-run'}
 		{@const unsent = owner && (failed || queued || held)}
 		{@const actions =
-			hasText(message) && !message.partial && !message.id.startsWith('voice:')
+			(hasText(message) || (owner && !!message.clientId)) &&
+			!message.partial &&
+			!message.id.startsWith('voice:')
 				? actionsFor(message)
 				: []}
 		<li
@@ -510,7 +571,7 @@
 						always={message.id === latestReply || message.id === readingId}
 						align={owner ? 'end' : 'start'}
 						pending={message.streaming}
-						beside={owner}
+						beside={owner && actions.length === 1}
 					/>
 				{/if}
 				{#if readingId === message.id}<p role="status" class="sr-only">
@@ -520,7 +581,60 @@
 						{readingError.message}
 					</p>{/if}
 			</div>
+			{#if revision?.id === message.id}
+				<div class="flex flex-col gap-3 rounded-lg border bg-card p-4">
+					<form
+						use:focusRevision
+						tabindex="-1"
+						aria-label="Change conversation history"
+						class="flex flex-col gap-3"
+						onsubmit={(event) => {
+							event.preventDefault();
+							void submitRevision();
+						}}
+					>
+						<p class="font-medium">
+							{revision.mode === 'edit' ? 'Edit and resend' : 'Delete from here?'}
+						</p>
+						<p class="text-sm text-muted-foreground">
+							{revision.mode === 'edit'
+								? 'Replaces this message and removes all later messages. Attached files stay with it.'
+								: 'Removes this message and all later messages so you can continue from the earlier conversation.'}
+							Completed actions and saved memory stay unchanged.
+						</p>
+						{#if revision.mode === 'edit'}
+							<Textarea
+								aria-label="Edit message"
+								bind:value={revision.text}
+								maxlength={16000}
+								disabled={revising}
+								rows={4}
+							/>
+						{/if}
+						{#if revisionError}<p role="alert" class="text-sm text-failed">{revisionError}</p>{/if}
+						<div class="flex flex-wrap justify-end gap-2">
+							<Button
+								variant="ghost"
+								disabled={revising}
+								onclick={() => {
+									revision = null;
+								}}>Cancel</Button
+							>
+							<Button
+								type="submit"
+								disabled={revising || (revision.mode === 'edit' && !revision.text.trim())}
+								>{revising
+									? 'Updating…'
+									: revision.mode === 'edit'
+										? 'Save and resend'
+										: 'Delete from here'}</Button
+							>
+						</div>
+					</form>
+				</div>
+			{/if}
 		</li>
 	{/each}
+
 	{#if after}<li class="flex flex-col gap-2">{@render after()}</li>{/if}
 </ol>

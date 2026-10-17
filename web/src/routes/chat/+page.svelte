@@ -392,6 +392,7 @@
 			onretrysend={(id) => s.retry(id)}
 			onsteersend={(id) => s.steerNow(id)}
 			ondeletesend={(id) => void s.discard(id)}
+			onrewind={(id, text) => s.rewind(id, text)}
 			onanswer={(askId, answer) => s.answer(askId, answer)}
 			onapprove={(nonce, location) => void s.decide(nonce, 'approve', location)}
 			ondeny={(nonce) => void s.decide(nonce, 'deny')}

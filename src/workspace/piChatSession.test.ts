@@ -263,3 +263,35 @@ test("shared owner-request tools survive real Pi main/topic reload and share can
     for (const session of sessions) session.dispose();
   }
 });
+
+test("rewind drops a user message and its tail from model context and survives reopening", async () => {
+  const factory = createPiChatSessionFactory(testConfig());
+  const built = await factory({ sessionFile: null });
+  const s = built.session as AgentSession;
+  const first = "01J9Z3W8K2M4N6P8Q0R2S4T6V8";
+  const second = "01J9Z3W8K2M4N6P8Q0R2S4T6V9";
+  s.sessionManager.appendMessage({ role: "user", content: `[web:${first} 2026-10-17 12:00 UTC]\nkeep`, timestamp: Date.now() });
+  s.sessionManager.appendMessage({ role: "user", content: `[web:${second} 2026-10-17 12:01 UTC]\nremove`, timestamp: Date.now() });
+  s.sessionManager.appendCustomEntry("test-tail", {});
+  expect(await built.session.rewind!(second)).toEqual({ ok: true });
+  expect(JSON.stringify(s.messages)).toContain("keep");
+  expect(JSON.stringify(s.messages)).not.toContain("remove");
+  s.dispose();
+  const reopened = await factory({ sessionFile: built.sessionFile });
+  expect(JSON.stringify(reopened.session.messages)).toContain("keep");
+  expect(JSON.stringify(reopened.session.messages)).not.toContain("remove");
+  expect((await reopened.session.rewind!(second)).ok).toBe(false);
+  expect((await reopened.session.rewind!(first)).ok).toBe(true);
+  expect(JSON.stringify(reopened.session.messages)).not.toContain("keep");
+  reopened.session.dispose();
+});
+
+test("rewind also removes a user message at the current leaf", async () => {
+  const built = await createPiChatSessionFactory(testConfig())({ sessionFile: null });
+  const s = built.session as AgentSession;
+  const id = "01J9Z3W8K2M4N6P8Q0R2S4T6V8";
+  s.sessionManager.appendMessage({ role: "user", content: `[web:${id} 2026-10-17 12:00 UTC]\nremove`, timestamp: Date.now() });
+  expect(await built.session.rewind!(id)).toEqual({ ok: true });
+  expect(JSON.stringify(s.messages)).not.toContain("remove");
+  s.dispose();
+});

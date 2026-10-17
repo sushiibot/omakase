@@ -369,6 +369,7 @@
 						onretrysend: (m) => store.retry(m),
 						onsteersend: (m) => store.steerNow(m),
 						ondeletesend: (m) => void store.discard(m),
+						onrewind: (id, text) => store.rewind(id, text),
 						onanswer: (askId, answer) => store.answer(askId, answer),
 						onapprove: (nonce, location) => void store.decide(nonce, 'approve', location),
 						ondeny: (nonce) => void store.decide(nonce, 'deny')

@@ -33,6 +33,7 @@ import {
   topicsManageParams,
   topicsManageResult,
   chatDeliverParams,
+  chatRewindResult,
   chatExportResult,
   runsChangedParams,
   type RunsChangedParams,
@@ -487,6 +488,10 @@ export class WorkspaceLink {
   markTurnEnded(turnId: string): void {
     this.rememberEnded(turnId, null);
     this.persistProgress();
+  }
+
+  async rewind(messageId: string, origin: ChatOrigin): Promise<{ ok: boolean; error?: string }> {
+    return chatRewindResult.parse(await this.request(RPC_METHODS.chatRewind, { principalId: this.opts.principalId, messageId, origin }, 30_000));
   }
 
   async newSession(origin?: ChatOrigin): Promise<{ sessionFile: string }> {

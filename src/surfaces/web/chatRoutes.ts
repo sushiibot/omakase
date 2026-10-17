@@ -68,7 +68,7 @@ export type ChatRouteLink = Pick<
   | "command"
   | "stopTurn"
   | "answerAsk"
->;
+> & Partial<Pick<WorkspaceLink, "rewind">>;
 
 export interface ChatRouteDeps {
   log: SqliteChatLog;
@@ -127,6 +127,7 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
   const shutdown = new AbortController();
   // clientIds being routed right now, so a duplicate POST can't route the same message twice at once.
   const routing = new Map<string, Promise<void>>();
+  let rewinding = false;
 
   const online = () => deps.workspaceEnabled && link.isConnected();
   // Routing needs a verified actor, which only a request carries; a re-drive waits for one.
@@ -142,7 +143,7 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
    *  routed; a workspaceOffline notice leaves it for the client to resend. */
   function drive(row: { clientId: string; text: string; uploadIds: string[]; voice?: boolean }, actor: SurfaceActor): void {
     // Checked in the same tick routing starts, so a delete either sees this route in flight or wins outright.
-    if (routing.has(row.clientId) || inbound.get(row.clientId)?.state !== "pending") return;
+    if (rewinding || routing.has(row.clientId) || inbound.get(row.clientId)?.state !== "pending") return;
     const run = (async () => {
       const known = row.uploadIds.length && deps.uploads ? deps.uploads.lookup(row.uploadIds) : new Map<string, UploadRef>();
       const attachments: InboundMessage["attachments"] = row.uploadIds.flatMap((id) => {
@@ -197,7 +198,7 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
   function redriveUnrouted(): void {
     redriveWanted = true;
     const actor = lastActor;
-    if (redriving || !actor || !online() || adapter.openTurns().length > 0 || shutdown.signal.aborted) return;
+    if (rewinding || redriving || !actor || !online() || adapter.openTurns().length > 0 || shutdown.signal.aborted) return;
     redriving = true;
     redriveWanted = false;
     void (async () => {
@@ -242,6 +243,7 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
   async function postMessage(req: Request, actor: SurfaceActor): Promise<Response> {
     const body = await parseBody(req, messageBody, MESSAGE_BODY_MAX);
     if (body instanceof Response) return body;
+    if (rewinding) return json({ error: "History is being changed. Try again." }, 409);
     if (inbound.claimedElsewhere(body.clientId)) return json({ error: "This message id belongs to another conversation." }, 409);
     const uploadIds = [...new Set(body.uploadIds ?? [])];
     const existing = inbound.get(body.clientId);
@@ -310,6 +312,34 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
     if (inbound.discard(clientId)) return json({ discarded: true } satisfies DiscardMessageResponse);
     if (row.state === "discarded") return json({ discarded: true } satisfies DiscardMessageResponse);
     return json({ routed: true } satisfies DiscardMessageRoutedResponse, 409);
+  }
+
+  async function rewindMessage(req: Request, clientId: string, actor: SurfaceActor): Promise<Response> {
+    if (!link.isOwner(actor)) return forbidden();
+    if (!CLIENT_ID_RE.test(clientId)) return json({ error: "not found" }, 404);
+    const body = await parseBody(req, z.object({ replacement: z.object({ clientId: z.string().regex(CLIENT_ID_RE), text: z.string().trim().min(1).max(MESSAGE_TEXT_MAX) }).strict().optional() }).strict(), MESSAGE_BODY_MAX);
+    if (body instanceof Response) return body;
+    if (body.replacement && (inbound.get(body.replacement.clientId) || inbound.claimedElsewhere(body.replacement.clientId))) return json({ error: "Replacement message already exists." }, 409);
+    const target = chatLog.find("user", clientId);
+    if (!target || target.data.byAgent) return json({ error: "Message not found." }, 404);
+    if (!online() || !link.rewind) return json({ error: "Connect to the workspace before changing history." }, 503);
+    if (rewinding || routing.size || adapter.openTurns().length || inbound.unrouted(0).length) return json({ error: "Wait for pending messages and running work to finish first." }, 409);
+    rewinding = true;
+    try {
+      const result = await link.rewind(clientId, origin);
+      if (!result.ok) return json({ error: result.error ?? "Could not rewind this conversation." }, 409);
+      chatLog.transaction(() => {
+        chatLog.rewindFrom(target.seq, clientId);
+        if (body.replacement) {
+          const { clientId: key, text } = body.replacement;
+          const uploadIds = target.data.uploadIds;
+          const at = now();
+          const seq = chatLog.append("user", { key, text, uploadIds, at: new Date(at).toISOString() }, key);
+          inbound.insert({ clientId: key, text, uploadIds, seq, createdAt: at });
+        }
+      });
+      return json({ ok: true });
+    } finally { rewinding = false; redriveUnrouted(); }
   }
 
   async function postStop(req: Request, actor: SurfaceActor): Promise<Response> {
@@ -432,6 +462,7 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
     setUpdates(source) { updates = source; },
     async handle(req, path, actor, server) {
       if (!path.startsWith("/api/chat/")) return null;
+      if (rewinding && req.method !== "GET") return json({ error: "History is being changed. Try again." }, 409);
       lastActor = actor;
       if (redriveWanted) redriveUnrouted();
       const method = req.method;
@@ -440,6 +471,8 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
       if (sub === "history") return method === "GET" ? getHistory(req) : methodNotAllowed();
       const message = /^messages\/([^/]+)$/.exec(sub);
       if (message) return method === "DELETE" ? deleteMessage(decodeSegment(message[1]!) ?? "") : methodNotAllowed();
+      const rewind = /^messages\/([^/]+)\/rewind$/.exec(sub);
+      if (rewind) return method === "POST" ? rewindMessage(req, decodeSegment(rewind[1]!) ?? "", actor) : methodNotAllowed();
       const steer = /^messages\/([^/]+)\/steer$/.exec(sub);
       if (steer) return method === "POST" ? postSteer(decodeSegment(steer[1]!) ?? "", actor) : methodNotAllowed();
       if (method !== "POST") return methodNotAllowed();

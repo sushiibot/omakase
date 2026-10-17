@@ -11,6 +11,7 @@ export const RPC_METHODS = {
   chatMessage: "chat/message",
   chatAbort: "chat/abort",
   chatNew: "chat/new",
+  chatRewind: "chat/rewind",
   chatAck: "chat/ack",
   topicsManage: "topics/manage",
   // Owner commands the workspace answers itself (!compact, !model, !tasks) → { text }.
@@ -106,6 +107,9 @@ export type ChatAbortParams = z.infer<typeof chatAbortParams>;
 export interface ChatAbortResult {
   aborted: boolean;
 }
+
+export const chatRewindParams = z.object({ principalId: z.string(), messageId: z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/), origin: chatOrigin });
+export const chatRewindResult = z.object({ ok: z.boolean(), error: z.string().optional() });
 
 export const chatNewParams = z.object({ principalId: z.string(), origin: chatOrigin.optional() });
 export type ChatNewParams = z.infer<typeof chatNewParams>;

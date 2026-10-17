@@ -443,6 +443,18 @@ export function createPiChatSessionFactory(
     };
     if (model.provider === CHATGPT_PROVIDER) restoreChatGptThinking(session);
 
+    Object.assign(session, { rewind: async (messageId: string) => {
+      const target = sessionManager.getBranch().find(e => e.type === "message" && e.message.role === "user" &&
+        (typeof e.message.content === "string" ? e.message.content : e.message.content.filter(p => p.type === "text").map(p => p.text).join("\n")).startsWith(`[web:${messageId} `));
+      if (!target) return { ok: false, error: "This message is outside the current agent session. Choose a message after the latest session boundary." };
+      // Pi treats navigation to the current leaf as a no-op, even for a user entry.
+      if (sessionManager.getLeafId() === target.id) sessionManager.appendCustomEntry("sushii.rewind.prepare", {});
+      const result = await session.navigateTree(target.id, { summarize: false });
+      if (result.cancelled) return { ok: false, error: "The history change was cancelled." };
+      // Persist the selected branch even if the owner deletes without sending a replacement.
+      sessionManager.appendCustomEntry("sushii.rewind", { messageId });
+      return { ok: true };
+    }});
     const file = sessionManager.getSessionFile();
     if (!file) throw new Error("pi chat session has no persisted file");
     sessionOverrides.set(session, { session, overrides, context: () => loader.getAgentsFiles().agentsFiles.map(f => ({ ...f, path: relative(config.home, f.path) })).filter(f => f.path && !f.path.startsWith("..") && !f.path.startsWith("/")), ownerName: () => config.ownerName });
