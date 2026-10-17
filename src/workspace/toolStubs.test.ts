@@ -1,3 +1,4 @@
+import { mailManifest, toolPolicyManifest } from "../integrations/mail/manifest.ts";
 import { fileStoreManifest } from "../orchestration/workspace/fileStores/service.ts";
 import { machineFileManifest } from "../orchestration/machines/control.ts";
 import { codingAgentManifest } from "../orchestration/machines/agents.ts";
@@ -57,7 +58,7 @@ function byName(s: ToolStubs, name: string, ctx?: Parameters<ToolStubs["definiti
 
 describe("manifest → stubs", () => {
   test("the known names match the bot's proxied tools", () => {
-    expect([...KNOWN_PROXIED_TOOLS].sort()).toEqual([...Object.keys(PROXIED_TOOLS), LOCATION_TOOL, taskManifest.name, machineFileManifest.name, codingAgentManifest.name, "list_channel_requests"].sort());
+    expect([...KNOWN_PROXIED_TOOLS].sort()).toEqual([...Object.keys(PROXIED_TOOLS), ...mailManifest.map(t => t.name), toolPolicyManifest.name, LOCATION_TOOL, taskManifest.name, machineFileManifest.name, codingAgentManifest.name, "list_channel_requests"].sort());
   });
 
   test("one stub per known manifest entry, carrying its name, description and schema", () => {
@@ -385,4 +386,13 @@ test("external files stay CLI-only even when offered by the bot", async () => {
   expect(s.names()).toEqual(["web_search"]);
   expect(s.definitions().some(t => t.name === "external_files")).toBe(false);
   expect(KNOWN_PROXIED_TOOLS).not.toContain("external_files");
+});
+
+test("draft review resolves only the selected account through the gateway", async () => {
+  const account = { id: "property", email: "property@example.com", purpose: "Oak Street" };
+  const h = stubs(async () => ({ ok: true, result: JSON.stringify({ accounts: [account, {id: "personal", email: "private@example.com"}] }) }));
+  h.s.update(mailManifest);
+  expect(await h.s.reviewMailAccount("property")).toEqual(account);
+  expect(h.calls[0]?.params.name).toBe("mail_accounts");
+  await expect(h.s.reviewMailAccount("removed")).rejects.toThrow("disconnected");
 });

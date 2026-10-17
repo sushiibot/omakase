@@ -269,7 +269,7 @@
 					{#if server.changed}
 						<p class="text-sm text-muted-foreground">
 							Marked lines show changes since the saved snapshot. Added and changed tools are
-							available without approval.
+							available for review under your tool-use rules.
 						</p>
 					{/if}
 					<ul class="flex flex-col divide-y rounded-xl border text-sm">

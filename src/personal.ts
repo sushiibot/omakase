@@ -1,3 +1,5 @@
+import { createMailService } from "./integrations/mail/index.ts";
+import { MailRoutes, TOOL_POLICY_KEY } from "./surfaces/web/mailRoutes.ts";
 // The personal agent's server side: the web gateway for the PWA and the workspace control plane.
 import { exitAfterBackoff } from "./crashBackoff.ts";
 import { otelSDK } from "./telemetry.ts";
@@ -76,6 +78,9 @@ async function main() {
   const machines = new MachineHub(machineGrants.parse(JSON.parse(process.env.SUSHII_MACHINES_JSON ?? "[]")));
   workspace.server.setMachineHub(machines);
   const agentState = new KvJsonState(db);
+  const mail = createMailService(agentState);
+  workspace.tools.setMail((name, args) => mail.action(name, args));
+  workspace.tools.setToolPolicy(() => agentState.get<string>(TOOL_POLICY_KEY) ?? "");
   const machineControl = new MachineControl(machines, new CodingAgentStore(agentState));
   const codingAgents = new CodingAgents(machineControl);
   const machineRoutes = new MachineRoutes(machineControl, codingAgents);
@@ -108,6 +113,7 @@ async function main() {
     tasks: taskRoutes,
     machines: machineRoutes,
     fileStores: new FileStoreRoutes(fileStores),
+    mail: new MailRoutes(mail, agentState),
     home: webChat.home,
     uploads,
     browser: createBrowserRoutes(workspace.link),

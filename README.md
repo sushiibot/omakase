@@ -104,6 +104,12 @@ The [gateway configuration](src/config.ts), [web configuration](src/surfaces/web
 [workspace configuration](src/workspace/config.ts) define all variables and defaults.
 Optional integrations include web push, GitHub App credentials, Exa, Grafana, Linear, and live voice providers.
 
+## Native mail accounts
+
+Use **Connectors → Accounts & rules** to connect Gmail or Fastmail accounts.
+The gateway stores credentials and exposes mail reads and draft saves. It cannot send mail through these tools.
+See [mail setup](docs/mail.md) for Google OAuth configuration, permissions, and limits.
+
 ## MCP connections
 
 Use **Connectors → Add a server** in the web app to connect a remote MCP server.
@@ -112,7 +118,8 @@ Connections support Streamable HTTP and OAuth with dynamic client registration.
 Local stdio servers and legacy SSE are not supported.
 
 Connected tools are available in chat, but not scheduled jobs.
-A connection authorizes tool use without per-call approval, including new or changed tools from that server.
+Each MCP call goes through the decision model and the owner’s tool-use rules.
+Actions that notify external people require human approval for that call.
 Use a read-only token to restrict access at the provider.
 
 The workspace stores credentials outside the browser.

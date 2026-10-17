@@ -237,7 +237,7 @@ export function createPiChatSessionFactory(
       syncOverrides?.();
     });
     if (opts.choice) await registerOpenRouter(opts.choice.openrouterIds());
-    const openrouterJudge = config.autoMode
+    const openrouterJudge = (config.autoMode || opts.connectors || opts.toolStubs)
       ? registerJudgeModel(modelRuntime, { model: config.judgeModel ?? DEFAULT_JUDGE_MODEL, apiKey: config.apiKey, baseUrl: config.baseUrl })
       : null;
     const chatgptJudge = openrouterJudge && config.provider === "chatgpt" ? chatgptJudgeModel(modelRuntime, config) : undefined;
@@ -329,6 +329,13 @@ export function createPiChatSessionFactory(
                   judge: judgeForBackend({ selector, runtime: modelRuntime, chatgpt: chatgptJudge, openrouter: openrouterJudge }),
                   complete: judgeCompletion(modelRuntime, { selector, openrouter: openrouterJudge, log: autoModeLog }),
                   agentDir: config.agentDir,
+                  integrationsOnly: !config.autoMode,
+                  reviewPolicy: stubs ? () => stubs.reviewPolicy() : undefined,
+                  describeCall: async (input, tool) => {
+                    if (tool === "mail_save_draft" && stubs) return stubs.reviewMailAccount(input.accountId);
+                    if (tool === "mcp_call_tool" && opts.connectors) return opts.connectors.reviewDescription(input);
+                    throw new Error("Integration metadata unavailable");
+                  },
                   currentRunId: () => observerRef.current?.currentRunId() ?? null,
                   log: autoModeLog,
                 }),

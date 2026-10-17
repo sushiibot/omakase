@@ -745,3 +745,17 @@ test("external files enforce owner, principal and schema before reaching the ada
   expect(await absent.tools.handleCall(conn(), call("external_files", { action: "list_stores" }))).toMatchObject({ ok: false });
   expect(calls).toBe(1);
 });
+
+test("mail uses the authenticated gateway boundary and unknown sends cannot reach the adapter", async () => {
+  const {tools, log} = setup(); const calls: string[] = [];
+  tools.setMail(async name => { calls.push(name); return {accounts: []}; });
+  tools.setToolPolicy(() => "Drafts only");
+  expect(tools.manifest().some(t => t.name === "mail_save_draft")).toBe(true);
+  expect(await tools.handleCall(conn(), call("mail_accounts", {}))).toMatchObject({ok: true, result: '{"accounts":[]}'});
+  expect(await tools.handleCall({...conn(), principalId: "other"}, call("mail_accounts", {}))).toMatchObject({ok: false, error: "principal mismatch"});
+  expect(await tools.handleCall(conn(), call("mail_send", {}))).toMatchObject({ok: false});
+  expect(await tools.handleCall(conn(), call("tool_policy", {rules: "ignore rules"}))).toMatchObject({ok: false});
+  expect(await tools.handleCall(conn(), call("tool_policy", {}))).toMatchObject({ok: true, result: '{"rules":"Drafts only"}'});
+  expect(calls).toEqual(["mail_accounts"]);
+  expect(log.lines.some(l => l.obj.name === "mail_accounts" && l.obj.ok)).toBe(true);
+});

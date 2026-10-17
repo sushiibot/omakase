@@ -1,3 +1,4 @@
+import { mailManifest, toolPolicyManifest } from "../../integrations/mail/manifest.ts";
 import { fileStoreManifest } from "./fileStores/service.ts";
 import { machineFileManifest } from "../machines/control.ts";
 import { CODING_AGENT_TOOL, codingAgentManifest } from "../machines/agents.ts";
@@ -207,6 +208,11 @@ export class WorkspaceTools {
     return out;
   }
 
+  private mail?: (name: string, args: unknown) => Promise<unknown>;
+  setMail(call: NonNullable<WorkspaceTools["mail"]>) { this.mail = call; }
+  private toolPolicy?: () => string;
+  setToolPolicy(read: () => string) { this.toolPolicy = read; }
+
   private taskControl?: (args: unknown, actor: SurfaceActor, conversationId?: string) => Promise<unknown>;
   setTaskControl(control: NonNullable<WorkspaceTools["taskControl"]>) { this.taskControl = control; }
   private channelRequests?: () => unknown;
@@ -230,6 +236,8 @@ export class WorkspaceTools {
       inputSchema: schema,
       approval: PROXIED_TOOLS[entry.name]!.approval,
     }));
+    if (this.mail) tools.push(...mailManifest);
+    if (this.toolPolicy) tools.push(toolPolicyManifest);
     if (this.externalFiles && this.opts.ownerUserId()) tools.push(fileStoreManifest);
     if (this.machineFiles && this.opts.ownerUserId()) tools.push(machineFileManifest);
     if (this.location) tools.push(locationManifest);
@@ -277,6 +285,14 @@ export class WorkspaceTools {
 
   private async dispatch(conn: ConnectionInfo, p: ToolCallParams): Promise<ToolCallResult> {
     if (p.principalId !== this.opts.principalId || conn.principalId !== this.opts.principalId) return { ok: false, error: "principal mismatch" };
+    if (p.name === "tool_policy") {
+      if (!this.toolPolicy || this.closed.has(conn) || !Check(toolPolicyManifest.inputSchema, p.args ?? {})) return { ok: false, error: "Tool policy is unavailable." };
+      return { ok: true, result: JSON.stringify({ rules: this.toolPolicy() }) };
+    }
+    if (mailManifest.some(t => t.name === p.name)) {
+      if (!this.mail || this.closed.has(conn)) return { ok: false, error: "Mail is unavailable." };
+      return { ok: true, result: JSON.stringify(await this.mail(p.name, p.args ?? {})) };
+    }
     if (p.name === "external_files") {
       if (!this.externalFiles || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "External files are unavailable." };
       if (!Check(fileStoreManifest.inputSchema, p.args ?? {})) return { ok: false, error: "Invalid external file request." };

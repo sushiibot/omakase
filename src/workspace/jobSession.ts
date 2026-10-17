@@ -1,3 +1,5 @@
+import { createAutoModeExtension, registerJudgeModel, judgeCompletion } from "./autoMode.ts";
+import { DEFAULT_JUDGE_MODEL } from "./config.ts";
 import { autoCompactionSettings } from "./contextEconomy.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -52,6 +54,7 @@ export interface ToolFreeJobInput {
   readOnlyTools?: { toolStubs?: ToolStubs };
   /** Host-supplied read-only tools, never discovered from the workspace. */
   evidenceTools?: ToolDefinition[];
+  describeMcpCall?: (input: Record<string, unknown>) => Promise<unknown>;
 }
 
 export interface ToolFreeJobResult {
@@ -123,9 +126,11 @@ export async function runToolFreeJob(config: WorkspaceConfig, input: ToolFreeJob
   // Approval-gated tools would park a job past its own timeout; jobs only get tools that run without asking.
   // A job never launches coding agents: their results report to a conversation, which a job has none of.
   const jobStubTools = (input.readOnlyTools?.toolStubs
-    ? KNOWN_PROXIED_TOOLS.filter((n) => n !== CODING_AGENT_TOOL && input.readOnlyTools?.toolStubs?.entry(n)?.approval === "none")
+    ? KNOWN_PROXIED_TOOLS.filter((n) => n !== CODING_AGENT_TOOL && n !== "mail_save_draft" && input.readOnlyTools?.toolStubs?.entry(n)?.approval === "none")
     : []) as string[];
   const stubs = input.readOnlyTools?.toolStubs?.binding({ agentId: input.agentName, agentName: input.agentName });
+  const integrationJudge = withTools && evidenceNames.includes("mcp_call_tool")
+    ? registerJudgeModel(modelRuntime, { model: config.judgeModel ?? DEFAULT_JUDGE_MODEL, apiKey: config.apiKey, baseUrl: config.baseUrl }) : null;
   const guards: { name: string; factory: ExtensionFactory }[] = withTools
     ? [
         { name: "sushii-secret-guard", factory: createSecretGuardExtension({ agentDir: config.agentDir, cwd, home: config.home, stateDir: config.stateDir, log, ownerName: () => config.ownerName }) },
@@ -145,6 +150,12 @@ export async function runToolFreeJob(config: WorkspaceConfig, input: ToolFreeJob
     appendSystemPromptOverride: () => [],
     extensionFactories: [
       ...guards,
+      ...(integrationJudge ? [{ name: "sushii-integration-review", factory: createAutoModeExtension({
+        judge: async () => integrationJudge, complete: judgeCompletion(modelRuntime),
+        agentDir: config.agentDir, integrationsOnly: true, log,
+        reviewPolicy: async () => { if (!stubs) throw new Error("Tool policy unavailable"); return stubs.reviewPolicy(); },
+        describeCall: async (args) => { if (!input.describeMcpCall) throw new Error("MCP metadata unavailable"); return input.describeMcpCall(args); },
+      }) }] : []),
       // Compose existing tools only; model APIs stay on the host accounting and policy paths.
       ...(withTools ? [{ name: "sushii-codemode", factory: createCodemodeExtension({ mode: "on", models: false }) }] : []),
       {

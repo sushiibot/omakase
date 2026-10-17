@@ -147,8 +147,8 @@
 						spellcheck={false}
 					/>
 					<Field.Description id="{uid}-token-help">
-						For Fastmail, use https://api.fastmail.com/mcp and create an MCP token with only “Read
-						data” enabled. The token is stored on the workspace server.
+						Use Accounts &amp; rules for native mail reads and drafts. MCP tokens are stored on the
+						workspace server; restrict their permissions at the provider.
 					</Field.Description>
 				</Field.Field>
 			</Field.Group>

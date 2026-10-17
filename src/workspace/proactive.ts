@@ -167,6 +167,7 @@ export interface PromptJobDeps {
   toolStubs?: ToolStubs;
   maintenance?: MaintenanceService;
   evidenceTools?: () => ToolDefinition[];
+  describeMcpCall?: (input: Record<string, unknown>) => Promise<unknown>;
   connectedSources?: () => Promise<string>;
   /** Shared follow-ups prevent broad reviews from repeating item-specific checks. */
   scheduledChecks?: () => string;
@@ -213,6 +214,7 @@ export function createPromptJob(spec: PromptJobSpec, deps: PromptJobDeps): Sched
         runs: deps.runs,
         selector: deps.selector,
         contextFiles: ["AGENTS.md", "USER.md"],
+        describeMcpCall: deps.describeMcpCall,
         evidenceTools: [...(deps.evidenceTools?.() ?? []), ...(maintenance?.tools() ?? [])],
         readOnlyTools: deps.toolStubs ? { toolStubs: deps.toolStubs } : {},
       }).catch(error => { maintenance?.noteReview("The review did not complete. Existing proposals are still available."); throw error; });
@@ -271,6 +273,7 @@ export interface ProactiveWiring {
   toolStubs?: ToolStubs;
   maintenance?: MaintenanceService;
   evidenceTools?: () => ToolDefinition[];
+  describeMcpCall?: (input: Record<string, unknown>) => Promise<unknown>;
   connectedSources?: () => Promise<string>;
   /** Shared follow-ups prevent broad reviews from repeating item-specific checks. */
   scheduledChecks?: () => string;
@@ -294,6 +297,7 @@ export function wireProactiveJobs(scheduler: Scheduler, w: ProactiveWiring): voi
     selector: w.selector,
     maintenance: w.maintenance,
     evidenceTools: w.evidenceTools,
+    describeMcpCall: w.describeMcpCall,
     connectedSources: w.connectedSources,
     ...(w.toolStubs ? { toolStubs: w.toolStubs } : {}),
     limiter,

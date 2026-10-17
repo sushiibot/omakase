@@ -13,7 +13,9 @@ test('connector tool changes are informational and the tracking snapshot is opti
 	await expect(page.getByText('New on the server')).toBeVisible();
 	await expect(page.getByText('Gone from the server')).toBeVisible();
 	await expect(
-		page.getByText('Added and changed tools are available without approval.', { exact: false })
+		page.getByText('Added and changed tools are available for review under your tool-use rules.', {
+			exact: false
+		})
 	).toBeVisible();
 	await page.getByRole('button', { name: 'Save tracking snapshot' }).click();
 	await expect(page.getByText('Gone from the server')).toHaveCount(0);

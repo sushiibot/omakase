@@ -12,6 +12,7 @@ const log = getLogger("workspace.tools");
  * stub can only be registered later under a name listed here; a manifest name outside it is skipped.
  */
 export const KNOWN_PROXIED_TOOLS: readonly string[] = [
+  "mail_accounts", "mail_search", "mail_read", "mail_attachment", "mail_save_draft", "tool_policy",
   "web_search",
   "fetch_url_content",
   "search_logs",
@@ -168,6 +169,25 @@ export class ToolStubs {
     throw new Error(`malformed tool/call result for ${name}`);
   }
 
+  async reviewMailAccount(accountId: unknown): Promise<unknown> {
+    const result = await this.call("mail_accounts", {}, MAIN_AGENT, undefined);
+    const block = result.content[0];
+    if (block?.type !== "text") throw new Error("Mail account metadata unavailable");
+    const account = JSON.parse(block.text).accounts?.find((a: {id: string}) => a.id === accountId);
+    if (!account) throw new Error("Mail account is disconnected");
+    return account;
+  }
+
+  async reviewPolicy(): Promise<string> {
+    if (!this.manifest.has("tool_policy")) throw new Error("Tool review policy is unavailable; reconnect the workspace.");
+    const result = await this.call("tool_policy", {}, MAIN_AGENT, undefined);
+    const block = result.content[0];
+    if (block?.type !== "text") throw new Error("Invalid tool review policy");
+    const rules = JSON.parse(block.text).rules;
+    if (typeof rules !== "string" || rules.length > 4000) throw new Error("Invalid tool review policy");
+    return rules;
+  }
+
   /** Withdraws a call whose turn was stopped, so its approval prompt can't run it later. Best-effort: the
    *  prompt still expires on its own if this never arrives. */
   private cancel(callId: string): void {
@@ -205,6 +225,9 @@ export class StubBinding {
     this.pi = null;
     this.stubs.release(this);
   }
+
+  reviewPolicy(): Promise<string> { return this.stubs.reviewPolicy(); }
+  reviewMailAccount(accountId: unknown): Promise<unknown> { return this.stubs.reviewMailAccount(accountId); }
 
   /** Stub names registered and declared to the model. */
   offered(): string[] {

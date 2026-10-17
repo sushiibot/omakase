@@ -19,5 +19,6 @@
 	online={pwa.online}
 	serverHref={(id) => resolve('/connectors/[id]', { id })}
 	addHref={resolve('/connectors/add')}
+	mailHref={resolve('/connectors/mail')}
 	onretry={() => void list.refetch()}
 />

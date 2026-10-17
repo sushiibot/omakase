@@ -25,6 +25,7 @@
 		online = true,
 		serverHref = (id) => `/connectors/${id}`,
 		addHref = '/connectors/add',
+		mailHref = '/connectors/mail',
 		onretry
 	}: {
 		remote: RemoteLike;
@@ -33,6 +34,7 @@
 		online?: boolean;
 		serverHref?: (id: string) => string;
 		addHref?: string;
+		mailHref?: string;
 		onretry?: () => void;
 	} = $props();
 
@@ -128,6 +130,7 @@
 	<ScreenContent>
 		<PageIntro description="Tools available to your agent.">
 			{#snippet actions()}
+				<Button href={mailHref} variant="outline">Accounts &amp; rules</Button>
 				<Button href={addHref} variant="outline" aria-label="Add a server by URL">
 					<Plus aria-hidden="true" />Add server
 				</Button>
@@ -142,7 +145,7 @@
 			{skeleton}
 			empty={{
 				title: 'No servers yet',
-				body: 'An MCP server gives the agent tools, like your mail or calendar. Add one with its address.'
+				body: 'Connect mail through Accounts & rules, or add an MCP server for other tools.'
 			}}
 		>
 			<div class="flex flex-col gap-6">

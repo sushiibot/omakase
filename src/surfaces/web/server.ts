@@ -1,3 +1,4 @@
+import { isMailCallback, type MailRoutes } from "./mailRoutes.ts";
 import { createUpdates, type UpdateSource } from "./updates.ts";
 import type { BrowserRoutes } from "./browserRoutes.ts";
 // The peer-IP check trusts that only the Serve host sends from WEB_TRUSTED_PEERS. Anything with host
@@ -65,6 +66,7 @@ export interface WebHandlerDeps {
   browser?: BrowserRoutes;
   /** /api/settings/*; absent: they answer 404. */
   settings?: SettingsRoutes;
+  mail?: MailRoutes;
 }
 
 /** The slice of Bun's server a route may use: lifting the idle timeout for a stream. */
@@ -117,6 +119,8 @@ export function createWebHandler(deps: WebHandlerDeps): WebHandler {
   /** `actor` is the only identity a route may hand to the workspace's owner checks. */
   async function api(req: Request, path: string, login: string, actor: SurfaceActor, server?: RequestTimeouts): Promise<Response> {
     const method = req.method;
+    // OAuth callbacks are authenticated owner navigations; MailRoutes verifies a one-use state and browser cookie.
+    if (method === "GET" && isMailCallback(path) && deps.mail) return (await deps.mail.handle(req, path))!;
     if (method === "GET" || method === "HEAD") {
       // Fetch Metadata: a browser always sends it, so only a non-browser client may omit it.
       const site = req.headers.get("Sec-Fetch-Site");
@@ -128,6 +132,7 @@ export function createWebHandler(deps: WebHandlerDeps): WebHandler {
       try { return (await deps.threads.handle(req, path, actor, server)) ?? json({ error: "not found" }, 404); }
       catch (err) { logger.warn({ err }, "thread request failed"); return json({ error: err instanceof Error ? err.message : "Thread request failed" }, 409); }
     }
+    if (deps.mail) { const response = await deps.mail.handle(req, path); if (response) return response; }
     if (deps.fileStores) {
       const res = await deps.fileStores.handle(req, path);
       if (res) return res;
@@ -270,6 +275,7 @@ export interface WebServerOptions {
   voice?: VoiceRoutes;
   browser?: BrowserRoutes;
   settings?: SettingsRoutes;
+  mail?: MailRoutes;
 }
 
 export async function startWebServer(config: WebConfig, db: Database, opts: WebServerOptions = {}): Promise<Server<VoiceSocketData>> {
@@ -307,6 +313,7 @@ export async function startWebServer(config: WebConfig, db: Database, opts: WebS
     ...(opts.voice ? { voice: opts.voice } : {}),
     ...(opts.browser ? { browser: opts.browser } : {}),
     ...(opts.settings ? { settings: opts.settings } : {}),
+    ...(opts.mail ? { mail: opts.mail } : {}),
   });
   if (config.devLogin && isLoopback(config.bindAddr)) {
     logger.warn({ devLogin: config.devLogin }, "WEB_DEV_LOGIN is active: requests without an identity header are treated as this login");

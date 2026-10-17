@@ -305,6 +305,7 @@ async function main(): Promise<void> {
   wireProactiveJobs(scheduler, {
     maintenance,
     evidenceTools: () => connectors.readOnlyTools(),
+    describeMcpCall: (input) => connectors.reviewDescription(input),
     connectedSources: async () => JSON.stringify(await connectors.discoverReadOnly()),
     scheduledChecks: () => `Pending one-time checks: ${JSON.stringify(wakeups.list().map(({ key, title, at, conversationId, taskId }) => ({ key, title, at, conversationId, taskId })))}. These items already have follow-ups. Do not repeat them unless something urgent changed. Reuse existing unanswered requests.`,
     config,

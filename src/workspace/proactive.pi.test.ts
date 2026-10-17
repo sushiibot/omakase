@@ -1,3 +1,5 @@
+import { Type } from "typebox";
+import { mailManifest, toolPolicyManifest } from "../integrations/mail/manifest.ts";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -118,7 +120,7 @@ describe("heartbeat on a real Pi session", () => {
       calls.push((params as ToolCallParams).name);
       return { ok: true, result: "search hits" };
     } });
-    stubs.update([SEARCH, LINEAR]);
+    stubs.update([SEARCH, LINEAR, ...mailManifest]);
     script = [
       { tool: { name: "codemode", args: { code: `
         const results = await Promise.allSettled([
@@ -127,7 +129,7 @@ describe("heartbeat on a real Pi session", () => {
           tools.read({path: ${JSON.stringify(join(cfg.agentDir, "auth.json"))}})
         ]);
         text(results);
-        text({write: "write" in tools, bash: "bash" in tools, gated: "file_linear_issue" in tools, models: typeof models});
+        text({write: "write" in tools, bash: "bash" in tools, gated: "file_linear_issue" in tools, models: typeof models, draft: "mail_save_draft" in tools});
       ` } } },
       { text: "NO_REPLY" },
     ];
@@ -139,7 +141,7 @@ describe("heartbeat on a real Pi session", () => {
     expect(results).toContain("Deploys from main");
     expect(results).toContain("rejected");
     expect(results).not.toContain(AUTH_SECRET);
-    expect(results).toContain('{"write":false,"bash":false,"gated":false,"models":"undefined"}');
+    expect(results).toContain('{"write":false,"bash":false,"gated":false,"models":"undefined","draft":false}');
     expect(results).toContain("Script completed");
     expect(calls).toEqual(["web_search"]);
     expect(readFileSync(join(cfg.home, "MEMORY.md"), "utf8")).toBe(MEMORY);
@@ -264,3 +266,27 @@ describe("heartbeat on a real Pi session", () => {
     expect(run).toMatchObject({ status: "done" });
   });
 });
+
+for (const decision of ["allow", "ask"] as const) {
+  test(`scheduled MCP calls use per-call review and ${decision === "ask" ? "block requests needing approval" : "allow reviewed reads"}`, async () => {
+    const cfg = config();
+    let executed = 0;
+    const stubs = new ToolStubs({ principalId: "drk", request: async () => ({ok: true, result: JSON.stringify({rules: "Read only; no notifications"})}) });
+    stubs.update([toolPolicyManifest]);
+    script = [
+      {tool: {name: "mcp_call_tool", args: {serverId: "mail", tool: "search", arguments: {query: "tenant"}}}},
+      {text: `<verdict>${decision}</verdict> reviewed action`},
+      {text: "NO_REPLY"},
+    ];
+    await runToolFreeJob(cfg, {
+      agentName: "job:heartbeat", systemPrompt: "Read connected sources.", prompt: "Check tenant mail.",
+      runs: new RunLog(cfg.stateDir), selector: new BackendSelector({primaryEnabled: false}), readOnlyTools: {toolStubs: stubs},
+      describeMcpCall: async () => ({description: "Search mail without changing it"}),
+      evidenceTools: [{ name: "mcp_call_tool", label: "MCP", description: "Call MCP", parameters: Type.Object({serverId: Type.String(), tool: Type.String(), arguments: Type.Record(Type.String(), Type.Unknown())}), execute: async () => { executed++; return {content: [{type: "text", text: "mail result"}], details: {}}; } }],
+    });
+    expect(executed).toBe(decision === "allow" ? 1 : 0);
+    expect(JSON.stringify(bodies[1])).toContain("Read only; no notifications");
+    expect(JSON.stringify(bodies[1])).toContain("Search mail without changing it");
+    expect(JSON.stringify(bodies[1])).toContain("tenant");
+  });
+}
