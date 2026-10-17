@@ -6,6 +6,7 @@ export const SHIPPED_TEMPLATE_HASHES: Record<string, readonly string[]> = {
     "074a83b814cca879a56f5ad5ad676c7c8dff6bab1cd9810c9e5810957f1da9cd",
     "1c7f4c2a2c4d6486a40c15763787b41a67a653d233ef12811530317f007a3ca0",
     "200998d25e337b4b1210c77ae72ebee4e56a5eadd436c363e19fe23de26a90e5",
+    "2419113c9cb78b873628c5b20fc6185548578bc91888db1b2cc5969abc3f8c6d",
     "25fea718271e53a647999eb771c51e2f6606d8ed33184095dc3d54eff0cff2b8",
     "2caa04afc6e847e6b8953ef095dc275238d543452bb7d421214c40818472f243",
     "2d3a616b72235652ee95a6af316d5001fc39c29008fb04613baad110f8901807",
@@ -18,6 +19,7 @@ export const SHIPPED_TEMPLATE_HASHES: Record<string, readonly string[]> = {
     "670493afb42c0b3c67659fdce567d9ccc84018f50d31e5ee045b1ead2e5b8f2a",
     "6b8047babb11f4e20bd1c71e98045d23d7c968d2530b6ecb1278053fd8fd004b",
     "6c093d36d4462368fe88c3cc5bf199c80270eb665a7d626d74e8501ef6931e77",
+    "7076f7c8f485d386a2734a009d9a223dd794ca9718df562a849c1a4921da2af5",
     "812d752ffd854df00ed05b96c8481a40a7d0b69dfc7f3b43620a302cec7c93ac",
     "8825a571737d90148c5685c4e2bb040cea84ab8c573457b47263b607c0c3d293",
     "8ff3f15592b2a6d6447311dde6d0bd33551849f8acf17d5ad7adda7bf6f5d8b5",
@@ -72,6 +74,7 @@ export const SHIPPED_TEMPLATE_HASHES: Record<string, readonly string[]> = {
     "52a3e7adcf4271e300d0af4cbc7e1fcd29f02c9d219e8fa9e339493f91b2b566",
   ],
   "agents-skills-location-research-SKILL.md": [
+    "0049e9fe4d283e1af7ab756b6d6fa947f572966ce3229a1920ffb3ce7c7b7b94",
     "5d4084fd7b0eae14a1b21483db8853aa344d13a6d6eb86bbfc1a5311170e050c",
   ],
   "agents-agents-explore.md": [],
