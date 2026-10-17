@@ -45,7 +45,6 @@
 	installFailed={settings.installFailed}
 	swError={pwa.swError}
 	online={pwa.online}
-	updateReady={!!pwa.waiting}
 	onretryme={() => void settings.me.refetch()}
 	onretryname={() => void settings.ownerName.refetch()}
 	onsavename={(name) => void settings.saveName(name)}

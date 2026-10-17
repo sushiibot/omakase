@@ -1,3 +1,4 @@
+import type { UpdateSource } from "./updates.ts";
 import { locationReply, type BrowserLocationRequests } from "../../orchestration/workspace/location.ts";
 import { z } from "zod";
 import { ID_MAX, WEB_CONVERSATION_ID, uploadUrl, type ChatMessageParams, type ChatOrigin } from "../../orchestration/contracts.ts";
@@ -87,6 +88,7 @@ export interface ChatRouteDeps {
 }
 
 export interface ChatRoutes {
+  setUpdates(source: UpdateSource): void;
   handle(req: Request, path: string, actor: SurfaceActor, server?: { timeout(req: Request, seconds: number): void }): Promise<Response | null>;
   closeStreams(): void;
   /** Resolves once every message being routed has finished; for tests and shutdown. */
@@ -116,6 +118,7 @@ const approvalBody = z.object({ decision: z.enum(["approve", "deny"]) }).strict(
 const seenBody = z.object({ seq: z.number().int().min(0) }).strict();
 
 export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
+  let updates: UpdateSource | undefined;
   const { log: chatLog, inbound, adapter, presence, link, tools } = deps;
   const origin = deps.origin ?? WEB_ORIGIN;
   const now = deps.now ?? Date.now;
@@ -414,6 +417,7 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
     const streamId = crypto.randomUUID();
     return sseResponse(chatLog, after, {
       ...sseTimes,
+      updates,
       onOpen: () => presence.open(streamId),
       hello: () => ({
         workspace: online() ? "online" : "offline",
@@ -425,6 +429,7 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
   }
 
   return {
+    setUpdates(source) { updates = source; },
     async handle(req, path, actor, server) {
       if (!path.startsWith("/api/chat/")) return null;
       lastActor = actor;

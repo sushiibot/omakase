@@ -105,3 +105,26 @@ describe("sse", () => {
     expect(reset).toStartWith(`event: reset\ndata: {"headSeq":1,"workspace":"online","pending":${JSON.stringify(pending)}}`);
   });
 });
+
+test("versions arrive on connect/reset and live changes without altering the durable cursor; subscriptions close", async () => {
+  const chat = log();
+  chat.append("session", { kind: "new" });
+  let emit: ((v: import('./events.ts').AppVersions) => void) | undefined;
+  let closed = 0;
+  const updates = {
+    current: () => ({ web: 'one', android: null }),
+    subscribe(fn: NonNullable<typeof emit>) { emit = fn; return () => { closed++; }; },
+  };
+  for (const after of [null, 999]) {
+    const res = sseResponse(chat, after, { heartbeatMs: 1000, maxLifetimeMs: 20, onOpen: () => () => {}, hello: () => ({ workspace: 'online', openTurns: [], pending: NONE }), updates });
+    emit?.({ web: 'two', android: null });
+    emit?.({ web: 'two', android: null });
+    const text = await drain(res);
+    expect(text).toStartWith(after === null ? 'event: hello' : 'event: reset');
+    expect(text.match(/event: app_update/g)).toHaveLength(2);
+    expect(text).toContain('event: app_update\ndata: {"web":"one","android":null}');
+    expect(text).toContain('event: app_update\ndata: {"web":"two","android":null}');
+  }
+  expect(closed).toBe(2);
+  expect(chat.head()).toBe(1);
+});

@@ -4,16 +4,31 @@ The Capacitor app loads `https://agent.sushii.bot` and uses the existing owner a
 The gateway and agent stay on the server. The phone exposes the local folders you select while the app is open.
 There is no background service, file scanner, or periodic file synchronization.
 
-## Download from GitHub Actions
+## Updates in the app
 
-Open [Android APK](https://github.com/sushiibot/omakase/actions/workflows/android.yml) and select a successful run on `main`.
-Download its `omakase-android-<run number>` artifact, extract the ZIP, and install `omakase.apk` on your phone.
-The artifact also contains a SHA-256 checksum. Downloads require a GitHub login and expire after 7 days.
+The app shows separate notices for web updates and Android updates.
+**Reload** loads a web update. **Install update** downloads the APK and opens Android's installer.
+The first installation can require permission to install apps from omakase.
+After granting permission, return to omakase and tap **Install update** again.
 
-The workflow runs when Android files change on `main`. Use **Run workflow** on `main` to request another build.
-Web changes reach the app through its live server URL and do not require a new APK.
-Pull requests run Android tests and build checks, without the persistent signing key or a downloadable artifact.
-No GitHub release is created.
+Older APKs show **Download APK** instead. That link downloads the first APK with the built-in installer.
+Install the downloaded APK without uninstalling omakase. Existing folder grants and app data remain available.
+
+The installer checks the SHA-256 checksum, package name, version code, and installed signing certificate.
+It rejects a different signer, an older version, or a damaged download.
+Installation always requires an explicit action. The app never reloads or installs an update automatically.
+
+CI publishes signed APKs in public GitHub releases when Android files change on `main`.
+Each `android-<version code>` release has an immutable APK, checksum, and `update.json` manifest.
+The `android-latest` release contains the current manifest. CI publishes it only after the APK upload succeeds.
+A rerun retains the existing APK. An older run cannot replace a newer update manifest.
+The gateway checks this manifest once per minute while an app stream is connected, then announces changes over SSE.
+GitHub caching or a network failure can delay detection. The gateway retains the last valid manifest during failures.
+Web and Android versions remain independent.
+
+The [Android APK workflow](https://github.com/sushiibot/omakase/actions/workflows/android.yml) also retains downloadable artifacts for seven days.
+Use **Run workflow** on `main` to request another build.
+Pull requests run Android tests and build checks without the persistent signing key or a published release.
 
 CI uses the `ANDROID_DEBUG_KEYSTORE_BASE64` repository secret to preserve the signing identity across builds.
 It contains the base64-encoded `mobile/.local/debug.keystore` from the initial local build.

@@ -45,7 +45,7 @@ export interface Hub {
 	useTransport(transport: ChatTransport): void;
 }
 
-const LIFECYCLE = new Set<ChatEventType>(['hello', 'reset', 'workspace']);
+const LIFECYCLE = new Set<ChatEventType>(['hello', 'reset', 'workspace', 'app_update']);
 const GLOBALS = new Set<ChatEventType>(['approval', 'approval_resolved']);
 
 /** The conversation an event belongs to, or null for connection-wide events. */
@@ -175,8 +175,9 @@ class RealtimeHub implements Hub {
 			return i > 0;
 		};
 		switch (ev.type) {
+			case 'app_update':
 			case 'workspace':
-				drop((e) => e.type === 'workspace');
+				drop((e) => e.type === ev.type);
 				snap.push(ev);
 				break;
 			case 'approval':

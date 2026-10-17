@@ -275,6 +275,8 @@ Measured on the real phone (mid-range Android), installed PWA, on the tailnet. B
 
 ## Notifications
 
+- **Show app updates once in the shared shell.** Keep web and Android actions separate. Show download progress and retry failures. Reload and installation require an explicit action. Check: `pw` (`e2e/app.test.ts`).
+
 The push payload is `{ title, body, url, tag? }`; the service worker shows it, and a click focuses or opens `url`. Everything below fits that shape.
 
 - **Push only for three things: the agent needs you (approval, question), a run failed, or a run finished that you asked to hear about.** Why: every notification for routine success trains the user to ignore all of them. Check: `review` of every server call site that sends a push.

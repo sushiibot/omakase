@@ -222,3 +222,24 @@ Home includes exact calendar-note proposals and their outcomes. Watching shows t
 The full-page reader at `/assistant/updates/[id]` shows the source, original notes, and proposed notes.
 Approve, Dismiss, Check result, and conditional Undo use the owner-only `/api/maintenance` endpoint.
 See [Calendar maintenance](../docs/calendar-maintenance.md) for provider scope, persistence, execution, and recovery limits.
+
+## App updates
+
+The gateway sends `app_update` events through the existing chat SSE stream.
+Each connection receives the deployed web version and any known Android release, including after a cursor reset.
+Update events have no durable sequence number. They do not change chat history or its replay cursor.
+The hub retains the latest announcement for subscribers that mount later.
+
+The web version comes from the build's `_app/version.json`, not the gateway commit.
+Backend-only deployments therefore do not request a web reload.
+On deployment, the old connection closes and the new gateway announces its version after reconnection.
+The browser downloads the new service worker with cache bypass and shows **Downloading web update…**.
+Once the worker finishes installation, **Reload** activates it and reloads the page.
+A failed download shows **Retry**. Android's WebView skips the service worker and offers a direct page reload.
+
+The shared shell owns one update notice on every screen.
+Web and Android updates have separate actions. Neither action runs automatically.
+Foreground and online events trigger recovery checks, limited to one per minute.
+A five-minute check runs only while the page is visible. SSE announcements bypass that limit.
+`GET /api/updates` uses owner authentication and `Cache-Control: no-store`.
+The [Android guide](../mobile/README.md#updates-in-the-app) describes APK publication and installation.

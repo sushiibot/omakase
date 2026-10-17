@@ -75,7 +75,6 @@
 	{now}
 	bind:query
 	online={pwa.online && !offlineBrowsing.unreachable}
-	updateReady={!!pwa.waiting}
 	mainHref={resolve('/chat')}
 	threadHref={(id) => resolve('/chats/[id]', { id })}
 	onretry={() => void list.refetch()}

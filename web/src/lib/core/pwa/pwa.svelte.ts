@@ -1,4 +1,7 @@
 import { isNativeApp } from '$lib/core/native/device-fs.svelte';
+import { hub } from '$lib/core/realtime/hub.svelte';
+import type { AppVersions } from '$lib/core/realtime/events';
+import { androidUpdates } from '$lib/core/native/updates.svelte';
 import { dev } from '$app/environment';
 import { resyncPush } from './push';
 import { serviceWorkerUrl } from './trusted-types';
@@ -22,6 +25,13 @@ class Pwa {
 	swError = $state<string | null>(null);
 	/** 'failed' when this device's push subscription couldn't be re-sent to the agent. */
 	pushSync = $state<'pending' | 'ok' | 'failed'>('pending');
+	updateState = $state<'idle' | 'downloading' | 'ready' | 'failed'>('idle');
+	updateError = $state<string | null>(null);
+	#target: string | null = null;
+	#registration: Promise<ServiceWorkerRegistration | undefined> | undefined;
+	#checking: Promise<void> | null = null;
+	#preparing: Promise<void> | null = null;
+	#lastCheck = 0;
 	#started = false;
 	#reloadPending = false;
 	#syncing: Promise<void> | null = null;
@@ -38,6 +48,7 @@ class Pwa {
 		addEventListener('online', () => {
 			this.online = true;
 			this.#retryPushSync();
+			void this.checkUpdates();
 		});
 		addEventListener('offline', () => (this.online = false));
 
@@ -53,13 +64,103 @@ class Pwa {
 		});
 		addEventListener('appinstalled', () => (this.installPrompt = null));
 
-		if (!isNativeApp()) void this.#registerServiceWorker();
+		if (!isNativeApp()) this.#registration = this.#registerServiceWorker();
 		else if ('serviceWorker' in navigator) {
 			void navigator.serviceWorker
 				.getRegistrations()
 				.then((items) => Promise.all(items.map((item) => item.unregister())))
 				.catch(() => {});
 		}
+		hub.subscribe({ types: ['app_update'] }, (events) => {
+			for (const event of events) if (event.type === 'app_update') this.receiveVersions(event.data);
+		});
+		void androidUpdates.start();
+		const foreground = () => {
+			if (document.visibilityState === 'visible') void this.checkUpdates();
+		};
+		document.addEventListener('visibilitychange', foreground);
+		setInterval(foreground, 5 * 60_000);
+		void this.checkUpdates();
+	}
+
+	/** Reconnect announcements bypass throttling; HTTP is only a recovery fallback. */
+	receiveVersions(versions: AppVersions) {
+		androidUpdates.receive(versions.android);
+		if (typeof versions.web !== 'string' || !versions.web || dev) return;
+		if (versions.web === __APP_VERSION__) {
+			this.#target = null;
+			this.updateState = 'idle';
+			return;
+		}
+		const changed = this.#target !== versions.web;
+		this.#target = versions.web;
+		if (changed || this.updateState === 'failed' || this.updateState === 'idle')
+			void this.prepareUpdate();
+	}
+
+	checkUpdates(force = false): Promise<void> {
+		if (this.#checking) return this.#checking;
+		if (!force && Date.now() - this.#lastCheck < 60_000) return Promise.resolve();
+		this.#lastCheck = Date.now();
+		this.#checking = (async () => {
+			try {
+				const response = await fetch('/api/updates', {
+					cache: 'no-store',
+					signal: AbortSignal.timeout(10_000)
+				});
+				if (response.ok) this.receiveVersions(await response.json());
+			} catch {
+				/* Reconnect or the next foreground check retries without interrupting chat. */
+			}
+		})().finally(() => {
+			this.#checking = null;
+		});
+		return this.#checking;
+	}
+
+	async prepareUpdate(): Promise<void> {
+		if (this.#preparing) return this.#preparing;
+		this.updateError = null;
+		this.updateState = 'downloading';
+		this.#preparing = (async () => {
+			try {
+				const reg = await this.#registration;
+				if (!reg || isNativeApp()) {
+					this.updateState = 'ready';
+					return;
+				}
+				await reg.update();
+				const worker = reg.installing ?? reg.waiting;
+				if (worker && worker.state !== 'installed' && worker.state !== 'activated') {
+					await new Promise<void>((resolve, reject) => {
+						const done = (error?: Error) => {
+							clearTimeout(timeout);
+							worker.removeEventListener('statechange', check);
+							error ? reject(error) : resolve();
+						};
+						const check = () => {
+							if (worker.state === 'installed' || worker.state === 'activated') done();
+							else if (worker.state === 'redundant')
+								done(new Error('Update download failed. Try again.'));
+						};
+						const timeout = setTimeout(
+							() => done(new Error('Update download timed out. Try again.')),
+							60_000
+						);
+						worker.addEventListener('statechange', check);
+						check();
+					});
+				}
+				this.waiting = reg.waiting;
+				this.updateState = this.#target || this.waiting ? 'ready' : 'idle';
+			} catch {
+				this.updateState = 'failed';
+				this.updateError = 'Could not download the web update.';
+			}
+		})().finally(() => {
+			this.#preparing = null;
+		});
+		return this.#preparing;
 	}
 
 	async install(): Promise<'accepted' | 'dismissed' | 'failed'> {
@@ -141,7 +242,8 @@ class Pwa {
 		let reg: ServiceWorkerRegistration;
 		try {
 			reg = await navigator.serviceWorker.register(serviceWorkerUrl(), {
-				type: dev ? 'module' : 'classic'
+				type: dev ? 'module' : 'classic',
+				updateViaCache: 'none'
 			});
 		} catch (err) {
 			this.swError = err instanceof Error ? err.message : String(err);
@@ -153,6 +255,7 @@ class Pwa {
 			const check = () => {
 				if (worker.state === 'installed' && navigator.serviceWorker.controller) {
 					this.waiting = worker;
+					this.updateState = 'ready';
 				} else if (this.waiting === worker && worker.state === 'redundant') {
 					this.waiting = null;
 				}
@@ -173,6 +276,7 @@ class Pwa {
 		});
 
 		void this.syncPush();
+		return reg;
 	}
 }
 

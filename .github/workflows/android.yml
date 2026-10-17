@@ -18,6 +18,8 @@ concurrency:
 
 jobs:
   android:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -71,6 +73,12 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
+      - name: Publish Android update
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: bun scripts/publish-update.ts
       - name: Remove signing key
         if: always()
         run: rm -f .local/debug.keystore

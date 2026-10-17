@@ -26,6 +26,8 @@
 	import { routedSheet, leaveSheet } from '$lib/core/nav/sheet';
 	import { goto } from '$app/navigation';
 	import { needsYou } from '$lib/features/home';
+	import AppUpdates from '$lib/ui/pwa/app-updates.svelte';
+	import { androidUpdates } from '$lib/core/native/updates.svelte';
 	import Shell from '$lib/ui/shell/shell.svelte';
 
 	let { children } = $props();
@@ -140,6 +142,7 @@
 
 <div class="h-dvh">
 	<Shell
+		notice={updateNotice}
 		nav={navFor(features.has)}
 		active={activeNav(page.route.id)}
 		navigationKey={page.url.pathname + page.url.search}
@@ -236,3 +239,19 @@
 	}}
 	onclose={() => channelSettings.close()}
 />
+
+{#snippet updateNotice()}
+	<AppUpdates
+		webState={pwa.updateState}
+		webError={pwa.updateError}
+		androidVersion={androidUpdates.available ? androidUpdates.release?.versionName : undefined}
+		androidUrl={androidUpdates.release?.url}
+		androidSupported={androidUpdates.supported}
+		androidBusy={androidUpdates.busy}
+		androidError={androidUpdates.error}
+		permissionRequired={androidUpdates.permissionRequired}
+		onreload={() => pwa.reload()}
+		onretry={() => void pwa.prepareUpdate()}
+		oninstall={() => void androidUpdates.install()}
+	/>
+{/snippet}

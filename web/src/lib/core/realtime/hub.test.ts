@@ -212,3 +212,24 @@ describe('hub', () => {
 		expect(batches).toHaveLength(1);
 	});
 });
+
+test('release announcements reach late subscribers and replace obsolete versions', async () => {
+	const { hub, fake } = setup();
+	hub.start();
+	await tick();
+	fake.emit('app_update', { web: 'one', android: null }, false);
+	fake.emit('app_update', { web: 'two', android: null }, false);
+	await tick();
+	const batches: (readonly ChatEnvelope[])[] = [];
+	const off = hub.subscribe({ types: ['app_update'] }, (events) => batches.push(events));
+	await tick();
+	expect(
+		batches
+			.flat()
+			.filter((e) => e.type === 'app_update')
+			.map((e) => e.data.web)
+	).toEqual(['two']);
+	expect(hub.headSeq).toBe(10);
+	off();
+	hub.stop();
+});

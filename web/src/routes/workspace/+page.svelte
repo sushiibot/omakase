@@ -9,6 +9,5 @@
 <WorkspaceScreen
 	entries={workspaceFor(features.has)}
 	online={pwa.online}
-	updateReady={!!pwa.waiting}
 	onreload={() => pwa.reload()}
 />

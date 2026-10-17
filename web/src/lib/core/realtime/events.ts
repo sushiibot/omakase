@@ -302,8 +302,20 @@ export interface SessionBoundary {
 	initialContext?: string;
 }
 
+export interface AndroidRelease {
+	versionCode: number;
+	versionName: string;
+	url: string;
+	sha256: string;
+}
+export interface AppVersions {
+	web: string | null;
+	android: AndroidRelease | null;
+}
+
 /** Payload of each SSE event, by event name. */
 export interface ChatEventMap {
+	app_update: AppVersions;
 	hello: {
 		headSeq: number;
 		workspace: WorkspaceState;
@@ -395,6 +407,7 @@ export const DURABLE_EVENTS = [
 ] as const;
 /** Fanned out to open streams only, never stored. */
 export const EPHEMERAL_EVENTS = [
+	'app_update',
 	'snapshot',
 	'delta',
 	'tool',

@@ -35,6 +35,7 @@
 		oncloseNavigation,
 		onnavigate,
 		conversation = false,
+		notice,
 		children
 	}: {
 		nav: NavItem[];
@@ -49,6 +50,7 @@
 		oncloseNavigation?: () => void;
 		onnavigate?: (href: string) => void;
 		conversation?: boolean;
+		notice?: Snippet;
 		children: Snippet;
 	} = $props();
 
@@ -620,6 +622,7 @@
 						inert={overlaid}
 						aria-hidden={overlaid ? true : undefined}
 					>
+						{@render notice?.()}
 						{@render children()}
 					</div>
 					{#if overlaid}<button

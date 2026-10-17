@@ -363,7 +363,6 @@
 			{connection}
 			commandsOffline={s.workspace === 'offline'}
 			toast={s.toast}
-			updateReady={!!pwa.waiting}
 			canInstall={pwa.canInstall}
 			announce={s.announce}
 			{focusAsk}

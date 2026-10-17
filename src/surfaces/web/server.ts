@@ -1,3 +1,4 @@
+import { createUpdates, type UpdateSource } from "./updates.ts";
 import type { BrowserRoutes } from "./browserRoutes.ts";
 // The peer-IP check trusts that only the Serve host sends from WEB_TRUSTED_PEERS. Anything with host
 // networking or the docker socket on that host counts as the host and can impersonate the owner.
@@ -40,6 +41,7 @@ const logger = getLogger("web");
 const MAX_REQUEST_BODY_BYTES = 12 * 1024 * 1024;
 
 export interface WebHandlerDeps {
+  updates?: UpdateSource;
   config: WebConfig;
   peers: PeerMatcher;
   /** Both undefined when push is not configured. */
@@ -105,6 +107,8 @@ const unsubscribeSchema = z.object({ endpoint: z.string().min(1).max(2048) });
 
 export function createWebHandler(deps: WebHandlerDeps): WebHandler {
   const { config, peers, pushStore, pushSender, uploads, chat, home, reads, dictation } = deps;
+  const updates = deps.updates ?? createUpdates(config.distDir);
+  chat?.setUpdates(updates);
   const owner = normalizeLogin(config.ownerLogin);
   // Also enforced at parse time; repeated here because a WebConfig can be built without the parser.
   const devLogin = config.devLogin && isLoopback(config.bindAddr) ? config.devLogin : undefined;
@@ -165,6 +169,8 @@ export function createWebHandler(deps: WebHandlerDeps): WebHandler {
       if (!home) return json({ error: "not found" }, 404);
       return (await home.handle(req, path)) ?? json({ error: "not found" }, 404);
     }
+
+    if (path === "/api/updates") return method === "GET" ? json(updates.current()) : json({ error: "method not allowed" }, 405);
 
     if (path === "/api/me") {
       if (method !== "GET") return json({ error: "method not allowed" }, 405);
@@ -285,6 +291,7 @@ export async function startWebServer(config: WebConfig, db: Database, opts: WebS
   const effective: WebConfig = { ...config, push };
   const handler = createWebHandler({
     config: effective,
+    updates: createUpdates(config.distDir, { fetch }),
     peers: createPeerMatcher(config.trustedPeers),
     pushStore,
     pushSender,

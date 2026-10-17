@@ -2,6 +2,8 @@ import { getLogger } from "../../logger.ts";
 import type { ChatLog, Subscription } from "./chatLog.ts";
 import type { ChatEnvelope, PendingState, TurnView, WorkspaceState } from "./events.ts";
 
+import type { UpdateSource } from "./updates.ts";
+
 const log = getLogger("web/sse");
 
 export const SSE_HEARTBEAT_MS = 15_000;
@@ -18,6 +20,7 @@ export interface SseOptions {
   hello(): { workspace: WorkspaceState; openTurns: TurnView[]; pending: PendingState };
   signal?: AbortSignal;
   maxBufferedBytes?: number;
+  updates?: UpdateSource;
 }
 
 const encoder = new TextEncoder();
@@ -51,6 +54,7 @@ export function sseResponse(chatLog: ChatLog, after: number | null, opts: SseOpt
         let heartbeat: ReturnType<typeof setInterval> | null = null;
         let lifetime: ReturnType<typeof setTimeout> | null = null;
         let sub: Subscription | null = null;
+        let offUpdates: (() => void) | undefined;
 
         const close = () => {
           if (closed) return;
@@ -58,6 +62,7 @@ export function sseResponse(chatLog: ChatLog, after: number | null, opts: SseOpt
           if (heartbeat) clearInterval(heartbeat);
           if (lifetime) clearTimeout(lifetime);
           sub?.close();
+          offUpdates?.();
           onClose?.();
           opts.signal?.removeEventListener("abort", close);
           try {
@@ -105,6 +110,17 @@ export function sseResponse(chatLog: ChatLog, after: number | null, opts: SseOpt
         if (closed) return;
 
         onClose = opts.onOpen();
+        if (opts.updates) {
+          let last = "";
+          const sendVersions = (data: import("./events.ts").AppVersions) => {
+            if (!data.web && !data.android) return;
+            const key = JSON.stringify(data);
+            if (key !== last) { last = key; send({ type: "app_update", data }); }
+          };
+          sendVersions(opts.updates.current());
+          offUpdates = opts.updates.subscribe(sendVersions);
+          if (closed) { offUpdates(); return; }
+        }
         heartbeat = setInterval(() => write(HEARTBEAT), opts.heartbeatMs);
         lifetime = setTimeout(close, opts.maxLifetimeMs);
         if (opts.signal?.aborted) close();

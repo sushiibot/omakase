@@ -180,7 +180,7 @@ for (const outcome of ['activated', 'stalled', 'throws', 'controllerchange'] as 
 				reg as unknown as ServiceWorkerRegistration;
 		}, outcome);
 		await page.goto('/chat');
-		const toast = page.getByRole('status').filter({ hasText: 'Update ready' });
+		const toast = page.getByLabel('App updates');
 		await expect(toast).toBeVisible();
 		const box = await toast.boundingBox();
 		const main = await page.locator('main').boundingBox();
@@ -852,3 +852,151 @@ test('the app runs under enforced Trusted Types with only its own policies', asy
 	await (await openDrawer(page)).getByRole('link', { name: 'Settings' }).click();
 	await expect(page.getByTestId('login')).toHaveText('drk@example.com');
 });
+
+for (const outcome of ['success', 'failure'] as const) {
+	test(`an SSE announcement prepares the web update without polling: ${outcome}`, async ({
+		page,
+		context
+	}) => {
+		const api = await mockApi(context);
+		await page.addInitScript(() => {
+			const original = window.fetch;
+			const encoder = new TextEncoder();
+			Object.assign(window, { announceUpdate: null, finishUpdate: null, updateChecks: 0 });
+			window.fetch = async (input, init) => {
+				if (String(input).startsWith('/api/chat/stream')) {
+					return new Response(
+						new ReadableStream({
+							start(controller) {
+								const emit = (event: string, data: unknown) =>
+									controller.enqueue(
+										encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+									);
+								emit('hello', {
+									headSeq: 0,
+									workspace: 'online',
+									openTurns: [],
+									pending: { approvals: [], asks: [] }
+								});
+								Object.assign(window, {
+									announceUpdate: () => emit('app_update', { web: 'new-build', android: null })
+								});
+							}
+						}),
+						{ headers: { 'content-type': 'text/event-stream' } }
+					);
+				}
+				return original(input, init);
+			};
+			const worker = Object.assign(new EventTarget(), { state: 'installing', postMessage() {} });
+			const reg = Object.assign(new EventTarget(), {
+				waiting: null as typeof worker | null,
+				installing: null as typeof worker | null,
+				pushManager: { getSubscription: async () => null },
+				update: async () => {
+					reg.installing = worker;
+					Object.assign(window, { updateChecks: 1 });
+				}
+			});
+			Object.defineProperty(navigator.serviceWorker, 'controller', { value: {} });
+			navigator.serviceWorker.register = async () => reg as unknown as ServiceWorkerRegistration;
+			navigator.serviceWorker.getRegistration = async () =>
+				reg as unknown as ServiceWorkerRegistration;
+			Object.assign(window, {
+				finishUpdate: (failed: boolean) => {
+					worker.state = failed ? 'redundant' : 'installed';
+					reg.waiting = failed ? null : worker;
+					reg.installing = null;
+					worker.dispatchEvent(new Event('statechange'));
+				}
+			});
+		});
+		await page.goto('/settings');
+		await expect(page.getByTestId('login')).toBeVisible();
+		await expect(page.getByLabel('App updates')).toHaveCount(0);
+		await expect
+			.poll(() =>
+				page.evaluate(
+					() => typeof (window as unknown as { announceUpdate: unknown }).announceUpdate
+				)
+			)
+			.toBe('function');
+		const checks = api.calls.filter((call) => call.path === '/api/updates').length;
+		await page.evaluate(() => (window as unknown as { announceUpdate(): void }).announceUpdate());
+		await expect(page.getByText('Downloading web update…')).toBeVisible();
+		await expect(
+			page.getByLabel('App updates').getByRole('button', { name: 'Reload' })
+		).toHaveCount(0);
+		await page.evaluate(
+			(failed) =>
+				(window as unknown as { finishUpdate(failed: boolean): void }).finishUpdate(failed),
+			outcome === 'failure'
+		);
+		await expect(
+			page
+				.getByLabel('App updates')
+				.getByRole('button', { name: outcome === 'success' ? 'Reload' : 'Retry' })
+		).toBeVisible();
+		expect(api.calls.filter((call) => call.path === '/api/updates').length).toBe(checks);
+		await horizontalOverflow(page);
+	});
+}
+
+for (const supported of [true, false]) {
+	test(`Android release notice uses ${supported ? 'native installer' : 'first-upgrade download'}`, async ({
+		page,
+		context
+	}) => {
+		await mockApi(context);
+		await page.addInitScript((supported) => {
+			Object.assign(window, {
+				androidBridge: {},
+				installs: 0,
+				Capacitor: {
+					PluginHeaders: supported
+						? [
+								{
+									name: 'AppUpdates',
+									methods: ['status', 'install'].map((name) => ({ name, rtype: 'promise' }))
+								}
+							]
+						: [],
+					nativePromise: async (plugin: string, method: string) => {
+						if (plugin !== 'AppUpdates') throw new Error('Unavailable');
+						if (method === 'status') return { versionCode: 1, versionName: '1.0' };
+						Object.assign(window, { installs: 1 });
+						return { permissionRequired: true };
+					}
+				}
+			});
+		}, supported);
+		await context.route('**/api/updates', (route) =>
+			route.fulfill({
+				json: {
+					web: null,
+					android: {
+						versionCode: 2,
+						versionName: '1.0.1',
+						sha256: 'a'.repeat(64),
+						url: 'https://github.com/sushiibot/omakase/releases/download/android-2/omakase.apk'
+					}
+				}
+			})
+		);
+		await page.goto('/settings');
+		await expect(page.getByText('Android 1.0.1 available')).toBeVisible();
+		if (supported) {
+			await page.getByRole('button', { name: 'Install update' }).click();
+			await expect(page.getByText('Allow installs, then tap Install update again.')).toBeVisible();
+			expect(await page.evaluate(() => (window as unknown as { installs: number }).installs)).toBe(
+				1
+			);
+		} else {
+			await expect(page.getByRole('link', { name: 'Download APK' })).toHaveAttribute(
+				'href',
+				/android-2\/omakase.apk$/
+			);
+		}
+		await horizontalOverflow(page);
+	});
+}
