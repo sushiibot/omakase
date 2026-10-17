@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { vault } from '$lib/core/native/vault.svelte';
-	import { VaultSettings } from '$lib/features/settings';
+	import { deviceFs } from '$lib/core/native/device-fs.svelte';
+	import { DeviceFsSettings } from '$lib/features/settings';
 	import { onMount } from 'svelte';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import { SettingsScreen, settingsStore } from '$lib/features/settings';
@@ -12,16 +12,16 @@
 <svelte:head><title>Settings · sushii</title></svelte:head>
 
 {#snippet nativeSettings()}
-	{#if vault.available}
-		<VaultSettings
-			folders={vault.folders}
-			multipleFolders={vault.multipleFolders}
-			markdownOnly={vault.markdownOnly}
-			connected={vault.connected}
-			busy={vault.busy}
-			error={vault.error}
-			onchoose={() => void vault.choose()}
-			ondisconnect={(id) => void vault.disconnect(id)}
+	{#if deviceFs.available}
+		<DeviceFsSettings
+			folders={deviceFs.folders}
+			multipleFolders={deviceFs.multipleFolders}
+			markdownOnly={deviceFs.markdownOnly}
+			connected={deviceFs.connected}
+			busy={deviceFs.busy}
+			error={deviceFs.error}
+			onchoose={() => void deviceFs.choose()}
+			ondisconnect={(id) => void deviceFs.disconnect(id)}
 		/>
 	{/if}
 {/snippet}

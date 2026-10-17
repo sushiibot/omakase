@@ -1,4 +1,4 @@
-import { mobileVaultRoute } from "./mobileVaultRoutes.ts";
+import { deviceFsRoute } from "./deviceFsRoutes.ts";
 import { z } from "zod";
 import type { MachineControl } from "../../orchestration/machines/control.ts";
 import { agentFolder, agentSessionView, type CodingAgentRecord, type CodingAgents } from "../../orchestration/machines/agents.ts";
@@ -25,7 +25,7 @@ export class MachineRoutes {
     const agents = path === "/api/agents" || path.startsWith("/api/agents/");
     if (!machines && !agents) return null;
     try {
-      const phone = await mobileVaultRoute(this.control.mobileVaults, req, path);
+      const phone = await deviceFsRoute(this.control.deviceFiles, req, path);
       if (phone) return phone;
       if (path === "/api/machines" && req.method === "GET") return json({ machines: this.control.list() });
       if (path === "/api/machines/files" && req.method === "POST") {

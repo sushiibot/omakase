@@ -13,7 +13,7 @@ public class MainActivity extends BridgeActivity {
     private Toast exitToast;
 
     @Override public void onCreate(Bundle savedInstanceState) {
-        registerPlugin(ObsidianVaultPlugin.class);
+        registerPlugin(DeviceFsPlugin.class);
         registerPlugin(CallAudioPlugin.class);
         super.onCreate(savedInstanceState);
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {

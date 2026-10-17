@@ -10,7 +10,7 @@ test('Android folders connect independently and retain the remaining grant', asy
 		let folders: { id: string; name: string; available: boolean }[] = [];
 		let choices = 0;
 		const status = () => ({
-			version: 3,
+			version: 4,
 			id: 'phone-11111111-1111-4111-8111-111111111111',
 			connected: folders.length > 0,
 			folders
@@ -20,7 +20,7 @@ test('Android folders connect independently and retain the remaining grant', asy
 			Capacitor: {
 				PluginHeaders: [
 					{
-						name: 'ObsidianVault',
+						name: 'DeviceFs',
 						methods: ['status', 'choose', 'disconnect', 'execute'].map((name) => ({
 							name,
 							rtype: 'promise'

@@ -84,9 +84,9 @@ Native push needs notification delivery and registration, plus `POST_NOTIFICATIO
 The current app stops voice calls when hidden and has no foreground service or native push registration.
 Do not add these permissions without implementing their features.
 
-The vault folder grant already persists across app restarts. It also permits access from a background component.
-The current vault connection runs in the WebView and stops when the app is hidden.
-Background vault work needs native request handling, authentication, and a foreground service or scheduled jobs.
+Each folder grant already persists across app restarts. It also permits access from a background component.
+The current device connection runs in the WebView and stops when the app is hidden.
+Background file access needs native request handling, authentication, and a foreground service or scheduled jobs.
 A foreground service needs an ongoing notification and a disconnect action.
 Android 15 and later limit `dataSync` foreground services to six background hours per 24 hours.
 This limit prevents a simple promise of unlimited background access through that service type.
@@ -117,30 +117,34 @@ Selecting the same folder again refreshes its permission without adding a duplic
 ## File operations
 
 The agent uses `machine_files` with `action: "list_machines"` to discover the phone.
-The phone has an ID beginning with `phone-`. Each folder has a stable root ID from `list_machines`.
-Existing installations keep their original `vault` root and folder permission. New folders use IDs beginning with `folder-`.
-It advertises `list`, `read`, and `write`. PC shares remain read-only.
+The phone has an ID beginning with `phone-` and one root ID per selected folder.
+PC shares remain read-only. The Android folder exposes these actions:
 
-```json
-{ "action": "list", "machineId": "phone-<uuid>", "rootId": "<root-id-from-list_machines>", "path": "." }
-{ "action": "read", "machineId": "phone-<uuid>", "rootId": "<root-id-from-list_machines>", "path": "example.txt" }
-{ "action": "write", "machineId": "phone-<uuid>", "rootId": "<root-id-from-list_machines>", "path": "example.txt", "content": "Updated file", "expectedHash": "<hash-from-read>" }
-```
+| Action | Parameters and behavior |
+| --- | --- |
+| `list` | `path`, optional entry `offset`; returns up to 200 entries and `nextOffset`. |
+| `read` | `path`; returns UTF-8 content and its SHA-256 `hash`. |
+| `write` | `path`, `content`, `expectedHash`; creates missing parent folders. Use null to create a new file. |
+| `edit` | `path`, `oldText`, `newText`, `expectedHash`; replaces exactly one matching text span. |
+| `mkdir` | `path`; creates the directory and missing parent directories. |
+| `find` | `path`, `query`; recursively matches literal text in relative paths. |
+| `grep` / `search` | `path`, `query`; recursively matches literal text in files and returns line numbers. |
+| `rename` | `path`, `name`; renames an entry in its current directory without replacing an existing entry. |
+| `delete` | `path`, optional `recursive`; nonempty directories require `recursive: true`. |
 
-Use `expectedHash: null` to create a new file. Parent folders must already exist.
-Reads return the full file and its SHA-256 hash. Files have a 256 KiB limit.
-Use `encoding: "utf8"` for text (the default), or `encoding: "base64"` for binary reads and writes.
-Listings return 200 entries per page. Use `nextOffset` as the next request's `offset`.
-All file types and hidden paths inside the selected folder are available. Deletion, renaming, creating folders, and search are not supported.
-The bridge name remains unchanged so existing folder permissions survive the update.
-Older APKs still support Markdown only; the agent sees their advertised file types.
+Every action requires `machineId` and `rootId`. Paths are relative to the selected folder.
+Hidden files and all file extensions are accessible. Reading and writing support files up to 256 KiB. Use `encoding: "base64"` for binary contents.
+Shell execution is not supported.
+Search stops at 2,000 entries, 32 directory levels, or 100 results.
+Search reports `truncated: true` when limits or unreadable files prevent a complete result.
 
-The native plugin checks the current hash before overwriting a file.
-Android document providers do not support an atomic compare-and-save operation.
-An edit from another app during the final write can still conflict. Avoid simultaneous edits to the same file.
+Writes and edits require the hash from the latest read. A stale hash rejects the change.
+Android document providers cannot compare and save atomically. Concurrent edits during the final write can still conflict.
+The transport never retries a mutation. After a timeout, inspect the affected paths before retrying.
+Deletion is permanent. Recovery copies cover overwritten files only.
 
-The transport never retries native writes automatically. A timeout or disconnect can leave the outcome unknown.
-After an uncertain write, read the file before deciding whether to retry.
+Install the updated APK to use device filesystem operations. Older APKs retain their existing operations and advertise only supported actions.
+Existing folder grants and recovery copies remain available. Folder IDs remain unchanged.
 
 ## Recovery copies
 

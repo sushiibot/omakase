@@ -6,23 +6,25 @@ interface Folder {
 	name: string;
 	available: boolean;
 }
-interface VaultStatus {
+interface DeviceFsStatus {
 	folders?: Folder[];
 	version: number;
 	id: string;
 	name?: string;
 	connected: boolean;
 }
-interface VaultPlugin {
-	status(): Promise<VaultStatus>;
-	choose(): Promise<VaultStatus>;
+interface DeviceFsPlugin {
+	status(): Promise<DeviceFsStatus>;
+	choose(): Promise<DeviceFsStatus>;
 	disconnect(params?: { rootId: string }): Promise<void>;
 	execute(params: Record<string, unknown>): Promise<unknown>;
 }
-const plugin = registerPlugin<VaultPlugin>('ObsidianVault');
+const plugin = registerPlugin<DeviceFsPlugin>(
+	Capacitor.isPluginAvailable('DeviceFs') ? 'DeviceFs' : 'ObsidianVault'
+);
 export const isNativeApp = () => Capacitor.getPlatform() === 'android';
 
-class Vault {
+class DeviceFs {
 	available = $state(false);
 	markdownOnly = $state(false);
 	folders = $state<Folder[]>([]);
@@ -30,7 +32,7 @@ class Vault {
 	connected = $state(false);
 	busy = $state(false);
 	error = $state<string>();
-	private status?: VaultStatus;
+	private status?: DeviceFsStatus;
 	private controller?: AbortController;
 	private session?: string;
 	private started = false;
@@ -50,7 +52,7 @@ class Vault {
 			this.status = await plugin.status();
 			this.markdownOnly = this.status.version === 1;
 			this.multipleFolders = this.status.version >= 3;
-			if (![1, 2, 3].includes(this.status.version))
+			if (![1, 2, 3, 4].includes(this.status.version))
 				throw new Error('Update the Android app to connect a folder.');
 			this.folders =
 				this.status.folders ??
@@ -194,4 +196,4 @@ class Vault {
 		}
 	}
 }
-export const vault = new Vault();
+export const deviceFs = new DeviceFs();

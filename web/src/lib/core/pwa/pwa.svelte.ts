@@ -1,4 +1,4 @@
-import { isNativeApp } from '$lib/core/native/vault.svelte';
+import { isNativeApp } from '$lib/core/native/device-fs.svelte';
 import { dev } from '$app/environment';
 import { resyncPush } from './push';
 import { serviceWorkerUrl } from './trusted-types';

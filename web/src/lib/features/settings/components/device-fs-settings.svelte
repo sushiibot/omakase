@@ -22,7 +22,7 @@
 	} = $props();
 </script>
 
-<Section id="local-files" title="Local files">
+<Section id="local-files" title="Device files">
 	<div class="flex flex-col gap-3">
 		<p class="max-w-prose text-sm text-muted-foreground" role="status">
 			{#if connected}Ready for the agent to read, create, and update files in these folders while

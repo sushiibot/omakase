@@ -5,20 +5,25 @@ export const phoneRoot = z.object({ id: z.string().regex(/^(?:vault|folder-[a-f0
 type PhoneRoot = z.infer<typeof phoneRoot>;
 const base = { machineId: z.string().regex(/^phone-[a-f0-9-]{36}$/), rootId: phoneRoot.shape.id, path: relativePath.default(".") };
 const encoding = z.enum(["utf8", "base64"]).optional();
-export const vaultRequest = z.discriminatedUnion("action", [
+export const deviceFileRequest = z.discriminatedUnion("action", [
   z.object({ ...base, action: z.literal("list"), offset: z.number().int().min(0).max(100000).default(0) }).strict(),
   z.object({ ...base, action: z.literal("read"), encoding }).strict(),
+  z.object({ ...base, action: z.literal("mkdir") }).strict(),
+  z.object({ ...base, action: z.literal("edit"), oldText: z.string().min(1).max(262144), newText: z.string().max(262144), expectedHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict(),
+  z.object({ ...base, action: z.literal("rename"), name: relativePath.refine(p => p !== "." && !p.includes("/")) }).strict(),
+  z.object({ ...base, action: z.literal("delete"), recursive: z.boolean().default(false) }).strict(),
+  z.object({ ...base, action: z.enum(["find", "grep", "search"]), query: z.string().min(1).max(1000) }).strict(),
   z.object({ ...base, action: z.literal("write"), encoding, content: z.string().max(349528), expectedHash: z.string().regex(/^[a-f0-9]{64}$/).nullable() }).strict(),
 ]);
-export type VaultRequest = z.infer<typeof vaultRequest>;
-interface Call { id: string; params: VaultRequest; delivered: boolean; resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }
-interface Device { version: 1 | 2 | 3; roots: PhoneRoot[]; id: string; name: string; session: string; seen: number; pending: Map<string, Call>; wake?: () => void }
+export type DeviceFileRequest = z.infer<typeof deviceFileRequest>;
+interface Call { id: string; params: DeviceFileRequest; delivered: boolean; resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }
+interface Device { version: 1 | 2 | 3 | 4; roots: PhoneRoot[]; id: string; name: string; session: string; seen: number; pending: Map<string, Call>; wake?: () => void }
 /** Owner-authenticated foreground device transport. Never persists or replays writes. */
-export class MobileVaults {
+export class DeviceFiles {
   private devices = new Map<string, Device>();
   constructor(private timeoutMs = 25000) {}
-  connect(id: string, name: string, version: 1 | 2 | 3 = 1, roots?: PhoneRoot[]) {
-    const granted = version === 3 ? z.array(phoneRoot).min(1).max(16).parse(roots) : [{ id: "vault", name }];
+  connect(id: string, name: string, version: 1 | 2 | 3 | 4 = 1, roots?: PhoneRoot[]) {
+    const granted = version >= 3 ? z.array(phoneRoot).min(1).max(16).parse(roots) : [{ id: "vault", name }];
     if (new Set(granted.map(r => r.id)).size !== granted.length) throw new Error("Duplicate folder IDs.");
     this.prune();
     if (!this.devices.has(id) && this.devices.size >= 8) throw new Error("Too many phones connected.");
@@ -33,7 +38,7 @@ export class MobileVaults {
   }
   list() {
     this.prune();
-    return [...this.devices.values()].map(d => ({ id: d.id, name: `Android · ${d.name}`, connected: true, roots: d.roots.map(r => ({ ...r, coding: false, writable: true })), providers: [] as ("codex" | "claude")[], fileActions: ["list", "read", "write"], readLimit: 262144, fileTypes: d.version === 1 ? "Markdown" : "all", encodings: d.version === 1 ? ["utf8"] : ["utf8", "base64"] }));
+    return [...this.devices.values()].map(d => ({ id: d.id, name: `Android · ${d.name}`, connected: true, roots: d.roots.map(r => ({ ...r, coding: false, writable: true })), providers: [] as ("codex" | "claude")[], fileActions: d.version >= 4 ? ["list", "read", "write", "edit", "mkdir", "find", "grep", "search", "rename", "delete"] : ["list", "read", "write"], readLimit: 262144, fileTypes: d.version === 1 ? "Markdown" : "all", encodings: d.version === 1 ? ["utf8"] : ["utf8", "base64"] }));
   }
   private device(session: string) {
     this.prune();
@@ -66,15 +71,16 @@ export class MobileVaults {
     if (error) c.reject(new Error(error)); else c.resolve(result);
   }
   request(raw: unknown): Promise<unknown> {
-    const p = vaultRequest.parse(raw);
+    const p = deviceFileRequest.parse(raw);
     this.prune();
     const d = this.devices.get(p.machineId);
     if (!d) throw new Error("Phone is offline. Open omakase on the phone and connect a folder.");
     if (!d.roots.some(r => r.id === p.rootId)) throw new Error("Folder is not connected on this phone.");
     if (d.pending.size >= 8) throw new Error("Phone is busy. Retry after the current operation.");
-    if (d.version === 1 && (p.path.split("/").some(s => s.startsWith(".") && s !== ".") || (p.action !== "list" && (!/\.md$/i.test(p.path) || p.encoding === "base64")))) throw new Error("Update the Android app for general file access; this version supports Markdown only.");
+    if (d.version < 4 && !["list", "read", "write"].includes(p.action)) throw new Error("Update the Android app for this filesystem operation.");
+    if (d.version === 1 && (p.path.split("/").some(s => s.startsWith(".") && s !== ".") || (p.action !== "list" && (!/\.md$/i.test(p.path) || ("encoding" in p && p.encoding === "base64"))))) throw new Error("Update the Android app for general file access; this version supports Markdown only.");
     if (p.action === "write") {
-      const binary = p.encoding === "base64";
+      const binary = ("encoding" in p && p.encoding === "base64");
       if (binary && !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(p.content)) throw new Error("Provide valid base64 content.");
       const bytes = Buffer.from(p.content, binary ? "base64" : "utf8");
       if (bytes.length > 262144) throw new Error("File exceeds the 256 KiB limit.");
@@ -84,7 +90,7 @@ export class MobileVaults {
       const id = crypto.randomUUID();
       const timer = setTimeout(() => {
         d.pending.delete(id);
-        reject(new Error("Phone request timed out. A write may have completed; read the file before retrying."));
+        reject(new Error("Phone request timed out. The operation may have completed; inspect the affected paths before retrying."));
       }, this.timeoutMs);
       d.pending.set(id, { id, params: p, resolve, reject, timer, delivered: false });
       d.wake?.();
@@ -94,7 +100,7 @@ export class MobileVaults {
     const d = [...this.devices.values()].find(d => d.session === session);
     if (!d) return;
     this.devices.delete(d.id);
-    for (const c of d.pending.values()) { clearTimeout(c.timer); c.reject(new Error("Phone disconnected. Read the file before retrying a write.")); }
+    for (const c of d.pending.values()) { clearTimeout(c.timer); c.reject(new Error("Phone disconnected. Inspect the affected paths before retrying an operation.")); }
     d.pending.clear();
     d.wake?.();
   }

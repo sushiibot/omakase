@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test";
-import { MobileVaults } from "../../orchestration/machines/mobileVault.ts";
-import { mobileVaultRoute } from "./mobileVaultRoutes.ts";
+import { DeviceFiles } from "../../orchestration/machines/deviceFs.ts";
+import { deviceFsRoute } from "./deviceFsRoutes.ts";
 const id = "phone-11111111-1111-4111-8111-111111111111";
 function post(action: string, body: unknown) {
   const path = `/api/machines/phone/${action}`;
   return { path, req: new Request(`https://example.com${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }) };
 }
 test("phone HTTP transport dispatches and replies to a machine file operation", async () => {
-  const hub = new MobileVaults();
-  const call = async (action: string, body: unknown) => { const { req, path } = post(action, body); return (await mobileVaultRoute(hub, req, path))!; };
+  const hub = new DeviceFiles();
+  const call = async (action: string, body: unknown) => { const { req, path } = post(action, body); return (await deviceFsRoute(hub, req, path))!; };
   const { session } = await (await call("connect", { id, name: "Local files", version: 3, roots: [{ id: "vault", name: "Documents" }] })).json();
   const result = hub.request({ action: "read", machineId: id, rootId: "vault", path: "config.json" });
   const { requests } = await (await call("poll", { session })).json();
@@ -20,11 +20,11 @@ test("phone HTTP transport dispatches and replies to a machine file operation", 
   expect(hub.list()).toEqual([]);
 });
 test("only exact POST endpoints match and oversized responses are refused", async () => {
-  const hub = new MobileVaults();
+  const hub = new DeviceFiles();
   const get = new Request("https://example.com/api/machines/phone/connect");
-  expect((await mobileVaultRoute(hub, get, new URL(get.url).pathname))!.status).toBe(405);
+  expect((await deviceFsRoute(hub, get, new URL(get.url).pathname))!.status).toBe(405);
   const other = post("anything/connect", {});
-  expect((await mobileVaultRoute(hub, other.req, other.path))!.status).toBe(404);
+  expect((await deviceFsRoute(hub, other.req, other.path))!.status).toBe(404);
   const big = post("result", { content: "x".repeat(1600001) });
-  expect((await mobileVaultRoute(hub, big.req, big.path))!.status).toBe(413);
+  expect((await deviceFsRoute(hub, big.req, big.path))!.status).toBe(413);
 });

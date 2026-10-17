@@ -136,7 +136,7 @@ async function main() {
     // A message still being routed marks itself routed in the DB; bounded, inside docker's 10s grace.
     if (webServer) await Promise.all([webChat.routes.drain(), webChat.threads.drain()]);
     // Before the DB closes, so no late workspace delivery writes to it.
-    machineControl.mobileVaults.stop();
+    machineControl.deviceFiles.stop();
     workspace.server.stop();
     closeDb();
     try {

@@ -18,9 +18,9 @@ import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-// Keep the bridge name and persisted folder grant compatible with the first APK.
-@CapacitorPlugin(name = "ObsidianVault")
-public class ObsidianVaultPlugin extends Plugin {
+// Keep persisted folder grants and recovery copies compatible with earlier APKs.
+@CapacitorPlugin(name = "DeviceFs")
+public class DeviceFsPlugin extends Plugin {
     private static final int LIMIT = 262144;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private volatile boolean foreground = true;
@@ -73,7 +73,7 @@ public class ObsidianVaultPlugin extends Plugin {
             connected |= available;
             entries.put(new JSObject().put("id", id).put("name", name).put("available", available));
         }
-        return new JSObject().put("version", 3).put("id", deviceId()).put("connected", connected).put("folders", entries);
+        return new JSObject().put("version", 4).put("id", deviceId()).put("connected", connected).put("folders", entries);
     }
     @PluginMethod public void status(PluginCall call) { io.execute(() -> {
         try { call.resolve(statusValue()); } catch (Exception e) { call.reject(e.getMessage()); }
@@ -164,6 +164,47 @@ public class ObsidianVaultPlugin extends Plugin {
         }
         return file;
     }
+    static DocumentFile directories(DocumentFile root, String[] parts, int count) throws IOException {
+        DocumentFile dir = root;
+        for (int i = 0; i < count; i++) {
+            DocumentFile next = dir.findFile(parts[i]);
+            if (next == null) next = dir.createDirectory(parts[i]);
+            if (next == null || !next.isDirectory() || !parts[i].equals(next.getName())) throw new IOException("Could not create directory.");
+            dir = next;
+        }
+        return dir;
+    }
+    static String edit(String content, String oldText, String newText) throws IOException {
+        if (oldText == null || oldText.isEmpty() || newText == null) throw new IOException("Provide oldText and newText.");
+        int at = content.indexOf(oldText);
+        if (at < 0) throw new IOException("oldText was not found.");
+        if (content.indexOf(oldText, at + 1) >= 0) throw new IOException("oldText matches more than once. Include more context.");
+        return content.substring(0, at) + newText + content.substring(at + oldText.length());
+    }
+    private boolean search(DocumentFile file, String path, String query, boolean names, JSArray matches, int[] visited, int depth) throws IOException {
+        if (++visited[0] > 2000 || depth > 32 || matches.length() >= 100) return false;
+        boolean complete = true;
+        if (names && path.contains(query)) matches.put(new JSObject().put("path", path));
+        if (file.isDirectory()) {
+            for (DocumentFile child : file.listFiles()) {
+                String name = child.getName();
+                if (name == null) continue;
+                try { parts(name); } catch (IOException invalid) { complete = false; continue; }
+                if (!search(child, path.isEmpty() ? name : path + "/" + name, query, names, matches, visited, depth + 1)) complete = false;
+                if (visited[0] > 2000 || matches.length() >= 100) return false;
+            }
+        } else if (!names) {
+            if (file.length() > LIMIT) return false;
+            String content;
+            try { content = text(read(file)); } catch (IOException e) { return false; }
+            String[] lines = content.split("\\n", -1);
+            for (int i = 0; i < lines.length; i++) if (lines[i].contains(query)) {
+                if (matches.length() >= 100) return false;
+                matches.put(new JSObject().put("path", path).put("line", i + 1).put("text", lines[i].substring(0, Math.min(lines[i].length(), 1000))));
+            }
+        }
+        return complete;
+    }
     private byte[] read(DocumentFile file) throws IOException {
         if (!file.isFile()) throw new IOException("Not a regular file.");
         if (file.length() > LIMIT) throw new IOException("File exceeds the 256 KiB limit.");
@@ -245,7 +286,34 @@ public class ObsidianVaultPlugin extends Plugin {
                     if (visible > offset + entries.length()) response.put("nextOffset", offset + entries.length());
                     call.resolve(response); return;
                 }
-                if (parts.length == 0) throw new IOException("Choose a file inside the connected folder.");
+                if (action.equals("mkdir")) {
+                    directories(root, parts, parts.length);
+                    call.resolve(new JSObject().put("path", path).put("created", true)); return;
+                }
+                if (action.equals("find") || action.equals("grep") || action.equals("search")) {
+                    String query = call.getString("query");
+                    if (query == null || query.isEmpty() || query.length() > 1000) throw new IOException("Provide a query of 1 to 1000 characters.");
+                    JSArray matches = new JSArray(); int[] visited = {0};
+                    boolean complete = search(find(root, parts, parts.length), path.equals(".") ? "" : path, query, action.equals("find"), matches, visited, 0);
+                    call.resolve(new JSObject().put("matches", matches).put("truncated", !complete)); return;
+                }
+                if (parts.length == 0) throw new IOException("Select a file or subdirectory, not the shared root.");
+                if (action.equals("rename")) {
+                    String name = call.getString("name");
+                    if (parts(name).length != 1) throw new IOException("Provide a single new name.");
+                    DocumentFile parent = find(root, parts, parts.length - 1);
+                    if (parent.findFile(name) != null) throw new IOException("Destination already exists.");
+                    DocumentFile file = find(root, parts, parts.length);
+                    if (!file.renameTo(name)) throw new IOException("Could not rename the entry.");
+                    call.resolve(new JSObject().put("renamed", true).put("name", file.getName())); return;
+                }
+                if (action.equals("delete")) {
+                    DocumentFile file = find(root, parts, parts.length);
+                    if (file.isDirectory() && !call.getBoolean("recursive", false) && file.listFiles().length > 0) throw new IOException("Directory is not empty. Use recursive=true to delete its contents.");
+                    if (!file.delete()) throw new IOException("Could not delete the entry.");
+                    call.resolve(new JSObject().put("deleted", true)); return;
+                }
+
                 String encoding = call.getString("encoding", "utf8");
                 if (!encoding.equals("utf8") && !encoding.equals("base64")) throw new IOException("Use utf8 or base64 encoding.");
                 if (action.equals("read")) {
@@ -255,8 +323,14 @@ public class ObsidianVaultPlugin extends Plugin {
                     else content = text(bytes);
                     call.resolve(new JSObject().put("content", content).put("encoding", encoding).put("hash", hash(bytes))); return;
                 }
-                if (!action.equals("write")) throw new IOException("Unsupported file action.");
+                if (!action.equals("write") && !action.equals("edit")) throw new IOException("Unsupported file action.");
                 String content = call.getString("content");
+                if (action.equals("edit")) {
+                    if (!encoding.equals("utf8")) throw new IOException("Text edits require utf8 encoding.");
+                    byte[] original = read(find(root, parts, parts.length));
+                    if (!hash(original).equals(call.getString("expectedHash"))) throw new IOException("File changed. Read it again before editing.");
+                    content = edit(text(original), call.getString("oldText"), call.getString("newText"));
+                }
                 if (content == null || content.length() > 349528) throw new IOException("Provide file content within the 256 KiB limit.");
                 byte[] bytes;
                 if (encoding.equals("base64")) {
@@ -270,7 +344,8 @@ public class ObsidianVaultPlugin extends Plugin {
                 if (bytes.length > LIMIT) throw new IOException("File exceeds the 256 KiB limit.");
                 if (!call.getData().has("expectedHash")) throw new IOException("Read the file before writing; provide its hash or null to create.");
                 String expected = call.getString("expectedHash");
-                DocumentFile parent = find(root, parts, parts.length - 1);
+                if (action.equals("edit") && expected == null) throw new IOException("Read the file before editing.");
+                DocumentFile parent = expected == null && action.equals("write") ? directories(root, parts, parts.length - 1) : find(root, parts, parts.length - 1);
                 DocumentFile file = parent.findFile(parts[parts.length - 1]);
                 byte[] previous = null;
                 if (file != null) {

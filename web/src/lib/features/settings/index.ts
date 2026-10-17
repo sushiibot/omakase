@@ -3,4 +3,4 @@ export { configureSettings, settingsStore, type SettingsStore } from './settings
 export type { SettingsApi } from './api';
 export type { OwnerName } from './types';
 
-export { default as VaultSettings } from './components/vault-settings.svelte';
+export { default as DeviceFsSettings } from './components/device-fs-settings.svelte';
