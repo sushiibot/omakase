@@ -4,7 +4,7 @@ import { isNativeApp } from './device-fs.svelte';
 
 interface UpdatePlugin {
 	status(): Promise<{ versionCode: number; versionName: string }>;
-	install(release: AndroidRelease): Promise<{ permissionRequired?: boolean }>;
+	install(release: AndroidRelease): Promise<{ permissionRequired?: boolean } | void>;
 }
 const plugin = registerPlugin<UpdatePlugin>('AppUpdates');
 class AndroidUpdates {
@@ -48,7 +48,7 @@ class AndroidUpdates {
 		this.error = null;
 		try {
 			const result = await plugin.install(this.release);
-			this.permissionRequired = !!result.permissionRequired;
+			this.permissionRequired = !!result?.permissionRequired;
 		} catch (error) {
 			this.error =
 				error instanceof Error

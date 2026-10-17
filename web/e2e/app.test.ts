@@ -949,6 +949,7 @@ for (const supported of [true, false]) {
 	}) => {
 		await mockApi(context);
 		await page.addInitScript((supported) => {
+			let installs = 0;
 			Object.assign(window, {
 				androidBridge: {},
 				installs: 0,
@@ -964,8 +965,8 @@ for (const supported of [true, false]) {
 					nativePromise: async (plugin: string, method: string) => {
 						if (plugin !== 'AppUpdates') throw new Error('Unavailable');
 						if (method === 'status') return { versionCode: 1, versionName: '1.0' };
-						Object.assign(window, { installs: 1 });
-						return { permissionRequired: true };
+						Object.assign(window, { installs: ++installs });
+						return installs === 1 ? { permissionRequired: true } : undefined;
 					}
 				}
 			});
@@ -990,6 +991,13 @@ for (const supported of [true, false]) {
 			await expect(page.getByText('Allow installs, then tap Install update again.')).toBeVisible();
 			expect(await page.evaluate(() => (window as unknown as { installs: number }).installs)).toBe(
 				1
+			);
+			// Android's successful call.resolve() has no data payload.
+			await page.getByRole('button', { name: 'Install update' }).click();
+			await expect(page.getByText('Android 1.0.1 available')).toBeVisible();
+			await expect(page.getByText('Allow installs, then tap Install update again.')).toHaveCount(0);
+			expect(await page.evaluate(() => (window as unknown as { installs: number }).installs)).toBe(
+				2
 			);
 		} else {
 			await expect(page.getByRole('link', { name: 'Download APK' })).toHaveAttribute(
