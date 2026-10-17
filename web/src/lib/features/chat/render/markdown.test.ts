@@ -308,3 +308,14 @@ describe('saved documents', () => {
 		expect(nodes).toContainEqual({ kind: 'text', text: '<script>alert(1)</script>' });
 	});
 });
+
+test('credential setup permits only the exact read-only setup route', () => {
+	expect(safeHref('/connectors/keys')).toBe('/connectors/keys');
+	for (const path of [
+		'/connectors/keys?key=secret',
+		'/connectors/keys#secret',
+		'/api/integrations/google_maps',
+		'/connectors/keys/../add'
+	])
+		expect(safeHref(path)).toBeNull();
+});

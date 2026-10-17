@@ -128,6 +128,7 @@
 	<ScreenContent>
 		<PageIntro description="Tools available to your agent.">
 			{#snippet actions()}
+				<Button href="/connectors/keys" variant="outline"><KeyRound />API keys</Button>
 				<Button href={addHref} variant="outline" aria-label="Add a server by URL">
 					<Plus aria-hidden="true" />Add server
 				</Button>

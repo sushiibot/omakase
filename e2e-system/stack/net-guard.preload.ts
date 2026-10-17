@@ -37,6 +37,11 @@ const guarded = (input: string | URL | Request, init?: RequestInit) => {
     const entry = { id: model, context_length: 400000, architecture: { input_modalities: ["text", "image"] }, top_provider: { max_completion_tokens: 32000 } };
     return Promise.resolve(Response.json({ data: [entry] }));
   }
+  // Deterministic credential validation; this fake key is never sent to Google.
+  if (url.href === "https://places.googleapis.com/v1/places:searchText") {
+    const key = new Headers(init?.headers).get("X-Goog-Api-Key");
+    return Promise.resolve(key === "e2e-google-credential-1234567890" ? Response.json({ places: [{ id: "e2e-place" }] }) : Response.json({ error: "Invalid test key" }, { status: 403 }));
+  }
   if (pushCapture && url.protocol === "https:" && PUSH_HOSTS.has(url.hostname)) return capturePush(url, input, init);
   console.error(`[e2e-net] blocked fetch ${url.origin}${url.pathname}`);
   return Promise.reject(new TypeError(`e2e: network disabled for ${url.origin}`));

@@ -1,3 +1,4 @@
+import { integrationsManifest } from "../../integrations/service.ts";
 import { mailManifest, toolPolicyManifest } from "../../integrations/mail/manifest.ts";
 import { fileStoreManifest } from "./fileStores/service.ts";
 import { GoogleMaps } from "./maps.ts";
@@ -158,7 +159,7 @@ export function hasInvisible(value: unknown): boolean {
 }
 
 export class WorkspaceTools {
-  private readonly maps: Pick<GoogleMaps, "action">;
+  private maps: Pick<GoogleMaps, "action">;
   private readonly opts: WorkspaceToolsOptions;
   private readonly registry: ToolRegistry;
   private readonly timers: Timers;
@@ -231,6 +232,9 @@ export class WorkspaceTools {
   private machineFiles?: (raw: unknown) => Promise<unknown>;
   setMachineFiles(call: (raw: unknown) => Promise<unknown>): void { this.machineFiles = call; }
   setChannelRequests(read: () => unknown): void { this.channelRequests = read; }
+  private integrations?: (raw: unknown) => Promise<unknown>;
+  setIntegrations(call: (raw: unknown) => Promise<unknown>): void { this.integrations = call; }
+  setMapsKey(key: () => string | undefined): void { this.maps = new GoogleMaps(key); }
   private location?: BrowserLocationRequests;
 
   setLocationRequests(location: BrowserLocationRequests): void { this.location = location; }
@@ -246,6 +250,7 @@ export class WorkspaceTools {
     if (this.toolPolicy) tools.push(toolPolicyManifest);
     if (this.externalFiles && this.opts.ownerUserId()) tools.push(fileStoreManifest);
     if (this.machineFiles && this.opts.ownerUserId()) tools.push(machineFileManifest);
+    if (this.integrations && this.opts.ownerUserId()) tools.push(integrationsManifest);
     if (this.location) tools.push(locationManifest);
     if (this.taskControl) tools.push(taskManifest);
     if (this.codingAgents && this.opts.ownerUserId()) tools.push(codingAgentManifest);
@@ -303,6 +308,10 @@ export class WorkspaceTools {
     if (p.name === "maps") {
       if (conn.role !== "workspace" || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Maps is unavailable." };
       return { ok: true, result: JSON.stringify(await this.maps.action(p.args)) };
+    }
+    if (p.name === "integrations") {
+      if (!this.integrations || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Integrations are unavailable." };
+      return { ok: true, result: JSON.stringify(await this.integrations(p.args)) };
     }
     if (p.name === "external_files") {
       if (!this.externalFiles || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "External files are unavailable." };

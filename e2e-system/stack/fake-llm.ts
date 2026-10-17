@@ -100,6 +100,7 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
     ], 0, undefined);
   }
   if (last?.role === "tool") {
+    if (userText.includes("E2E-INTEGRATIONS")) return stream([textOf(last.content), "\n[Set up API keys](/connectors/keys)"], 10, tag);
     if (userText.includes("E2E-ARTIFACT")) {
       const result = JSON.parse(textOf(last.content));
       return stream([result.link], 10, tag);
@@ -115,6 +116,11 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
     const cli = resolve(import.meta.dir, "../../bin/external-files.ts");
     return toolCall("bash", { command: "bun '" + cli.replace(/'/g, "'\\''") + "' stores" });
   }
+  if (userText.includes("E2E-MAPS-SAVED")) {
+    const cli = resolve(import.meta.dir, "../../bin/maps.ts");
+    return toolCall("bash", { command: "bun '" + cli.replace(/'/g, "'\\''") + "' search coffee" });
+  }
+  if (userText.includes("E2E-INTEGRATIONS")) return toolCall("integrations", { action: "list" });
   if (userText.includes("E2E-CHANNEL-REQUESTS")) return toolCall("list_channel_requests", {});
   if (userText.includes("E2E-OWNER-DECISION")) {
     const key = /key-([a-z0-9]{4,16})\b/.exec(userText)?.[1] ?? tag ?? "test";

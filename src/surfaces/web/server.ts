@@ -56,6 +56,7 @@ export interface WebHandlerDeps {
   tasks?: import("./taskRoutes.ts").TaskRoutes;
   machines?: import("./machineRoutes.ts").MachineRoutes;
   fileStores?: import("./fileStoreRoutes.ts").FileStoreRoutes;
+  integrations?: import("./integrationRoutes.ts").IntegrationRoutes;
   /** The /api/home routes. */
   home?: HomeRoutes;
   /** /api/runs, /api/history and /api/search; absent: they answer 404. */
@@ -133,6 +134,10 @@ export function createWebHandler(deps: WebHandlerDeps): WebHandler {
       catch (err) { logger.warn({ err }, "thread request failed"); return json({ error: err instanceof Error ? err.message : "Thread request failed" }, 409); }
     }
     if (deps.mail) { const response = await deps.mail.handle(req, path); if (response) return response; }
+    if (deps.integrations) {
+      const res = await deps.integrations.handle(req, path);
+      if (res) return res;
+    }
     if (deps.fileStores) {
       const res = await deps.fileStores.handle(req, path);
       if (res) return res;
@@ -268,6 +273,7 @@ export interface WebServerOptions {
   tasks?: import("./taskRoutes.ts").TaskRoutes;
   machines?: import("./machineRoutes.ts").MachineRoutes;
   fileStores?: import("./fileStoreRoutes.ts").FileStoreRoutes;
+  integrations?: import("./integrationRoutes.ts").IntegrationRoutes;
   home?: HomeRoutes;
   /** Sources for the live read-only routes. */
   reads?: ReadRouteDeps;
@@ -307,6 +313,7 @@ export async function startWebServer(config: WebConfig, db: Database, opts: WebS
     ...(opts.tasks ? { tasks: opts.tasks } : {}),
     ...(opts.machines ? { machines: opts.machines } : {}),
     ...(opts.fileStores ? { fileStores: opts.fileStores } : {}),
+    ...(opts.integrations ? { integrations: opts.integrations } : {}),
     ...(opts.home ? { home: opts.home } : {}),
     ...(opts.reads ? { reads: createReadRoutes(opts.reads) } : {}),
     ...(opts.dictation ? { dictation: opts.dictation } : {}),

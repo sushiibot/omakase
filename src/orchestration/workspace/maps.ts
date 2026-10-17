@@ -16,7 +16,7 @@ export class GoogleMaps {
     if (!parsed.success) throw new Error(`Invalid maps request: ${parsed.error.issues[0]?.message}`);
     const p = parsed.data;
     const key = this.key();
-    if (!key) throw new Error("Maps is not configured. Set GOOGLE_MAPS_API_KEY on the gateway and enable Places API (New) and Routes API.");
+    if (!key) throw new Error("Maps is not configured. Use the integrations tool to check setup, then offer [Set up Google Maps](/connectors/keys). Never ask for the key in chat.");
     if (this.active >= 4) throw new Error("Maps is busy. Wait before retrying.");
     if (this.now() - this.windowStart >= 60_000) { this.windowStart = this.now(); this.requests = 0; }
     if (this.requests >= 30) throw new Error("Maps request limit reached (30/minute). Wait before retrying.");

@@ -776,3 +776,17 @@ test("mail uses the authenticated gateway boundary and unknown sends cannot reac
   expect(calls).toEqual(["mail_accounts"]);
   expect(log.lines.some(l => l.obj.name === "mail_accounts" && l.obj.ok)).toBe(true);
 });
+
+test("integration capabilities are owner-scoped and unavailable after disconnect", async () => {
+  const { tools } = setup();
+  let calls = 0;
+  tools.setIntegrations(async () => { calls++; return { integrations: [] }; });
+  expect(tools.manifest().some(t => t.name === "integrations")).toBe(true);
+  const connection = conn();
+  expect(await tools.handleCall({ ...connection, principalId: "other" }, call("integrations", { action: "list" }))).toMatchObject({ ok: false, error: "principal mismatch" });
+  expect(calls).toBe(0);
+  expect(await tools.handleCall(connection, call("integrations", { action: "list" }))).toMatchObject({ ok: true });
+  tools.onSocketClosed(connection);
+  expect(await tools.handleCall(connection, call("integrations", { action: "list" }))).toMatchObject({ ok: false });
+  expect(calls).toBe(1);
+});

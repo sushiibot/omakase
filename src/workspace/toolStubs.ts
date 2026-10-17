@@ -25,6 +25,7 @@ export const KNOWN_PROXIED_TOOLS: readonly string[] = [
   "machine_files",
   "coding_agent",
   "list_channel_requests",
+  "integrations",
 ];
 
 /** Above the bot's 30 min approval wait plus its 120 s execution cap. */

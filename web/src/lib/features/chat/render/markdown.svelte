@@ -107,7 +107,9 @@
 				class="rounded bg-muted px-1 font-mono text-code [overflow-wrap:anywhere]">{node.text}</code
 			>{:else if node.kind === 'link'}<a
 				href={node.href}
-				target={node.href.startsWith('/artifacts/') ? undefined : '_blank'}
+				target={node.href.startsWith('/artifacts/') || node.href === '/connectors/keys'
+					? undefined
+					: '_blank'}
 				rel="noopener noreferrer"
 				class={node.href.startsWith('/artifacts/')
 					? 'my-2 inline-flex max-w-full flex-col justify-center rounded-md border bg-muted px-4 py-2 [overflow-wrap:anywhere] text-foreground no-underline'

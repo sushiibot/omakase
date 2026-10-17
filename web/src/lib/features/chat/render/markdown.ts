@@ -70,6 +70,8 @@ const FILE_PATH_RE = /^\/f\/([A-Za-z0-9_-]{22})$/;
 
 /** The serialized URL when `raw` is an absolute http(s)/mailto URL off this origin; null otherwise. */
 export function safeHref(raw: string, origin?: string): string | null {
+	// Exact read-only setup route; no query or fragment may carry credentials.
+	if (raw === '/connectors/keys') return raw;
 	if (/^\/artifacts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(raw))
 		return raw;
 	let url: URL;

@@ -1,3 +1,7 @@
+import { dirname, join } from "node:path";
+import { IntegrationSecrets, secretEncryptionKey } from "./integrations/secrets.ts";
+import { Integrations } from "./integrations/service.ts";
+import { IntegrationRoutes } from "./surfaces/web/integrationRoutes.ts";
 import { createMailService } from "./integrations/mail/index.ts";
 import { MailRoutes, TOOL_POLICY_KEY } from "./surfaces/web/mailRoutes.ts";
 // The personal agent's server side: the web gateway for the PWA and the workspace control plane.
@@ -78,6 +82,10 @@ async function main() {
   const machines = new MachineHub(machineGrants.parse(JSON.parse(process.env.SUSHII_MACHINES_JSON ?? "[]")));
   workspace.server.setMachineHub(machines);
   const agentState = new KvJsonState(db);
+  const integrationSecrets = new IntegrationSecrets(agentState, secretEncryptionKey(join(dirname(config.databasePath), "integration-secrets.key"), agentState.list("integration-secret:").length > 0));
+  const integrations = new Integrations(integrationSecrets, fetch, () => config.googleMapsApiKey);
+  workspace.tools.setIntegrations(raw => integrations.action(raw));
+  workspace.tools.setMapsKey(() => integrations.googleMapsKey());
   const mail = createMailService(agentState);
   workspace.tools.setMail((name, args) => mail.action(name, args));
   workspace.tools.setToolPolicy(() => agentState.get<string>(TOOL_POLICY_KEY) ?? "");
@@ -114,6 +122,7 @@ async function main() {
     machines: machineRoutes,
     fileStores: new FileStoreRoutes(fileStores),
     mail: new MailRoutes(mail, agentState),
+    integrations: new IntegrationRoutes(integrations),
     home: webChat.home,
     uploads,
     browser: createBrowserRoutes(workspace.link),
