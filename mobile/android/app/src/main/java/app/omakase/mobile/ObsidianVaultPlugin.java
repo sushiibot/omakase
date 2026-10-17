@@ -99,7 +99,7 @@ public class ObsidianVaultPlugin extends Plugin {
             try {
                 int flags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                 if (flags != (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION)) throw new IOException("The folder needs read and write permission.");
-                getContext().getContentResolver().takePersistableUriPermission(uri, flags);
+                getContext().getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                 DocumentFile next = DocumentFile.fromTreeUri(getContext(), uri);
                 if (next == null || !next.isDirectory() || !next.canRead() || !next.canWrite()) throw new IOException("Choose a writable folder.");
                 JSONObject folders = folders();

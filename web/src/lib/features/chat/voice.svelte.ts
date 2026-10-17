@@ -6,6 +6,7 @@ import { voiceProvider } from './render/voice-provider';
 import { LiveTranscription } from './render/live-transcription';
 import { voiceMessages, type VoiceTranscript } from './render/voice-messages';
 import { AudioSessionLease } from './render/audio-session';
+import { NativeCallAudio, microphonePermissionHelp } from '$lib/core/native/call-audio';
 
 export class Voice {
 	reader = new ReadAloud();
@@ -91,6 +92,8 @@ export class Voice {
 	);
 	micReady = $state(false);
 	#audioSession = new AudioSessionLease();
+	#nativeAudio = new NativeCallAudio();
+	#onCallInterrupted = () => this.#fail('Call interrupted. Start a new call to continue.');
 	#input: MediaStreamAudioSourceNode | null = null;
 	#resumingMic = false;
 	previewState = $state<'idle' | 'loading' | 'playing'>('idle');
@@ -394,13 +397,18 @@ export class Voice {
 		const generation = ++this.#generation;
 		this.#turnDetector.reset();
 		document.addEventListener('visibilitychange', this.#onhidden);
+		window.addEventListener('omakaseCallInterrupted', this.#onCallInterrupted);
 		this.#timeout = setTimeout(() => this.#fail('Voice connection timed out. Try again.'), 20000);
 		try {
 			this.#audioSession.set('play-and-record');
-			// Resume during the user gesture, before any permission or network awaits.
-			const context = new AudioContext();
-			this.#context = context;
-			await context.resume();
+			// Browsers need gesture-time playback. Android must open capture first so
+			// WebView creates the output stream with communication audio usage.
+			let context: AudioContext | null = null;
+			if (!this.#nativeAudio.supported) {
+				context = new AudioContext();
+				this.#context = context;
+				await context.resume();
+			}
 			const stream = await navigator.mediaDevices.getUserMedia({
 				audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
 			});
@@ -412,6 +420,20 @@ export class Voice {
 			this.micReady = true;
 			for (const track of stream.getAudioTracks())
 				track.onended = () => this.#fail('Microphone disconnected. Start a new call.');
+			try {
+				await this.#nativeAudio.start();
+			} catch {
+				if (generation === this.#generation)
+					this.#fail('Could not start call audio. End any other call and try again.');
+				return;
+			}
+			if (generation !== this.#generation) return;
+			if (!context) {
+				context = new AudioContext();
+				this.#context = context;
+				await context.resume();
+				if (generation !== this.#generation) return;
+			}
 			await context.audioWorklet.addModule('/audio/voice-capture.js');
 			if (generation !== this.#generation) return;
 			const capture = new AudioWorkletNode(context, 'voice-capture', {
@@ -481,7 +503,7 @@ export class Voice {
 			if (generation !== this.#generation) return;
 			this.#fail(
 				error instanceof DOMException && error.name === 'NotAllowedError'
-					? "Allow microphone access in the browser's site settings, then try again."
+					? microphonePermissionHelp()
 					: "Couldn't start voice on this device. Try again."
 			);
 		}
@@ -693,6 +715,8 @@ export class Voice {
 		++this.#generation;
 		this.#turnDetector.reset();
 		document.removeEventListener('visibilitychange', this.#onhidden);
+		window.removeEventListener('omakaseCallInterrupted', this.#onCallInterrupted);
+		void this.#nativeAudio.stop().catch(() => {});
 		if (this.#timer) clearInterval(this.#timer);
 		if (this.#timeout) clearTimeout(this.#timeout);
 		this.#timer = this.#timeout = null;

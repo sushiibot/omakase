@@ -1,6 +1,7 @@
 import { microphoneLevel } from './render/microphone-level';
 import { LiveTranscription } from './render/live-transcription';
 import type { DictationState } from './types';
+import { microphonePermissionHelp } from '$lib/core/native/call-audio';
 
 export type { DictationState };
 
@@ -111,7 +112,7 @@ export class Dictation {
 			this.state = 'idle';
 			this.error =
 				err instanceof DOMException && err.name === 'NotAllowedError'
-					? "Microphone access is off. Allow it in the browser's site settings, then try again."
+					? microphonePermissionHelp()
 					: "Couldn't start the microphone.";
 			return;
 		}

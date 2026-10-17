@@ -50,6 +50,57 @@ The app does not register the PWA service worker. The browser PWA remains availa
 The wrapper requires network access at startup. Connect the phone to the private network before opening it.
 Browser push notifications are not supported inside this WebView. Native push is outside this feature.
 
+## Device permissions and call audio
+
+Android requests permissions when you use the related feature. The app does not request them at startup.
+
+| Feature | Permission or configuration |
+| --- | --- |
+| Voice calls and dictation | `RECORD_AUDIO` shows the microphone permission prompt. `MODIFY_AUDIO_SETTINGS` allows communication audio mode. |
+| Share location | `ACCESS_COARSE_LOCATION` and `ACCESS_FINE_LOCATION` allow the location prompt. Approximate location also works. |
+| Attach photos | The system file picker grants read access to selected photos. No photo-library or storage permission is needed. |
+| Take photo | A manifest query makes the system camera visible to Capacitor. The camera receives temporary access to an app-owned image file. |
+| Local folders | The system folder picker grants persistent access to the selected folders. No broad storage permission is needed. |
+| Clipboard | The existing foreground copy buttons need no manifest permission. |
+| Network | `INTERNET` is declared. The configured server must use HTTPS. Cleartext and mixed content remain disabled. |
+
+Live and turn-based calls request audio focus and use `MODE_IN_COMMUNICATION` through the `CallAudio` plugin.
+The volume buttons control call volume while the call is active.
+Android chooses the audio route. The app does not scan for Bluetooth devices or request nearby-device access.
+On Android 12 and later, the plugin maintains communication mode when WebView releases the microphone between turns.
+The screen stays awake during a call without a wake-lock permission.
+Ending a call releases audio focus, communication mode, the volume override, and the screen flag.
+Audio-focus loss ends the call. Returning from another app does not restart it automatically.
+Older APKs without this plugin retain the existing WebView audio behavior.
+
+These assistant calls do not dial telephone numbers. They need no `CALL_PHONE`, phone-state, or call-log permissions.
+The composer's **Take photo** action uses the system camera through an image-capture intent.
+This action needs no direct `CAMERA` permission. Direct WebView camera capture would need a separate permission and implementation.
+The file provider exposes the app's camera image directory and cache, rather than the whole external storage tree.
+
+Background calls and native notifications need additional implementation before their permissions can help.
+Background calls need a foreground microphone service, a persistent notification, and call lifecycle handling.
+Native push needs notification delivery and registration, plus `POST_NOTIFICATIONS` on Android 13 and later.
+The current app stops voice calls when hidden and has no foreground service or native push registration.
+Do not add these permissions without implementing their features.
+
+The vault folder grant already persists across app restarts. It also permits access from a background component.
+The current vault connection runs in the WebView and stops when the app is hidden.
+Background vault work needs native request handling, authentication, and a foreground service or scheduled jobs.
+A foreground service needs an ongoing notification and a disconnect action.
+Android 15 and later limit `dataSync` foreground services to six background hours per 24 hours.
+This limit prevents a simple promise of unlimited background access through that service type.
+See [Android's background service limits](https://developer.android.com/about/versions/15/behavior-changes-15).
+
+After installing an updated APK, test microphone denial and retry, photo selection and cancellation, and approximate location sharing.
+Test both voice modes with the phone speaker, wired audio, and a Bluetooth headset.
+Check volume buttons, incoming phone calls, headset disconnection, backgrounding, and audio restoration after hangup.
+No connected-device test is implied by a successful APK build.
+
+Android references: [audio routing](https://developer.android.com/develop/connectivity/bluetooth/ble-audio/audio-manager),
+[permission alternatives](https://developer.android.com/privacy-and-security/minimize-permission-requests),
+and [location permissions](https://developer.android.com/develop/sensors-and-location/location/permissions/runtime).
+
 ## Connect folders
 
 1. Open the Android app.

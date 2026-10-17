@@ -1,6 +1,49 @@
 import { expect, test, type BrowserContext } from '@playwright/test';
 import { mockRecognition, recognize } from './live-transcription';
 import { axe, checkScreen, fixtureApp, push } from './helpers';
+
+for (const ending of ['hangup', 'interruption'] as const) {
+	test(`Android call audio starts and releases on ${ending}`, async ({ page, context }) => {
+		await withVoice(context);
+		const nativeCalls: string[] = [];
+		await page.exposeFunction('recordNativeAudio', (method: string) => nativeCalls.push(method));
+		await page.addInitScript(() => {
+			Object.assign(window, {
+				androidBridge: {},
+				Capacitor: {
+					PluginHeaders: [
+						{
+							name: 'CallAudio',
+							methods: ['start', 'stop'].map((name) => ({ name, rtype: 'promise' }))
+						}
+					],
+					nativePromise: async (plugin: string, method: string) => {
+						if (plugin === 'CallAudio')
+							await (
+								window as unknown as { recordNativeAudio: (method: string) => Promise<void> }
+							).recordNativeAudio(method);
+					}
+				}
+			});
+		});
+		await page.routeWebSocket('**/api/voice/connect**', (ws) =>
+			ws.send(JSON.stringify({ type: 'ready', inputRate: 16000 }))
+		);
+		await page.goto('/chat');
+		await page.getByRole('button', { name: 'Voice chat', exact: true }).click();
+		await page.getByRole('button', { name: 'Start voice chat' }).click();
+		const call = page.getByRole('region', { name: 'Voice call', exact: true });
+		await expect(call.getByRole('button', { name: 'Mute microphone' })).toBeEnabled();
+		expect(nativeCalls).toContain('start');
+		if (ending === 'interruption')
+			await page.evaluate(() => window.dispatchEvent(new Event('omakaseCallInterrupted')));
+		else await call.getByRole('button', { name: 'End call' }).click();
+		await expect(call).toBeHidden();
+		await expect.poll(() => nativeCalls.at(-1)).toBe('stop');
+		await expect(page.getByRole('button', { name: 'Dictate' })).toBeEnabled();
+	});
+}
+
 test.use({
 	launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] },
 	permissions: ['microphone']
