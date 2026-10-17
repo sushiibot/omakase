@@ -1,7 +1,7 @@
 # Mail accounts and tool-use rules
 
-Open **Connectors → Accounts & rules** to add an account.
-Give each account a name and purpose, such as a property address.
+Open **Settings → Mail accounts** to add an account.
+Select **Add account**. Give each account a name and purpose, such as a property address.
 The agent selects accounts explicitly. It can read mail and save drafts in the provider's mailbox.
 Review and send drafts in Gmail or Fastmail yourself.
 
@@ -22,7 +22,7 @@ MAIL_GOOGLE_CLIENT_SECRET=<client-secret>
 MAIL_GOOGLE_REDIRECT_URI=https://<your-app-host>/api/mail/oauth/gmail/callback
 ```
 
-6. Restart the gateway. Open **Accounts & rules**, name the account, and select **Continue with Google**.
+6. Restart the gateway. Open **Mail accounts**, name the account, and select **Continue with Google**.
 7. Select the Google account and approve both mail permissions.
 
 The callback must reach the owner-authenticated web gateway through the same browser.
@@ -40,7 +40,7 @@ The gateway exposes only mail reads and draft saves. It has no send operation or
 
 1. Open Fastmail **Settings → Privacy & Security → Manage API tokens**.
 2. Create a JMAP token with mail read/write access. Leave sending access off when selecting permissions.
-3. Select **Fastmail** in **Accounts & rules**.
+3. Select **Fastmail** in **Mail accounts**.
 4. Enter an account name, an optional purpose, and the token.
 5. Select **Connect account**.
 
@@ -60,7 +60,7 @@ If the reviewer cannot decide, the app asks the owner. Without an interactive ap
 Integration review remains enabled when general workspace auto mode is off.
 Scheduled MCP calls also receive per-call review. Calls that need approval are blocked in background jobs.
 
-Set additional restrictions in **Accounts & rules → Tool-use rules**.
+Set additional restrictions in **Settings → Tool permissions**.
 The read-only and draft-only presets fill the rules field. Select **Save rules** to apply them.
 The gateway stores these rules. Agent tools can read them but cannot change them.
 

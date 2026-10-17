@@ -18,7 +18,7 @@ export class MailRoutes {
         if (!state || cookie !== state || !url.searchParams.get("code")) throw new IntegrationError("Invalid sign-in response.");
         await this.mail.finish(provider, state, url.searchParams.get("code")!); outcome = "connected";
       } catch { /* Never put provider errors, codes or credentials into URLs or logs. */ }
-      return new Response(null, { status: 303, headers: { Location: `/connectors/mail?connection=${outcome}`, "Cache-Control": "no-store", "Set-Cookie": `mail_oauth=; Path=/api/mail/oauth/; HttpOnly; SameSite=Lax; Max-Age=0` } });
+      return new Response(null, { status: 303, headers: { Location: `/settings/mail?connection=${outcome}`, "Cache-Control": "no-store", "Set-Cookie": `mail_oauth=; Path=/api/mail/oauth/; HttpOnly; SameSite=Lax; Max-Age=0` } });
     }
     try {
       if (path === "/api/mail" && req.method === "GET") return json({ accounts: this.mail.list(), providers: this.mail.catalog() });

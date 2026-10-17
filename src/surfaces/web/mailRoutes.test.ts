@@ -25,7 +25,7 @@ test("OAuth callback accepts an owner navigation only with matching one-use stat
   const callback = `/api/mail/oauth/gmail/callback?state=${state}&code=private-code`;
   const missing = await s.request(callback, undefined, {"Sec-Fetch-Site": "cross-site"}); expect(missing.headers.get('location')).toContain('failed'); expect(s.service.list()).toHaveLength(0);
   const response = await s.request(callback, undefined, {"Sec-Fetch-Site": "cross-site", cookie: cookie.split(';')[0]!});
-  expect(response.status).toBe(303); expect(response.headers.get('location')).toBe('/connectors/mail?connection=connected');
+  expect(response.status).toBe(303); expect(response.headers.get('location')).toBe('/settings/mail?connection=connected');
   expect(JSON.stringify(await (await s.request('/api/mail')).json())).not.toContain('private-');
   expect((await s.request(callback, undefined, {cookie: cookie.split(';')[0]!})).headers.get('location')).toContain('failed');
 });

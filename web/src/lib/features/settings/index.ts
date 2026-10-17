@@ -4,3 +4,5 @@ export type { SettingsApi } from './api';
 export type { OwnerName } from './types';
 
 export { default as DeviceFsSettings } from './components/device-fs-settings.svelte';
+export { default as ToolPermissionsScreen } from './tool-permissions-screen.svelte';
+export { ToolPolicyStore } from './tool-policy.svelte';

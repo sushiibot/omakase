@@ -3,7 +3,6 @@ import type { MailAccount, MailProvider } from './types';
 export class MailStore {
 	accounts = $state<MailAccount[]>([]);
 	providers = $state<MailProvider[]>([]);
-	rules = $state('');
 	loaded = $state(false);
 	busy = $state(false);
 	error = $state<string | null>(null);
@@ -12,10 +11,9 @@ export class MailStore {
 		this.busy = true;
 		this.error = null;
 		try {
-			const [mail, policy] = await Promise.all([mailApi.list(), mailApi.policy()]);
+			const mail = await mailApi.list();
 			this.accounts = mail.accounts;
 			this.providers = mail.providers;
-			this.rules = policy.rules;
 			this.loaded = true;
 		} catch (error) {
 			this.error = error instanceof Error ? error.message : 'Could not load accounts. Try again.';
@@ -71,20 +69,6 @@ export class MailStore {
 			this.notice = result.message;
 		} catch (error) {
 			this.error = error instanceof Error ? error.message : 'Could not disconnect the account.';
-		} finally {
-			this.busy = false;
-		}
-	}
-	async saveRules(rules: string) {
-		this.busy = true;
-		this.error = null;
-		this.notice = null;
-		try {
-			const result = await mailApi.savePolicy(rules);
-			this.rules = result.rules;
-			this.notice = 'Tool-use rules saved.';
-		} catch (error) {
-			this.error = error instanceof Error ? error.message : 'Could not save the rules.';
 		} finally {
 			this.busy = false;
 		}

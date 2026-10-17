@@ -14,8 +14,6 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
 }
 export const mailApi = {
 	list: () => call<{ accounts: MailAccount[]; providers: MailProvider[] }>('/mail'),
-	policy: () => call<{ rules: string }>('/tool-policy'),
-	savePolicy: (rules: string) => call<{ rules: string }>('/tool-policy', { rules }),
 	connect: (
 		provider: string,
 		auth: 'oauth' | 'token',

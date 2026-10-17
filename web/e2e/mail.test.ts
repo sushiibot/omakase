@@ -52,15 +52,20 @@ test('mail accounts can be added, renamed and disconnected; secrets are cleared'
 	context
 }) => {
 	const app = await mailFixture(context);
-	await page.goto('/connectors');
-	await page.getByRole('link', { name: 'Accounts & rules' }).click();
+	await page.goto('/settings');
+	await page.getByRole('link', { name: 'Mail accounts' }).click();
 	await expect(page.getByText('property@example.com', { exact: false })).toBeVisible();
+	await expect(page.getByLabel('Provider', { exact: true })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Add account', exact: true }).click();
 	await page.getByLabel('Provider', { exact: true }).selectOption('fastmail');
 	await page.getByLabel('Account name', { exact: true }).fill('Maple Avenue');
 	await page.getByLabel('API token', { exact: true }).fill('private-test-token');
 	await page.getByRole('button', { name: 'Connect account', exact: true }).click();
-	await expect(page.getByRole('status')).toContainText('Mail account connected');
+	await expect(page.getByText('Mail account connected.', { exact: true })).toBeVisible();
+	await expect(page.getByLabel('API token', { exact: true })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Add account', exact: true }).click();
 	await expect(page.getByLabel('API token', { exact: true })).toHaveValue('');
+	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 	expect(app.writes).toContainEqual({
 		name: 'Maple Avenue',
 		purpose: '',
@@ -76,10 +81,12 @@ test('mail accounts can be added, renamed and disconnected; secrets are cleared'
 });
 test('owner rules can be changed independently of provider accounts', async ({ page, context }) => {
 	const app = await mailFixture(context);
-	await page.goto('/connectors/mail');
-	await page.getByRole('button', { name: 'Draft-only preset' }).click();
+	await context.route('**/api/mail', (route) => route.abort());
+	await page.goto('/settings');
+	await page.getByRole('link', { name: 'Tool permissions' }).click();
+	await page.getByRole('button', { name: 'Allow drafts only' }).click();
 	await page.getByRole('button', { name: 'Save rules' }).click();
-	await expect(page.getByRole('status')).toContainText('Tool-use rules saved');
+	await expect(page.getByRole('status')).toContainText('Rules saved');
 	expect(app.rules()).toContain('Do not send');
 	await page.reload();
 	await expect(page.getByLabel('Additional restrictions')).toHaveValue(app.rules());
@@ -91,20 +98,49 @@ for (const colorScheme of ['light', 'dark'] as const) {
 	}) => {
 		await page.emulateMedia({ colorScheme });
 		await mailFixture(context);
-		await page.goto('/connectors/mail');
+		await page.goto('/settings/mail');
+		await expect(page.getByRole('button', { name: 'Add account', exact: true })).toBeEnabled();
+		await checkScreen(page);
+		await page.getByRole('button', { name: 'Add account', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
 		await checkScreen(page);
 		await page.getByLabel('Provider', { exact: true }).selectOption('fastmail');
 		await checkScreen(page);
 	});
 }
-test('mail load failure has retry and no editable stale policy', async ({ page, context }) => {
+test('mail load failure has retry and disables account setup', async ({ page, context }) => {
 	await mailFixture(context);
 	await context.route('**/api/mail', (route) =>
 		route.fulfill({ status: 503, json: { error: 'Mail is unavailable.' } })
 	);
-	await page.goto('/connectors/mail');
+	await page.goto('/settings/mail');
 	await expect(page.getByRole('alert')).toContainText('Mail is unavailable');
 	await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Save rules' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Add account', exact: true })).toBeDisabled();
 });
+
+test('old mail links preserve the connection result and return to Settings', async ({
+	page,
+	context
+}) => {
+	await mailFixture(context);
+	await page.goto('/connectors/mail?connection=connected');
+	await expect(page).toHaveURL(/\/settings\/mail\?connection=connected$/);
+	await expect(page.getByText('Mail account connected.', { exact: true })).toBeVisible();
+	await page.getByRole('link', { name: 'Settings', exact: true }).click();
+	await expect(page.getByRole('link', { name: 'Tool permissions' })).toBeVisible();
+	await page.getByRole('link', { name: 'MCP servers' }).click();
+	await expect(page.getByRole('link', { name: 'Accounts & rules' })).toHaveCount(0);
+});
+for (const colorScheme of ['light', 'dark'] as const) {
+	test(`tool permissions remain usable without mail accounts in ${colorScheme}`, async ({
+		page,
+		context
+	}) => {
+		await page.emulateMedia({ colorScheme });
+		await mailFixture(context);
+		await page.goto('/settings/permissions');
+		await expect(page.getByRole('button', { name: 'Save rules' })).toBeVisible();
+		await checkScreen(page);
+	});
+}

@@ -147,8 +147,8 @@
 						spellcheck={false}
 					/>
 					<Field.Description id="{uid}-token-help">
-						Use Accounts &amp; rules for native mail reads and drafts. MCP tokens are stored on the
-						workspace server; restrict their permissions at the provider.
+						Connect mail accounts in Settings. MCP tokens are stored on the workspace server;
+						restrict their permissions at the provider.
 					</Field.Description>
 				</Field.Field>
 			</Field.Group>

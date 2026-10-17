@@ -6,7 +6,7 @@
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import { MailScreen, MailStore } from '$lib/features/mail';
 	const store = new MailStore();
-	const back = backTo(resolve('/connectors'));
+	const back = backTo(resolve('/settings'));
 	onMount(() => {
 		const outcome = page.url.searchParams.get('connection');
 		if (outcome === 'connected') store.notice = 'Mail account connected.';
@@ -16,19 +16,17 @@
 	});
 </script>
 
-<svelte:head><title>Accounts & rules · sushii</title></svelte:head>
+<svelte:head><title>Mail accounts · sushii</title></svelte:head>
 <MailScreen
 	accounts={store.accounts}
 	providers={store.providers}
-	rules={store.rules}
 	loaded={store.loaded}
 	busy={store.busy}
 	error={store.error}
 	notice={store.notice}
 	online={pwa.online}
-	back={{ href: resolve('/connectors'), label: 'Connectors', onclick: back }}
+	back={{ href: resolve('/settings'), label: 'Settings', onclick: back }}
 	onretry={() => void store.load()}
 	onsave={(input) => store.save(input)}
 	onremove={(id) => void store.remove(id)}
-	onsaverules={(rules) => void store.saveRules(rules)}
 />

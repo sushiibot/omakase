@@ -6,6 +6,8 @@
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import * as Item from '$lib/ui/item';
 	import BellRing from '@lucide/svelte/icons/bell-ring';
 	import RotateCw from '@lucide/svelte/icons/rotate-cw';
 	import { Button } from '$lib/ui/button';
@@ -23,6 +25,7 @@
 	import OwnerNameField from './components/owner-name-field.svelte';
 
 	let {
+		accessLinks = [],
 		nativeSettings,
 		back,
 		me,
@@ -52,6 +55,7 @@
 		oninstall,
 		onreload
 	}: {
+		accessLinks?: { label: string; description: string; href: string }[];
 		nativeSettings?: Snippet;
 		back?: { href: string; label: string; onclick?: (e: MouseEvent) => void };
 		me: RemoteLike & { data?: { login: string; displayName?: string } };
@@ -137,6 +141,33 @@
 <DetailScreen title="Settings" {back} {banner} toast={updateReady ? toast : undefined}>
 	<ScreenContent>
 		<div class="flex flex-col gap-8 md:gap-10">
+			{#if accessLinks.length}
+				<Section id="agent-access" title="Agent access" tone="list">
+					<Item.Group>
+						{#each accessLinks as link (link.href)}
+							<div role="listitem">
+								<Item.Root size="sm">
+									{#snippet child({ props })}
+										<a href={link.href} {...props}>
+											<Item.Content
+												><Item.Title>{link.label}</Item.Title><Item.Description
+													>{link.description}</Item.Description
+												></Item.Content
+											>
+											<Item.Actions
+												><ChevronRight
+													class="size-4 text-muted-foreground"
+													aria-hidden="true"
+												/></Item.Actions
+											>
+										</a>
+									{/snippet}
+								</Item.Root>
+							</div>
+						{/each}
+					</Item.Group>
+				</Section>
+			{/if}
 			<Section id="account" title="Account">
 				<Field.Group>
 					<ScreenState
