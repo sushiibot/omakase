@@ -54,7 +54,11 @@ export async function chromiumAccountFill(endpoint: string, marker: string, inpu
         const result = await call("Runtime.evaluate", { expression: `(${fillAccountPage.toString()})(${JSON.stringify(input)})`, returnByValue: true }, sessionId);
         if (result.exceptionDetails || result.result?.value !== true) throw new Error("Account fill failed");
         return;
-      } finally { await call("Target.detachFromTarget", { sessionId }); }
+      } finally {
+        // Cleanup cannot change an acknowledged DOM result (the page may close
+        // itself after its input handlers run). The socket is also closed below.
+        await call("Target.detachFromTarget", { sessionId }).catch(() => {});
+      }
     }
     throw new Error("Account fill failed");
   } catch { throw new Error("Account fill failed"); }
