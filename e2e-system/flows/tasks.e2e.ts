@@ -78,8 +78,11 @@ test("manual tasks persist, execute in their own conversation, and accept follow
   await page.getByRole("button", { name: /^Done \d+$/ }).click();
   const completed = page.getByRole("checkbox", { name: `Mark Task ${tag} to do`, exact: true });
   await expect(completed).toBeChecked();
-  await completed.uncheck();
-  await expect(page.getByRole("region", { name: "To do", exact: true }).getByRole("checkbox", { name: `Mark Task ${tag} done`, exact: true })).toBeVisible();
+  // Reopening moves the row and changes its accessible name. Assert the new state below.
+  await completed.click();
+  const reopened = page.getByRole("region", { name: "To do", exact: true }).getByRole("checkbox", { name: `Mark Task ${tag} done`, exact: true });
+  await expect(reopened).toBeVisible();
+  await expect(reopened).not.toBeChecked();
   const conversations = await page.evaluate(
     async () => await (await fetch("/api/chats")).json(),
   );
