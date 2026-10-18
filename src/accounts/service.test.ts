@@ -109,7 +109,7 @@ describe("account lifecycle", () => {
         accounts.internal(conn, { ...input, ...override }),
       ).toThrow();
     expect(() =>
-      accounts.internal({ ...conn, role: "machine" } as ConnectionInfo, input),
+      accounts.internal({ ...conn, role: "machine" } as unknown as ConnectionInfo, input),
     ).toThrow();
     const result = accounts.internal(conn, input) as {
       receiptId: string;
