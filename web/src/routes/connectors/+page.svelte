@@ -7,6 +7,12 @@
 	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
 	const connections = [
 		{
+			href: '/accounts',
+			name: 'Accounts',
+			description: 'Passwords created by the agent, with access history.',
+			icon: KeyRound
+		},
+		{
 			href: '/connectors/mcp',
 			name: 'MCP servers',
 			description: 'Connect servers that provide tools to your agent.',

@@ -99,7 +99,7 @@ const moreEntries: NavEntry[] = [
 		href: '/connectors',
 		label: 'Connectors',
 		icon: Plug,
-		description: 'MCP servers and API integrations'
+		description: 'Accounts, MCP servers and API integrations'
 	},
 	{
 		id: 'file-stores',
@@ -184,6 +184,7 @@ export function activeNav(routeId: string | null): string | undefined {
 		section === '/workspace' ||
 		section === '/more' ||
 		section === '/connectors' ||
+		section === '/accounts' ||
 		section === '/file-stores' ||
 		pathOf(routeId).startsWith('/settings/mail') ||
 		pathOf(routeId).startsWith('/settings/permissions')

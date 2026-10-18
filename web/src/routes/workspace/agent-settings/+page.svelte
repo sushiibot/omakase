@@ -11,7 +11,7 @@
 		{
 			href: '/connectors',
 			name: 'Connectors',
-			description: 'MCP servers and API integrations',
+			description: 'Accounts, MCP servers and API integrations',
 			icon: Plug
 		},
 		{
