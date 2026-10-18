@@ -1,3 +1,6 @@
+import { accountsContribution } from "../../accounts/toolContribution.ts";
+import { AccountError } from "../../accounts/service.ts";
+import { accountsManifest } from "../../accounts/contracts.ts";
 import { mailContributions, toolPolicyContribution, integrationsContribution, externalFilesContribution, machineFilesContribution, codingAgentsContribution, taskContribution, channelRequestsContribution } from "./toolContributions.ts";
 import { BrowserLocationRequests, LOCATION_TOOL } from "./location.ts";
 import { isVerifiedWebActor, mintWebActor } from "../../surfaces/web/actor.ts";
@@ -867,5 +870,60 @@ describe("gateway contributions", () => {
     expect(await tools.handleCall(conn(), call("task_manage", { extra: true }))).toEqual({ ok: false, error: "Invalid task action." });
     expect(log.lines).toHaveLength(1);
     expect(log.lines[0]!.obj).toMatchObject({ name: "task_manage", ok: false });
+  });
+});
+
+
+describe("account contribution", () => {
+  test("requires owner, workspace role, matching principals and an open connection", async () => {
+    let ownerId: string | undefined = OWNER_ID;
+    const { tools, log } = setup({ ownerUserId: () => ownerId, registry: fixedRegistry([]) });
+    const args: unknown[] = [];
+    tools.register(accountsContribution(raw => { args.push(raw); return { accounts: [] }; }));
+    expect(tools.manifest()).toEqual([accountsManifest]);
+    const unavailable: ToolCallResult = { ok: false, error: "Accounts are unavailable." };
+    expect(await tools.handleCall({ ...conn(), role: "machine" } as unknown as ConnectionInfo, call("accounts", {}))).toEqual(unavailable);
+    ownerId = undefined;
+    expect(tools.manifest()).toEqual([]);
+    expect(await tools.handleCall(conn(), call("accounts", {}))).toEqual(unavailable);
+    ownerId = OWNER_ID;
+    const closed = conn();
+    tools.onSocketClosed(closed);
+    expect(await tools.handleCall(closed, call("accounts", {}))).toEqual(unavailable);
+    expect(await tools.handleCall({ ...conn(), principalId: "other" }, call("accounts", {}))).toEqual({ ok: false, error: "principal mismatch" });
+    expect(await tools.handleCall(conn(), call("accounts", {}, { principalId: "other" }))).toEqual({ ok: false, error: "principal mismatch" });
+    expect(args).toEqual([]);
+    // The service receives raw input, including omitted args and invalid schema shapes.
+    for (const raw of [undefined, null, "invalid", { action: "unknown", extra: true }]) {
+      expect(await tools.handleCall(conn(), call("accounts", raw))).toEqual({ ok: true, result: '{"accounts":[]}' });
+    }
+    expect(args).toEqual([undefined, null, "invalid", { action: "unknown", extra: true }]);
+    expect(tools.manifest()).toEqual([accountsManifest]);
+    expect(log.lines.map(line => line.obj.ok)).toEqual([false, false, false, false, false, true, true, true, true]);
+  });
+
+  test("exposes only AccountError messages and redacts execution and serialization failures", async () => {
+    const publicError = new AccountError(409, "Password requirements conflict. Adjust the length limits or allowed symbols.");
+    const circular: { self?: unknown } = {};
+    circular.self = circular;
+    const cases: Array<{ run: () => unknown; error: string }> = [
+      { run: () => { throw publicError; }, error: publicError.message },
+      ...[
+        () => { throw new Error("secret password"); },
+        () => { throw "secret password"; },
+        () => Promise.reject(new Error("secret password")),
+        () => circular,
+        () => 1n,
+        () => ({ toJSON() { throw new Error("secret password"); } }),
+      ].map(run => ({ run, error: "Account operation could not be completed." })),
+    ];
+    for (const { run, error } of cases) {
+      const { tools, log } = setup();
+      tools.register(accountsContribution(run));
+      expect(await tools.handleCall(conn(), call("accounts", {}))).toEqual({ ok: false, error });
+      expect(log.lines).toHaveLength(1);
+      expect(log.lines[0]!.obj).toMatchObject({ name: "accounts", ok: false, denied: false });
+      expect(JSON.stringify(log.lines)).not.toContain("secret password");
+    }
   });
 });

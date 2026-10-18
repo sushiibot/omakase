@@ -1,3 +1,4 @@
+import { accountsContribution } from "./accounts/toolContribution.ts";
 import { Accounts } from "./accounts/service.ts";
 import { AccountRoutes } from "./surfaces/web/accountRoutes.ts";
 import { mailContributions, toolPolicyContribution, integrationsContribution, externalFilesContribution, machineFilesContribution, codingAgentsContribution, taskContribution, channelRequestsContribution } from "./orchestration/workspace/toolContributions.ts";
@@ -89,7 +90,7 @@ async function main() {
   const agentState = new KvJsonState(db);
   const integrationSecrets = new IntegrationSecrets(agentState, secretEncryptionKey(process.env.INTEGRATION_MASTER_KEY_FILE ?? join(dirname(config.databasePath), "integration-secrets.key"), agentState.list("integration-secret:").length > 0, !!process.env.INTEGRATION_MASTER_KEY_FILE));
   const accounts = new Accounts(db, secretEncryptionKey(process.env.ACCOUNTS_MASTER_KEY_FILE ?? join(dirname(config.databasePath), "accounts-secrets.key"), !!db.query("SELECT key FROM kv WHERE key LIKE 'accounts:v1:record:%' LIMIT 1").get(), !!process.env.ACCOUNTS_MASTER_KEY_FILE), ownerPrincipalId);
-  workspace.tools.setAccounts(raw => accounts.action(raw));
+  workspace.tools.register(accountsContribution(raw => accounts.action(raw)));
   workspace.link.setAccountsInternal((conn, raw) => accounts.internal(conn, raw));
   const integrations = new Integrations(integrationSecrets, fetch, () => config.googleMapsApiKey, new IntegrationBroker(agentState, integrationSecrets));
   workspace.tools.register(integrationsContribution(raw => integrations.action(raw)));

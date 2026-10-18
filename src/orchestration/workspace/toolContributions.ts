@@ -1,4 +1,5 @@
 import type { ToolCallParams, ToolManifestEntry } from "../contracts.ts";
+import type { ConnectionInfo } from "../transport/server.ts";
 import type { SurfaceActor } from "./surface.ts";
 import { integrationsManifest } from "../../integrations/service.ts";
 import { mailManifest, toolPolicyManifest } from "../../integrations/mail/manifest.ts";
@@ -17,6 +18,9 @@ export interface ToolContribution {
   manifest: ToolManifestEntry;
   visible?: (ownerId: string | undefined) => boolean;
   requiresOwner?: boolean;
+  requiredRole?: ConnectionInfo["role"];
+  /** Formats execution and JSON serialization failures, including sensitive service errors. */
+  formatError?: (error: unknown) => string;
   unavailableError: string;
   /** Omit when the service validates its own arguments. */
   invalidArgumentsError?: string;

@@ -1,5 +1,3 @@
-import { AccountError } from "../../accounts/service.ts";
-import { accountsManifest } from "../../accounts/contracts.ts";
 import { GoogleMaps } from "./maps.ts";
 import { config } from "../../config.ts";
 import type { ToolContribution } from "./toolContributions.ts";
@@ -212,9 +210,6 @@ export class WorkspaceTools {
     return out;
   }
 
-  private accounts?: (args: unknown) => unknown;
-  setAccounts(call: (args: unknown) => unknown): void { this.accounts = call; }
-
   private readonly contributions = new Map<string, ToolContribution>();
 
   /** Register ordinary gateway tools before the transport starts listening.
@@ -241,7 +236,6 @@ export class WorkspaceTools {
       inputSchema: schema,
       approval: PROXIED_TOOLS[entry.name]!.approval,
     }));
-    if (this.accounts && this.opts.ownerUserId()) tools.push(accountsManifest);
     const ownerId = this.opts.ownerUserId();
     for (const contribution of this.contributions.values()) {
       if (!contribution.visible || contribution.visible(ownerId)) tools.push(contribution.manifest);
@@ -283,11 +277,6 @@ export class WorkspaceTools {
 
   private async dispatch(conn: ConnectionInfo, p: ToolCallParams): Promise<ToolCallResult> {
     if (p.principalId !== this.opts.principalId || conn.principalId !== this.opts.principalId) return { ok: false, error: "principal mismatch" };
-    if (p.name === "accounts") {
-      if (!this.accounts || conn.role !== "workspace" || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Accounts are unavailable." };
-      try { return { ok: true, result: JSON.stringify(this.accounts(p.args)) }; }
-      catch (error) { return { ok: false, error: error instanceof AccountError ? error.message : "Account operation could not be completed." }; }
-    }
     // Private CLI dispatch. This name is never advertised to the model.
     if (p.name === "maps") {
       if (conn.role !== "workspace" || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Maps is unavailable." };
@@ -296,14 +285,19 @@ export class WorkspaceTools {
     const contribution = this.contributions.get(p.name);
     if (contribution) {
       const ownerId = this.opts.ownerUserId();
-      if (this.closed.has(conn) || (contribution.requiresOwner && !ownerId)) {
+      if (this.closed.has(conn) || (contribution.requiresOwner && !ownerId) || (contribution.requiredRole && conn.role !== contribution.requiredRole)) {
         return { ok: false, error: contribution.unavailableError };
       }
       if (contribution.invalidArgumentsError && !Check(contribution.manifest.inputSchema, p.args ?? {})) {
         return { ok: false, error: contribution.invalidArgumentsError };
       }
       const actor = ownerId ? { surface: this.opts.toolSpace.surface, userId: ownerId, name: "owner" } : undefined;
-      return { ok: true, result: JSON.stringify(await contribution.execute(p, actor)) };
+      try {
+        return { ok: true, result: JSON.stringify(await contribution.execute(p, actor)) };
+      } catch (error) {
+        if (!contribution.formatError) throw error;
+        return { ok: false, error: contribution.formatError(error) };
+      }
     }
     if (p.name === LOCATION_TOOL) {
       if (!this.location || this.closed.has(conn)) return { ok: false, error: "browser location is unavailable" };
