@@ -1,31 +1,25 @@
+import { createConversationService, messageBody, stopBody, WEB_ORIGIN, type ConversationLink, type ConversationOperations, type SubmitOutcome, type StopOutcome } from "./application/conversationService.ts";
 import type { UpdateSource } from "./updates.ts";
 import { locationReply, type BrowserLocationRequests } from "../../orchestration/workspace/location.ts";
 import { z } from "zod";
-import { ID_MAX, WEB_CONVERSATION_ID, uploadUrl, type ChatMessageParams, type ChatOrigin } from "../../orchestration/contracts.ts";
-import type { WorkspaceLink } from "../../orchestration/workspace/link.ts";
-import { handleOwnerMessage, type OwnerRouterDeps } from "../../orchestration/workspace/router.ts";
-import type { InboundMessage, RouterNotice, SurfaceActor } from "../../orchestration/workspace/surface.ts";
+import { ID_MAX, type ChatOrigin } from "../../orchestration/contracts.ts";
+import type { RouterNotice, SurfaceActor } from "../../orchestration/workspace/surface.ts";
 import { APPROVAL_TIMEOUT_MS, NONCE_RE, type WorkspaceTools } from "../../orchestration/workspace/tools.ts";
 import { getLogger } from "../../logger.ts";
-import { WEB_SURFACE } from "./actor.ts";
-import { INBOUND_RETENTION_MS, type SqliteChatLog } from "./chatLog.ts";
+import { type SqliteChatLog } from "./chatLog.ts";
 import {
   CLIENT_ID_RE,
   HISTORY_LIMIT_MAX,
   MESSAGE_TEXT_MAX,
-  MESSAGE_UPLOADS_MAX,
-  UPLOAD_ID_RE,
   type DiscardMessageResponse,
   type DiscardMessageRoutedResponse,
   type PostApprovalResponse,
   type PostAskResponse,
   type PostMessageResponse,
-  type PostMessageUploadMissingResponse,
-  type UploadRef,
 } from "./events.ts";
 import { historyPage, parseCursor as parseHistoryCursor } from "./history.ts";
 import { forbidden, isJson, json, readJson } from "./http.ts";
-import type { InboundRow, WebInboundStore } from "./inbound.ts";
+import type { WebInboundStore } from "./inbound.ts";
 import type { Presence } from "./presence.ts";
 import { parseCursor, sseResponse, SSE_HEARTBEAT_MS, SSE_MAX_LIFETIME_MS } from "./sse.ts";
 import type { WebUploadPort, WebWorkspaceAdapter } from "./workspaceAdapter.ts";
@@ -33,10 +27,6 @@ import type { WebUploadPort, WebWorkspaceAdapter } from "./workspaceAdapter.ts";
 const log = getLogger("web/chatRoutes");
 
 /** MESSAGE_TEXT_MAX chars can reach ~48 KB of UTF-8, plus the JSON around it. */
-
-/** Messages the gateway posts for the agent (a task it starts). Only an object identity marks one, so no HTTP
- *  request can claim it, and such a message never counts as the owner speaking. */
-export const agentPosted = new WeakSet<Request>();
 
 /** When the owner last wrote in this log, skipping messages the agent posted. */
 export function lastOwnerMessageAt(log: Pick<SqliteChatLog, "page">): number | undefined {
@@ -50,25 +40,8 @@ const SHUTDOWN_IDLE_MS = 2_000;
 /** How long a delete waits for a route already in flight to settle before calling the message delivered. */
 const DISCARD_WAIT_MS = 20_000;
 
-export const WEB_ORIGIN: ChatOrigin = Object.freeze({ surface: WEB_SURFACE, conversationId: WEB_CONVERSATION_ID });
-
-export type ChatRouteLink = Pick<
-  WorkspaceLink,
-  | "isConnected"
-  | "sendMessage"
-  | "abort"
-  | "newSession"
-  | "recordOffline"
-  | "interceptReply"
-  | "isOwner"
-  | "isLoginPending"
-  | "startLogin"
-  | "completeLogin"
-  | "cancelLogin"
-  | "command"
-  | "stopTurn"
-  | "answerAsk"
-> & Partial<Pick<WorkspaceLink, "rewind">>;
+export { WEB_ORIGIN } from "./application/conversationService.ts";
+export type ChatRouteLink = ConversationLink;
 
 export interface ChatRouteDeps {
   log: SqliteChatLog;
@@ -88,6 +61,7 @@ export interface ChatRouteDeps {
 }
 
 export interface ChatRoutes {
+  readonly conversation: ConversationOperations;
   setUpdates(source: UpdateSource): void;
   handle(req: Request, path: string, actor: SurfaceActor, server?: { timeout(req: Request, seconds: number): void }): Promise<Response | null>;
   closeStreams(): void;
@@ -99,16 +73,6 @@ export interface ChatRoutes {
   workspaceConnected(): void;
 }
 
-const messageBody = z
-  .object({
-    clientId: z.string().regex(CLIENT_ID_RE),
-    text: z.string().max(MESSAGE_TEXT_MAX),
-    voice: z.boolean().optional(),
-    uploadIds: z.array(z.string().regex(UPLOAD_ID_RE)).max(MESSAGE_UPLOADS_MAX).optional(),
-  })
-  .strict()
-  .refine((b) => b.text.trim() !== "" || (b.uploadIds?.length ?? 0) > 0, "empty message");
-const stopBody = z.object({ turnId: z.string().min(1).max(ID_MAX).optional() }).strict();
 const commandBody = z.object({ command: z.enum(["new", "compact"]) }).strict();
 const askBody = z.union([
   z.object({ index: z.number().int().min(0).max(99), label: z.string().max(ID_MAX) }).strict(),
@@ -125,159 +89,14 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
   const sseTimes = deps.sse ?? { heartbeatMs: SSE_HEARTBEAT_MS, maxLifetimeMs: SSE_MAX_LIFETIME_MS };
   const historyMax = deps.historyMaxBytes ?? HISTORY_RESPONSE_MAX;
   const shutdown = new AbortController();
-  // clientIds being routed right now, so a duplicate POST can't route the same message twice at once.
-  const routing = new Map<string, Promise<void>>();
-  let rewinding = false;
-
-  const online = () => deps.workspaceEnabled && link.isConnected();
-  // Routing needs a verified actor, which only a request carries; a re-drive waits for one.
-  let lastActor: SurfaceActor | undefined;
-  let redriveWanted = false;
-  let redriving = false;
+  const conversation = createConversationService(deps);
   const notice = (n: RouterNotice) => void chatLog.append("notice", n);
-
-  // The last open turn just ended: that is when rows queued behind it are routed, in seq order.
-  adapter.onTurnsIdle = () => redriveUnrouted();
-
-  /** Routes a persisted message through the owner router. A receipt (or a consuming notice) marks it
-   *  routed; a workspaceOffline notice leaves it for the client to resend. */
-  function drive(row: { clientId: string; text: string; uploadIds: string[]; voice?: boolean }, actor: SurfaceActor): void {
-    // Checked in the same tick routing starts, so a delete either sees this route in flight or wins outright.
-    if (rewinding || routing.has(row.clientId) || inbound.get(row.clientId)?.state !== "pending") return;
-    const run = (async () => {
-      const known = row.uploadIds.length && deps.uploads ? deps.uploads.lookup(row.uploadIds) : new Map<string, UploadRef>();
-      const attachments: InboundMessage["attachments"] = row.uploadIds.flatMap((id) => {
-        const ref = known.get(id);
-        return ref ? [{ url: uploadUrl(id), name: ref.name, contentType: ref.contentType }] : [];
-      });
-      const message: InboundMessage = {
-        origin,
-        id: row.clientId,
-        text: row.text,
-        author: { id: actor.userId, name: actor.name },
-        isVoice: false,
-        attachments,
-        actor,
-      };
-      const routerLink: OwnerRouterDeps<InboundMessage>["link"] = {
-        isConnected: () => link.isConnected(),
-        sendMessage: async (input: Omit<ChatMessageParams, "principalId">) => {
-          const res = await link.sendMessage({ ...input, ...(row.voice ? { voice: true } : {}) });
-          // The workspace already has it (say, a resend after a bot restart): that is still a receipt.
-          if (res.mode === "duplicate" && input.messageId === row.clientId) await adapter.ack(message, "accepted");
-          return res;
-        },
-        abort: (turnId?: string) => link.abort(turnId, origin),
-        newSession: () => link.newSession(origin),
-        recordOffline: (u, r, o) => link.recordOffline(u, r, o),
-        interceptReply: (m) => link.interceptReply(m),
-        isOwner: (a) => link.isOwner(a),
-        isLoginPending: () => link.isLoginPending(),
-        startLogin: (o) => link.startLogin(o),
-        completeLogin: (i) => link.completeLogin(i),
-        cancelLogin: () => link.cancelLogin(),
-        command: (c, a) => link.command(c, a, origin),
-      };
-      await handleOwnerMessage(message, {
-        workspaceEnabled: deps.workspaceEnabled,
-        transcriptionEnabled: false,
-        link: routerLink,
-        surface: adapter,
-        cursor: { advance: () => {} },
-        offline: "reject",
-      });
-    })()
-      .catch((err) => log.error({ err, clientId: row.clientId }, "routing a web message failed"))
-      .finally(() => routing.delete(row.clientId));
-    routing.set(row.clientId, run);
-  }
-
-  /** Routes every stored, never-routed message in the order it was sent. The workspace dedupes by clientId,
-   *  so one it already took answers as a duplicate and is marked routed. Gated on no open turn: a row
-   *  queued behind a running turn waits for its end (the adapter calls back then), never re-routes mid-turn. */
-  function redriveUnrouted(): void {
-    redriveWanted = true;
-    const actor = lastActor;
-    if (rewinding || redriving || !actor || !online() || adapter.openTurns().length > 0 || shutdown.signal.aborted) return;
-    redriving = true;
-    redriveWanted = false;
-    void (async () => {
-      for (const row of inbound.unrouted(now() - INBOUND_RETENTION_MS)) {
-        if (!online() || shutdown.signal.aborted) break;
-        // A turn started while this pass ran: the rest stay pending, in order, for its end.
-        if (adapter.openTurns().length > 0) {
-          redriveWanted = true;
-          break;
-        }
-        drive(row, actor);
-        await routing.get(row.clientId);
-      }
-    })()
-      .catch((err) => log.error({ err }, "re-routing stored web messages failed"))
-      .finally(() => {
-        redriving = false;
-        // A reconnect while this pass ran may have left new pending rows behind it.
-        if (redriveWanted) redriveUnrouted();
-      });
-  }
-
-  /** A message sent while a turn runs is held by the bot, not the device: it is acked `queued`, which
-   *  leaves the row pending, and routed when the turn ends (or the owner steers it). True when held. */
-  function queueBehindTurn(row: { clientId: string; text: string }, actor: SurfaceActor): boolean {
-    // Already out with the workspace: its receipt settles it, so it is not queued behind the turn.
-    if (routing.has(row.clientId)) return true;
-    if (!online() || adapter.openTurns().length === 0) return false;
-    const message: InboundMessage = {
-      origin,
-      id: row.clientId,
-      text: row.text,
-      author: { id: actor.userId, name: actor.name },
-      isVoice: false,
-      attachments: [],
-      actor,
-    };
-    adapter.ack(message, "queued").catch((err) => log.error({ err, clientId: row.clientId }, "acking a queued web message failed"));
-    return true;
-  }
+  const online = () => deps.workspaceEnabled && link.isConnected();
 
   async function postMessage(req: Request, actor: SurfaceActor): Promise<Response> {
     const body = await parseBody(req, messageBody, MESSAGE_BODY_MAX);
     if (body instanceof Response) return body;
-    if (rewinding) return json({ error: "History is being changed. Try again." }, 409);
-    if (inbound.claimedElsewhere(body.clientId)) return json({ error: "This message id belongs to another conversation." }, 409);
-    const uploadIds = [...new Set(body.uploadIds ?? [])];
-    const existing = inbound.get(body.clientId);
-    if (existing) {
-      if (existing.text !== body.text) log.warn({ clientId: body.clientId }, "a resent web message differs from the stored one; keeping the stored one");
-      if (existing.state === "discarded") return json({ discarded: true } satisfies DiscardMessageResponse, 410);
-      // A resend of a refused message is the owner's retry: it goes back to pending and is routed again.
-      if (existing.state === "rejected") inbound.markPending(existing.clientId);
-      if (existing.state !== "routed" && !queueBehindTurn(existing, actor)) drive(existing, actor);
-      return json({ seq: existing.seq, routed: existing.state === "routed" } satisfies PostMessageResponse, 202);
-    }
-    if (uploadIds.length && !deps.uploads) return json({ error: "uploads are not available" }, 400);
-    const at = now();
-    let row: InboundRow;
-    try {
-      row = chatLog.transaction(() => {
-        // A concurrent duplicate may have been stored while this request's body was read.
-        const raced = inbound.get(body.clientId);
-        if (raced) return raced;
-        // In the same transaction as the insert, so a message held for days never loses its photos to orphan GC.
-        const missing = uploadIds.length ? deps.uploads!.markReferenced(uploadIds, body.clientId).missing : [];
-        if (missing.length) throw new UploadMissing(missing);
-        const seq = chatLog.append("user", { key: body.clientId, text: body.text, uploadIds, at: new Date(at).toISOString(), ...(agentPosted.has(req) ? { byAgent: true as const } : {}) }, body.clientId);
-        const stored = { clientId: body.clientId, text: body.text, uploadIds, seq, createdAt: at, ...(body.voice ? { voice: true } : {}) };
-        inbound.insert(stored);
-        return { ...stored, routedAt: null, state: "pending" as const };
-      });
-    } catch (err) {
-      if (err instanceof UploadMissing) return json({ error: "upload_missing", ids: err.ids } satisfies PostMessageUploadMissingResponse, 409);
-      throw err;
-    }
-    if (row.state === "discarded") return json({ discarded: true } satisfies DiscardMessageResponse, 410);
-    if (row.state !== "routed" && !queueBehindTurn(row, actor)) drive(row, actor);
-    return json({ seq: row.seq, routed: row.state === "routed" } satisfies PostMessageResponse, 202);
+    return submitResponse(await conversation.submit(body, actor));
   }
 
   /** The owner tapped a queued message: route it now, mid-turn, steering the running turn. */
@@ -288,20 +107,20 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
     if (row.state === "discarded") return json({ discarded: true } satisfies DiscardMessageResponse, 410);
     // Same retry semantics as a resend: a refused row goes back to pending, then routes.
     if (row.state === "rejected") inbound.markPending(clientId);
-    if (row.state !== "routed") drive(row, actor);
+    if (row.state !== "routed") conversation.drive(row, actor);
     return json({ seq: row.seq, routed: row.state === "routed" } satisfies PostMessageResponse, 202);
   }
 
   /** The owner deleted a posted message: it must never reach the agent, unless it already did. */
   async function deleteMessage(clientId: string): Promise<Response> {
     if (!CLIENT_ID_RE.test(clientId)) return json({ error: "not found" }, 404);
-    const inFlight = routing.get(clientId);
+    const inFlight = conversation.routingMessage(clientId);
     if (inFlight) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([inFlight, new Promise<void>((r) => (timer = setTimeout(r, deps.discardWaitMs ?? DISCARD_WAIT_MS)))]);
       clearTimeout(timer);
       // Still out with the workspace, which may already have it: it can't be called back.
-      if (routing.has(clientId)) return json({ routed: true } satisfies DiscardMessageRoutedResponse, 409);
+      if (conversation.routingMessage(clientId)) return json({ routed: true } satisfies DiscardMessageRoutedResponse, 409);
     }
     const row = inbound.get(clientId);
     if (!row) {
@@ -323,8 +142,8 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
     const target = chatLog.find("user", clientId);
     if (!target || target.data.byAgent) return json({ error: "Message not found." }, 404);
     if (!online() || !link.rewind) return json({ error: "Connect to the workspace before changing history." }, 503);
-    if (rewinding || routing.size || adapter.openTurns().length || inbound.unrouted(0).length) return json({ error: "Wait for pending messages and running work to finish first." }, 409);
-    rewinding = true;
+    if (conversation.rewinding || conversation.routingCount || adapter.openTurns().length || inbound.unrouted(0).length) return json({ error: "Wait for pending messages and running work to finish first." }, 409);
+    conversation.rewinding = true;
     try {
       const result = await link.rewind(clientId, origin);
       if (!result.ok) return json({ error: result.error ?? "Could not rewind this conversation." }, 409);
@@ -339,28 +158,13 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
         }
       });
       return json({ ok: true });
-    } finally { rewinding = false; redriveUnrouted(); }
+    } finally { conversation.rewinding = false; conversation.workspaceConnected(); }
   }
 
   async function postStop(req: Request, actor: SurfaceActor): Promise<Response> {
     const body = await parseBody(req, stopBody);
     if (body instanceof Response) return body;
-    if (!link.isOwner(actor)) return forbidden();
-    void (async () => {
-      if (!online()) return notice({ type: "nothingToStop" });
-      if (body.turnId) {
-        const res = await link.stopTurn(origin, body.turnId, actor);
-        if (res.status === "failed") notice({ type: "stopFailed", error: res.error });
-        else if (res.status === "ok" && res.final) await adapter.progressFinalize(origin, { id: body.turnId }, res.final);
-        return;
-      }
-      try {
-        if (!(await link.abort(undefined, origin)).aborted) notice({ type: "nothingToStop" });
-      } catch (err) {
-        notice({ type: "stopFailed", error: errorText(err) });
-      }
-    })().catch((err) => log.error({ err }, "web stop failed"));
-    return new Response(null, { status: 202 });
+    return stopResponse(await conversation.stop(body, actor));
   }
 
   async function postCommand(req: Request, actor: SurfaceActor): Promise<Response> {
@@ -459,12 +263,12 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
   }
 
   return {
+    conversation,
     setUpdates(source) { updates = source; },
     async handle(req, path, actor, server) {
       if (!path.startsWith("/api/chat/")) return null;
-      if (rewinding && req.method !== "GET") return json({ error: "History is being changed. Try again." }, 409);
-      lastActor = actor;
-      if (redriveWanted) redriveUnrouted();
+      if (conversation.rewinding && req.method !== "GET") return json({ error: "History is being changed. Try again." }, 409);
+      conversation.observeActor(actor);
       const method = req.method;
       const sub = path.slice("/api/chat/".length);
       if (sub === "stream") return method === "GET" ? getStream(req, server) : methodNotAllowed();
@@ -501,12 +305,13 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
     },
     closeStreams() {
       shutdown.abort();
+      conversation.close();
     },
     async idle() {
-      while (routing.size) await Promise.all([...routing.values()]);
+      await conversation.idle();
     },
     workspaceConnected() {
-      redriveUnrouted();
+      conversation.workspaceConnected();
     },
     async drain(timeoutMs = SHUTDOWN_IDLE_MS) {
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -514,12 +319,6 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
       clearTimeout(timer);
     },
   };
-}
-
-class UploadMissing extends Error {
-  constructor(readonly ids: string[]) {
-    super("upload missing");
-  }
 }
 
 async function parseBody<T extends z.ZodTypeAny>(req: Request, schema: T, limit?: number): Promise<z.infer<T> | Response> {
@@ -546,4 +345,22 @@ function methodNotAllowed(): Response {
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function submitResponse(result: SubmitOutcome): Response {
+  switch (result.kind) {
+    case "accepted": return json({ seq: result.seq, routed: result.routed }, 202);
+    case "invalid": return json({ error: result.error }, 400);
+    case "conflict": return json({ error: result.error }, 409);
+    case "discarded": return json({ discarded: true }, 410);
+    case "upload-missing": return json({ error: "upload_missing", ids: result.ids }, 409);
+  }
+}
+function stopResponse(result: StopOutcome): Response {
+  switch (result.kind) {
+    case "accepted": return new Response(null, { status: 202 });
+    case "forbidden": return forbidden();
+    case "invalid": return json({ error: result.error }, 400);
+    case "conflict": return json({ error: result.error }, 409);
+  }
 }

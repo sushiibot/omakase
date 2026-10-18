@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TaskStore } from "../../workspace/taskStore.ts";
 import { CLIENT_ID_RE } from "./events.ts";
+import { TaskService } from "./application/taskService.ts";
 import { TaskRoutes } from "./taskRoutes.ts";
 import type { WebThreads } from "./threadRoutes.ts";
 import type { TaskRequest } from "../../orchestration/taskContracts.ts";
 import { mintWebActor } from "./actor.ts";
-import { agentPosted } from "./chatRoutes.ts";
 import { AgentEvents, MAX_AUTO_CYCLES } from "../../orchestration/machines/events.ts";
 import { CodingAgentStore } from "../../orchestration/machines/agents.ts";
 import { MemoryJsonState } from "../../db/jsonState.ts";
@@ -29,19 +29,21 @@ function setup() {
     async ensureTask(id: string) {
       channels.add(id);
     },
-    channel(id: string) {
+    conversation(id: string) {
       if (!channels.has(id)) throw new Error("No channel");
       return {
-        routes: {
-          async handle(req: Request, path: string) {
-            sent.push({ id, path, body: await req.json() });
-            return Response.json({}, { status: 202 });
-          },
+        async submit(body: unknown) {
+          sent.push({ id, path: "/api/chat/messages", body });
+          return { kind: "accepted", seq: 1, routed: false };
+        },
+        async stop(body: unknown) {
+          sent.push({ id, path: "/api/chat/stop", body });
+          return { kind: "accepted" };
         },
       };
     },
   } as unknown as WebThreads;
-  const routes = new TaskRoutes(
+  const service = new TaskService(
     {
       tasksManage: async (request: TaskRequest) => store.manage(request),
       runsStop: async (id: string) => {
@@ -52,12 +54,12 @@ function setup() {
     threads,
   );
   const actor = mintWebActor("owner@example.com", "Owner");
-  return { routes, store, actor, sent, stopped, channels };
+  return { service, routes: new TaskRoutes(service, threads), store, actor, sent, stopped, channels };
 }
 test("manual create stays a to-do; repeated start and prompts use one isolated task channel", async () => {
-  const { routes, store, actor, sent, channels } = setup();
+  const { service, store, actor, sent, channels } = setup();
   const task = (
-    await routes.action(
+    await service.action(
       { action: "create", title: "Renew passport" },
       actor,
       "trip",
@@ -67,11 +69,11 @@ test("manual create stays a to-do; repeated start and prompts use one isolated t
   expect(task.sourceConversationId).toBe("trip");
   expect(sent).toHaveLength(0);
   await Promise.all([
-    routes.action(
+    service.action(
       { action: "start", id: task.id, text: "Check requirements" },
       actor,
     ),
-    routes.action(
+    service.action(
       { action: "start", id: task.id, text: "Also check dates" },
       actor,
     ),
@@ -88,11 +90,11 @@ test("manual create stays a to-do; repeated start and prompts use one isolated t
   expect((sent[1]!.body as { text: string }).text).toBe("Also check dates");
 });
 test("stopping work keeps the task and checklist available to resume", async () => {
-  const { routes, store, actor, sent, stopped } = setup();
+  const { service, store, actor, sent, stopped } = setup();
   let task = (
-    await routes.action({ action: "create", title: "Fix login" }, actor)
+    await service.action({ action: "create", title: "Fix login" }, actor)
   ).tasks[0]!;
-  await routes.action({ action: "start", id: task.id }, actor);
+  await service.action({ action: "start", id: task.id }, actor);
   task = store.get(task.id);
   store.manage({
     action: "update",
@@ -101,7 +103,7 @@ test("stopping work keeps the task and checklist available to resume", async () 
     patch: { checklist: [{ id: "test", title: "Verify expiry", done: false }] },
   });
   store.attachRun(task.id, "run-1", "coder");
-  const result = await routes.action({ action: "stop", id: task.id }, actor);
+  const result = await service.action({ action: "stop", id: task.id }, actor);
   expect(stopped).toEqual(["run-1"]);
   expect(sent.at(-1)?.path).toBe("/api/chat/stop");
   expect(result.tasks[0]!.status).toBe("todo");
@@ -109,10 +111,10 @@ test("stopping work keeps the task and checklist available to resume", async () 
 });
 
 test("prepare creates one task conversation without starting work and refuses completed tasks", async () => {
-  const { routes, store, actor, sent, channels } = setup();
-  const task = (await routes.action({ action: "create", title: "Check delivery" }, actor)).tasks[0]!;
-  await routes.action({ action: "prepare", id: task.id }, actor);
-  await routes.action({ action: "prepare", id: task.id }, actor);
+  const { service, store, actor, sent, channels } = setup();
+  const task = (await service.action({ action: "create", title: "Check delivery" }, actor)).tasks[0]!;
+  await service.action({ action: "prepare", id: task.id }, actor);
+  await service.action({ action: "prepare", id: task.id }, actor);
   const prepared = store.get(task.id);
   expect(prepared.workConversationId).toBe(`task-${task.id}`);
   expect(prepared.status).toBe("todo");
@@ -120,18 +122,18 @@ test("prepare creates one task conversation without starting work and refuses co
   expect(channels.size).toBe(1);
   expect(sent).toEqual([]);
   store.manage({ action: "update", id: task.id, revision: prepared.revision, patch: { status: "done" } });
-  await expect(routes.action({ action: "prepare", id: task.id }, actor)).rejects.toThrow("already complete");
+  await expect(service.action({ action: "prepare", id: task.id }, actor)).rejects.toThrow("already complete");
 });
 
 test("stopping a parent also stops child runs and task conversations", async () => {
-  const { routes, store, actor, sent, stopped } = setup();
-  const parent = (await routes.action({ action: "create", title: "Ship login" }, actor)).tasks[0]!;
-  const child = (await routes.action({ action: "create", title: "Test login", parentTaskId: parent.id }, actor)).tasks[0]!;
-  await routes.action({ action: "start", id: parent.id }, actor);
-  await routes.action({ action: "start", id: child.id }, actor);
+  const { service, store, actor, sent, stopped } = setup();
+  const parent = (await service.action({ action: "create", title: "Ship login" }, actor)).tasks[0]!;
+  const child = (await service.action({ action: "create", title: "Test login", parentTaskId: parent.id }, actor)).tasks[0]!;
+  await service.action({ action: "start", id: parent.id }, actor);
+  await service.action({ action: "start", id: child.id }, actor);
   store.attachRun(parent.id, "parent-run", "Sushii");
   store.attachRun(child.id, "child-run", "coder");
-  await routes.action({ action: "stop", id: parent.id }, actor);
+  await service.action({ action: "stop", id: parent.id }, actor);
   expect(stopped).toEqual(["parent-run", "child-run"]);
   expect(sent.filter(s => s.path === "/api/chat/stop").map(s => s.id)).toEqual([`task-${parent.id}`, `task-${child.id}`]);
   expect(store.get(child.id).status).toBe("todo");
@@ -147,18 +149,16 @@ test("an agent at the automatic-cycle cap cannot reset it by starting a task: on
   const threads = {
     taskNeedsInput: () => false,
     async ensureTask() {},
-    channel(id: string) {
+    conversation(id: string) {
       return {
-        routes: {
-          async handle(req: Request) {
-            if (!agentPosted.has(req)) ownerAt.set(id, ++now);
-            return Response.json({}, { status: 202 });
-          },
+        async submit(_body: unknown, _actor: unknown, origin: string) {
+          if (origin !== "agent") ownerAt.set(id, ++now);
+          return { kind: "accepted", seq: 1, routed: false };
         },
       };
     },
   } as unknown as WebThreads;
-  const routes = new TaskRoutes({ tasksManage: async (r: TaskRequest) => store.manage(r), runsStop: async () => ({ stopped: true }) }, threads);
+  const service = new TaskService({ tasksManage: async (r: TaskRequest) => store.manage(r), runsStop: async () => ({ stopped: true }) }, threads);
   const state = new MemoryJsonState();
   const events = new AgentEvents({
     control: { hub: {} as never, agents: new CodingAgentStore(state), list: () => [] },
@@ -170,14 +170,33 @@ test("an agent at the automatic-cycle cap cannot reset it by starting a task: on
     outboxRetryMs: 0,
   });
   const actor = mintWebActor("owner@example.com", "Owner");
-  const task = (await routes.action({ action: "create", title: "Fix login" }, actor)).tasks[0]!;
+  const task = (await service.action({ action: "create", title: "Fix login" }, actor)).tasks[0]!;
   const conversation = `task-${task.id}`;
   state.set(`agent-loop:${conversation}`, { cycles: MAX_AUTO_CYCLES, since: 0 });
   expect(() => events.guard(conversation)).toThrow("paused");
-  await routes.action({ action: "start", id: task.id, text: "keep going" }, actor, conversation, "agent");
+  await service.action({ action: "start", id: task.id, text: "keep going" }, actor, conversation, "agent");
   now += 10;
   expect(() => events.guard(conversation)).toThrow("paused");
-  await routes.action({ action: "start", id: task.id, text: "go on" }, actor, conversation, "owner");
+  await service.action({ action: "start", id: task.id, text: "go on" }, actor, conversation, "owner");
   now += 10;
   expect(() => events.guard(conversation)).not.toThrow();
+});
+
+test("HTTP and direct task operations use the same service and preserve validation mapping", async () => {
+  const { service, routes, actor, store } = setup();
+  const created = (await service.action({ action: "create", title: "Shared service" }, actor)).tasks[0]!;
+  const res = await routes.handle(new Request("http://local/api/tasks"), "/api/tasks", actor);
+  expect(res!.status).toBe(200);
+  expect(await res!.json()).toEqual(await service.action({ action: "list" }, actor));
+  const started = await routes.handle(new Request("http://local/api/tasks", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "start", id: created.id }),
+  }), "/api/tasks", actor);
+  expect(started!.status).toBe(200);
+  expect(store.get(created.id).workConversationId).toBe(`task-${created.id}`);
+  const bad = await routes.handle(new Request("http://local/api/tasks", {
+    method: "POST", headers: { "content-type": "application/json" }, body: '{"action":"invalid"}',
+  }), "/api/tasks", actor);
+  expect(bad!.status).toBe(400);
+  expect(await bad!.json()).toEqual({ error: "Invalid task request." });
 });

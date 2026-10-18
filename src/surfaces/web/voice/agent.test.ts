@@ -34,30 +34,30 @@ test("voice uses a valid durable chat ID and waits for the matching agent reply"
             };
           },
         },
-        routes: {
-          handle: async (
-            req: Request,
-            path: string,
-            receivedActor: unknown,
-          ) => {
-            expect(path).toBe("/api/chat/messages");
-            expect(receivedActor).toBe(actor);
-            const body = await req.json();
-            expect(body.clientId).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
-            expect(body.text).toBe("check my calendar");
-            expect(body.voice).toBe(true);
-            expect(links).toEqual([{ userId: body.clientId }]);
-            speechListener("other", "Unrelated reply.");
-            speechListener(body.clientId, "Your calendar is clear.");
-            listener({ kind: "reply", replyTo: "other", text: "unrelated" });
-            listener({
-              kind: "reply",
-              replyTo: body.clientId,
-              text: "Your calendar is clear.",
-              turnId: "calendar-turn",
-            });
-            return new Response(null, { status: 202 });
-          },
+      };
+    },
+    conversation: (conversation: string) => {
+      expect(conversation).toBe("topic");
+      return {
+        submit: async (
+          body: { clientId: string; text: string; voice?: boolean },
+          receivedActor: unknown,
+        ) => {
+          expect(receivedActor).toBe(actor);
+          expect(body.clientId).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+          expect(body.text).toBe("check my calendar");
+          expect(body.voice).toBe(true);
+          expect(links).toEqual([{ userId: body.clientId }]);
+          speechListener("other", "Unrelated reply.");
+          speechListener(body.clientId, "Your calendar is clear.");
+          listener({ kind: "reply", replyTo: "other", text: "unrelated" });
+          listener({
+            kind: "reply",
+            replyTo: body.clientId,
+            text: "Your calendar is clear.",
+            turnId: "calendar-turn",
+          });
+          return { kind: "accepted", seq: 1, routed: false };
         },
       };
     },

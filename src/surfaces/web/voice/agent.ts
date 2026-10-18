@@ -1,8 +1,15 @@
-import type { WebThreads } from "../threadRoutes.ts";
+import type { ConversationOperations } from "../application/conversationService.ts";
+import type { WebWorkspaceAdapter } from "../workspaceAdapter.ts";
 import type { AskAgent } from "./session.ts";
 import { ulid } from "../../../workspace/ulid.ts";
-/** Uses the same durable input routes, actor and approval flow as typed web chat. */
-export function createVoiceAgent(threads: WebThreads): AskAgent {
+
+interface VoiceConversations {
+  channel(id: string): { adapter: Pick<WebWorkspaceAdapter, "openTurns" | "subscribeSpeech" | "subscribeReply"> };
+  conversation(id: string): ConversationOperations;
+}
+
+/** Uses the same durable conversation operations, actor and approval flow as typed web chat. */
+export function createVoiceAgent(threads: VoiceConversations): AskAgent {
   return async (text, actor, conversation, signal, onlink, ontext) => {
     const channel = threads.channel(conversation);
     if (signal.aborted) throw new Error("Voice call ended");
@@ -37,19 +44,11 @@ export function createVoiceAgent(threads: WebThreads): AskAgent {
       );
       signal.addEventListener("abort", abort, { once: true });
     });
-    // Attach a handler before the POST awaits: cancellation can arrive during routing.
+    // Attach a handler before submission awaits: cancellation can arrive during routing.
     void reply.catch(() => {});
     try {
-      const res = await channel.routes.handle(
-        new Request("http://voice.internal/api/chat/messages", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ clientId, text, voice: true }),
-        }),
-        "/api/chat/messages",
-        actor,
-      );
-      if (!res?.ok) throw new Error("Sushii couldn't accept the voice request");
+      const res = await threads.conversation(conversation).submit({ clientId, text, voice: true }, actor);
+      if (res.kind !== "accepted") throw new Error("Sushii couldn't accept the voice request");
       return await reply;
     } finally {
       unsubscribe();

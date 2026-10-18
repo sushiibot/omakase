@@ -23,6 +23,7 @@ import { WorkspaceLinkStore } from "./db/workspaceLink.ts";
 import { OwnerNameStore } from "./db/ownerName.ts";
 import { createSettingsRoutes } from "./surfaces/web/settingsRoutes.ts";
 import { personalConfig } from "./surfaces/web/config.ts";
+import { TaskService } from "./surfaces/web/application/taskService.ts";
 import { TaskRoutes } from "./surfaces/web/taskRoutes.ts";
 import { lastOwnerMessageAt } from "./surfaces/web/chatRoutes.ts";
 import { FileStores } from "./orchestration/workspace/fileStores/service.ts";
@@ -103,9 +104,10 @@ async function main() {
   workspace.tools.register(externalFilesContribution(raw => fileStores.action(raw)));
   workspace.tools.register(machineFilesContribution(async raw => (raw as { action?: string })?.action === "list_machines" ? { machines: machineControl.list() } : machineControl.files(raw)));
   workspace.tools.register(codingAgentsContribution((args, conversationId, toolCallId) => codingAgents.action(args, conversationId, "agent", toolCallId)));
-  const taskRoutes = new TaskRoutes(workspace.link, webChat.threads);
+  const taskService = new TaskService(workspace.link, webChat.threads);
+  const taskRoutes = new TaskRoutes(taskService, webChat.threads);
   workspace.tools.register(channelRequestsContribution(() => webChat.threads.pendingRequests()));
-  workspace.tools.register(taskContribution((args, actor, conversationId) => taskRoutes.action(args, actor, conversationId, "agent")));
+  workspace.tools.register(taskContribution((args, actor, conversationId) => taskService.action(args, actor, conversationId, "agent")));
   const agentEvents = new AgentEvents({
     control: machineControl,
     link: workspace.link,

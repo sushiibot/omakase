@@ -113,6 +113,10 @@ export class WebThreads {
       .query("SELECT * FROM web_threads WHERE id = ?")
       .get(id) as ThreadRow | null;
   }
+  /** Application operations share the channel's single durable routing owner. */
+  conversation(id: string) {
+    return this.channel(id).routes.conversation;
+  }
   channel(id: string): ThreadChannel {
     if (id === "main") return this.deps.main;
     const known = this.channels.get(id);

@@ -12,7 +12,7 @@ import { RpcErrorReply } from "../../orchestration/transport/server.ts";
 import type { SurfaceActor } from "../../orchestration/workspace/surface.ts";
 import { isVerifiedWebActor, mintWebActor } from "./actor.ts";
 import { INBOUND_RETENTION_MS, SqliteChatLog } from "./chatLog.ts";
-import { agentPosted, createChatRoutes, lastOwnerMessageAt, type ChatRouteLink } from "./chatRoutes.ts";
+import { createChatRoutes, lastOwnerMessageAt, type ChatRouteLink } from "./chatRoutes.ts";
 import type { HistoryResponse } from "./events.ts";
 import { WebInboundStore } from "./inbound.ts";
 import { png } from "./__fixtures__/images.ts";
@@ -1022,14 +1022,11 @@ test("a message the gateway posts for the agent is marked, and never counts as t
   await post(h.handler, "/api/chat/messages", { clientId: CLIENT, text: "owner says hi" });
   const ownerAt = lastOwnerMessageAt(h.log);
   expect(ownerAt).toBeDefined();
-  const req = new Request("http://task.local/api/chat/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ clientId: "01J0000000000000000000AGNT", text: "Work on task t-1" }),
-  });
-  agentPosted.add(req);
-  const res = await h.routes.handle(req, "/api/chat/messages", mintWebActor(OWNER, "Owner"));
-  expect(res?.status).toBe(202);
+  const res = await h.routes.conversation.submit(
+    { clientId: "01J0000000000000000000AGNT", text: "Work on task t-1" },
+    mintWebActor(OWNER, "Owner"), "agent",
+  );
+  expect(res.kind).toBe("accepted");
   const events = h.log.page(["user"], { limit: 5 });
   expect((events[0]!.data as { byAgent?: boolean }).byAgent).toBe(true);
   expect((events[1]!.data as { byAgent?: boolean }).byAgent).toBeUndefined();
@@ -1085,6 +1082,9 @@ test("rewind locks out concurrent sends, preserves attachments, and restores the
   await Bun.sleep(1);
   const blocked = await post(s.handler, "/api/chat/messages", { clientId: "01J9Z3W8K2M4N6P8Q0R2S4T6VA", text: "race" });
   expect(blocked.status).toBe(409);
+  const actor = mintWebActor(OWNER, "Owner");
+  expect(await s.routes.conversation.submit({ clientId: "01J9Z3W8K2M4N6P8Q0R2S4T6VA", text: "application race" }, actor)).toEqual({ kind: "conflict", error: "History is being changed. Try again." });
+  expect(await s.routes.conversation.stop({}, actor)).toEqual({ kind: "conflict", error: "History is being changed. Try again." });
   release();
   expect((await response).status).toBe(200);
   await s.routes.idle();
@@ -1092,4 +1092,78 @@ test("rewind locks out concurrent sends, preserves attachments, and restores the
   s.db.run("DELETE FROM web_events");
   expect(s.log.find("user", CLIENT2)).not.toBeNull();
   s.db.close();
+});
+
+describe("typed conversation operations", () => {
+  const turn = (turnId: string) => ({ turnId, startedAt: 0, lines: [], toolCount: 0, text: "" });
+  const actor = mintWebActor(OWNER, "Owner");
+
+  test("application and HTTP submissions share durable deduplication and queued redelivery", async () => {
+    const h = setup();
+    await h.adapter.progressCreate(null, turn("t1"));
+    const input = { clientId: CLIENT, text: "first", voice: true };
+    const accepted = await h.routes.conversation.submit(input, actor);
+    expect(accepted).toMatchObject({ kind: "accepted", routed: false });
+    const duplicate = await post(h.handler, "/api/chat/messages", input);
+    expect(duplicate.status).toBe(202);
+    expect(await duplicate.json()).toEqual({ seq: h.inbound.get(CLIENT)!.seq, routed: false });
+    await h.routes.conversation.submit({ clientId: CLIENT2, text: "second" }, actor);
+    expect(h.log.page(["user"], { limit: 10 })).toHaveLength(2);
+    expect(h.link.sent).toHaveLength(0);
+    await h.adapter.progressFinalize(null, { id: "t1" }, { outcome: "done", summary: null });
+    await until(() => h.link.sent.length === 2);
+    await h.routes.idle();
+    expect(h.link.sent.map(m => m.text)).toEqual(["first", "second"]);
+    expect(h.link.sent[0]!.voice).toBe(true);
+    expect(await h.routes.conversation.submit(input, actor)).toEqual({ kind: "accepted", seq: h.inbound.get(CLIENT)!.seq, routed: true });
+    expect(h.link.sent).toHaveLength(2);
+  });
+
+  test("both entry points reject invalid bodies and honor discard tombstones", async () => {
+    const h = setup();
+    const invalid = { clientId: CLIENT, text: " " };
+    expect(await h.routes.conversation.submit(invalid, actor)).toEqual({ kind: "invalid", error: "invalid body" });
+    const bad = await post(h.handler, "/api/chat/messages", invalid);
+    expect(bad.status).toBe(400);
+    expect(await bad.json()).toEqual({ error: "invalid body" });
+    expect(h.inbound.get(CLIENT)).toBeNull();
+    h.inbound.tombstone(CLIENT, Date.now());
+    const input = { clientId: CLIENT, text: "too late" };
+    expect(await h.routes.conversation.submit(input, actor)).toEqual({ kind: "discarded" });
+    const discarded = await post(h.handler, "/api/chat/messages", input);
+    expect(discarded.status).toBe(410);
+    expect(await discarded.json()).toEqual({ discarded: true });
+    expect(h.link.sent).toHaveLength(0);
+  });
+
+  test("HTTP cannot set the trusted agent provenance available to application callers", async () => {
+    const h = setup();
+    const response = await post(h.handler, "/api/chat/messages", { clientId: CLIENT, text: "hello", byAgent: true });
+    expect(response.status).toBe(400);
+    expect(h.log.page(["user"], { limit: 10 })).toHaveLength(0);
+  });
+
+  test("stop verifies ownership and acknowledges before the asynchronous failure notice", async () => {
+    const h = setup();
+    let rejectStop!: (error: Error) => void;
+    let calls = 0;
+    h.link.abort = () => {
+      calls++;
+      return new Promise((_, reject) => { rejectStop = reject; });
+    };
+    const impostor = { ...actor };
+    expect(await h.routes.conversation.stop({}, impostor)).toEqual({ kind: "forbidden" });
+    expect(calls).toBe(0);
+    expect(await h.routes.conversation.stop({}, actor)).toEqual({ kind: "accepted" });
+    expect(calls).toBe(1);
+    expect(h.log.page(["notice"], { limit: 10 })).toHaveLength(0);
+    rejectStop(new Error("stop unavailable"));
+    await until(() => h.log.page(["notice"], { limit: 10 }).length === 1);
+    expect(h.log.page(["notice"], { limit: 10 })[0]!.data).toEqual({ type: "stopFailed", error: "stop unavailable" });
+    const response = await post(h.handler, "/api/chat/stop", {});
+    expect(response.status).toBe(202);
+    expect(await response.text()).toBe("");
+    rejectStop(new Error("HTTP stop unavailable"));
+    await until(() => h.log.page(["notice"], { limit: 10 }).length === 2);
+  });
 });
