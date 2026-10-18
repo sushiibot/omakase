@@ -30,19 +30,23 @@
 			loading = false;
 		}
 	}
-	async function update(id: string, key?: string) {
+	async function update(id: string, key?: string, revision?: string) {
 		if (busy) return;
 		busy = true;
 		error = null;
 		notice = null;
 		try {
 			integrations = (
-				await (key === undefined ? integrationsApi.remove(id) : integrationsApi.save(id, key))
+				await (key === undefined
+					? integrationsApi.remove(id)
+					: integrationsApi.save(id, key, revision))
 			).integrations;
 			notice =
 				key === undefined
 					? 'Key removed.'
-					: 'Key tested and saved. Return to your conversation to continue.';
+					: revision
+						? 'Access approved and key saved. The key will be checked on first use.'
+						: 'Key tested and saved. Return to your conversation to continue.';
 		} catch (err) {
 			error = message(err);
 		} finally {
@@ -63,6 +67,6 @@
 	{notice}
 	online={pwa.online}
 	onretry={() => void refresh()}
-	onsave={(id, key) => update(id, key)}
+	onsave={(id, key, revision) => update(id, key, revision)}
 	onremove={(id) => update(id)}
 />

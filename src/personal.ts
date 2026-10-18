@@ -1,3 +1,4 @@
+import { IntegrationBroker } from "./integrations/broker.ts";
 import { dirname, join } from "node:path";
 import { IntegrationSecrets, secretEncryptionKey } from "./integrations/secrets.ts";
 import { Integrations } from "./integrations/service.ts";
@@ -82,8 +83,8 @@ async function main() {
   const machines = new MachineHub(machineGrants.parse(JSON.parse(process.env.SUSHII_MACHINES_JSON ?? "[]")));
   workspace.server.setMachineHub(machines);
   const agentState = new KvJsonState(db);
-  const integrationSecrets = new IntegrationSecrets(agentState, secretEncryptionKey(join(dirname(config.databasePath), "integration-secrets.key"), agentState.list("integration-secret:").length > 0));
-  const integrations = new Integrations(integrationSecrets, fetch, () => config.googleMapsApiKey);
+  const integrationSecrets = new IntegrationSecrets(agentState, secretEncryptionKey(process.env.INTEGRATION_MASTER_KEY_FILE ?? join(dirname(config.databasePath), "integration-secrets.key"), agentState.list("integration-secret:").length > 0, !!process.env.INTEGRATION_MASTER_KEY_FILE));
+  const integrations = new Integrations(integrationSecrets, fetch, () => config.googleMapsApiKey, new IntegrationBroker(agentState, integrationSecrets));
   workspace.tools.setIntegrations(raw => integrations.action(raw));
   workspace.tools.setMapsKey(() => integrations.googleMapsKey());
   const mail = createMailService(agentState);

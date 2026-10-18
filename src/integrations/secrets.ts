@@ -8,7 +8,12 @@ const prefix = "integration-secret:";
 
 /** Gateway-only encryption key. The workspace must never mount this file or the gateway database.
  * Back up both together; database-only backups contain no plaintext credentials. */
-export function secretEncryptionKey(path: string, hasSavedCredentials = false): Buffer {
+export function secretEncryptionKey(path: string, hasSavedCredentials = false, provisioned = false): Buffer {
+  if (provisioned) {
+    const key = readFileSync(path);
+    if (key.length !== 32) throw new Error("Provisioned integration encryption key must contain exactly 32 bytes.");
+    return key;
+  }
   if (hasSavedCredentials && !existsSync(path)) throw new Error("Integration encryption key is missing. Restore it before starting the gateway.");
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   try { writeFileSync(path, randomBytes(32), { flag: "wx", mode: 0o600 }); }

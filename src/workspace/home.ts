@@ -25,6 +25,7 @@ const TEMPLATE_FILES: Record<string, string> = {
   ".agents/skills/session-history/SKILL.md": "agents-skills-session-history-SKILL.md",
   ".agents/skills/documents/SKILL.md": "agents-skills-documents-SKILL.md",
   ".agents/skills/external-files/SKILL.md": "agents-skills-external-files-SKILL.md",
+  ".agents/skills/integrations/SKILL.md": "agents-skills-integrations-SKILL.md",
   ".agents/skills/location-research/SKILL.md": "agents-skills-location-research-SKILL.md",
   ".agents/agents/explore.md": "agents-agents-explore.md",
   ".agents/agents/researcher.md": "agents-agents-researcher.md",

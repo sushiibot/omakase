@@ -120,6 +120,11 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
     const cli = resolve(import.meta.dir, "../../bin/maps.ts");
     return toolCall("bash", { command: "bun '" + cli.replace(/'/g, "'\\''") + "' search coffee" });
   }
+  if (userText.includes("E2E-INTEGRATIONS-PROPOSE")) return toolCall("integrations", { action: "propose", definition: { id: "e2e_custom", name: "Custom API", capability: "Search records", origin: "https://api.example.com", docsUrl: "https://example.com/docs", auth: { type: "bearer" }, operations: [{ id: "search", description: "Search records", method: "GET", path: "/v1/search", query: ["q"] }] } });
+  if (userText.includes("E2E-INTEGRATIONS-CLI")) {
+    const cli = resolve(import.meta.dir, "../../bin/integrations.ts");
+    return toolCall("bash", { command: "bun '" + cli.replace(/'/g, "'\\''") + "' list" });
+  }
   if (userText.includes("E2E-INTEGRATIONS")) return toolCall("integrations", { action: "list" });
   if (userText.includes("E2E-CHANNEL-REQUESTS")) return toolCall("list_channel_requests", {});
   if (userText.includes("E2E-OWNER-DECISION")) {
@@ -194,7 +199,7 @@ Bun.serve({
       images: msgs.reduce((a, m) => a + imagesIn(m.content), 0),
       lastImages: imagesIn(lastUser?.content),
       tools: (body.tools ?? []).map((t) => t.function?.name ?? ""),
-      lastTool: last?.role === "tool" ? textOf(last.content).slice(0, 400) : undefined,
+      lastTool: last?.role === "tool" ? textOf(last.content).slice(0, userText.includes("E2E-INTEGRATIONS") ? 16000 : 400) : undefined,
       ownerName: /The user's name is (.+)\.$/m.exec(msgs.filter((m) => m.role === "system").map((m) => textOf(m.content)).join("\n"))?.[1],
     });
     return reply(msgs, userText, lastUser);
