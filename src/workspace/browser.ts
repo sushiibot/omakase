@@ -164,22 +164,26 @@ export class BrowserManager {
     try {
       await this.waitForOwner(entry, signal);
       return await this.serial(entry, async () => {
-        if (entry.status.control === "owner" || entry.status.state === "ended" || signal?.aborted) throw new Error("Account fill cancelled.");
+        const cancelled = () => entry.status.control === "owner" || entry.status.state === "ended" || signal?.aborted;
+        if (cancelled()) throw new Error("Account fill cancelled.");
         await this.prepare(entry, signal);
         let receiptId: string | undefined;
+        let filled = false;
         try {
           const url = new URL((await this.driver.run(entry.session, ["get", "url"], signal, entry.launch)).trim());
           if (url.protocol !== "https:" || url.username || url.password) throw new Error();
           const secret = await this.accounts!.fill(input, url.origin, entry.launch.engine, entry.status.runId ?? undefined);
           receiptId = secret.receiptId;
-          if (entry.status.control === "owner" || entry.status.state === "ended" || signal?.aborted) throw new Error();
+          if (cancelled()) throw new Error();
           await this.driver.fillAccount!(entry.session, { origin: url.origin, fields: input.fields, password: secret.password, username: secret.username }, signal, entry.launch);
+          filled = true;
           await this.accounts!.result(receiptId, "filled");
           receiptId = undefined;
           return "Account fields filled. Verify the page before submitting; credentials have not been confirmed.";
         } catch {
+          if (filled) throw new Error("Fields may be filled; audit unavailable. Inspect the page before retrying.");
           if (receiptId) await this.accounts!.result(receiptId, "failed").catch(() => {});
-          throw new Error("Account fill failed. Check the page and account origin before retrying.");
+          throw new Error("Account fill did not complete. Fields may be filled. Inspect the page and account origin before retrying.");
         }
       });
     } finally { entry.busy--; entry.touchedAt = this.now(); }

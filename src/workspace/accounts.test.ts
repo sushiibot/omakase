@@ -36,7 +36,7 @@ test("failed private fills expose fixed errors and record failure", async () => 
   const client = new AccountsClient("owner", async p => { requests.push(p); return (p as any).operation === "fill" ? { password: "SECRET", username: "owner", version: 1, receiptId: "receipt" } : { ok: true }; });
   const manager = new BrowserManager(dir, { run: async (_, args) => args[0] === "get" ? "https://example.com" : "ok", connect: () => { throw new Error(); }, fillAccount: async () => { throw new Error("SECRET"); } }, Date.now, client);
   try {
-    await expect(manager.bind("main", () => "run").tool().execute("call", { args: ["fill-account"], accountId: id, fields: { password: "#password" } }, undefined, undefined, {} as never)).rejects.toThrow("Account fill failed. Check the page and account origin before retrying.");
+    await expect(manager.bind("main", () => "run").tool().execute("call", { args: ["fill-account"], accountId: id, fields: { password: "#password" } }, undefined, undefined, {} as never)).rejects.toThrow("Account fill did not complete. Fields may be filled. Inspect the page and account origin before retrying.");
     expect(requests.at(-1).outcome).toBe("failed");
   } finally { await manager.dispose(); rmSync(dir, { recursive: true, force: true }); }
 });
@@ -48,4 +48,22 @@ test("redaction malformed responses and disconnected gateway fail closed without
   }
   const client = new AccountsClient("owner", async () => { throw new Error("SECRET"); });
   await expect(client.fill({ accountId: id, fields: { password: "#password" } }, "https://example.com", "chromium")).rejects.toThrow("Account fill unavailable.");
+});
+
+
+test("a successful fill with failed audit acknowledgement never records a failed fill", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "account-browser-"));
+  const requests: any[] = [];
+  const client = new AccountsClient("owner", async p => {
+    requests.push(p);
+    if ((p as any).operation === "fill") return { password: "SECRET", username: "owner", version: 1, receiptId: "receipt" };
+    throw new Error("Audit offline");
+  });
+  let filled = false;
+  const manager = new BrowserManager(dir, { run: async (_, args) => args[0] === "get" ? "https://example.com" : "ok", connect: () => { throw new Error(); }, fillAccount: async () => { filled = true; } }, Date.now, client);
+  try {
+    await expect(manager.bind("main", () => "run").tool().execute("call", { args: ["fill-account"], accountId: id, fields: { password: "#password" } }, undefined, undefined, {} as never)).rejects.toThrow("Fields may be filled; audit unavailable. Inspect the page before retrying.");
+    expect(filled).toBe(true);
+    expect(requests.filter(p => p.operation === "fill_result").map(p => p.outcome)).toEqual(["filled"]);
+  } finally { await manager.dispose(); rmSync(dir, { recursive: true, force: true }); }
 });

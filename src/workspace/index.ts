@@ -133,7 +133,7 @@ async function main(): Promise<void> {
   const choice = new ModelChoice(config, config.stateDir);
   const accounts = new AccountsClient(config.principalId, async params => {
     if (!client?.connected) throw new Error("Account service unavailable.");
-    return client.request("accounts/internal", params, 30_000);
+    return client.request("accounts/internal", params, { timeoutMs: 30_000 });
   });
   configureOutboundRedaction((payload, provider) => accounts.redact(payload, provider));
   const browsers = new BrowserManager(config.stateDir, localBrowserDriver(config.home), Date.now, accounts);
