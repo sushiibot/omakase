@@ -17,4 +17,5 @@ test "$(agent-browser get title)" = "Example Domain"
 agent-browser close
 bun scripts/browser-preview-smoke.ts
 bun scripts/browser-session-smoke.ts
+bun scripts/browser-account-smoke.ts
 echo "browser smoke passed"
