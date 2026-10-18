@@ -1,5 +1,6 @@
 import { Accounts } from "./accounts/service.ts";
 import { AccountRoutes } from "./surfaces/web/accountRoutes.ts";
+import { mailContributions, toolPolicyContribution, integrationsContribution, externalFilesContribution, machineFilesContribution, codingAgentsContribution, taskContribution, channelRequestsContribution } from "./orchestration/workspace/toolContributions.ts";
 import { IntegrationBroker } from "./integrations/broker.ts";
 import { dirname, join } from "node:path";
 import { IntegrationSecrets, secretEncryptionKey } from "./integrations/secrets.ts";
@@ -90,21 +91,21 @@ async function main() {
   workspace.tools.setAccounts(raw => accounts.action(raw));
   workspace.link.setAccountsInternal((conn, raw) => accounts.internal(conn, raw));
   const integrations = new Integrations(integrationSecrets, fetch, () => config.googleMapsApiKey, new IntegrationBroker(agentState, integrationSecrets));
-  workspace.tools.setIntegrations(raw => integrations.action(raw));
+  workspace.tools.register(integrationsContribution(raw => integrations.action(raw)));
   workspace.tools.setMapsKey(() => integrations.googleMapsKey());
   const mail = createMailService(agentState);
-  workspace.tools.setMail((name, args) => mail.action(name, args));
-  workspace.tools.setToolPolicy(() => agentState.get<string>(TOOL_POLICY_KEY) ?? "");
+  for (const contribution of mailContributions((name, args) => mail.action(name, args))) workspace.tools.register(contribution);
+  workspace.tools.register(toolPolicyContribution(() => agentState.get<string>(TOOL_POLICY_KEY) ?? ""));
   const machineControl = new MachineControl(machines, new CodingAgentStore(agentState));
   const codingAgents = new CodingAgents(machineControl);
   const machineRoutes = new MachineRoutes(machineControl, codingAgents);
   const fileStores = new FileStores(db);
-  workspace.tools.setExternalFiles(raw => fileStores.action(raw));
-  workspace.tools.setMachineFiles(async raw => (raw as { action?: string })?.action === "list_machines" ? { machines: machineControl.list() } : machineControl.files(raw));
-  workspace.tools.setCodingAgents((args, conversationId, toolCallId) => codingAgents.action(args, conversationId, "agent", toolCallId));
+  workspace.tools.register(externalFilesContribution(raw => fileStores.action(raw)));
+  workspace.tools.register(machineFilesContribution(async raw => (raw as { action?: string })?.action === "list_machines" ? { machines: machineControl.list() } : machineControl.files(raw)));
+  workspace.tools.register(codingAgentsContribution((args, conversationId, toolCallId) => codingAgents.action(args, conversationId, "agent", toolCallId)));
   const taskRoutes = new TaskRoutes(workspace.link, webChat.threads);
-  workspace.tools.setChannelRequests(() => webChat.threads.pendingRequests());
-  workspace.tools.setTaskControl((args, actor, conversationId) => taskRoutes.action(args, actor, conversationId, "agent"));
+  workspace.tools.register(channelRequestsContribution(() => webChat.threads.pendingRequests()));
+  workspace.tools.register(taskContribution((args, actor, conversationId) => taskRoutes.action(args, actor, conversationId, "agent")));
   const agentEvents = new AgentEvents({
     control: machineControl,
     link: workspace.link,

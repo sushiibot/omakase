@@ -1,3 +1,4 @@
+import { mailContributions, toolPolicyContribution, integrationsContribution, externalFilesContribution, machineFilesContribution, codingAgentsContribution, taskContribution, channelRequestsContribution } from "./toolContributions.ts";
 import { BrowserLocationRequests, LOCATION_TOOL } from "./location.ts";
 import { isVerifiedWebActor, mintWebActor } from "../../surfaces/web/actor.ts";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -733,7 +734,7 @@ test("channel request discovery is read-only, owner-scoped and rejects extra arg
   const { tools } = setup();
   const records = [{ kind: "approval", id: "canonical-nonce", conversationId: "deployment", state: "unresolved", view: { tool: "file_linear_issue", fields: [{ key: "title", value: "Exact action" }] } }];
   let reads = 0;
-  tools.setChannelRequests(() => { reads++; return records; });
+  tools.register(channelRequestsContribution(() => { reads++; return records; }));
   expect(tools.manifest().find(t => t.name === "list_channel_requests")).toMatchObject({ approval: "none" });
   expect(await tools.handleCall(conn(), call("list_channel_requests", {}))).toEqual({ ok: true, result: JSON.stringify({ requests: records }) });
   expect(reads).toBe(1);
@@ -743,21 +744,21 @@ test("channel request discovery is read-only, owner-scoped and rejects extra arg
   const closed = conn(); tools.onSocketClosed(closed);
   expect(await tools.handleCall(closed, call("list_channel_requests", {}))).toMatchObject({ ok: false, error: "Channel requests are unavailable." });
   const unavailable = setup({ ownerUserId: () => undefined }).tools;
-  unavailable.setChannelRequests(() => records);
+  unavailable.register(channelRequestsContribution(() => records));
   expect(unavailable.manifest().some(t => t.name === "list_channel_requests")).toBe(false);
   expect(await unavailable.handleCall(conn(), call("list_channel_requests", {}))).toMatchObject({ ok: false });
 });
 
 test("external files enforce owner, principal and schema before reaching the adapter", async () => {
   const { tools } = setup(); let calls = 0;
-  tools.setExternalFiles(async () => { calls++; return { stores: [] }; });
+  tools.register(externalFilesContribution(async () => { calls++; return { stores: [] }; }));
   expect(tools.manifest().some(t => t.name === "external_files")).toBe(true);
   expect(await tools.handleCall(conn(), call("external_files", { action: "list_stores" }))).toMatchObject({ ok: true });
   expect(await tools.handleCall(conn(), call("external_files", { action: "list_stores", endpoint: "https://untrusted" }))).toMatchObject({ ok: false });
   expect(await tools.handleCall(conn(), call("external_files", { action: "list_stores" }, { principalId: "other" }))).toMatchObject({ ok: false });
   expect(calls).toBe(1);
   const absent = setup({ ownerUserId: () => undefined });
-  absent.tools.setExternalFiles(async () => { calls++; return {}; });
+  absent.tools.register(externalFilesContribution(async () => { calls++; return {}; }));
   expect(absent.tools.manifest().some(t => t.name === "external_files")).toBe(false);
   expect(await absent.tools.handleCall(conn(), call("external_files", { action: "list_stores" }))).toMatchObject({ ok: false });
   expect(calls).toBe(1);
@@ -765,8 +766,8 @@ test("external files enforce owner, principal and schema before reaching the ada
 
 test("mail uses the authenticated gateway boundary and unknown sends cannot reach the adapter", async () => {
   const {tools, log} = setup(); const calls: string[] = [];
-  tools.setMail(async name => { calls.push(name); return {accounts: []}; });
-  tools.setToolPolicy(() => "Drafts only");
+  for (const contribution of mailContributions(async name => { calls.push(name); return {accounts: []}; })) tools.register(contribution);
+  tools.register(toolPolicyContribution(() => "Drafts only"));
   expect(tools.manifest().some(t => t.name === "mail_save_draft")).toBe(true);
   expect(await tools.handleCall(conn(), call("mail_accounts", {}))).toMatchObject({ok: true, result: '{"accounts":[]}'});
   expect(await tools.handleCall({...conn(), principalId: "other"}, call("mail_accounts", {}))).toMatchObject({ok: false, error: "principal mismatch"});
@@ -780,7 +781,7 @@ test("mail uses the authenticated gateway boundary and unknown sends cannot reac
 test("integration capabilities are owner-scoped and unavailable after disconnect", async () => {
   const { tools } = setup();
   let calls = 0;
-  tools.setIntegrations(async () => { calls++; return { integrations: [] }; });
+  tools.register(integrationsContribution(async () => { calls++; return { integrations: [] }; }));
   expect(tools.manifest().some(t => t.name === "integrations")).toBe(true);
   const connection = conn();
   expect(await tools.handleCall({ ...connection, principalId: "other" }, call("integrations", { action: "list" }))).toMatchObject({ ok: false, error: "principal mismatch" });
@@ -789,4 +790,82 @@ test("integration capabilities are owner-scoped and unavailable after disconnect
   tools.onSocketClosed(connection);
   expect(await tools.handleCall(connection, call("integrations", { action: "list" }))).toMatchObject({ ok: false });
   expect(calls).toBe(1);
+});
+
+describe("gateway contributions", () => {
+  test("registration rejects collisions with registered and lifecycle tools, and missing handlers", () => {
+    const { tools } = setup();
+    const contribution = channelRequestsContribution(() => []);
+    tools.register(contribution);
+    for (const name of ["list_channel_requests", "web_search", LOCATION_TOOL, "maps"]) {
+      expect(() => tools.register({ ...contribution, manifest: { ...contribution.manifest, name } })).toThrow(`duplicate workspace tool: ${name}`);
+    }
+    expect(() => tools.register({ ...contribution, manifest: { ...contribution.manifest, name: "broken" }, execute: undefined } as unknown as Parameters<WorkspaceTools["register"]>[0])).toThrow("workspace tool has no handler: broken");
+    expect(tools.manifest().some(t => t.name === "broken")).toBe(false);
+    expect(() => tools.register({ ...contribution, manifest: { ...contribution.manifest, name: "ask", approval: "ask" } } as unknown as Parameters<WorkspaceTools["register"]>[0])).toThrow("approval tools require the approval lifecycle: ask");
+  });
+
+  test("feature visibility remains dynamic and all advertised contributions execute", async () => {
+    let ownerId: string | undefined = OWNER_ID;
+    const { tools } = setup({ ownerUserId: () => ownerId, registry: fixedRegistry([]) });
+    const called: string[] = [];
+    const record = (name: string) => async () => { called.push(name); return {}; };
+    const contributions = [
+      ...mailContributions(async name => { called.push(name); return {}; }),
+      toolPolicyContribution(() => { called.push("tool_policy"); return "rules"; }),
+      externalFilesContribution(record("external_files")),
+      machineFilesContribution(record("machine_files")),
+      integrationsContribution(record("integrations")),
+      taskContribution(record("task_manage")),
+      codingAgentsContribution(record("coding_agent")),
+      channelRequestsContribution(record("list_channel_requests")),
+    ];
+    for (const contribution of contributions) tools.register(contribution);
+    expect(tools.manifest()).toHaveLength(contributions.length);
+    for (const manifest of tools.manifest()) {
+      const args = manifest.name === "external_files" ? { action: "list_stores" }
+        : manifest.name === "machine_files" ? { action: "list_machines" }
+        : manifest.name === "coding_agent" ? { action: "list" } : {};
+      expect(await tools.handleCall(conn(), call(manifest.name, args))).toMatchObject({ ok: true });
+    }
+    expect(called.sort()).toEqual(contributions.map(c => c.manifest.name).sort());
+    ownerId = undefined;
+    expect(tools.manifest().map(t => t.name).sort()).toEqual([...mailContributions(async () => ({})).map(c => c.manifest.name), "tool_policy", "task_manage"].sort());
+    for (const contribution of contributions.filter(c => c.requiresOwner)) {
+      expect(await tools.handleCall(conn(), call(contribution.manifest.name, {}))).toEqual({ ok: false, error: contribution.unavailableError });
+    }
+    ownerId = OWNER_ID;
+    expect(tools.manifest()).toHaveLength(contributions.length);
+    const connection = conn();
+    tools.onSocketClosed(connection);
+    for (const contribution of contributions) {
+      expect(await tools.handleCall(connection, call(contribution.manifest.name, {}))).toEqual({ ok: false, error: contribution.unavailableError });
+    }
+    expect(called).toHaveLength(contributions.length);
+  });
+
+  test("task and coding dispatch preserve actor, origin and tool call identifiers", async () => {
+    const { tools, log } = setup();
+    const tasks: unknown[][] = [];
+    const coding: unknown[][] = [];
+    tools.register(taskContribution(async (...args) => { tasks.push(args); return { task: "saved" }; }));
+    tools.register(codingAgentsContribution(async (...args) => { coding.push(args); return { agent: "started" }; }));
+    const origin = { surface: "web", conversationId: "topic-7" };
+    expect(await tools.handleCall(conn(), call("task_manage", { action: "list" }, { origin }))).toEqual({ ok: true, result: '{"task":"saved"}' });
+    expect(tasks).toEqual([[{ action: "list" }, { surface: "discord", userId: OWNER_ID, name: "owner" }, "topic-7"]]);
+    expect(await tools.handleCall(conn(), call("coding_agent", { action: "list" }, { origin, toolCallId: "model-call" }))).toMatchObject({ ok: true });
+    expect(await tools.handleCall(conn(), call("coding_agent", { action: "list" }))).toMatchObject({ ok: true });
+    expect(coding).toEqual([[{ action: "list" }, "topic-7", "model-call"], [{ action: "list" }, "main", undefined]]);
+    expect(await tools.handleCall(conn(), call("coding_agent", { action: "list", extra: true }))).toEqual({ ok: false, error: "Invalid coding agent request." });
+    expect(coding).toHaveLength(2);
+    expect(log.lines.map(l => l.obj.ok)).toEqual([true, true, true, false]);
+  });
+
+  test("service validation errors retain their text and are audited once", async () => {
+    const { tools, log } = setup();
+    tools.register(taskContribution(async () => { throw new Error("Invalid task action."); }));
+    expect(await tools.handleCall(conn(), call("task_manage", { extra: true }))).toEqual({ ok: false, error: "Invalid task action." });
+    expect(log.lines).toHaveLength(1);
+    expect(log.lines[0]!.obj).toMatchObject({ name: "task_manage", ok: false });
+  });
 });

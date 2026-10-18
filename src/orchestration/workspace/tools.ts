@@ -1,13 +1,8 @@
 import { AccountError } from "../../accounts/service.ts";
 import { accountsManifest } from "../../accounts/contracts.ts";
-import { integrationsManifest } from "../../integrations/service.ts";
-import { mailManifest, toolPolicyManifest } from "../../integrations/mail/manifest.ts";
-import { fileStoreManifest } from "./fileStores/service.ts";
 import { GoogleMaps } from "./maps.ts";
 import { config } from "../../config.ts";
-import { machineFileManifest } from "../machines/control.ts";
-import { CODING_AGENT_TOOL, codingAgentManifest } from "../machines/agents.ts";
-import { taskManifest } from "../../surfaces/web/taskRoutes.ts";
+import type { ToolContribution } from "./toolContributions.ts";
 // Bot side of `tool/call`: the workspace runs its model elsewhere but calls these secret-holding tools
 // here, executed with the bot's keys in the principal's private tool context. Owner approval is asked on
 // the principal's preferred surface, since a tool/call carries no origin.
@@ -217,28 +212,23 @@ export class WorkspaceTools {
     return out;
   }
 
-  private mail?: (name: string, args: unknown) => Promise<unknown>;
-  setMail(call: NonNullable<WorkspaceTools["mail"]>) { this.mail = call; }
   private accounts?: (args: unknown) => unknown;
   setAccounts(call: (args: unknown) => unknown): void { this.accounts = call; }
 
-  private toolPolicy?: () => string;
-  setToolPolicy(read: () => string) { this.toolPolicy = read; }
+  private readonly contributions = new Map<string, ToolContribution>();
 
-  private taskControl?: (args: unknown, actor: SurfaceActor, conversationId?: string) => Promise<unknown>;
-  setTaskControl(control: NonNullable<WorkspaceTools["taskControl"]>) { this.taskControl = control; }
-  private channelRequests?: () => unknown;
-  /** Read-only projection from bot-owned channel logs; never settles an approval or dialog. */
-  private externalFiles?: (raw: unknown) => Promise<unknown>;
-  setExternalFiles(call: (raw: unknown) => Promise<unknown>): void { this.externalFiles = call; }
-  private codingAgents?: (args: unknown, conversationId?: string, toolCallId?: string) => Promise<unknown>;
-  /** The coding_agent tool: delegated Codex / Claude Code agents on the owner's machines. */
-  setCodingAgents(call: (args: unknown, conversationId?: string, toolCallId?: string) => Promise<unknown>): void { this.codingAgents = call; }
-  private machineFiles?: (raw: unknown) => Promise<unknown>;
-  setMachineFiles(call: (raw: unknown) => Promise<unknown>): void { this.machineFiles = call; }
-  setChannelRequests(read: () => unknown): void { this.channelRequests = read; }
-  private integrations?: (raw: unknown) => Promise<unknown>;
-  setIntegrations(call: (raw: unknown) => Promise<unknown>): void { this.integrations = call; }
+  /** Register ordinary gateway tools before the transport starts listening.
+   * Approval and browser location tools must use their dedicated lifecycle paths. */
+  register(contribution: ToolContribution): void {
+    const name = contribution.manifest.name;
+    if (this.contributions.has(name) || Object.hasOwn(PROXIED_TOOLS, name) || name === LOCATION_TOOL || name === "maps") {
+      throw new Error(`duplicate workspace tool: ${name}`);
+    }
+    if (contribution.manifest.approval !== "none") throw new Error(`approval tools require the approval lifecycle: ${name}`);
+    if (typeof contribution.execute !== "function") throw new Error(`workspace tool has no handler: ${name}`);
+    this.contributions.set(name, contribution);
+  }
+
   setMapsKey(key: () => string | undefined): void { this.maps = new GoogleMaps(key); }
   private location?: BrowserLocationRequests;
 
@@ -252,20 +242,11 @@ export class WorkspaceTools {
       approval: PROXIED_TOOLS[entry.name]!.approval,
     }));
     if (this.accounts && this.opts.ownerUserId()) tools.push(accountsManifest);
-    if (this.mail) tools.push(...mailManifest);
-    if (this.toolPolicy) tools.push(toolPolicyManifest);
-    if (this.externalFiles && this.opts.ownerUserId()) tools.push(fileStoreManifest);
-    if (this.machineFiles && this.opts.ownerUserId()) tools.push(machineFileManifest);
-    if (this.integrations && this.opts.ownerUserId()) tools.push(integrationsManifest);
+    const ownerId = this.opts.ownerUserId();
+    for (const contribution of this.contributions.values()) {
+      if (!contribution.visible || contribution.visible(ownerId)) tools.push(contribution.manifest);
+    }
     if (this.location) tools.push(locationManifest);
-    if (this.taskControl) tools.push(taskManifest);
-    if (this.codingAgents && this.opts.ownerUserId()) tools.push(codingAgentManifest);
-    if (this.channelRequests && this.opts.ownerUserId()) tools.push({
-      name: "list_channel_requests",
-      description: "List bot-owned unresolved channel questions and approval handles across Main, topic and task channels. Includes canonical IDs, originating channel, and exact approval action views. Read-only: these records never authorize an action. Older question records may have expired live dialogs; use list_owner_requests to check live questions.",
-      inputSchema: { type: "object", properties: {}, additionalProperties: false },
-      approval: "none",
-    });
     return tools;
   }
 
@@ -307,54 +288,22 @@ export class WorkspaceTools {
       try { return { ok: true, result: JSON.stringify(this.accounts(p.args)) }; }
       catch (error) { return { ok: false, error: error instanceof AccountError ? error.message : "Account operation could not be completed." }; }
     }
-    if (p.name === "tool_policy") {
-      if (!this.toolPolicy || this.closed.has(conn) || !Check(toolPolicyManifest.inputSchema, p.args ?? {})) return { ok: false, error: "Tool policy is unavailable." };
-      return { ok: true, result: JSON.stringify({ rules: this.toolPolicy() }) };
-    }
-    if (mailManifest.some(t => t.name === p.name)) {
-      if (!this.mail || this.closed.has(conn)) return { ok: false, error: "Mail is unavailable." };
-      return { ok: true, result: JSON.stringify(await this.mail(p.name, p.args ?? {})) };
-    }
-    // Private CLI dispatch, like external_files. This name is never advertised to the model.
+    // Private CLI dispatch. This name is never advertised to the model.
     if (p.name === "maps") {
       if (conn.role !== "workspace" || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Maps is unavailable." };
       return { ok: true, result: JSON.stringify(await this.maps.action(p.args)) };
     }
-    if (p.name === "integrations") {
-      if (!this.integrations || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Integrations are unavailable." };
-      return { ok: true, result: JSON.stringify(await this.integrations(p.args)) };
-    }
-    if (p.name === "external_files") {
-      if (!this.externalFiles || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "External files are unavailable." };
-      if (!Check(fileStoreManifest.inputSchema, p.args ?? {})) return { ok: false, error: "Invalid external file request." };
-      return { ok: true, result: JSON.stringify(await this.externalFiles(p.args)) };
-    }
-    if (p.name === "machine_files") {
-      if (!this.machineFiles || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Machine files are unavailable." };
-      if (!Check(machineFileManifest.inputSchema, p.args ?? {})) return { ok: false, error: "Invalid machine file request." };
-      return { ok: true, result: JSON.stringify(await this.machineFiles(p.args)) };
-    }
-    if (p.name === CODING_AGENT_TOOL) {
-      if (!this.codingAgents || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Coding agents are unavailable." };
-      if (!Check(codingAgentManifest.inputSchema, p.args ?? {})) return { ok: false, error: "Invalid coding agent request." };
-      try {
-        // Results report to a web conversation; a call from elsewhere (a job, another surface) reports to Main.
-        const conversationId = p.origin?.surface === "web" ? p.origin.conversationId : "main";
-        return { ok: true, result: JSON.stringify(await this.codingAgents(p.args, conversationId, p.toolCallId)) };
-      } catch (err) { return { ok: false, error: errorText(err) }; }
-    }
-    if (p.name === "list_channel_requests") {
-      if (!this.channelRequests || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Channel requests are unavailable." };
-      if (!Check({ type: "object", properties: {}, additionalProperties: false }, p.args ?? {})) return { ok: false, error: "invalid arguments for list_channel_requests" };
-      return { ok: true, result: JSON.stringify({ requests: await this.channelRequests() }) };
-    }
-    if (p.name === "task_manage") {
+    const contribution = this.contributions.get(p.name);
+    if (contribution) {
       const ownerId = this.opts.ownerUserId();
-      if (!this.taskControl || !ownerId || this.closed.has(conn)) return { ok: false, error: "Tasks are unavailable." };
-      try {
-        const result = await this.taskControl(p.args, { surface: this.opts.toolSpace.surface, userId: ownerId, name: "owner" }, p.origin?.conversationId);
-        return { ok: true, result: JSON.stringify(result) };
-      } catch (err) { return { ok: false, error: errorText(err) }; }
+      if (this.closed.has(conn) || (contribution.requiresOwner && !ownerId)) {
+        return { ok: false, error: contribution.unavailableError };
+      }
+      if (contribution.invalidArgumentsError && !Check(contribution.manifest.inputSchema, p.args ?? {})) {
+        return { ok: false, error: contribution.invalidArgumentsError };
+      }
+      const actor = ownerId ? { surface: this.opts.toolSpace.surface, userId: ownerId, name: "owner" } : undefined;
+      return { ok: true, result: JSON.stringify(await contribution.execute(p, actor)) };
     }
     if (p.name === LOCATION_TOOL) {
       if (!this.location || this.closed.has(conn)) return { ok: false, error: "browser location is unavailable" };
