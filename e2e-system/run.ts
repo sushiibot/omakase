@@ -50,6 +50,8 @@ const PUSH_CAPTURE = join(TMP, "push.jsonl");
 // The gateway's link probe (stack/link-probe.preload.ts) listens here; the control server forwards to it.
 const LINK_SOCKET = join(TMP, "link.sock");
 const SCHEDULER_SOCKET = join(TMP, "scheduler.sock");
+const WAKEUP_SOCKET = join(TMP, "wakeups.sock");
+const WAKEUP_NOW = new Date().toISOString();
 
 /** A Main session from before the web app, which the gateway imports once from the workspace (flows/history-import). */
 function seedPreWebSession(): void {
@@ -222,6 +224,9 @@ function controlServer(personal: Proc, ws: Proc, llmURL: string) {
       if (req.method === "POST" && url.pathname === "/scheduler/tick") {
         return fetch("http://scheduler/tick", { method: "POST", unix: SCHEDULER_SOCKET } as RequestInit);
       }
+      if (req.method === "POST" && url.pathname === "/wakeups/tick") {
+        return fetch("http://wakeups/tick", { method: "POST", body: await req.text(), unix: WAKEUP_SOCKET } as RequestInit);
+      }
       if (req.method === "POST" && url.pathname === "/workspace/restart") {
         if (url.searchParams.get("crash") === "true") {
           signal(ws, "SIGKILL");
@@ -334,7 +339,7 @@ async function main(): Promise<number> {
   const portEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => /^E2E_/.test(k))) as Record<string, string>;
   const guard = join(HERE, "stack", "net-guard.preload.ts");
 
-  const llm: Proc = { name: "llm", cmd: [BUN, "--no-env-file", join(HERE, "stack", "fake-llm.ts")], cwd: HERE, env: { ...common, ...portEnv, HOME: P.personalHome } };
+  const llm: Proc = { name: "llm", cmd: [BUN, "--no-env-file", join(HERE, "stack", "fake-llm.ts")], cwd: HERE, env: { ...common, ...portEnv, E2E_WAKEUP_NOW: WAKEUP_NOW, HOME: P.personalHome } };
   const proxy: Proc = { name: "proxy", cmd: [BUN, "--no-env-file", join(HERE, "stack", "proxy.ts")], cwd: HERE, env: { ...common, ...portEnv, HOME: P.personalHome } };
   // The gateway with its service's env only.
   const personal: Proc = {
@@ -374,12 +379,14 @@ async function main(): Promise<number> {
   };
   const ws: Proc = {
     name: "ws",
-    cmd: [BUN, "--no-env-file", "--preload", join(HERE, "stack", "scheduler-probe.preload.ts"), "--preload", guard, "src/workspace/index.ts"],
+    cmd: [BUN, "--no-env-file", "--preload", join(HERE, "stack", "scheduler-probe.preload.ts"), "--preload", join(HERE, "stack", "wakeup-probe.preload.ts"), "--preload", guard, "src/workspace/index.ts"],
     cwd: REPO,
     env: {
       ...common,
       HOME: P.wsHome,
       E2E_SCHEDULER_SOCKET: SCHEDULER_SOCKET,
+      E2E_WAKEUP_SOCKET: WAKEUP_SOCKET,
+      E2E_WAKEUP_NOW: WAKEUP_NOW,
       ORCH_URL: `ws://${addrs.local}:${ports.orch}`,
       ORCH_SECRET: orchSecret,
       OPENAI_API_KEY: "e2e-stub",

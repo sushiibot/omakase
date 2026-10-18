@@ -71,6 +71,10 @@ export const stack = {
   async tickScheduler(): Promise<void> {
     await call("/scheduler/tick", { method: "POST" });
   },
+  /** Set the wakeup clock and run its real tick. Omit at to reset to the run baseline. */
+  async tickWakeups(at?: string): Promise<void> {
+    await call("/wakeups/tick", { method: "POST", body: JSON.stringify({ at }) });
+  },
   async restartWorkspace(opts: { crash?: boolean } = {}): Promise<void> {
     await call(`/workspace/restart${opts.crash ? "?crash=true" : ""}`, { method: "POST" });
   },

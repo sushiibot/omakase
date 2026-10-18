@@ -109,6 +109,7 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
       return stream([result.link], 10, tag);
     }
     if (userText.includes("E2E-LIST-CHECKS") || userText.includes("E2E-OWNER-DECISION") || userText.includes("E2E-CHANNEL-REQUESTS") || userText.includes("E2E-MAIL-ACCOUNTS") || userText.includes("E2E-TOOL-POLICY")) return stream([textOf(last.content)], 10, tag);
+    if (userText.includes("E2E-SCHEDULE")) return stream([`Tool finished. Result: ${textOf(last.content)}`], 10, tag);
     if (userText.includes("E2E-BROWSER")) return stream(["Browser is open. ", "Browser task finished."], 50, tag, 0, false, 1);
     return stream([`Tool finished. Result: ${textOf(last.content).slice(0, 160).replace(/\n/g, " ")}`], 50, tag);
   }
@@ -149,7 +150,7 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
     return toolCall("schedule_check", {
       key: `e2e-${key}`, title: `E2E scheduled check ${key}`,
       prompt: `E2E-ECHO checked-${key} #w${key}`,
-      at: new Date(Date.now() + 8000).toISOString(),
+      at: new Date(Date.parse(process.env["E2E_WAKEUP_NOW"]!) + 60_000).toISOString(),
       ...(taskId ? { taskId } : {}),
     });
   }

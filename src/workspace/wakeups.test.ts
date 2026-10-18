@@ -95,6 +95,28 @@ test("absolute dates respect offsets, remain pending until consumed, and survive
   expect((await manager()).list(true)[0].status).toBe("consumed");
 });
 
+test("the polling timer delivers a check that becomes due after startup", async () => {
+  let delivered!: () => void;
+  const delivery = new Promise<void>((resolve) => { delivered = resolve; });
+  const m = await manager({
+    pollMs: 5,
+    deliver: async (check, wake) => {
+      deliveries.push({ check, wake });
+      wake.onConsumed();
+      delivered();
+    },
+  });
+  const { check } = m.schedule(args, WEB);
+  await m.start();
+  expect(deliveries).toHaveLength(0);
+  now = new Date(check.at);
+  // No manual tick: this must be dispatched by start()'s interval.
+  await delivery;
+  await m.stop();
+  expect(deliveries).toHaveLength(1);
+  expect(m.list(true)[0].status).toBe("consumed");
+});
+
 test("repeated purpose keys reuse one pending check and other items remain independent", async () => {
   const m = await manager();
   const first = m.schedule(args, WEB);

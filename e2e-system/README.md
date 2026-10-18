@@ -75,6 +75,7 @@ test("my flow", async ({ page, watch }) => {
 - `stack.llmLog()` and `stack.waitForLlm(match)` return what the fake model received.
 - `stack.query(sql, ...params)` runs a read-only query on the gateway DB. It uses `bun:sqlite` in the runner, because flows run in node.
 - `stack.restartPersonal({ waitReady })` sends the gateway SIGTERM and starts it again on the same data.
+- `stack.tickWakeups(at?)` sets the wakeup manager clock and runs its real tick through a private Unix-socket preload. Omit `at` to reset to the run baseline. The clock stays frozen so checks cannot become due during pending assertions; workspace restart resets it to the same baseline. Scheduled-check flows reset it before and after each test, and advance to the persisted check’s due time. Production startup/polling are unchanged.
 - `stack.wsHome` is the workspace `$HOME`, and `stack.wsState` its state dir (a scheduler request is `requests/<job>.request` there). `stack.config` holds the ports and addresses.
 - `stack.pushes()` returns every Web Push request the gateway sent. The gateway's net guard answers a push service host with 201 and records the encrypted body, so a flow that registered its own subscription keys can decrypt it (`flows/job-alerts.e2e.ts`).
 - `stack.linkRequest(method, params)` sends a gateway → workspace RPC over the real link, through `stack/link-probe.preload.ts` in the gateway process. It returns the result and the pinned contract schema's verdict on it. Use it for workspace RPCs the gateway has no HTTP route for yet.

@@ -1,6 +1,24 @@
 import { bubble, openChat, send } from "../lib/chat.ts";
 import { expect, nonce, stack, test } from "../lib/harness.ts";
 
+async function checkResult(reply: ReturnType<typeof bubble>) {
+  let parsed: any;
+  await expect.poll(async () => {
+    const text = await reply.innerText();
+    try {
+      parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+      return true;
+    } catch {
+      return false;
+    }
+  }).toBe(true);
+  return parsed;
+}
+
+// The clock is frozen; slow CI cannot make a check due before pending assertions.
+test.beforeEach(async () => { await stack.tickWakeups(); });
+test.afterEach(async () => { await stack.tickWakeups(); });
+
 test("agent schedules one follow-up, dedupes it, and wakes in the same conversation after restart", async ({
   page,
   watch,
@@ -17,10 +35,7 @@ test("agent schedules one follow-up, dedupes it, and wakes in the same conversat
     const query = nonce();
     await send(page, `E2E-LIST-CHECKS #${query}`);
     await expect(bubble(page, `re-${query}`)).toContainText('"checks"');
-    const text = await bubble(page, `re-${query}`).innerText();
-    const parsed = JSON.parse(
-      text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1),
-    );
+    const parsed = await checkResult(bubble(page, `re-${query}`));
     return parsed.checks.filter((c: { key: string }) => c.key === `e2e-${tag}`);
   };
   const pending = await checks();
@@ -31,14 +46,21 @@ test("agent schedules one follow-up, dedupes it, and wakes in the same conversat
   });
   await stack.restartWorkspace();
   await page.reload();
+  expect(await checks()).toEqual(pending);
+  await expect(bubble(page, `re-w${tag}`)).toHaveCount(0);
+  await stack.tickWakeups(pending[0].at);
   await expect(bubble(page, `re-w${tag}`)).toContainText(
     `Echo checked-${tag}.`,
     { timeout: 45_000 },
   );
+  await stack.tickWakeups(pending[0].at);
   await expect(bubble(page, `re-w${tag}`)).toHaveCount(1);
   const finished = await checks();
   expect(finished).toHaveLength(1);
   expect(finished[0].status).toBe("consumed");
+  await stack.tickWakeups(pending[0].at);
+  expect(await checks()).toEqual(finished);
+  expect((await stack.llmLog()).filter((r) => r.userText.includes(`checked-${tag}`))).toHaveLength(1);
   const request = await stack.waitForLlm((r) =>
     r.userText.includes(`checked-${tag}`),
   );
@@ -64,6 +86,17 @@ test("a scheduled check prepares an unstarted task and delivers into its work co
   expect(task.workConversationId).toBeUndefined();
   await send(page, `E2E-SCHEDULE key-${tag} taskId:${task.id} #${tag}`);
   await expect(bubble(page, `re-${tag}`)).toContainText("Tool finished.");
+  const scheduled = await checkResult(bubble(page, `re-${tag}`));
+  expect(scheduled.check.status).toBe("pending");
+  await expect(bubble(page, `re-w${tag}`)).toHaveCount(0);
+  const beforeDue = await page.evaluate(
+    async (id) => (await (await fetch("/api/tasks")).json()).tasks.find(
+      (t: { id: string }) => t.id === id,
+    ),
+    task.id,
+  );
+  expect(beforeDue.workConversationId).toBeUndefined();
+  await stack.tickWakeups(scheduled.check.at);
   await expect
     .poll(
       async () =>
