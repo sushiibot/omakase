@@ -21,6 +21,8 @@ export interface LlmRequest {
   lastImages: number;
   tools: string[];
   lastTool?: string;
+  /** Full test-only payload for credential leak assertions. */
+  accountPayload?: string;
   /** The user's name as the system prompt states it, when it does. */
   ownerName?: string;
 }
@@ -100,6 +102,7 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
     ], 0, undefined);
   }
   if (last?.role === "tool") {
+    if (userText.includes("E2E-ACCOUNT")) return stream([textOf(last.content)], 10, tag);
     if (userText.includes("E2E-INTEGRATIONS")) return stream([textOf(last.content), "\n[Set up API keys](/connectors/keys)"], 10, tag);
     if (userText.includes("E2E-ARTIFACT")) {
       const result = JSON.parse(textOf(last.content));
@@ -119,6 +122,10 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
   if (userText.includes("E2E-MAPS-SAVED")) {
     const cli = resolve(import.meta.dir, "../../bin/maps.ts");
     return toolCall("bash", { command: "bun '" + cli.replace(/'/g, "'\\''") + "' search coffee" });
+  }
+  if (userText.includes("E2E-ACCOUNT-ACTION")) {
+    const match = /E2E-ACCOUNT-ACTION (\{[^\n]+\})/.exec(userText);
+    if (match) return toolCall("accounts", JSON.parse(match[1]!));
   }
   if (userText.includes("E2E-INTEGRATIONS-PROPOSE")) return toolCall("integrations", { action: "propose", definition: { id: "e2e_custom", name: "Custom API", capability: "Search records", origin: "https://api.example.com", docsUrl: "https://example.com/docs", auth: { type: "bearer" }, operations: [{ id: "search", description: "Search records", method: "GET", path: "/v1/search", query: ["q"] }] } });
   if (userText.includes("E2E-INTEGRATIONS-CLI")) {
@@ -193,13 +200,14 @@ Bun.serve({
     const userText = textOf(lastUser?.content);
     seen.push({
       n,
+      ...(userText.includes("E2E-ACCOUNT") ? { accountPayload: JSON.stringify(body) } : {}),
       at: new Date().toISOString(),
       lastRole: last?.role,
       userText: userText.slice(0, 600),
       images: msgs.reduce((a, m) => a + imagesIn(m.content), 0),
       lastImages: imagesIn(lastUser?.content),
       tools: (body.tools ?? []).map((t) => t.function?.name ?? ""),
-      lastTool: last?.role === "tool" ? textOf(last.content).slice(0, userText.includes("E2E-INTEGRATIONS") ? 16000 : 400) : undefined,
+      lastTool: last?.role === "tool" ? textOf(last.content).slice(0, /E2E-(?:INTEGRATIONS|ACCOUNT)/.test(userText) ? 16000 : 400) : undefined,
       ownerName: /The user's name is (.+)\.$/m.exec(msgs.filter((m) => m.role === "system").map((m) => textOf(m.content)).join("\n"))?.[1],
     });
     return reply(msgs, userText, lastUser);
