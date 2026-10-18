@@ -12,7 +12,7 @@ const log = getLogger("workspace.tools");
  * stub can only be registered later under a name listed here; a manifest name outside it is skipped.
  */
 export const KNOWN_PROXIED_TOOLS: readonly string[] = [
-  "mail_accounts", "mail_search", "mail_read", "mail_attachment", "mail_save_draft", "tool_policy",
+  "accounts", "mail_accounts", "mail_search", "mail_read", "mail_attachment", "mail_save_draft", "tool_policy",
   "web_search",
   "fetch_url_content",
   "search_logs",

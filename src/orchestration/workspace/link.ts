@@ -263,6 +263,8 @@ export function deliveryView(p: ChatDeliverParams, toolCount: number | null = nu
 /** Bot side of the personal-agent workspace chat protocol, surface-neutral: sends the principal's messages
  *  to the workspace, and routes its live progress and deliveries to the surface each one came from. */
 export class WorkspaceLink {
+  private accountsInternal?: (conn: ConnectionInfo, params: unknown) => unknown;
+  setAccountsInternal(handler: (conn: ConnectionInfo, params: unknown) => unknown): void { this.accountsInternal = handler; }
   private readonly opts: WorkspaceLinkOptions;
   private readonly now: () => number;
   private readonly timers: Timers;
@@ -866,6 +868,10 @@ export class WorkspaceLink {
   }
 
   private async onRequest(conn: ConnectionInfo, method: string, params: unknown): Promise<unknown> {
+    if (method === "accounts/internal") {
+      if (!this.accountsInternal || this.opts.enabled === false || conn.role !== "workspace" || conn.principalId !== this.opts.principalId || this.rpc?.getWorkspaceConnection(this.opts.principalId) !== conn) throw new Error("Account operation could not be completed.");
+      try { return this.accountsInternal(conn, params); } catch { throw new Error("Account operation could not be completed."); }
+    }
     if (method === RPC_METHODS.toolCall && this.toolsEnabled) return this.opts.tools!.handleCall(conn, params);
     if (method === RPC_METHODS.toolCancel && this.toolsEnabled) return this.opts.tools!.handleCancel(conn, params);
     if (method === RPC_METHODS.githubToken) {

@@ -1,3 +1,5 @@
+import { AccountError } from "../../accounts/service.ts";
+import { accountsManifest } from "../../accounts/contracts.ts";
 import { integrationsManifest } from "../../integrations/service.ts";
 import { mailManifest, toolPolicyManifest } from "../../integrations/mail/manifest.ts";
 import { fileStoreManifest } from "./fileStores/service.ts";
@@ -217,6 +219,9 @@ export class WorkspaceTools {
 
   private mail?: (name: string, args: unknown) => Promise<unknown>;
   setMail(call: NonNullable<WorkspaceTools["mail"]>) { this.mail = call; }
+  private accounts?: (args: unknown) => unknown;
+  setAccounts(call: (args: unknown) => unknown): void { this.accounts = call; }
+
   private toolPolicy?: () => string;
   setToolPolicy(read: () => string) { this.toolPolicy = read; }
 
@@ -246,6 +251,7 @@ export class WorkspaceTools {
       inputSchema: schema,
       approval: PROXIED_TOOLS[entry.name]!.approval,
     }));
+    if (this.accounts && this.opts.ownerUserId()) tools.push(accountsManifest);
     if (this.mail) tools.push(...mailManifest);
     if (this.toolPolicy) tools.push(toolPolicyManifest);
     if (this.externalFiles && this.opts.ownerUserId()) tools.push(fileStoreManifest);
@@ -296,6 +302,11 @@ export class WorkspaceTools {
 
   private async dispatch(conn: ConnectionInfo, p: ToolCallParams): Promise<ToolCallResult> {
     if (p.principalId !== this.opts.principalId || conn.principalId !== this.opts.principalId) return { ok: false, error: "principal mismatch" };
+    if (p.name === "accounts") {
+      if (!this.accounts || conn.role !== "workspace" || !this.opts.ownerUserId() || this.closed.has(conn)) return { ok: false, error: "Accounts are unavailable." };
+      try { return { ok: true, result: JSON.stringify(this.accounts(p.args)) }; }
+      catch (error) { return { ok: false, error: error instanceof AccountError ? error.message : "Account operation could not be completed." }; }
+    }
     if (p.name === "tool_policy") {
       if (!this.toolPolicy || this.closed.has(conn) || !Check(toolPolicyManifest.inputSchema, p.args ?? {})) return { ok: false, error: "Tool policy is unavailable." };
       return { ok: true, result: JSON.stringify({ rules: this.toolPolicy() }) };
