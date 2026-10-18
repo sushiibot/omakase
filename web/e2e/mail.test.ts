@@ -134,7 +134,7 @@ test('old mail links preserve the connection result and return to Agent settings
 	await expect(page.getByText('Mail account connected.', { exact: true })).toBeVisible();
 	await page.getByRole('link', { name: 'Agent settings', exact: true }).click();
 	await expect(page.getByRole('link', { name: 'Tool permissions' })).toBeVisible();
-	await page.getByRole('link', { name: /Connectors MCP servers/ }).click();
+	await page.getByRole('link', { name: /^Connectors / }).click();
 	await expect(page.getByRole('link', { name: 'Accounts & rules' })).toHaveCount(0);
 });
 for (const colorScheme of ['light', 'dark'] as const) {
