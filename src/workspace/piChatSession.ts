@@ -1,19 +1,18 @@
-import { integrationSocket } from "./integrations.ts";
+import { createWorkspaceBashTool, browserLifecycle } from "./executionTools.ts";
 import { MAINTENANCE_INSTRUCTIONS, MAINTENANCE_TOOLS, type MaintenanceService } from "./maintenance/service.ts";
 import { ArtifactStore, ARTIFACT_TOOLS } from "./artifacts.ts";
 import { OwnerRequests, ownerRequestAsks } from "./ownerRequests.ts";
-import { mapsSocket } from "./maps.ts";
 import { memoryEvidence, MEMORY_TOOL_NAMES, RECALL_INSTRUCTIONS } from "./memoryEvidence.ts";
 import { ownerNameLine } from "../orchestration/ownerLabel.ts";
 import { taskAwareness } from "./taskAwareness.ts";
 import type { TaskStore } from "./taskStore.ts";
 import type { WakeupManager } from "./wakeups.ts";
-import type { BrowserManager, BrowserBinding } from "./browser.ts";
+import type { BrowserManager } from "./browser.ts";
 import { relative } from "node:path";
 import { threadAwareness, threadContextTools } from "./threadContext.ts";
 import { createGitHubPushTool, GITHUB_PUSH_TOOL } from "./githubPush.ts";
 import { CONNECTOR_TOOLS, type ConnectorManager } from "./connectors.ts";
-import { assertExactTools, createAgentBashTool, createOpenRouterModel } from "../agentRuntime/piShared.ts";
+import { assertExactTools, createOpenRouterModel } from "../agentRuntime/piShared.ts";
 import { estimateTokens } from "@earendil-works/pi-coding-agent";
 import type { ConversationContext } from "../orchestration/contracts.ts";
 import type { AgentSession, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
@@ -39,7 +38,6 @@ import { createVerifyGateExtension } from "./verifyGate.ts";
 import { createCompactionHandoffExtension } from "./memoryFlush.ts";
 import { RunLog, type RunRecorder } from "./runLog.ts";
 import { observeRuns, type RunObserver } from "./runObserver.ts";
-import { externalFilesSocket } from "./externalFiles.ts";
 import { chatSessionDir } from "./sessionPaths.ts";
 import { SEND_FILE_TOOL, createSendFileTool } from "./sendFile.ts";
 import { KNOWN_PROXIED_TOOLS, type ToolStubs } from "./toolStubs.ts";
@@ -65,16 +63,8 @@ const autoModeLog = getLogger("workspace.automode");
 const PROVIDER_ID = "sushii-workspace-openrouter";
 const WORKSPACE_TOOLS = ["codemode", "read", "edit", "write", "grep", "find", "ls", "bash", SEND_FILE_TOOL, ...MEMORY_TOOL_NAMES, ...ARTIFACT_TOOLS];
 
-/** Pi's bash under the agent env allowlist, minus PI_* (PI_CODING_AGENT_DIR and PI_SESSION_FILE point at the agent dir).
- *  `WS_RUN_ID` is the run in progress at spawn time, so `ws-runs` can default to it. */
-export function createWorkspaceBashTool(cwd: string, currentRunId: () => string | null = () => null, github?: Pick<GitHubCredentials, "envFor">, browser?: BrowserBinding, stateDir?: string) {
-  const extraEnv = (): Record<string, string> => {
-    const runId = currentRunId();
-    return { ...(runId ? { WS_RUN_ID: runId } : {}), ...(stateDir ? { EXTERNAL_FILES_SOCKET: externalFilesSocket(stateDir), MAPS_SOCKET: mapsSocket(stateDir), INTEGRATIONS_SOCKET: integrationSocket(stateDir) } : {}), ...browser?.env() };
-  };
-  const prepareEnv = github ? (command: string, dir: string) => github.envFor(command, dir) : undefined;
-  return createAgentBashTool(cwd, extraEnv, { dropPrefixes: ["PI_"], exposeSessionEnvironment: false, prepareEnv });
-}
+// Kept for callers that historically obtained the shell tool from this module.
+export { createWorkspaceBashTool } from "./executionTools.ts";
 
 const runObservers = new WeakMap<object, RunObserver>();
 
@@ -425,19 +415,15 @@ export function createPiChatSessionFactory(
       unsubscribeChoice?.();
       throw err;
     }
-    const unsubscribeBrowser = browser ? session.subscribe((event) => {
-      if (event.type === "agent_settled") void browser.finish().catch((err) => log.warn({ err }, "browser cleanup failed"));
-    }) : undefined;
-    const browserHeartbeat = browser ? setInterval(() => { if (session.isStreaming) browser.touch(); }, 60_000) : undefined;
-    browserHeartbeat?.unref();
+    const browserEvents = browserLifecycle(session, browser, err => log.warn({ err }, "browser cleanup failed"));
+    const unsubscribeBrowser = browser ? session.subscribe(browserEvents.onEvent) : undefined;
     const dispose = session.dispose.bind(session);
     session.dispose = () => {
       try {
         return dispose();
       } finally {
         unsubscribeBrowser?.();
-        clearInterval(browserHeartbeat);
-        void browser?.finish().catch((err) => log.warn({ err }, "browser cleanup failed"));
+        browserEvents.dispose();
         stubs?.release();
         unsubscribeChoice?.();
       }

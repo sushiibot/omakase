@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { readWorkspaceState } from "./state.ts";
 import { join } from "node:path";
-import { z } from "zod";
 import {
   RPC_METHODS,
   TOPIC_ID_RE,
@@ -15,7 +14,7 @@ import {
   type ChatOrigin,
 } from "../orchestration/contracts.ts";
 import { Outbox } from "./outbox.ts";
-import { readJson, writeFileAtomic } from "./files.ts";
+import { readTopicCatalog, writeTopicCatalog, type TopicRecord } from "./topicCatalog.ts";
 import type { PersonalSession } from "./personalSession.ts";
 
 export type TopicSession = Pick<
@@ -36,13 +35,6 @@ export type TopicSession = Pick<
   | "requestContextReload"
 > & { readonly currentSessionFile?: string; readonly chatSession?: PersonalSession["chatSession"] };
 
-interface TopicRecord {
-  id: string;
-  title: string;
-  brief: string;
-  archived: boolean;
-}
-
 /** Main keeps its existing session; topics own separate state, dedupe and delivery outboxes. */
 export class TopicSessions {
   private readonly sessions = new Map<string, TopicSession>();
@@ -59,27 +51,10 @@ export class TopicSessions {
       command: (p: unknown) => Promise<unknown>;
     },
   ) {
-    const saved = z
-      .record(
-        z.object({
-          id: z.string().regex(TOPIC_ID_RE),
-          title: z.string().min(1).max(120),
-          brief: z.string().max(16000),
-          archived: z.boolean(),
-        }),
-      )
-      .safeParse(readJson<unknown>(this.path) ?? {});
-    if (!saved.success) throw new Error("invalid persisted topic catalog");
-    this.records = Object.assign(
-      Object.create(null) as Record<string, TopicRecord>,
-      saved.data,
-    );
-  }
-  private get path() {
-    return join(this.opts.stateDir, "topics.json");
+    this.records = readTopicCatalog(this.opts.stateDir);
   }
   private save() {
-    writeFileAtomic(this.path, JSON.stringify(this.records));
+    writeTopicCatalog(this.opts.stateDir, this.records);
   }
   private id(origin?: ChatOrigin): string | null {
     if (origin?.surface !== "web" || origin.conversationId === "main")

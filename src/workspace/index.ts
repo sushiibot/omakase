@@ -50,7 +50,8 @@ import { historyHandlers } from "./historyFiles.ts";
 import { HistorySearch, historySearchHandlers } from "./historySearch.ts";
 import { DurableState } from "../agentRuntime/durableState.ts";
 import { WakeupManager, deliverScheduledCheck } from "./wakeups.ts";
-import { readJson } from "./files.ts";
+import { topicConversationExists } from "./topicCatalog.ts";
+import { recordTaskRuns } from "./taskRuns.ts";
 import { applyRegisteredOwnerName, loadOwnerName, ownerHandlers } from "./owner.ts";
 import { AgentResults } from "./agentResults.ts";
 
@@ -89,17 +90,7 @@ async function main(): Promise<void> {
   let client: OrchestrationClient | null = null;
   const taskStore = new TaskStore(config.stateDir, config.home);
   const recordedRuns = notifyRunChanges(recordHistory(runLog, history, historyLog), (method, params) => client?.notify(method, params), config.principalId, log);
-  taskStore.setRunActivity(id => recordedRuns.getRun(id)?.status === "running");
-  const runs: import("./runLog.ts").RunRecorder = {
-    startRun(input) {
-      const id = recordedRuns.startRun(input);
-      const task = !input.parentRunId && taskStore.list().find(t => t.workConversationId === input.conversationId);
-      if (task) taskStore.attachRun(task.id, id, "Sushii");
-      return id;
-    },
-    endRun(id, end) { recordedRuns.endRun(id, end); taskStore.settleRun(id, end.status, end.resultSummary); },
-    listRuns: q => recordedRuns.listRuns(q), getRun: id => recordedRuns.getRun(id),
-  };
+  const runs = recordTaskRuns(recordedRuns, taskStore);
   const toolStubs = new ToolStubs({
     principalId: config.principalId,
     ownerName: () => config.ownerName,
@@ -156,7 +147,7 @@ async function main(): Promise<void> {
     timeZone: config.tz,
     tasks: taskStore,
     ready: () => client?.connected ?? false,
-    conversationExists: id => id === "main" || !!readJson<Record<string, unknown>>(join(config.stateDir, "topics.json"))?.[id],
+    conversationExists: id => topicConversationExists(config.stateDir, id),
     deliver: (check, wake) => {
       if (!topicsRef) throw new Error("Topic sessions are not ready.");
       return deliverScheduledCheck(topicsRef, taskStore, check, wake, async id => {
@@ -286,7 +277,7 @@ async function main(): Promise<void> {
   const agentResults = new AgentResults({
     stateDir: config.stateDir,
     principalId: config.principalId,
-    conversationExists: id => id === "main" || !!readJson<Record<string, unknown>>(join(config.stateDir, "topics.json"))?.[id],
+    conversationExists: id => topicConversationExists(config.stateDir, id),
     wake: async (conversationId, wake) => (await topics.session({ surface: "web", conversationId })).wake(wake),
     warn: (err, message) => log.warn({ err }, message),
   });

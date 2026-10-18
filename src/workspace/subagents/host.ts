@@ -30,7 +30,7 @@ import { mapSessionEvent, newRunAccumulator, type RunAccumulator } from "../even
 import { runFileRel } from "../history.ts";
 import { createMemoryGuardExtension, resolveReal } from "../memoryGuard.ts";
 import { createCompactionHandoffExtension } from "../memoryFlush.ts";
-import { createWorkspaceBashTool } from "../piChatSession.ts";
+import { createWorkspaceBashTool, browserLifecycle } from "../executionTools.ts";
 import type { GitHubCredentials } from "../githubCredentials.ts";
 import type { RunRecorder, RunStatus } from "../runLog.ts";
 import { createSecretGuardExtension } from "../secretGuard.ts";
@@ -780,20 +780,18 @@ export class SubagentHost {
       throw err;
     }
 
+    const browserEvents = browserLifecycle(session, browser, err => log.warn({ err }, "child browser cleanup failed"));
     const unsubscribe = session.subscribe((event) => {
       this.onChildEvent(spawn, event);
-      if (event.type === "agent_settled") void browser?.finish().catch((err) => log.warn({ err }, "child browser cleanup failed"));
+      browserEvents.onEvent(event);
     });
-    const browserHeartbeat = browser ? setInterval(() => { if (session.isStreaming) browser?.touch(); }, 60_000) : undefined;
-    browserHeartbeat?.unref();
     const dispose = session.dispose.bind(session);
     session.dispose = () => {
       try {
         unsubscribe();
         return dispose();
       } finally {
-        clearInterval(browserHeartbeat);
-        void browser?.finish().catch((err) => log.warn({ err }, "child browser cleanup failed"));
+        browserEvents.dispose();
         stubs?.release();
       }
     };
