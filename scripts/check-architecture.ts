@@ -156,7 +156,8 @@ export function analyze(root: string): { edges: Edge[]; violations: string[] } {
         if (ts.isTypeNode(node)) return;
         if (ts.isIdentifier(node) && ["process", "Bun", "globalThis"].includes(node.text)) {
           const parent = node.parent;
-          const propertyName = ts.isPropertyAccessExpression(parent) && parent.name === node;
+          const propertyName = (ts.isPropertyAccessExpression(parent) && parent.name === node)
+            || (ts.isBindingElement(parent) && parent.propertyName === node);
           const symbol = ts.isShorthandPropertyAssignment(parent)
             ? checker.getShorthandAssignmentValueSymbol(parent)
             : checker.getSymbolAtLocation(node);

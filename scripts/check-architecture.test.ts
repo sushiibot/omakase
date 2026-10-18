@@ -142,9 +142,27 @@ describe("backend architecture boundaries", () => {
           return { process, Bun, globalThis, value: process.env };
         }
         export function local() { const process = { env: "value" }; return process.env; }
+        export function keys(value: Record<string, string>) {
+          const { process: p, Bun: b, globalThis: g } = value;
+          return [p, b, g];
+        }
       `,
     });
     expect(analyze(root).violations).toEqual([]);
+  });
+
+  test("computed destructuring keys still count as runtime global references", () => {
+    const root = fixture({
+      "src/orchestration/teamConfig.ts": `
+        export function parse(value: Record<string, string>) {
+          const { [process.env.KEY!]: selected } = value;
+          return selected;
+        }
+      `,
+    });
+    expect(analyze(root).violations).toEqual([
+      "config-global: src/orchestration/teamConfig.ts -> src/orchestration/teamConfig.ts -> process",
+    ]);
   });
 
   test("missing local imports fail instead of silently erasing an edge", () => {
