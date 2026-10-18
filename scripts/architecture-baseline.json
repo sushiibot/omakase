@@ -2,12 +2,6 @@
   "orchestration-web: src/orchestration/machines/events.ts -> src/surfaces/web/pushRules.ts",
   "orchestration-web: src/orchestration/transport/server.ts -> src/surfaces/web/config.ts",
   "orchestration-web: src/orchestration/workspace/boot.ts -> src/surfaces/web/actor.ts",
-  "orchestration-web: src/orchestration/workspace/tools.ts -> src/surfaces/web/taskRoutes.ts",
   "runtime-cycle: src/config.ts -> src/orchestration/teams.ts",
-  "runtime-cycle: src/orchestration/teams.ts -> src/config.ts",
-  "runtime-cycle: src/orchestration/workspace/tools.ts -> src/surfaces/web/taskRoutes.ts",
-  "runtime-cycle: src/surfaces/web/chatRoutes.ts -> src/orchestration/workspace/tools.ts",
-  "runtime-cycle: src/surfaces/web/readRoutes.ts -> src/surfaces/web/chatRoutes.ts",
-  "runtime-cycle: src/surfaces/web/taskRoutes.ts -> src/surfaces/web/chatRoutes.ts",
-  "runtime-cycle: src/surfaces/web/taskRoutes.ts -> src/surfaces/web/readRoutes.ts"
+  "runtime-cycle: src/orchestration/teams.ts -> src/config.ts"
 ]
