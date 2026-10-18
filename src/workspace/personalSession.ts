@@ -28,7 +28,8 @@ import {
   type JobAlertWire,
   parseUploadUrl,
 } from "../orchestration/contracts.ts";
-import { RpcErrorResponse } from "../orchestration/transport/client.ts";
+import { DeliveryTransport } from "./deliveryTransport.ts";
+export { isContractRefusal } from "./deliveryTransport.ts";
 import { ulid } from "./ulid.ts";
 import { getLogger } from "../logger.ts";
 import { failureNotice, mapSessionEvent, newRunAccumulator, replyText, runAborted, runUsage, type RunAccumulator } from "./events.ts";
@@ -111,11 +112,6 @@ export interface ChatTransport {
   /** When absent the link is assumed up. */
   isConnected?(): boolean;
 }
-
-const RESEND_INTERVAL_MS = 60_000;
-// The bot answers chat/deliver at once but drops a request that lands before its register reply; without a
-// deadline that send stays "unanswered" and the interval resend skips it until the next reconnect.
-const DELIVER_TIMEOUT_MS = 30_000;
 
 /** Memory upkeep around the chat session; tests supply fakes. */
 export interface MemoryHooks {
@@ -328,10 +324,7 @@ export class PersonalSession {
   private unpersistedContextIds: string[] = [];
   private compactionWaiters: Array<() => void> = [];
   private settleWaiters: Array<() => void> = [];
-  private readonly sending = new Set<string>();
-  private resendTimer: ReturnType<typeof setInterval> | null = null;
-  // The delivery kinds the bot listed when it last registered; null until the first register.
-  private botFeatures: readonly string[] | null = null;
+  private readonly delivery: DeliveryTransport;
   // The next run to start is a memory flush.
   private hiddenNext: HiddenPrompt | null = null;
   // An abandoned flush prompt still in Pi's preflight: user prompts wait for it so they can't join or become its run.
@@ -369,6 +362,7 @@ export class PersonalSession {
     if (opts.boundaryReport) this.boundaryRecorder = new SessionBoundaryRecorder(opts.boundaryReport.home, opts.stateDir);
     this.opts = opts;
     this.outbox = new Outbox(opts.stateDir);
+    this.delivery = new DeliveryTransport(this.outbox, opts);
     this.inbox = new DurableInbox(opts.stateDir, 500, { store: opts.durableState, conversationId: opts.conversationId });
     this.pendingOwnerAsks = new PendingOwnerAsks(this.inbox.durableState, opts.conversationId ?? "main");
     this.newId = opts.newId ?? ulid;
@@ -731,7 +725,7 @@ export class PersonalSession {
       });
       const entry: ChatDeliverParams = { principalId: this.opts.principalId, origin, outboxId: this.newId(), kind: "session", text: "", session: { ...boundary, ...details } };
       this.outbox.append(entry);
-      this.send(entry);
+      this.delivery.send(entry);
     }).catch(err => log.warn({ err }, "recording context boundary failed")).finally(() => { this.pendingBoundaries--; });
     return this.boundaryChain;
   }
@@ -1014,34 +1008,17 @@ export class PersonalSession {
     }).catch((err) => log.warn({ err }, "pre-compaction memory flush failed"));
   }
 
-  ownsDelivery(outboxId: string): boolean { return this.outbox.unacked().some(e => e.outboxId === outboxId); }
-  hasUnackedDeliveries(): boolean { return this.outbox.unacked().length > 0; }
+  ownsDelivery(outboxId: string): boolean { return this.delivery.ownsDelivery(outboxId); }
+  hasUnackedDeliveries(): boolean { return this.delivery.hasUnackedDeliveries(); }
+  handleAck(outboxId: string): Record<string, never> { return this.delivery.handleAck(outboxId); }
 
-  handleAck(outboxId: string): Record<string, never> {
-    if (!this.outbox.ack(outboxId)) log.debug({ outboxId }, "ack for an unknown or already-acked outbox entry");
-    return {};
-  }
-
-  /** Called after every (re)register with the bot's advertised features: resends right away, then keeps retrying
-   *  on an interval while connected. A bot without `alert` (an older one, or a rollback) gets queued alerts as text. */
+  /** Registration retries both durable inputs and pending deliveries. */
   onRegistered(features: readonly string[] = []): void {
-    this.botFeatures = features;
     void this.recoverInputs().catch((err) => log.error({ err }, "replaying durable inputs failed; retrying at the next registration"));
-    if (!features.includes("alert")) for (const entry of this.outbox.unacked()) if (entry.kind === "alert") this.downgradeAlert(entry);
-    this.resendUnacked();
-    if (this.resendTimer) return;
-    this.resendTimer = setInterval(() => {
-      if (this.opts.transport.isConnected?.() ?? true) this.resendUnacked();
-    }, this.opts.resendIntervalMs ?? RESEND_INTERVAL_MS);
-    this.resendTimer.unref?.();
+    this.delivery.onRegistered(features);
   }
 
-  /** The bot dedupes by outboxId, so resending is safe; an entry whose last send is still unanswered is skipped. */
-  resendUnacked(): void {
-    for (const entry of this.outbox.unacked()) {
-      if (!this.sending.has(entry.outboxId)) this.send(entry);
-    }
-  }
+  resendUnacked(): void { this.delivery.resendUnacked(); }
 
   /**
    * Prompts `w.text` as its own run once the session is idle, never as a steer or through Pi's queues, so a
@@ -1108,8 +1085,7 @@ export class PersonalSession {
   async dispose(): Promise<void> {
     this.closing = true;
     await this.boundaryChain;
-    if (this.resendTimer) clearInterval(this.resendTimer);
-    this.resendTimer = null;
+    this.delivery.dispose();
     if (this.idleTimer) clearInterval(this.idleTimer);
     this.idleTimer = null;
     this.asks.hold("shutdown");
@@ -1496,7 +1472,7 @@ export class PersonalSession {
     };
     this.outbox.append(entry);
     this.markDelivery(entry, inTranscript);
-    this.send(entry);
+    this.delivery.send(entry);
   }
 
   private fileRun(): OpenRun {
@@ -1554,7 +1530,7 @@ export class PersonalSession {
     };
     this.outbox.append(entry);
     this.markDelivery(entry, false);
-    this.send(entry);
+    this.delivery.send(entry);
   }
 
   /** A scheduled job's alert: structured when the bot accepts `alert`, else its text as a proactive message. */
@@ -1562,22 +1538,14 @@ export class PersonalSession {
     const entry: ChatDeliverParams = { outboxId: this.newId(), principalId: this.opts.principalId, kind: "alert", text, alert };
     // An alert the bot would refuse at parse would be resent forever, so one outside the contract goes as text.
     const valid = chatDeliverParams.safeParse(entry);
-    if (!valid.success || (this.botFeatures !== null && !this.botFeatures.includes("alert"))) {
+    if (!valid.success || this.delivery.alertsUnsupported) {
       if (!valid.success) log.warn({ job: alert.job, error: valid.error.issues[0]?.message }, "job alert outside the contract; sending it as text");
       this.deliverOutOfBand({ kind: "proactive", text });
       return;
     }
     this.outbox.append(entry);
     this.markDelivery(entry, false);
-    this.send(entry);
-  }
-
-  /** Rewrites a queued alert as its proactive text; `alert` must go, since the contract refuses it on a proactive. */
-  private downgradeAlert(entry: OutboxEntry): OutboxEntry {
-    const { alert: _alert, ...rest } = entry;
-    const text: OutboxEntry = { ...rest, kind: "proactive" };
-    this.outbox.replace(text);
-    return text;
+    this.delivery.send(entry);
   }
 
   /** Asks the owner something outside any turn; resolves to the parsed answer, or undefined when it expires. */
@@ -1599,7 +1567,7 @@ export class PersonalSession {
     };
     this.outbox.append(entry);
     this.markDelivery(entry, false);
-    this.send(entry);
+    this.delivery.send(entry);
   }
 
   private async deliverAsk(ask: AskRequest): Promise<void> {
@@ -1618,7 +1586,7 @@ export class PersonalSession {
     };
     this.outbox.append(entry);
     this.markDelivery(entry, false);
-    this.send(entry);
+    this.delivery.send(entry);
   }
 
   private closeOwnerAsk(ask: AskRequest, status: RequestEnd, answer: string | null): void {
@@ -1638,7 +1606,7 @@ export class PersonalSession {
       kind: "ask_resolved", text: "", askResolution: { askId, status, answer },
     };
     this.outbox.append(entry);
-    this.send(entry);
+    this.delivery.send(entry);
   }
 
   private deliverFailure(err: unknown, replyTo: string | undefined, turnId: string | undefined, origin: ChatOrigin | undefined): void {
@@ -1701,32 +1669,6 @@ export class PersonalSession {
     } catch (err) {
       log.warn({ err, customType }, "persisting a history marker failed");
     }
-  }
-
-  private send(entry: OutboxEntry): void {
-    if (entry.kind === "session" && !this.botFeatures?.includes("session")) return;
-    if (entry.kind === "alert") {
-      // Unregistered: whether the bot takes alerts is unknown, and the register resends everything anyway.
-      if (this.botFeatures === null) return;
-      if (!this.botFeatures.includes("alert")) entry = this.downgradeAlert(entry);
-    }
-    this.sending.add(entry.outboxId);
-    let params: ChatDeliverParams;
-    try {
-      params = this.outbox.wire(entry);
-    } catch (err) {
-      this.sending.delete(entry.outboxId);
-      log.warn({ err, outboxId: entry.outboxId }, "building chat/deliver failed; will resend");
-      return;
-    }
-    this.opts.transport
-      .request(RPC_METHODS.chatDeliver, params, this.opts.deliverTimeoutMs ?? DELIVER_TIMEOUT_MS)
-      .catch((err) => {
-        log.warn({ err, outboxId: entry.outboxId }, "chat/deliver not confirmed; will resend");
-        // An alert the bot can't take would be refused on every resend; any other error may pass.
-        if (entry.kind === "alert" && isContractRefusal(err)) this.downgradeAlert(entry);
-      })
-      .finally(() => this.sending.delete(entry.outboxId));
   }
 
   private emit(ev: ChatEventPayload): void {
@@ -1902,18 +1844,4 @@ function isCompactionBusy(err: unknown): boolean {
 
 function sameConversation(a: ChatOrigin | undefined, b: ChatOrigin | undefined): boolean {
   return a?.surface === b?.surface && a?.conversationId === b?.conversationId;
-}
-
-/** The bot refused the request's params: -32602 from a bot that says so, or a zod issue list in a generic
- *  -32000 from one that predates `alert`. */
-export function isContractRefusal(err: unknown): boolean {
-  if (!(err instanceof RpcErrorResponse)) return false;
-  if (err.code === -32601 || err.code === -32602) return true;
-  if (err.code !== -32000) return false;
-  try {
-    const issues = JSON.parse(err.message) as unknown;
-    return Array.isArray(issues) && issues.length > 0 && issues.every((i) => typeof i === "object" && i !== null && "code" in i && "path" in i);
-  } catch {
-    return false;
-  }
 }
