@@ -587,7 +587,7 @@ test('seen goes out only while Main is on screen', async ({ page, context }) => 
 	await push(page, 'proactive', { key: 'p1', text: 'On screen', files: [] }, 1);
 	await expect.poll(() => posts('/api/chat/seen').length).toBe(1);
 	const menu = await openDrawer(page);
-	await menu.getByRole('link', { name: 'Settings' }).click();
+	await menu.getByRole('link', { name: 'App settings' }).click();
 	await expect(page).toHaveURL(/\/settings$/);
 	await push(page, 'approval', approval('n1'), 2);
 	await page.waitForTimeout(1500);

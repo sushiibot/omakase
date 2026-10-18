@@ -5,7 +5,7 @@
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import { ToolPermissionsScreen, ToolPolicyStore } from '$lib/features/settings';
 	const store = new ToolPolicyStore();
-	const back = backTo(resolve('/settings'));
+	const back = backTo(resolve('/workspace/agent-settings'));
 	onMount(() => {
 		void store.load();
 	});
@@ -19,7 +19,7 @@
 	error={store.error}
 	notice={store.notice}
 	online={pwa.online}
-	back={{ href: resolve('/settings'), label: 'Settings', onclick: back }}
+	back={{ href: resolve('/workspace/agent-settings'), label: 'Agent settings', onclick: back }}
 	onretry={() => void store.load()}
 	onsave={(rules) => void store.save(rules)}
 />

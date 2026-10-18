@@ -1,6 +1,6 @@
 # Integration API keys
 
-Open **Connectors → API integrations** to connect a service.
+Open **Workspace → Agent settings → Connectors → API integrations** to connect a service.
 **MCP servers** is a separate page under **Connectors**.
 Google Maps Places API (New) is the first supported service.
 Other JSON HTTP APIs can use the generic broker with header or Bearer authentication.

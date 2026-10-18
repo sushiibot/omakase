@@ -445,7 +445,7 @@
 						<a
 							{...props}
 							href="/settings"
-							aria-label="Settings"
+							aria-label="App settings"
 							data-sveltekit-replacestate={navOpen ? '' : undefined}
 						>
 							<span
@@ -460,7 +460,7 @@
 							>
 							<span class="grid flex-1 text-start text-sm leading-tight">
 								<span class="truncate font-medium">sushii</span>
-								<span class="truncate text-xs text-muted-foreground">Settings</span>
+								<span class="truncate text-xs text-muted-foreground">App settings</span>
 							</span>
 							<Settings class="ms-auto" />
 						</a>

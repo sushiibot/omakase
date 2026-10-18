@@ -53,6 +53,11 @@ test('mail accounts can be added, renamed and disconnected; secrets are cleared'
 }) => {
 	const app = await mailFixture(context);
 	await page.goto('/settings');
+	await expect(page.getByRole('heading', { name: 'App settings', exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'MCP servers' })).toHaveCount(0);
+	await expect(page.getByRole('link', { name: 'Mail accounts' })).toHaveCount(0);
+	await page.goto('/workspace');
+	await page.getByRole('link', { name: /Agent settings Connections/ }).click();
 	await page.getByRole('link', { name: 'Mail accounts' }).click();
 	await expect(page.getByText('property@example.com', { exact: false })).toBeVisible();
 	await expect(page.getByLabel('Provider', { exact: true })).toHaveCount(0);
@@ -82,7 +87,7 @@ test('mail accounts can be added, renamed and disconnected; secrets are cleared'
 test('owner rules can be changed independently of provider accounts', async ({ page, context }) => {
 	const app = await mailFixture(context);
 	await context.route('**/api/mail', (route) => route.abort());
-	await page.goto('/settings');
+	await page.goto('/workspace/agent-settings');
 	await page.getByRole('link', { name: 'Tool permissions' }).click();
 	await page.getByRole('button', { name: 'Allow drafts only' }).click();
 	await page.getByRole('button', { name: 'Save rules' }).click();
@@ -119,7 +124,7 @@ test('mail load failure has retry and disables account setup', async ({ page, co
 	await expect(page.getByRole('button', { name: 'Add account', exact: true })).toBeDisabled();
 });
 
-test('old mail links preserve the connection result and return to Settings', async ({
+test('old mail links preserve the connection result and return to Agent settings', async ({
 	page,
 	context
 }) => {
@@ -127,9 +132,9 @@ test('old mail links preserve the connection result and return to Settings', asy
 	await page.goto('/connectors/mail?connection=connected');
 	await expect(page).toHaveURL(/\/settings\/mail\?connection=connected$/);
 	await expect(page.getByText('Mail account connected.', { exact: true })).toBeVisible();
-	await page.getByRole('link', { name: 'Settings', exact: true }).click();
+	await page.getByRole('link', { name: 'Agent settings', exact: true }).click();
 	await expect(page.getByRole('link', { name: 'Tool permissions' })).toBeVisible();
-	await page.getByRole('link', { name: 'MCP servers' }).click();
+	await page.getByRole('link', { name: /Connectors MCP servers/ }).click();
 	await expect(page.getByRole('link', { name: 'Accounts & rules' })).toHaveCount(0);
 });
 for (const colorScheme of ['light', 'dark'] as const) {

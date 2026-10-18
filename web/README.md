@@ -47,7 +47,7 @@ The standalone Browser takeover screen remains a development preview.
 
 ## MCP connections
 
-Open **Connectors → MCP servers** to manage MCP connections.
+Open **Workspace → Agent settings → Connectors → MCP servers** to manage MCP connections.
 The sibling **API integrations** page starts guided setup in chat and provides secure key entry.
 See [Integration API keys](../docs/integration-keys.md) for credential storage and API access.
 The workspace stores connections and credentials outside the browser.
@@ -77,7 +77,8 @@ Adding UI:
 The [channel interaction rules](docs/channel-interaction-rules.md) define the workspace layout,
 source evidence, gesture behavior, and acceptance checks. The live shell keeps channel navigation
 beside desktop conversations. On phones, dragging chat reveals navigation or the supporting inspector.
-Tasks and Activity stay directly accessible; Workspace holds Memory, History, Connectors, and previews.
+Tasks and Activity stay directly accessible; Workspace holds Memory, History, Agent settings, and previews.
+Agent settings groups connections, file access, and tool permissions. App settings contains account and device preferences.
 Settings remains accessible from navigation. Existing conversation URLs and drafts remain valid.
 The isolated motion prototype remains available at `/interaction-lab` with `bun run dev:proto`.
 Run its touch, recovery, history, and timing checks with

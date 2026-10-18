@@ -606,7 +606,7 @@ test('the precached shell opens while offline', async ({ page, context }) => {
 	await controlled(page);
 	await context.setOffline(true);
 	await page.goto('/settings');
-	await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'App settings' })).toBeVisible();
 	await expect(page.getByText(/You're offline/)).toBeVisible();
 });
 
@@ -621,7 +621,7 @@ test('a 502 from the proxy during a restart still opens the cached shell', async
 		route.fulfill({ status: 502, contentType: 'text/plain', body: 'Bad gateway' })
 	);
 	await page.goto('/settings');
-	await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'App settings' })).toBeVisible();
 	await expect(page.getByTestId('login')).toHaveText('drk@example.com');
 });
 
@@ -801,7 +801,7 @@ test('settings from the chat goes back to the chat', async ({ page, context }) =
 	await mockApi(context);
 	await stubPush(page);
 	await page.goto('/chat');
-	await (await openDrawer(page)).getByRole('link', { name: 'Settings' }).click();
+	await (await openDrawer(page)).getByRole('link', { name: 'App settings' }).click();
 	await expect(page).toHaveURL(/\/settings$/);
 	await page.goBack();
 	await expect(page).toHaveURL(/\/chat$/);
@@ -814,7 +814,7 @@ test('opening settings directly throws nothing', async ({ page, context }) => {
 	const errors: string[] = [];
 	page.on('pageerror', (e) => errors.push(e.message));
 	await page.goto('/settings');
-	await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'App settings', level: 1 })).toBeVisible();
 	await expect(page.getByRole('button', { name: /^Menu/ })).toBeVisible();
 	expect(errors).toEqual([]);
 });
@@ -849,7 +849,7 @@ test('the app runs under enforced Trusted Types with only its own policies', asy
 	expect(probe).toEqual({ innerHTML: 'blocked', policy: 'blocked' });
 	// The probe's own violations are expected; anything after it is not.
 	ttErrors.get(page)?.splice(0);
-	await (await openDrawer(page)).getByRole('link', { name: 'Settings' }).click();
+	await (await openDrawer(page)).getByRole('link', { name: 'App settings' }).click();
 	await expect(page.getByTestId('login')).toHaveText('drk@example.com');
 });
 

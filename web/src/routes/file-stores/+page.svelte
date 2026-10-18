@@ -9,4 +9,8 @@
 </script>
 
 <svelte:head><title>File stores · sushii</title></svelte:head>
-<FileStoresScreen online={pwa.online} ondirty={(value) => (dirty = value)} />
+<FileStoresScreen
+	back={{ href: '/workspace/agent-settings', label: 'Agent settings' }}
+	online={pwa.online}
+	ondirty={(value) => (dirty = value)}
+/>

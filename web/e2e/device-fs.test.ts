@@ -119,6 +119,6 @@ test('browser settings do not offer native folder access', async ({ page, contex
 		})
 	);
 	await page.goto('/settings');
-	await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'App settings', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Add folder', exact: true })).toHaveCount(0);
 });

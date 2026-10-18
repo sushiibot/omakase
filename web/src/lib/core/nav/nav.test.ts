@@ -16,8 +16,7 @@ describe('workspace navigation', () => {
 			'/artifacts',
 			'/memory',
 			'/history',
-			'/connectors',
-			'/file-stores'
+			'/workspace/agent-settings'
 		]);
 		expect(
 			workspaceFor(allOn)
@@ -34,6 +33,9 @@ describe('workspace navigation', () => {
 			'/memory/[file]/diff',
 			'/history/[day]',
 			'/connectors/[name]',
+			'/settings/mail',
+			'/settings/permissions',
+			'/workspace/agent-settings',
 			'/file-stores',
 			'/skills/[name]/versions',
 			'/more',

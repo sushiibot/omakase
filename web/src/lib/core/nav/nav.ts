@@ -117,9 +117,16 @@ const moreEntries: NavEntry[] = [
 		description: "Watch the agent's browser, or take it over to sign in"
 	},
 	{
+		id: 'agent-settings',
+		href: '/workspace/agent-settings',
+		label: 'Agent settings',
+		icon: Settings,
+		description: 'Connections, file access and tool permissions'
+	},
+	{
 		id: 'settings',
 		href: '/settings',
-		label: 'Settings',
+		label: 'App settings',
 		icon: Settings,
 		description: 'Notifications, theme and this device'
 	}
@@ -145,8 +152,7 @@ export function workspaceFor(on: FeatureCheck): NavEntry[] {
 		'artifacts',
 		'memory',
 		'history',
-		'connectors',
-		'file-stores',
+		'agent-settings',
 		'briefing',
 		'skills',
 		'schedules',
@@ -174,7 +180,15 @@ export function activeNav(routeId: string | null): string | undefined {
 	if (!routeId) return undefined;
 	const section = sectionOf(pathOf(routeId));
 	if (section === '/chat' || section === '/inbox') return 'chats';
-	if (section === '/workspace' || section === '/more') return 'workspace';
+	if (
+		section === '/workspace' ||
+		section === '/more' ||
+		section === '/connectors' ||
+		section === '/file-stores' ||
+		pathOf(routeId).startsWith('/settings/mail') ||
+		pathOf(routeId).startsWith('/settings/permissions')
+	)
+		return 'workspace';
 	const entry = [assistant, chats, ...moreEntries].find((e) => e.href === section);
 	return entry && workspaceFor(allOn).some((item) => item.id === entry.id)
 		? 'workspace'

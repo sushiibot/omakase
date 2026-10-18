@@ -22,7 +22,10 @@
 </script>
 
 <svelte:head><title>Connectors · sushii</title></svelte:head>
-<DetailScreen title="Connectors" back={{ href: '/workspace', label: 'Workspace' }}>
+<DetailScreen
+	title="Connectors"
+	back={{ href: '/workspace/agent-settings', label: 'Agent settings' }}
+>
 	<ScreenContent>
 		<div class="flex flex-col gap-6">
 			<p class="text-sm text-muted-foreground">Manage the services and tools your agent can use.</p>

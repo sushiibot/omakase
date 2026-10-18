@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { deviceFs } from '$lib/core/native/device-fs.svelte';
 	import { DeviceFsSettings } from '$lib/features/settings';
-	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import { SettingsScreen, settingsStore } from '$lib/features/settings';
@@ -10,7 +9,7 @@
 	onMount(() => settings.open());
 </script>
 
-<svelte:head><title>Settings · sushii</title></svelte:head>
+<svelte:head><title>App settings · sushii</title></svelte:head>
 
 {#snippet nativeSettings()}
 	{#if deviceFs.available}
@@ -28,23 +27,6 @@
 {/snippet}
 
 <SettingsScreen
-	accessLinks={[
-		{
-			label: 'Mail accounts',
-			description: 'Connected inboxes and draft access',
-			href: resolve('/settings/mail')
-		},
-		{
-			label: 'MCP servers',
-			description: 'Tools from external services',
-			href: resolve('/connectors')
-		},
-		{
-			label: 'Tool permissions',
-			description: 'Review rules and approval requirements',
-			href: resolve('/settings/permissions')
-		}
-	]}
 	{nativeSettings}
 	me={settings.me}
 	ownerName={settings.ownerName}

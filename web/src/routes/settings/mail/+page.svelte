@@ -6,7 +6,7 @@
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import { MailScreen, MailStore } from '$lib/features/mail';
 	const store = new MailStore();
-	const back = backTo(resolve('/settings'));
+	const back = backTo(resolve('/workspace/agent-settings'));
 	onMount(() => {
 		const outcome = page.url.searchParams.get('connection');
 		if (outcome === 'connected') store.notice = 'Mail account connected.';
@@ -25,7 +25,7 @@
 	error={store.error}
 	notice={store.notice}
 	online={pwa.online}
-	back={{ href: resolve('/settings'), label: 'Settings', onclick: back }}
+	back={{ href: resolve('/workspace/agent-settings'), label: 'Agent settings', onclick: back }}
 	onretry={() => void store.load()}
 	onsave={(input) => store.save(input)}
 	onremove={(id) => void store.remove(id)}
