@@ -44,6 +44,20 @@ describe("backend architecture boundaries", () => {
     expect(result.edges.map(e => e.typeOnly)).toEqual([true, true, true, false]);
   });
 
+  test("neutral reexport barrels cannot hide web dependencies, including type-only chains", () => {
+    const root = fixture({
+      "src/orchestration/worker.ts": 'import { route } from "../shared"; import type { Shape } from "../types";',
+      "src/shared.ts": 'import { route } from "./surfaces/web/route"; export { route };',
+      "src/types.ts": 'export type { Shape } from "@/nested";',
+      "src/nested.ts": 'export type { Shape } from "./surfaces/web/route";',
+      "src/surfaces/web/route.ts": 'export const route = 1; export interface Shape {}',
+    });
+    expect(analyze(root).violations).toEqual([
+      "orchestration-web: src/orchestration/worker.ts -> src/shared.ts -> src/surfaces/web/route.ts",
+      "orchestration-web: src/orchestration/worker.ts -> src/types.ts -> src/nested.ts -> src/surfaces/web/route.ts",
+    ]);
+  });
+
   test("contracts reject implementation types and runtime dependencies but allow SDK types", () => {
     const root = fixture({
       "src/core/contracts.ts": 'import type { SDK } from "ai"; import type { DB } from "../db/store"; export { run } from "../service"; import "node:fs";',
@@ -100,6 +114,35 @@ describe("backend architecture boundaries", () => {
       "src/orchestration/teamConfig.ts": 'import { parse } from "../helper"; import type { Config } from "../config";',
       "src/helper.ts": 'export const parse = (value: string) => value.trim();',
       "src/config.ts": 'export type Config = {}; export const config = process.env;',
+    });
+    expect(analyze(root).violations).toEqual([]);
+  });
+
+  test("pure parser rejects destructured, aliased and shorthand runtime globals", () => {
+    for (const [source, global] of [
+      ['const { env } = process; export const value = env.TEAMS;', "process"],
+      ['const runtime = Bun; export const value = runtime.env.TEAMS;', "Bun"],
+      ['const runtime = globalThis; export const value = runtime.process.env;', "globalThis"],
+      ['export const runtime = { process };', "process"],
+    ]) {
+      const root = fixture({ "src/orchestration/teamConfig.ts": source! });
+      expect(analyze(root).violations).toEqual([
+        `config-global: src/orchestration/teamConfig.ts -> src/orchestration/teamConfig.ts -> ${global}`,
+      ]);
+    }
+  });
+
+  test("pure parser accepts global-like property names, shadowed bindings and type references", () => {
+    const root = fixture({
+      "src/orchestration/teamConfig.ts": `
+        type Runtime = typeof process;
+        const record = { process: 1, Bun: 2, globalThis: 3 };
+        export const value = record.process;
+        export function parse(process: { env: string }, Bun: string, globalThis: string) {
+          return { process, Bun, globalThis, value: process.env };
+        }
+        export function local() { const process = { env: "value" }; return process.env; }
+      `,
     });
     expect(analyze(root).violations).toEqual([]);
   });

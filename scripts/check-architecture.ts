@@ -32,7 +32,7 @@ export function analyze(root: string): { edges: Edge[]; violations: string[] } {
   const edges: Edge[] = [];
   const violations = new Set<string>();
   const visited = new Set<string>();
-  const globals = new Map<string, Set<string>>();
+  const reexports = new Map<string, Set<string>>();
   // Follow resolved local dependencies too, so an intermediary cannot conceal a runtime cycle.
   const queue = [...files];
   for (let index = 0; index < queue.length; index++) {
@@ -43,7 +43,7 @@ export function analyze(root: string): { edges: Edge[]; violations: string[] } {
     const source = ts.sys.readFile(path);
     if (source === undefined) throw new Error(`Cannot read ${from}`);
     const ast = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
-    const add = (specifier: string, typeOnly: boolean) => {
+    const add = (specifier: string, typeOnly: boolean, reexport = false) => {
       const resolved = ts.resolveModuleName(specifier, path, parsed.options, ts.sys).resolvedModule;
       const local = resolved && !resolved.isExternalLibraryImport && !name(resolved.resolvedFileName).startsWith("../");
       const to = local ? name(resolved.resolvedFileName) : specifier;
@@ -55,6 +55,11 @@ export function analyze(root: string): { edges: Edge[]; violations: string[] } {
         violations.add(`unresolved-local: ${from} -> ${specifier}`);
       }
       edges.push({ from, to, typeOnly });
+      if (reexport) {
+        const targets = reexports.get(from) ?? new Set<string>();
+        targets.add(to);
+        reexports.set(from, targets);
+      }
       if (local && production(resolved.resolvedFileName)) queue.push(resolved.resolvedFileName);
       if (from.startsWith("src/orchestration/") && (to.startsWith("src/surfaces/web/") || to.startsWith("web/"))) {
         violations.add(`orchestration-web: ${from} -> ${to}`);
@@ -65,6 +70,20 @@ export function analyze(root: string): { edges: Edge[]; violations: string[] } {
       }
 
     };
+    // Also recognize split barrels: import { x } from "..."; export { x }.
+    const imported = new Map<string, { specifier: string; typeOnly: boolean }>();
+    for (const statement of ast.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+      const clause = statement.importClause;
+      if (!clause) continue;
+      const specifier = statement.moduleSpecifier.text;
+      if (clause.name) imported.set(clause.name.text, { specifier, typeOnly: clause.isTypeOnly });
+      const bindings = clause.namedBindings;
+      if (bindings && ts.isNamespaceImport(bindings)) imported.set(bindings.name.text, { specifier, typeOnly: clause.isTypeOnly });
+      if (bindings && ts.isNamedImports(bindings)) for (const binding of bindings.elements) {
+        imported.set(binding.name.text, { specifier, typeOnly: clause.isTypeOnly || binding.isTypeOnly });
+      }
+    }
     const walk = (node: ts.Node) => {
       if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
         const clause = node.importClause;
@@ -73,7 +92,15 @@ export function analyze(root: string): { edges: Edge[]; violations: string[] } {
         add(node.moduleSpecifier.text, typeOnly);
       } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
         const clause = node.exportClause;
-        add(node.moduleSpecifier.text, node.isTypeOnly || (!!clause && ts.isNamedExports(clause) && clause.elements.length > 0 && clause.elements.every(e => e.isTypeOnly)));
+        add(node.moduleSpecifier.text, node.isTypeOnly || (!!clause && ts.isNamedExports(clause) && clause.elements.length > 0 && clause.elements.every(e => e.isTypeOnly)), true);
+      } else if (ts.isExportDeclaration(node) && !node.moduleSpecifier && node.exportClause && ts.isNamedExports(node.exportClause)) {
+        for (const binding of node.exportClause.elements) {
+          const source = imported.get((binding.propertyName ?? binding.name).text);
+          if (source) add(source.specifier, source.typeOnly || node.isTypeOnly || binding.isTypeOnly, true);
+        }
+      } else if (ts.isExportAssignment(node) && ts.isIdentifier(node.expression)) {
+        const source = imported.get(node.expression.text);
+        if (source) add(source.specifier, source.typeOnly, true);
       } else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference) && node.moduleReference.expression && ts.isStringLiteral(node.moduleReference.expression)) {
         add(node.moduleReference.expression.text, node.isTypeOnly);
       } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal)) {
@@ -82,14 +109,24 @@ export function analyze(root: string): { edges: Edge[]; violations: string[] } {
         const argument = node.arguments[0];
         if (argument && ts.isStringLiteralLike(argument)) add(argument.text, false);
       }
-      if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && ts.isIdentifier(node.expression) && ["process", "Bun", "globalThis"].includes(node.expression.text)) {
-        const entries = globals.get(from) ?? new Set<string>();
-        entries.add(node.expression.text);
-        globals.set(from, entries);
-      }
       ts.forEachChild(node, walk);
     };
     walk(ast);
+  }
+  // A neutral barrel must not hide web implementation provenance. Follow only
+  // reexports after the first edge: ordinary service composition is not a barrel.
+  const followBarrel = (path: string[]) => {
+    const last = path.at(-1)!;
+    if (path.length > 2 && (last.startsWith("src/surfaces/web/") || last.startsWith("web/"))) {
+      violations.add(`orchestration-web: ${path.join(" -> ")}`);
+      return;
+    }
+    for (const next of reexports.get(last) ?? []) {
+      if (!path.includes(next)) followBarrel([...path, next]);
+    }
+  };
+  for (const edge of edges) if (edge.from.startsWith("src/orchestration/")) {
+    followBarrel([edge.from, edge.to]);
   }
   // Inventory each edge participating in a cycle, rather than SCC names: adding an edge
   // inside an existing SCC must fail, too. Traversal order never affects the baseline.
@@ -105,7 +142,37 @@ export function analyze(root: string): { edges: Edge[]; violations: string[] } {
     seen.add(start);
     return [...(adjacency.get(start) ?? [])].some(next => reaches(next, target, seen));
   };
-  for (const parser of [...visited].map(name).filter(isPureConfig)) {
+  const parsers = [...visited].map(name).filter(isPureConfig);
+  // Resolve symbols to distinguish runtime globals from object keys, parameters,
+  // local bindings and type references. The latter are safe in a pure parser.
+  const globals = new Map<string, Set<string>>();
+  if (parsers.length) {
+    const program = ts.createProgram(parsers.map(file => resolve(root, file)), parsed.options);
+    const checker = program.getTypeChecker();
+    for (const source of program.getSourceFiles()) {
+      const file = name(source.fileName);
+      if (!parsers.some(parser => reaches(parser, file))) continue;
+      const walk = (node: ts.Node) => {
+        if (ts.isTypeNode(node)) return;
+        if (ts.isIdentifier(node) && ["process", "Bun", "globalThis"].includes(node.text)) {
+          const parent = node.parent;
+          const propertyName = ts.isPropertyAccessExpression(parent) && parent.name === node;
+          const symbol = ts.isShorthandPropertyAssignment(parent)
+            ? checker.getShorthandAssignmentValueSymbol(parent)
+            : checker.getSymbolAtLocation(node);
+          const local = symbol?.declarations?.some(declaration => !declaration.getSourceFile().isDeclarationFile);
+          if (!propertyName && !local) {
+            const entries = globals.get(file) ?? new Set<string>();
+            entries.add(node.text);
+            globals.set(file, entries);
+          }
+        }
+        ts.forEachChild(node, walk);
+      };
+      walk(source);
+    }
+  }
+  for (const parser of parsers) {
     for (const edge of edges.filter(e => !e.typeOnly && reaches(parser, e.from))) {
       if (/(?:^|\/)config\.ts$/.test(edge.to) || edge.to.startsWith("src/surfaces/web/") || (!visited.has(resolve(root, edge.to)) && edge.to !== "zod")) {
         violations.add(`config-purity: ${parser} -> ${edge.from} -> ${edge.to}`);
