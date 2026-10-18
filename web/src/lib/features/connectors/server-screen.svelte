@@ -29,7 +29,7 @@
 		operation,
 		errorOperation,
 		error = null,
-		listHref = '/connectors',
+		listHref = '/connectors/mcp',
 		runHref = (id) => `/runs/${id}`,
 		onaccept,
 		onreconnect,
@@ -226,7 +226,7 @@
 	<Breadcrumb.Root>
 		<Breadcrumb.List>
 			<Breadcrumb.Item>
-				<Breadcrumb.Link href={listHref}>Connectors</Breadcrumb.Link>
+				<Breadcrumb.Link href={listHref}>MCP servers</Breadcrumb.Link>
 			</Breadcrumb.Item>
 			<Breadcrumb.Separator />
 			<Breadcrumb.Item>

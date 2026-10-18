@@ -99,7 +99,7 @@ const moreEntries: NavEntry[] = [
 		href: '/connectors',
 		label: 'Connectors',
 		icon: Plug,
-		description: 'MCP servers and the tools they give the agent'
+		description: 'MCP servers and API integrations'
 	},
 	{
 		id: 'file-stores',

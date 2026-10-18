@@ -1,6 +1,7 @@
 # Integration API keys
 
-Open **Connectors → API keys** to configure a supported service.
+Open **Connectors → API integrations** to connect a service.
+**MCP servers** is a separate page under **Connectors**.
 Google Maps Places API (New) is the first supported service.
 Other JSON HTTP APIs can use the generic broker with header or Bearer authentication.
 OAuth, signed requests, streaming, uploads, and non-HTTP protocols need dedicated adapters.
@@ -10,13 +11,16 @@ OAuth, signed requests, streaming, uploads, and non-HTTP protocols need dedicate
 The agent's `integrations` tool lists supported services and their current credential status.
 When a key is missing, the tool returns setup instructions and `/connectors/keys`.
 The agent can link to this form from any conversation.
-After saving a key, return to the conversation and ask the agent to continue.
+Select **Connect a service** or **Guide setup** to start guidance in chat.
+The agent checks live status, finds official links, and explains one step at a time.
+The handoff preserves any existing chat draft and attachments.
+After saving a key, select **Continue with agent** to resume.
 The agent checks the current status without a restart.
 
-1. Follow the Google setup links in the form.
+1. Select **Guide setup** for Google Maps.
 2. Enable billing and Places API (New) in your Google Cloud project.
 3. Restrict the key to Places API (New) and the gateway's public outgoing IP address.
-4. Enter the key in the password field.
+4. Open the secure form, select **I already have a key**, and enter the key.
 5. Select **Save and test**.
 
 Validation makes one Places request and can incur a Google charge.

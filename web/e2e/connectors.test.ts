@@ -7,7 +7,7 @@ test('connector tool changes are informational and the tracking snapshot is opti
 	context
 }) => {
 	await fixtureApp(context);
-	await page.goto('/connectors');
+	await page.goto('/connectors/mcp');
 	await expect(page.getByRole('region', { name: 'Connected' })).toContainText('Code host');
 	await page.getByRole('link', { name: /Code host/ }).click();
 	await expect(page.getByText('New on the server')).toBeVisible();
@@ -28,7 +28,7 @@ test('connector rows prioritize recovery and keep full addresses in details', as
 	context
 }) => {
 	await fixtureApp(context);
-	await page.goto('/connectors');
+	await page.goto('/connectors/mcp');
 	const attention = page.getByRole('region', { name: 'Needs attention', exact: true });
 	await expect(attention.getByRole('link', { name: /Calendar/ })).toBeVisible();
 	await expect(attention).not.toContainText('Code host');
@@ -45,7 +45,7 @@ test('connector rows prioritize recovery and keep full addresses in details', as
 
 test('adding a server by URL walks address, sign-in and paste-back', async ({ page, context }) => {
 	await fixtureApp(context);
-	await page.goto('/connectors');
+	await page.goto('/connectors/mcp');
 	await page.getByRole('link', { name: 'Add a server by URL' }).click();
 	await page
 		.getByRole('textbox', { name: 'Server address' })
@@ -73,8 +73,8 @@ test('adding a server by URL walks address, sign-in and paste-back', async ({ pa
 	await page.getByRole('button', { name: 'Connect' }).click();
 	await expect(page).toHaveURL(/\/connectors\/tracker$/, { timeout: 8000 });
 	await expect(page.getByText('Connected. The agent can use these tools')).toBeVisible();
-	await page.getByRole('link', { name: 'Back to Connectors', exact: true }).click();
-	await expect(page).toHaveURL(/\/connectors$/);
+	await page.getByRole('link', { name: 'Back to MCP servers', exact: true }).click();
+	await expect(page).toHaveURL(/\/connectors\/mcp$/);
 	await expect(page.getByRole('link', { name: /Tracker/ })).toBeVisible();
 });
 
@@ -88,7 +88,7 @@ test('an http address is refused with a reason', async ({ page, context }) => {
 
 test('no servers and a failure say so', async ({ page, context }) => {
 	const app = await fixtureApp(context, { fixtures: { connectors: 'empty' } });
-	await page.goto('/connectors');
+	await page.goto('/connectors/mcp');
 	await expect(page.getByText('No servers yet')).toBeVisible();
 	app.set('connectors', 'error');
 	await page.reload();
@@ -103,7 +103,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 		await page.emulateMedia({ colorScheme });
 		await fixtureApp(context);
 		for (const [path, ready] of [
-			['/connectors', 'Needs attention'],
+			['/connectors/mcp', 'Needs attention'],
 			['/connectors/code-host', 'Tools'],
 			['/connectors/add', 'Server address']
 		]) {
@@ -150,7 +150,7 @@ test('Fastmail token connection can disconnect, reconnect and remove its credent
 	await page.getByRole('button', { name: 'Connection actions', exact: true }).click();
 	await page.getByRole('menuitem', { name: 'Remove…', exact: true }).click();
 	await page.getByRole('button', { name: 'Remove connection', exact: true }).click();
-	await expect(page).toHaveURL(/\/connectors$/);
+	await expect(page).toHaveURL(/\/connectors\/mcp$/);
 	await expect(page.getByRole('link', { name: /api.fastmail.com/ })).toHaveCount(0);
 });
 
@@ -270,11 +270,11 @@ test('leaving server setup preserves its address but clears tokens and allows st
 	context
 }) => {
 	await fixtureApp(context);
-	await page.goto('/connectors');
+	await page.goto('/connectors/mcp');
 	await page.getByRole('link', { name: 'Add a server by URL' }).click();
 	await page.getByRole('textbox', { name: 'Server address' }).fill('https://api.fastmail.com/mcp');
 	await page.getByLabel('API token (optional)').fill('unsaved-secret-token');
-	await page.getByRole('link', { name: 'Back to Connectors', exact: true }).click();
+	await page.getByRole('link', { name: 'Back to MCP servers', exact: true }).click();
 	await page.getByRole('link', { name: 'Add a server by URL' }).click();
 	await expect(page.getByRole('textbox', { name: 'Server address' })).toHaveValue(
 		'https://api.fastmail.com/mcp'
@@ -291,7 +291,7 @@ test('OAuth setup resumes its stage with a cleared callback and resets after a s
 	context
 }) => {
 	await fixtureApp(context);
-	await page.goto('/connectors');
+	await page.goto('/connectors/mcp');
 	await page.getByRole('link', { name: 'Add a server by URL' }).click();
 	await page
 		.getByRole('textbox', { name: 'Server address' })
@@ -302,7 +302,7 @@ test('OAuth setup resumes its stage with a cleared callback and resets after a s
 	await page
 		.getByRole('textbox', { name: 'Address from the browser' })
 		.fill('http://localhost:7461/callback?code=secret&state=q');
-	await page.getByRole('link', { name: 'Back to Connectors', exact: true }).click();
+	await page.getByRole('link', { name: 'Back to MCP servers', exact: true }).click();
 	await page.getByRole('link', { name: 'Add a server by URL' }).click();
 	await expect(page.getByRole('textbox', { name: 'Address from the browser' })).toHaveValue('');
 	await expect(page.getByRole('button', { name: 'Connect', exact: true })).toBeDisabled();
@@ -318,7 +318,7 @@ test('OAuth setup resumes its stage with a cleared callback and resets after a s
 		.fill('http://localhost:7461/callback?code=abc&state=q');
 	await page.getByRole('button', { name: 'Connect', exact: true }).click();
 	await expect(page).toHaveURL(/\/connectors\/tracker$/);
-	await page.getByRole('link', { name: 'Back to Connectors', exact: true }).click();
+	await page.getByRole('link', { name: 'Back to MCP servers', exact: true }).click();
 	await page.getByRole('link', { name: 'Add a server by URL' }).click();
 	await expect(page.getByRole('textbox', { name: 'Server address' })).toHaveValue('');
 	await expect(page.getByLabel('API token (optional)')).toHaveValue('');
@@ -330,13 +330,13 @@ test('a different server sign-in intent replaces unrelated saved setup', async (
 	context
 }) => {
 	await fixtureApp(context);
-	await page.goto('/connectors');
+	await page.goto('/connectors/mcp');
 	await page.getByRole('link', { name: 'Add a server by URL' }).click();
 	await page
 		.getByRole('textbox', { name: 'Server address' })
 		.fill('https://mcp.tracker.example/sse');
 	await page.getByRole('button', { name: 'Continue', exact: true }).click();
-	await page.getByRole('link', { name: 'Back to Connectors', exact: true }).click();
+	await page.getByRole('link', { name: 'Back to MCP servers', exact: true }).click();
 	await page.getByRole('link', { name: /Code host/ }).click();
 	await page.getByRole('button', { name: 'Connection actions', exact: true }).click();
 	await page.getByRole('menuitem', { name: 'Sign in / replace token', exact: true }).click();
@@ -361,7 +361,7 @@ for (const hasTouch of [false, true]) {
 		try {
 			await fixtureApp(context);
 			const page = await context.newPage();
-			await page.goto('/connectors');
+			await page.goto('/connectors/mcp');
 			const add = page.getByRole('link', { name: 'Add a server by URL' });
 			await expect(add).toBeVisible();
 			const bounds = await add.boundingBox();
@@ -369,7 +369,7 @@ for (const hasTouch of [false, true]) {
 			expect(bounds!.height).toBe(32);
 			// The invisible touch hit area must activate the control too.
 			await add.click(hasTouch ? { position: { x: 12, y: -6 } } : undefined);
-			await expect(page.getByRole('link', { name: 'Back to Connectors' })).toBeVisible();
+			await expect(page.getByRole('link', { name: 'Back to MCP servers' })).toBeVisible();
 			const next = await page.getByRole('button', { name: 'Continue', exact: true }).boundingBox();
 			expect(next!.width).toBeLessThan(200);
 			expect(next!.height).toBe(32);

@@ -47,7 +47,9 @@ The standalone Browser takeover screen remains a development preview.
 
 ## MCP connections
 
-Connectors is available automatically in the owner web app.
+Open **Connectors → MCP servers** to manage MCP connections.
+The sibling **API integrations** page starts guided setup in chat and provides secure key entry.
+See [Integration API keys](../docs/integration-keys.md) for credential storage and API access.
 The workspace stores connections and credentials outside the browser.
 The screen supports token or OAuth authentication, tool-list review, reconnection, disconnection, and removal.
 See [MCP connections](../README.md#mcp-connections) for setup, protocol limits, and tool access.

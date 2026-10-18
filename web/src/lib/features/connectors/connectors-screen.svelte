@@ -124,11 +124,10 @@
 	</div>
 {/snippet}
 
-<DetailScreen title="Connectors" {back} {banner}>
+<DetailScreen title="MCP servers" {back} {banner}>
 	<ScreenContent>
-		<PageIntro description="Tools available to your agent.">
+		<PageIntro description="Connect MCP servers to make their tools available to your agent.">
 			{#snippet actions()}
-				<Button href="/connectors/keys" variant="outline"><KeyRound />API keys</Button>
 				<Button href={addHref} variant="outline" aria-label="Add a server by URL">
 					<Plus aria-hidden="true" />Add server
 				</Button>

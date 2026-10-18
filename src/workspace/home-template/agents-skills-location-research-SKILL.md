@@ -7,8 +7,10 @@ description: Find and compare restaurants, cafes, attractions and other places t
 
 Use `maps` through Bash. The CLI calls Google Places and Routes through the gateway.
 The gateway holds the key. Run `maps --help` for all flags; no setup is needed in the shell.
-If Maps is unconfigured, call `integrations` with `action=list` and offer its secure setup link.
-Help the owner follow the official setup instructions. Never ask for a key in chat or search for credentials.
+If Maps is unconfigured, call `integrations` with `action=list`. Guide setup in chat one step at a time.
+Ask about their existing Google Cloud project, then provide the official link for each next action.
+At the credential step, offer the secure setup link and tell them to select **I already have a key**.
+After **Continue with agent**, check live status and resume the original task. Never ask for a key in chat or search for credentials.
 After the owner saves the key, retry the requested Maps operation. Keys take effect without a restart.
 
 ## Find candidates

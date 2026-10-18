@@ -491,3 +491,37 @@ test('reconnecting refreshes a conversation loaded from an offline snapshot', as
 	store.destroy();
 	hub.stop();
 });
+
+test('setup guidance preserves the draft and pending attachments', async () => {
+	const { transport } = runningTurnStream();
+	const outbox = memoryKeyValue<OutboxEntry>((e) => e.clientId);
+	const store = new ChatStore('main', {
+		hub: createHub({ transport }),
+		api: recordingApi([]),
+		outbox,
+		drafts: memory()
+	});
+	await store.start();
+	store.setDraft('My unfinished message');
+	store.photos = [
+		{
+			id: 'pending',
+			file: new Blob(['pending']),
+			name: 'photo.jpg',
+			src: '',
+			image: true,
+			state: 'uploading',
+			key: 'pending'
+		}
+	];
+	expect(store.sendBlocked).toBe(true);
+	expect(await store.send('Guide my setup', [], { preserveComposer: true })).toBe(true);
+	expect(store.draft).toBe('My unfinished message');
+	expect(store.photos.map((p) => p.id)).toEqual(['pending']);
+	const entries = await outbox.all();
+	expect(entries).toHaveLength(1);
+	expect(entries[0]?.text).toBe('Guide my setup');
+	expect(entries[0]?.uploadIds).toEqual([]);
+	expect(entries[0]?.photos).toEqual([]);
+	store.destroy();
+});

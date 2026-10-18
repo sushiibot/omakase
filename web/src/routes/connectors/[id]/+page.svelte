@@ -8,7 +8,7 @@
 	import { McpServerScreen, connectorsStore } from '$lib/features/connectors';
 
 	const connectors = connectorsStore();
-	const goBack = backTo(resolve('/connectors'));
+	const goBack = backTo(resolve('/connectors/mcp'));
 	const id = $derived(page.params.id ?? '');
 	const remote = $derived(connectors.server(id));
 	// Said once, on arrival from the add flow.
@@ -28,21 +28,21 @@
 	{remote}
 	server={remote.data}
 	{now}
-	back={{ href: resolve('/connectors'), label: 'Back to Connectors', onclick: goBack }}
+	back={{ href: resolve('/connectors/mcp'), label: 'Back to MCP servers', onclick: goBack }}
 	online={pwa.online}
 	{justConnected}
 	busy={connectors.busy}
 	operation={connectors.operation?.id === id ? connectors.operation.kind : undefined}
 	errorOperation={connectors.errorOperation?.id === id ? connectors.errorOperation.kind : undefined}
 	error={connectors.errorOperation?.id === id ? connectors.error : null}
-	listHref={resolve('/connectors')}
+	listHref={resolve('/connectors/mcp')}
 	runHref={(run) => resolve('/runs/[id]', { id: run })}
 	signInHref={resolve('/connectors/add') + '?url=' + encodeURIComponent(remote.data?.url ?? '')}
 	onreconnect={() => void connectors.action(id, 'reconnect')}
 	ondisconnect={() => void connectors.action(id, 'disconnect')}
 	onremove={async () => {
 		if (await connectors.action(id, 'remove'))
-			await goto(resolve('/connectors'), { replaceState: true });
+			await goto(resolve('/connectors/mcp'), { replaceState: true });
 	}}
 	onaccept={() => void connectors.acceptTools(id)}
 	onretry={() => void remote.refetch()}

@@ -13,7 +13,7 @@
 		untrack(() => connectors.openAdd(url));
 	});
 	onDestroy(() => connectors.leaveAdd());
-	const goBack = backTo(resolve('/connectors'));
+	const goBack = backTo(resolve('/connectors/mcp'));
 	let copied = $state(false);
 	let copyError = $state<string | null>(null);
 
@@ -45,7 +45,7 @@
 
 <AddServerScreen
 	add={connectors.add}
-	back={{ href: resolve('/connectors'), label: 'Back to Connectors', onclick: goBack }}
+	back={{ href: resolve('/connectors/mcp'), label: 'Back to MCP servers', onclick: goBack }}
 	online={pwa.online}
 	{copied}
 	{copyError}

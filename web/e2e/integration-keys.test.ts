@@ -48,8 +48,11 @@ for (const desktop of [false, true]) {
 			});
 		});
 		await page.goto('/connectors');
-		await page.getByRole('link', { name: 'API keys', exact: true }).click();
+		await page.getByRole('link', { name: /API integrations/ }).click();
 		await expect(page.getByText('Setup needed', { exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Guide setup', exact: true })).toBeVisible();
+		await expect(page.getByLabel('API key', { exact: true })).toHaveCount(0);
+		await page.getByRole('button', { name: 'I already have a key' }).click();
 		const input = page.getByLabel('API key', { exact: true });
 		await expect(input).toHaveAttribute('type', 'password');
 		await input.fill('test-key-never-in-chat-123456');
@@ -69,6 +72,16 @@ for (const desktop of [false, true]) {
 		await page.getByRole('button', { name: 'Remove key', exact: true }).click();
 		await page.getByRole('button', { name: 'Confirm removal' }).click();
 		await expect(page.getByText('Setup needed', { exact: true })).toBeVisible();
+		await input.fill('test-key-never-in-chat-123456');
+		await page.getByRole('button', { name: 'Save and test' }).click();
+		const request = page.waitForRequest(
+			(req) => req.url().endsWith('/api/chat/messages') && req.method() === 'POST'
+		);
+		await page.getByRole('button', { name: 'Continue with agent' }).click();
+		const body = (await request).postDataJSON();
+		expect(body.text).toContain('I saved the credential for Google Maps');
+		expect(JSON.stringify(body)).not.toContain(values[0]);
+		await expect(page).toHaveURL(/\/chat$/);
 	});
 }
 
@@ -96,6 +109,7 @@ test('failed key test clears input and preserves configured status', async ({ pa
 		)
 	);
 	await page.goto('/connectors/keys');
+	await page.getByRole('button', { name: 'Manage key' }).click();
 	await page.getByLabel('Replacement API key').fill('test-key-never-in-chat-123456');
 	await page.getByRole('button', { name: 'Save and test' }).click();
 	await expect(page.getByRole('alert')).toContainText('Google Maps rejected');
@@ -156,9 +170,10 @@ for (const desktop of [false, true]) {
 			});
 		});
 		await page.goto('/connectors/keys');
+		await page.getByRole('button', { name: 'I already have a key' }).click();
 		const keys = page.getByLabel('API key', { exact: true });
-		await keys.nth(1).fill('custom-key-stays-on-server');
-		await expect(keys.nth(0)).toHaveValue('');
+		await keys.nth(0).fill('custom-key-stays-on-server');
+		await expect(keys.nth(1)).toHaveValue('');
 		const approve = page.getByRole('button', { name: 'Approve access and save' });
 		await expect(approve).toBeDisabled();
 		await expect(page.getByText('https://api.example.com', { exact: true })).toBeVisible();
@@ -230,11 +245,74 @@ test('refreshing a changed definition clears the previous approval and unsent cr
 		});
 	});
 	await page.goto('/connectors/keys');
-	await page.getByLabel('API key', { exact: true }).nth(1).fill('pending-custom-credential');
+	await page.getByRole('button', { name: 'I already have a key' }).click();
+	await page.getByLabel('API key', { exact: true }).nth(0).fill('pending-custom-credential');
 	await page.getByRole('checkbox').check();
-	await page.getByLabel('API key', { exact: true }).nth(0).fill('invalid-google-credential');
+	await page.getByLabel('API key', { exact: true }).nth(1).fill('invalid-google-credential');
 	await page.getByRole('button', { name: 'Save and test' }).click();
 	await page.getByRole('button', { name: 'Refresh status' }).click();
 	await expect(page.getByRole('checkbox')).not.toBeChecked();
-	await expect(page.getByLabel('API key', { exact: true }).nth(1)).toHaveValue('');
+	await expect(page.getByLabel('API key', { exact: true }).nth(0)).toHaveValue('');
+});
+
+test('connectors separates MCP servers from API integrations', async ({ page, context }) => {
+	await fixtureApp(context);
+	await page.goto('/connectors');
+	await expect(page.getByRole('heading', { name: 'Connectors', exact: true })).toBeVisible();
+	await page.getByRole('link', { name: /MCP servers Connect servers/ }).click();
+	await expect(page).toHaveURL(/\/connectors\/mcp$/);
+	await expect(page.getByRole('heading', { name: 'MCP servers', exact: true })).toBeVisible();
+	await page.goBack();
+	await page.getByRole('link', { name: /API integrations Let the agent/ }).click();
+	await expect(page.getByRole('heading', { name: 'API integrations', exact: true })).toBeVisible();
+});
+
+test('connect a service sends a setup request to chat', async ({ page, context }) => {
+	await fixtureApp(context);
+	await context.route('**/api/integrations', (route) =>
+		route.fulfill({ json: { integrations: [] } })
+	);
+	await page.goto('/connectors/keys');
+	const request = page.waitForRequest(
+		(req) => req.url().endsWith('/api/chat/messages') && req.method() === 'POST'
+	);
+	await page.getByRole('button', { name: 'Connect a service', exact: true }).click();
+	const body = (await request).postDataJSON();
+	expect(body.text).toContain('Guide me through connecting a new API service');
+	expect(body.uploadIds ?? []).toEqual([]);
+	await expect(page).toHaveURL(/\/chat$/);
+});
+
+test('Google Maps guide setup starts a conversation without key entry', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await context.route('**/api/integrations', (route) =>
+		route.fulfill({
+			json: {
+				integrations: [
+					{
+						id: 'google_maps',
+						name: 'Google Maps',
+						capability: 'Find places',
+						configured: false,
+						setupUrl: '/connectors/keys',
+						steps: [],
+						links: []
+					}
+				]
+			}
+		})
+	);
+	await page.goto('/connectors/keys');
+	await expect(page.getByLabel('API key', { exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Guide setup', exact: true })).toBeVisible();
+	await page.screenshot({ path: '/tmp/omakase-guided-landing-phone.png', fullPage: true });
+	const request = page.waitForRequest(
+		(req) => req.url().endsWith('/api/chat/messages') && req.method() === 'POST'
+	);
+	await page.getByRole('button', { name: 'Guide setup', exact: true }).click();
+	expect((await request).postDataJSON().text).toContain('Guide me through connecting Google Maps');
+	await expect(page).toHaveURL(/\/chat$/);
 });

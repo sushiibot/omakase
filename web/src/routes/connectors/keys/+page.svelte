@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { chatStore } from '$lib/features/chat';
 	import { onMount } from 'svelte';
 	import { HttpError } from '$lib/core/http';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
@@ -8,6 +11,24 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let notice = $state<string | null>(null);
+	let continueId = $state<string | undefined>();
+	async function guide(id?: string, resume = false) {
+		if (busy || !pwa.online) return;
+		busy = true;
+		const service =
+			id === 'google_maps' ? 'Google Maps' : id ? `the API integration ${id}` : 'a new API service';
+		const prompt = resume
+			? `I saved the credential for ${service} in the secure form. Check its live integration status and help me continue.`
+			: `Guide me through connecting ${service}. Check current integration status, ask what I need, and walk me through setup one step at a time. Find the official links for me. Keep credentials in the secure form, never in chat.`;
+		try {
+			await goto(resolve('/chat'));
+			await chatStore().send(prompt, [], { preserveComposer: true });
+		} catch (err) {
+			error = message(err);
+		} finally {
+			busy = false;
+		}
+	}
 	function message(err: unknown) {
 		if (
 			err instanceof HttpError &&
@@ -35,12 +56,14 @@
 		busy = true;
 		error = null;
 		notice = null;
+		continueId = undefined;
 		try {
 			integrations = (
 				await (key === undefined
 					? integrationsApi.remove(id)
 					: integrationsApi.save(id, key, revision))
 			).integrations;
+			continueId = key === undefined ? undefined : id;
 			notice =
 				key === undefined
 					? 'Key removed.'
@@ -58,13 +81,15 @@
 	});
 </script>
 
-<svelte:head><title>API keys · sushii</title></svelte:head>
+<svelte:head><title>API integrations · sushii</title></svelte:head>
 <KeysScreen
 	{integrations}
 	{loading}
 	{busy}
 	{error}
 	{notice}
+	{continueId}
+	onguide={(id, resume) => void guide(id, resume)}
 	online={pwa.online}
 	onretry={() => void refresh()}
 	onsave={(id, key, revision) => update(id, key, revision)}

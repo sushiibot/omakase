@@ -30,6 +30,7 @@ test("agent guides setup; encrypted credentials survive gateway restart without 
   await reply.getByRole("link", { name: "Set up API keys" }).click();
   await expect(page.getByText("Setup needed", { exact: true })).toBeVisible();
   const key = "e2e-google-credential-1234567890";
+  await page.getByRole("button", { name: "I already have a key" }).click();
   await page.getByLabel("API key", { exact: true }).fill(key);
   await page.getByRole("button", { name: "Save and test" }).click();
   await expect(page.getByText("Key saved on server", { exact: true })).toBeVisible();
@@ -56,6 +57,7 @@ test("agent guides setup; encrypted credentials survive gateway restart without 
   expect(JSON.stringify(await stack.llmLog())).not.toContain(key);
   await readReply(searchTag);
   await page.goto("/connectors/keys");
+  await page.getByRole("button", { name: "Manage key" }).click();
   await page.getByRole("button", { name: "Remove key", exact: true }).click();
   await page.getByRole("button", { name: "Confirm removal" }).click();
   await expect(page.getByText("Setup needed", { exact: true })).toBeVisible();
@@ -69,7 +71,7 @@ test("agent guides setup; encrypted credentials survive gateway restart without 
   await page.goto("/connectors/keys");
   await expect(page.getByText("https://api.example.com", {exact:true})).toBeVisible();
   const customKey = "e2e-custom-provider-credential";
-  await page.getByLabel("API key", {exact:true}).nth(1).fill(customKey);
+  await page.getByLabel("API key", {exact:true}).fill(customKey);
   await expect(page.getByRole("button", {name:"Approve access and save"})).toBeDisabled();
   await page.getByRole("checkbox").check();
   await page.getByRole("button", {name:"Approve access and save"}).click();

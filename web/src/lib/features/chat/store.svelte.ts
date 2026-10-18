@@ -502,18 +502,26 @@ export class ChatStore {
 		return this.photos.some((p) => p.state !== 'uploaded');
 	}
 
-	/** Sends text plus the attached photos. `files` attaches more first and waits for their uploads. */
-	async send(text: string, files: File[] = []): Promise<boolean> {
-		if (files.length) {
+	/** Sends text plus attached photos. preserveComposer sends text alone and keeps the current draft. */
+	async send(
+		text: string,
+		files: File[] = [],
+		options: { preserveComposer?: boolean } = {}
+	): Promise<boolean> {
+		if (files.length && !options.preserveComposer) {
 			await Promise.all(this.attach(files));
 		}
 		const body = text.trim();
-		if (this.sendBlocked || (!body && !this.photos.length)) return false;
+		if (
+			(!options.preserveComposer && this.sendBlocked) ||
+			(!body && (options.preserveComposer || !this.photos.length))
+		)
+			return false;
 		if (body.length > MESSAGE_TEXT_MAX) {
 			this.showToast('That message is too long. The limit is 16,000 characters.');
 			return false;
 		}
-		const photos = this.photos;
+		const photos = options.preserveComposer ? [] : this.photos;
 		const entry: OutboxEntry = {
 			clientId: ulid(),
 			conversationId: this.conversationId,
@@ -545,10 +553,12 @@ export class ChatStore {
 			at: entry.at,
 			delivery: 'sending'
 		});
-		this.photos = [];
-		this.quotaFull = false;
-		this.draft = '';
-		this.#saveDraft();
+		if (!options.preserveComposer) {
+			this.photos = [];
+			this.quotaFull = false;
+			this.draft = '';
+			this.#saveDraft();
+		}
 		this.#commit();
 		this.#pending.set(entry.clientId, entry);
 		await this.#outbox

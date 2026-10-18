@@ -9,6 +9,11 @@ Run `integrations list` to discover live setup status and approved operations.
 The agent tool named `integrations` exposes the same list, propose, and request actions.
 Provider credentials stay on the gateway. Never request keys in chat or put them in shell variables, files, memory, or tool arguments.
 
+When setup is needed, guide the owner in chat one step at a time. Ask what they want to do and which account or project they already have.
+Find the official account, API enablement, and credential links. Explain the next action and wait for the owner before continuing.
+Do not send the owner away to a static checklist. Offer the secure form when they reach the credential step.
+For Google Maps, use the built-in integration; do not propose a duplicate. In the form, select **I already have a key**.
+
 For a new service, read its official documentation first. Confirm its HTTPS API origin, authentication header, exact operation paths, query fields, JSON request and response formats, and provider charges.
 Propose only the operations needed for the owner's task:
 
@@ -18,10 +23,11 @@ integrations propose '{"id":"example","name":"Example search","capability":"Sear
 
 This is an illustrative definition. Substitute verified provider details.
 Header authentication uses `{"type":"header","name":"X-Api-Key"}`.
-Offer [API key setup](/connectors/keys). The owner reviews the proposed destination and operations, then saves the key in that form.
+Offer [API integrations](/connectors/keys). The owner reviews the proposed destination and operations, then saves the key in that form.
 Do not call a proposal approved or connected until live status confirms it.
 Saving a generic key does not test it. The first requested operation checks provider access.
-After the owner saves it, check status and continue the task.
+After the owner saves it and selects **Continue with agent**, check status and continue the task.
+Do the same if they return to chat themselves. Never infer success from the message alone.
 
 ```sh
 integrations request '{"integration":"example","operation":"search","query":{"q":"coffee"}}'
