@@ -1,6 +1,6 @@
 import type { PrincipalConfig } from "./orchestration/principals.ts";
-import type { TeamConfig } from "./orchestration/teams.ts";
-import { parseTeams, buildTeamIndex } from "./orchestration/teams.ts";
+import type { TeamConfig } from "./orchestration/teamConfig.ts";
+import { parseTeams, buildTeamIndex } from "./orchestration/teamConfig.ts";
 import { getLogger } from "./logger.ts";
 
 const logger = getLogger("config");
@@ -130,7 +130,7 @@ function parseTeamsJson(content: string, filePath: string): Record<string, TeamC
  *  are two separate try blocks: an unreadable default path is "no teams.json", but an existing,
  *  invalid one must still throw.
  *  `readFile` is injectable so this is testable without real files (mirrors resolveOwnerPrincipals's
- *  injectable `warn`). Shape validation and buzz spaceId normalization live in parseTeams (teams.ts);
+ *  injectable `warn`). Shape validation and buzz spaceId normalization live in parseTeams (teamConfig.ts);
  *  buildTeamIndex then runs on the normalized output so two spellings of one relay collide as a
  *  duplicate at boot, not later. */
 export function resolveTeamsConfig(

@@ -1,7 +1,5 @@
 [
   "orchestration-web: src/orchestration/machines/events.ts -> src/surfaces/web/pushRules.ts",
   "orchestration-web: src/orchestration/transport/server.ts -> src/surfaces/web/config.ts",
-  "orchestration-web: src/orchestration/workspace/boot.ts -> src/surfaces/web/actor.ts",
-  "runtime-cycle: src/config.ts -> src/orchestration/teams.ts",
-  "runtime-cycle: src/orchestration/teams.ts -> src/config.ts"
+  "orchestration-web: src/orchestration/workspace/boot.ts -> src/surfaces/web/actor.ts"
 ]

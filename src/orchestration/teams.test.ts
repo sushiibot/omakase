@@ -292,3 +292,14 @@ describe("buildTeamIndex", () => {
     ).toThrow(/claimed by both/);
   });
 });
+
+test("pure team parsing loads without application environment or config files", () => {
+  const parser = new URL("./teamConfig.ts", import.meta.url).pathname;
+  const result = Bun.spawnSync([process.execPath, "--no-env-file", "-e", `
+    const { parseTeams, buildTeamIndex } = await import(${JSON.stringify(parser)});
+    const teams = parseTeams({ test: { spaces: [{ surface: "discord", spaceId: "1" }] } });
+    if (buildTeamIndex(teams).bySpace.get("discord 1")?.id !== "test") process.exit(2);
+  `], { env: { ...process.env, OPENAI_API_KEY: "", TEAMS_PATH: "/nonexistent/team-config-test.json" } });
+  expect(result.stderr.toString()).toBe("");
+  expect(result.exitCode).toBe(0);
+});

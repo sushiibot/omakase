@@ -71,3 +71,13 @@ describe("WorkspaceLink reads", () => {
     expect(rpc.calls).toEqual([]);
   });
 });
+
+test("reads use the current transport after each attach", async () => {
+  const { l, rpc: first } = link(() => ({ days: [], before: null }));
+  await l.historyDays({});
+  const second = new Rpc(() => ({ days: [], before: null }));
+  l.attach(second);
+  expect(await l.historyDays({})).toEqual({ days: [], before: null });
+  expect(first.calls).toHaveLength(1);
+  expect(second.calls).toHaveLength(1);
+});
