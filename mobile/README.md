@@ -168,7 +168,7 @@ It keeps the latest 50 copies in `files/vault-backups`. Each `.path` file record
 To extract backups from a debug installation, run:
 
 ```sh
-adb exec-out run-as app.omakase.mobile tar -cf - files/vault-backups > vault-backups.tar
+adb exec-out run-as bot.sushii.omakase tar -cf - files/vault-backups > vault-backups.tar
 ```
 
 Backups are local to the app. They do not replace your normal file backup.

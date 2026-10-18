@@ -1,4 +1,4 @@
-package app.omakase.mobile;
+package bot.sushii.omakase;
 
 import static org.junit.Assert.*;
 import androidx.documentfile.provider.TestDocument;

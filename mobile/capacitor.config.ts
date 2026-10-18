@@ -6,7 +6,7 @@ if (origin.protocol !== 'https:' || origin.username || origin.password || origin
   throw new Error('OMAKASE_URL must be an HTTPS origin without credentials, path, query or fragment.');
 }
 const config: CapacitorConfig = {
-  appId: 'app.omakase.mobile',
+  appId: 'bot.sushii.omakase',
   appName: 'omakase',
   webDir: 'www',
   server: { url: origin.origin, cleartext: false },

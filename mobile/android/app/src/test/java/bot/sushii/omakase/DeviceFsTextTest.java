@@ -1,4 +1,4 @@
-package app.omakase.mobile;
+package bot.sushii.omakase;
 import static org.junit.Assert.*;
 import org.junit.Test;
 import java.io.IOException;

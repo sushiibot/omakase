@@ -1,4 +1,4 @@
-package app.omakase.mobile;
+package bot.sushii.omakase;
 
 import android.os.Bundle;
 import android.os.SystemClock;

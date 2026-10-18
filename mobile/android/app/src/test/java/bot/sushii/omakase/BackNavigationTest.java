@@ -1,8 +1,8 @@
-package app.omakase.mobile;
+package bot.sushii.omakase;
 
 import static org.junit.Assert.assertEquals;
 import org.junit.Test;
-import static app.omakase.mobile.BackNavigation.Action.*;
+import static bot.sushii.omakase.BackNavigation.Action.*;
 
 public class BackNavigationTest {
     @Test public void historyAndSheetsCloseBeforeExit() {

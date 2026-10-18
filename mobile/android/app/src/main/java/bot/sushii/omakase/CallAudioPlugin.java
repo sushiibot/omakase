@@ -1,4 +1,4 @@
-package app.omakase.mobile;
+package bot.sushii.omakase;
 
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;

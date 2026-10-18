@@ -1,4 +1,4 @@
-package app.omakase.mobile;
+package bot.sushii.omakase;
 
 import android.app.Activity;
 import android.content.Intent;

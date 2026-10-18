@@ -1,4 +1,4 @@
-package app.omakase.mobile;
+package bot.sushii.omakase;
 
 /** Back must exhaust history, reach home, then receive a second press to exit. */
 final class BackNavigation {
