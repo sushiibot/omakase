@@ -173,6 +173,14 @@ bun run build
 bun run test:e2e
 ```
 
+CI splits functional browser tests across two shards. The four `@performance` tests run on a separate runner with one worker.
+Local `bun run test:e2e` still runs all tests. Both CI selections use the same assertions, thresholds, and retry policy.
+
+Backend shards upload fresh per-file Bun timings. CI does not restore these files or use past timings to balance shards.
+Browser jobs upload Playwright JSON reports and test artifacts, including after failures.
+Job summaries list slow files or tests, browser runner elapsed time, summed attempt durations, and retries.
+Parallel attempt durations overlap; their sum is not elapsed time. Reports remain available for seven days.
+
 The [system test guide](e2e-system/README.md) covers tests with a real gateway, workspace, browser, and fake model.
 
 ## Deployment
