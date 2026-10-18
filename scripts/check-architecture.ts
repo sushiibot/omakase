@@ -9,12 +9,33 @@ import { relative, resolve } from "node:path";
 
 export interface Edge { from: string; to: string; typeOnly: boolean }
 const portableContracts = new Set([
-  "src/core/contracts.ts", "src/orchestration/contracts.ts",
+  "src/core/contracts.ts", "src/orchestration/contracts.ts", "src/accounts/contracts.ts",
   "src/orchestration/machines/contracts.ts",
   ...["artifact", "browser", "maintenance", "maps", "memory", "session", "task"].map(
     (name) => `src/orchestration/${name}Contracts.ts`,
   ),
 ]);
+// Concrete landed boundaries. Runtime-only rules permit interface imports.
+const boundaryRules = [
+  { id: "application-route", runtimeOnly: false,
+    source: (file: string) => file.startsWith("src/surfaces/web/application/"),
+    target: (file: string) => /^src\/surfaces\/web\/(?:.*Routes|voice\/routes|chat|server)\.ts$/.test(file) },
+  { id: "execution-session", runtimeOnly: false,
+    source: (file: string) => file.startsWith("src/workspace/subagents/") || file === "src/workspace/executionTools.ts",
+    target: (file: string) => file === "src/workspace/piChatSession.ts" },
+  { id: "dispatcher-feature", runtimeOnly: true,
+    source: (file: string) => file === "src/orchestration/workspace/tools.ts",
+    target: (file: string) => file.startsWith("src/accounts/") || file.startsWith("src/integrations/")
+      || file.startsWith("src/orchestration/workspace/fileStores/")
+      || ["src/orchestration/workspace/toolContributions.ts", "src/orchestration/machines/control.ts",
+        "src/orchestration/machines/agents.ts", "src/orchestration/taskManifest.ts"].includes(file) },
+  { id: "workspace-api-link", runtimeOnly: false,
+    source: (file: string) => file === "src/orchestration/workspace/api.ts",
+    target: (file: string) => file === "src/orchestration/workspace/link.ts" },
+  { id: "delivery-session", runtimeOnly: true,
+    source: (file: string) => file === "src/workspace/deliveryTransport.ts",
+    target: (file: string) => file === "src/workspace/personalSession.ts" },
+];
 const isContract = (file: string) => portableContracts.has(file) || file.startsWith("src/contracts/");
 const isPureConfig = (file: string) => file === "src/orchestration/teamConfig.ts";
 const production = (file: string) => !/\.(test|spec|d)\.[cm]?tsx?$/.test(file);
@@ -33,6 +54,7 @@ export function analyze(root: string): { edges: Edge[]; violations: string[] } {
   const violations = new Set<string>();
   const visited = new Set<string>();
   const reexports = new Map<string, Set<string>>();
+  const runtimeReexports = new Map<string, Set<string>>();
   // Follow resolved local dependencies too, so an intermediary cannot conceal a runtime cycle.
   const queue = [...files];
   for (let index = 0; index < queue.length; index++) {
@@ -59,13 +81,18 @@ export function analyze(root: string): { edges: Edge[]; violations: string[] } {
         const targets = reexports.get(from) ?? new Set<string>();
         targets.add(to);
         reexports.set(from, targets);
+        if (!typeOnly) {
+          const runtimeTargets = runtimeReexports.get(from) ?? new Set<string>();
+          runtimeTargets.add(to);
+          runtimeReexports.set(from, runtimeTargets);
+        }
       }
       if (local && production(resolved.resolvedFileName)) queue.push(resolved.resolvedFileName);
       if (from.startsWith("src/orchestration/") && (to.startsWith("src/surfaces/web/") || to.startsWith("web/"))) {
         violations.add(`orchestration-web: ${from} -> ${to}`);
       }
       // Explicit wire contracts, not every file called types.ts: SDK type dependencies are portable.
-      if (isContract(from) && (local ? !isContract(to) : (!typeOnly && specifier !== "zod") || /^(node:|bun(?:$|:))/.test(specifier))) {
+      if (isContract(from) && (local ? !isContract(to) : (!typeOnly && !["zod", "zod/v4"].includes(specifier)) || /^(node:|bun(?:$|:))/.test(specifier))) {
         violations.add(`contract-portability: ${from} -> ${to}`);
       }
 
@@ -127,6 +154,23 @@ export function analyze(root: string): { edges: Edge[]; violations: string[] } {
   };
   for (const edge of edges) if (edge.from.startsWith("src/orchestration/")) {
     followBarrel([edge.from, edge.to]);
+  }
+  // Follow reexports, not arbitrary service dependencies, for each owned boundary.
+  for (const rule of boundaryRules) {
+    const barrels = rule.runtimeOnly ? runtimeReexports : reexports;
+    const follow = (path: string[]) => {
+      const last = path.at(-1)!;
+      if (rule.target(last)) {
+        violations.add(`${rule.id}: ${path.join(" -> ")}`);
+        return;
+      }
+      for (const next of barrels.get(last) ?? []) {
+        if (!path.includes(next)) follow([...path, next]);
+      }
+    };
+    for (const edge of edges) {
+      if (rule.source(edge.from) && (!rule.runtimeOnly || !edge.typeOnly)) follow([edge.from, edge.to]);
+    }
   }
   // Inventory each edge participating in a cycle, rather than SCC names: adding an edge
   // inside an existing SCC must fail, too. Traversal order never affects the baseline.

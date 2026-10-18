@@ -170,6 +170,76 @@ describe("backend architecture boundaries", () => {
     expect(analyze(root).violations).toEqual(["unresolved-local: src/a.ts -> ./missing", "unresolved-local: src/a.ts -> @/missing"]);
   });
 
+  const seams = [
+    ["application-route", "src/surfaces/web/application/service.ts", "src/surfaces/web/chat.ts", false],
+    ["application-route", "src/surfaces/web/application/service.ts", "src/surfaces/web/taskRoutes.ts", false],
+    ["application-route", "src/surfaces/web/application/service.ts", "src/surfaces/web/voice/routes.ts", false],
+    ["execution-session", "src/workspace/subagents/host.ts", "src/workspace/piChatSession.ts", false],
+    ["execution-session", "src/workspace/executionTools.ts", "src/workspace/piChatSession.ts", false],
+    ["dispatcher-feature", "src/orchestration/workspace/tools.ts", "src/accounts/toolContribution.ts", true],
+    ["dispatcher-feature", "src/orchestration/workspace/tools.ts", "src/integrations/service.ts", true],
+    ["dispatcher-feature", "src/orchestration/workspace/tools.ts", "src/orchestration/workspace/toolContributions.ts", true],
+    ["dispatcher-feature", "src/orchestration/workspace/tools.ts", "src/orchestration/workspace/fileStores/service.ts", true],
+    ["dispatcher-feature", "src/orchestration/workspace/tools.ts", "src/orchestration/machines/control.ts", true],
+    ["dispatcher-feature", "src/orchestration/workspace/tools.ts", "src/orchestration/machines/agents.ts", true],
+    ["dispatcher-feature", "src/orchestration/workspace/tools.ts", "src/orchestration/taskManifest.ts", true],
+    ["workspace-api-link", "src/orchestration/workspace/api.ts", "src/orchestration/workspace/link.ts", false],
+    ["delivery-session", "src/workspace/deliveryTransport.ts", "src/workspace/personalSession.ts", true],
+  ] as const;
+
+  for (const [rule, from, to, runtimeOnly] of seams) {
+    test(`${rule} guards ${from} -> ${to}, directly and through barrels`, () => {
+      const alias = `@/${to.slice(4, -3)}`;
+      for (const viaBarrel of [false, true]) {
+        for (const typeOnly of [false, true]) {
+          const source = viaBarrel ? "@/barrel" : alias;
+          const root = fixture({
+            [from]: `import ${typeOnly ? "type " : ""}{ value } from "${source}";`,
+            [to]: "export const value = 1;",
+            "src/barrel.ts": `import { value } from "${alias}"; export { value };`,
+          });
+          expect(analyze(root).violations).toEqual(runtimeOnly && typeOnly ? [] : [
+            `${rule}: ${from} -> ${viaBarrel ? "src/barrel.ts -> " : ""}${to}`,
+          ]);
+        }
+      }
+    });
+  }
+
+  test("runtime boundaries allow type-only barrels and ordinary composition", () => {
+    const root = fixture({
+      "src/orchestration/workspace/tools.ts": 'import { value } from "@/composition"; import { Shape } from "@/types"; import "./maps"; import "./location"; import "../../core/tools/registry";',
+      "src/composition.ts": 'import { value } from "./accounts/toolContribution"; export const service = () => value;',
+      "src/types.ts": 'export type { Shape } from "./accounts/toolContribution";',
+      "src/accounts/toolContribution.ts": 'export const value = 1; export interface Shape {}',
+      "src/orchestration/workspace/maps.ts": "export {};",
+      "src/orchestration/workspace/location.ts": "export {};",
+      "src/core/tools/registry.ts": "export {};",
+      "src/surfaces/web/application/service.ts": 'import "../events"; import "../workspaceAdapter";',
+      "src/surfaces/web/events.ts": "export {};",
+      "src/surfaces/web/workspaceAdapter.ts": "export {};",
+      "src/workspace/subagents/host.ts": 'import "../executionTools";',
+      "src/workspace/executionTools.ts": "export {};",
+      "src/orchestration/workspace/link.ts": 'import "./api";',
+      "src/orchestration/workspace/api.ts": "export {};",
+      "src/workspace/personalSession.ts": 'import "./deliveryTransport";',
+      "src/workspace/deliveryTransport.ts": "export {};",
+    });
+    expect(analyze(root).violations).toEqual([]);
+  });
+
+  test("account contracts allow zod/v4 but reject account service imports", () => {
+    const root = fixture({
+      "src/accounts/contracts.ts": 'import { z } from "zod/v4"; import type { SDK } from "ai";',
+      "src/accounts/service.ts": "export interface Service {}",
+    });
+    expect(analyze(root).violations).toEqual([]);
+    writeFileSync(join(root, "src/accounts/contracts.ts"), 'import type { Service } from "./service";');
+    expect(analyze(root).violations).toEqual([
+      "contract-portability: src/accounts/contracts.ts -> src/accounts/service.ts",
+    ]);
+  });
+
   test("baseline rejects both new debt and fixed entries; order is deterministic", () => {
     expect(compareBaseline(["c", "a"], ["b", "a"])).toEqual({ added: ["c"], stale: ["b"] });
     const root = fixture({ "src/z.ts": 'import "./a";', "src/a.ts": 'import "./z";' });
