@@ -109,7 +109,10 @@ describe("account lifecycle", () => {
         accounts.internal(conn, { ...input, ...override }),
       ).toThrow();
     expect(() =>
-      accounts.internal({ ...conn, role: "machine" } as unknown as ConnectionInfo, input),
+      accounts.internal(
+        { ...conn, role: "machine" } as unknown as ConnectionInfo,
+        input,
+      ),
     ).toThrow();
     const result = accounts.internal(conn, input) as {
       receiptId: string;
@@ -151,6 +154,47 @@ describe("account lifecycle", () => {
     ]);
     db.run("UPDATE kv SET value='bad' WHERE key LIKE 'accounts:v1:record:%'");
     expect(() => accounts.redact({ safe: true })).toThrow();
+  });
+  test("redacts form encoding and lowercase percent escapes in values and keys", () => {
+    const { accounts } = setup();
+    for (const [index, symbol] of ["!", "/"].entries()) {
+      const prepared = accounts.action({
+        ...prepare,
+        requestId: `form-${index}`,
+        passwordPolicy: { allowedSymbols: symbol, requireSymbols: true },
+      });
+      if (!("account" in prepared)) throw new Error("Missing account");
+      const password = accounts.reveal(
+        prepared.account.id,
+        1,
+        "reveal",
+      ).password;
+      const form = new URLSearchParams({ password })
+        .toString()
+        .slice("password=".length);
+      const lower = form.replace(/%[0-9A-F]{2}/g, (escape) =>
+        escape.toLowerCase(),
+      );
+      expect(form.includes(symbol)).toBe(false);
+      const payload = {
+        [form]: { nested: [`password=${form}`, lower] },
+        [lower]: { nested: [`password=${lower}`, form] },
+      };
+      const result = accounts.redact(payload);
+      expect(result).toEqual({
+        "[REDACTED_ACCOUNT_PASSWORD]": {
+          nested: [
+            "password=[REDACTED_ACCOUNT_PASSWORD]",
+            "[REDACTED_ACCOUNT_PASSWORD]",
+          ],
+        },
+      });
+      expect(
+        accounts
+          .audit(prepared.account.id)
+          .filter((event) => event.action === "llm_redacted").length,
+      ).toBe(1);
+    }
   });
   test("rejects unsupported policy and contradictory constraints", () => {
     const { accounts } = setup();

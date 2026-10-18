@@ -387,10 +387,19 @@ export class Accounts {
     for (const r of this.records())
       for (let v = 1; v <= r.passwords.length; v++) {
         const value = this.open(r, v);
-        for (const form of [
-          value,
+        const encoded = [
           encodeURIComponent(value),
           encodeURI(value),
+          new URLSearchParams({ password: value })
+            .toString()
+            .slice("password=".length),
+        ];
+        for (const form of [
+          value,
+          ...encoded,
+          ...encoded.map((form) =>
+            form.replace(/%[0-9A-F]{2}/g, (escape) => escape.toLowerCase()),
+          ),
           Buffer.from(value).toString("base64"),
           Buffer.from(value).toString("base64url"),
           JSON.stringify(value).slice(1, -1),
