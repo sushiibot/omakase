@@ -408,7 +408,7 @@ export class WebWorkspaceAdapter implements SurfaceAdapter<WebInbound, WebHandle
       if (prev && prev.state === line.state) return;
       this.deps.log.publish({
         type: "tool",
-        data: { turnId: turn.turnId, name: line.name, summary: line.summary, ...(line.diff ? { diff: line.diff } : {}), ...(line.id ? { id: line.id } : {}), ...(line.textOffset !== undefined ? { textOffset: line.textOffset } : {}), ...(line.agentId ? { agentId: line.agentId } : {}), ...(line.state !== "run" ? { ok: line.state === "ok" } : {}) },
+        data: { turnId: turn.turnId, name: line.name, summary: line.summary, input: line.input, output: line.output, ...(line.diff ? { diff: line.diff } : {}), ...(line.id ? { id: line.id } : {}), ...(line.textOffset !== undefined ? { textOffset: line.textOffset } : {}), ...(line.agentId ? { agentId: line.agentId } : {}), ...(line.state !== "run" ? { ok: line.state === "ok" } : {}) },
       });
     });
     turn.modelActivity = view.modelActivity;

@@ -18,7 +18,7 @@ export interface SurfaceCapabilities {
 }
 
 /** One tool in a turn's progress view. `agentId` is set for a subagent's tool, shown nested under the turn. */
-export type ToolLine = { name: string; summary: string; state: "run" | "ok" | "err"; agentId?: string; id?: string; textOffset?: number; diff?: ToolDiff };
+export type ToolLine = { input?: string; output?: string; name: string; summary: string; state: "run" | "ok" | "err"; agentId?: string; id?: string; textOffset?: number; diff?: ToolDiff };
 
 export interface ProgressView {
   modelActivity?: "waiting" | "thinking";

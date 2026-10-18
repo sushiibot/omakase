@@ -85,6 +85,8 @@ export interface ToolDiff {
 
 export interface ToolLine {
 	diff?: ToolDiff;
+	input?: string;
+	output?: string;
 	id?: string;
 	/** UTF-16 position in assistant text when this call began. */
 	textOffset?: number;
@@ -359,6 +361,8 @@ export interface ChatEventMap {
 	delta: { turnId: string; offset: number; text: string };
 	tool: {
 		diff?: ToolDiff;
+		input?: string;
+		output?: string;
 		turnId: string;
 		name: string;
 		summary: string;
@@ -459,6 +463,8 @@ export type WebHistoryItem =
 			activityText?: string;
 			tools: {
 				diff?: ToolDiff;
+				input?: string;
+				output?: string;
 				name: string;
 				summary: string;
 				ok: boolean;

@@ -408,8 +408,8 @@ describe('tool confirmations', () => {
 		expect(els.some((e) => e.attrs['data-surface'] === 'tool-confirmation')).toBe(true);
 		expect(text).toContain('Approval needed');
 		expect(text).toContain('ws-consolidate --status');
-		expect(text).toContain('Approve');
-		expect(text).toContain('Deny');
+		expect(text).toContain('Allow once');
+		expect(text).toContain('Cancel');
 		expect(els.some((e) => e.tag === 'input')).toBe(false);
 	});
 	test('resolved confirmation shows approved without inventing execution and keeps reason distinct from output', async () => {
@@ -425,7 +425,7 @@ describe('tool confirmations', () => {
 		});
 		expect(text).toContain('Approved');
 		expect(text).toContain('Execution status unavailable');
-		expect(text).toContain('Reason');
+		expect(text).toContain('Why approval was requested');
 		expect(text).not.toContain('Output');
 		expect(text).not.toContain('Finished');
 		expect(els.filter(disclosure).every((e) => e.attrs['data-state'] === 'closed')).toBe(true);

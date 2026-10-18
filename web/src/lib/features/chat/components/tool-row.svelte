@@ -2,6 +2,7 @@
 	import { Spinner } from '$lib/ui/spinner';
 	import ToolIcon from './tool-icon.svelte';
 	import ToolDiff from './tool-diff.svelte';
+	import { toolPresentation } from '../tool-presentation';
 	import { toolCategory } from '../tool-activity';
 	import CircleX from '@lucide/svelte/icons/circle-x';
 	import * as Collapsible from '$lib/ui/collapsible';
@@ -44,7 +45,10 @@
 		'approved-elsewhere': 'Approved on another device',
 		'denied-elsewhere': 'Denied on another device'
 	};
-	const readable = $derived(step.label === step.tool ? step.tool.replaceAll('_', ' ') : step.label);
+	const presentation = $derived(toolPresentation(step.tool, step.input, step.label));
+	const errorPreview = $derived(
+		step.state === 'failed' ? step.output?.trim().split('\n').find(Boolean) : undefined
+	);
 </script>
 
 {#if pending && approval?.outcome === 'pending'}
@@ -61,22 +65,34 @@
 					class="size-4 shrink-0 text-failed"
 					aria-hidden="true"
 				/>{/if}
-			<span class="min-w-16 flex-1 truncate" data-tool-label>{readable}</span>
-			<span class="flex min-w-0 items-center gap-1 text-right text-meta"
-				>{#if step.state === 'running'}<Spinner
-						decorative
-						class="size-3.5 text-running"
-					/>{/if}<span class="truncate"
-					>{#if approval && !executionUnknown}{labels[approval.outcome]} ·
-					{/if}{executionUnknown && approval
-						? labels[approval.outcome]
-						: step.state === 'running'
-							? 'Running'
-							: step.state === 'failed'
-								? 'Failed'
-								: 'Finished'}</span
-				></span
-			>
+			<span class="min-w-0 flex-1 py-1">
+				<span class="block font-medium [overflow-wrap:anywhere] text-foreground" data-tool-label
+					>{presentation.title}</span
+				>
+				{#if presentation.detail}<span class="line-clamp-2 block text-meta [overflow-wrap:anywhere]"
+						>{presentation.detail}</span
+					>{/if}
+				<span
+					class="flex flex-wrap items-center gap-1 text-meta"
+					class:text-failed={step.state === 'failed' && !executionUnknown}
+				>
+					{#if step.state === 'running'}<Spinner decorative class="size-3.5" />{/if}
+					<span
+						>{executionUnknown && approval
+							? labels[approval.outcome]
+							: step.state === 'running'
+								? 'Running'
+								: step.state === 'failed'
+									? 'Failed'
+									: 'Completed'}</span
+					>
+					<span aria-hidden="true"> · </span>{open ? 'Hide details' : 'View details'}
+				</span>
+				{#if errorPreview}<span
+						class="mt-1 line-clamp-3 block text-meta [overflow-wrap:anywhere] text-failed"
+						>{errorPreview}</span
+					>{/if}
+			</span>
 		</DisclosureTrigger>
 		<Collapsible.Content hiddenUntilFound>
 			<dl class="flex min-w-0 flex-col gap-2 border-t py-2 text-meta">
@@ -86,12 +102,12 @@
 							{labels[approval.outcome]}{approval.outcome.startsWith('approved')
 								? executionUnknown
 									? ' · Execution status unavailable'
-									: ' · Execution status shown above'
+									: ' · Permission granted for this call'
 								: ''}
 						</dd>
 					</div>{/if}
 				{#if approvalReason}<div>
-						<dt>Reason</dt>
+						<dt>Why approval was requested</dt>
 						<dd class="whitespace-pre-wrap">{approvalReason}</dd>
 					</div>{/if}
 				<div>
@@ -102,7 +118,7 @@
 						<dt>Input</dt>
 						<dd>
 							<pre
-								class="max-h-48 overflow-auto font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{step.input}</pre>
+								class="max-h-48 overflow-auto font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{presentation.input}</pre>
 						</dd>
 					</div>{/if}
 				{#if step.diff}<div>
@@ -114,12 +130,18 @@
 						<dd>Diff was not recorded for this call.</dd>
 					</div>{/if}
 				{#if step.output}<div>
-						<dt>Output</dt>
+						<dt>{step.state === 'failed' ? 'Error details' : 'Result'}</dt>
 						<dd>
 							<pre
 								class="max-h-64 overflow-auto font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{step.output}</pre>
 						</dd>
 					</div>{/if}
+				{#if !step.output && step.state !== 'running' && !executionUnknown}
+					<div>
+						<dt>Result</dt>
+						<dd>No text output was recorded for this call.</dd>
+					</div>
+				{/if}
 			</dl>
 		</Collapsible.Content>
 	</Collapsible.Root>

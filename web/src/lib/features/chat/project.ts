@@ -51,7 +51,8 @@ export function toTurn(t: TurnState, stopping: boolean): Turn {
 		tool: l.name,
 		label: l.summary || l.name,
 		state: stepState[l.state],
-		input: l.summary,
+		input: l.input ?? l.summary,
+		output: l.output,
 		diff: l.diff
 	}));
 	const running = steps.some((s) => s.state === 'running');

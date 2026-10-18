@@ -38,9 +38,9 @@ export function historyPage(
   for (const ev of events) {
     let item = toItem(ev, { answers, decisions, known, finals });
     let size = Buffer.byteLength(JSON.stringify(item)) + 1;
-    if (size > deps.maxBytes / 2 && item.type === "assistant" && item.tools.some((tool) => tool.diff)) {
+    if (size > deps.maxBytes / 2 && item.type === "assistant" && item.tools.some((tool) => tool.diff || tool.input || tool.output)) {
       // Optional file patches must not replace an otherwise readable reply with a size error.
-      item = { ...item, tools: item.tools.map((tool) => tool.diff ? { ...tool, diff: { patch: "", truncated: true } } : tool) };
+      item = { ...item, tools: item.tools.map((tool) => ({ ...tool, ...(tool.diff ? { diff: { patch: "", truncated: true } } : {}), ...(tool.input ? { input: "[Input omitted to fit history page]" } : {}), ...(tool.output ? { output: "[Output omitted to fit history page]" } : {}) })) };
       size = Buffer.byteLength(JSON.stringify(item)) + 1;
     }
     if (size > deps.maxBytes / 2) {

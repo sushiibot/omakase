@@ -6,6 +6,7 @@
 	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
 	import ToolIcon from './tool-icon.svelte';
 	import ToolRow from './tool-row.svelte';
+	import { toolPresentation } from '../tool-presentation';
 	import { toolCategory } from '../tool-activity';
 	import { splitGitHubPush } from '../render/ask-question';
 	import { confirmationOutcome } from '../tool-confirmation';
@@ -27,11 +28,14 @@
 	);
 	const category = $derived(toolCategory(confirmation.tool));
 	const uid = $props.id();
+	const presentation = $derived(toolPresentation(confirmation.tool, confirmation.input));
 	function choiceLabel(choice: string) {
 		return /^(yes|approve|allow|confirm)$/i.test(choice)
-			? 'Approve'
+			? push
+				? 'Push to GitHub'
+				: 'Allow once'
 			: /^(no|deny|reject)$/i.test(choice)
-				? 'Deny'
+				? 'Cancel'
 				: choice;
 	}
 </script>
@@ -47,7 +51,7 @@
 		<div class="flex min-h-8 items-center gap-2">
 			<ToolIcon kind={category.kind} />
 			<h3 id="{uid}-title" class="min-w-0 flex-1 font-semibold">
-				{push ? 'Push to GitHub?' : `Allow ${category.label.toLowerCase()}?`}
+				{push ? 'Push to GitHub?' : `${presentation.title}?`}
 			</h3>
 			<ShieldCheck class="size-4 shrink-0 text-approval" aria-hidden="true" />
 			<span class="text-meta text-muted-foreground">Approval needed</span>
@@ -67,10 +71,12 @@
 			</div>
 		{:else}
 			<pre
-				class="my-2 max-h-32 overflow-auto rounded-lg bg-muted px-3 py-2 font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{confirmation.input}</pre>
+				class="my-2 max-h-32 overflow-auto rounded-lg bg-muted px-3 py-2 font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{presentation.input}</pre>
 		{/if}
+		<p class="my-2 text-meta">This action is waiting for your decision.</p>
 		{#if confirmation.reason}<p class="my-2 text-meta text-muted-foreground">
-				{confirmation.reason}
+				<span class="block font-medium text-foreground">Why approval is needed</span
+				>{confirmation.reason}
 			</p>{/if}
 		<div class="flex gap-2 any-pointer-coarse:gap-4">
 			{#each ask.choices as choice, index (index)}

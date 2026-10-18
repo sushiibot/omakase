@@ -714,3 +714,20 @@ test("large edit diffs do not displace reply text in bounded history pages", asy
   await h.adapter.sendReply(null, { kind: "reply", turnId: "large-edit", text: "Updated preferences.", toolCount: 1 }, { outboxId: "large-reply", ledger: { isSent: () => false, markSent: () => {} }, plain: false });
   expect(historyPage(h.log, { limit: 30 }, { maxBytes: 2000 }).items).toMatchObject([{ text: "Updated preferences.", tools: [{ diff: { patch: "", truncated: true } }] }]);
 });
+
+test("tool input and failure output reach live events and cold history for the matching call", async () => {
+  const h = setup();
+  const input = '{"command":"maps search candy"}';
+  const output = "maps: command not found";
+  h.event("result-turn", { type: "tool_start", name: "bash", summary: "maps…", input, toolCallId: "one" });
+  h.event("result-turn", { type: "tool_start", name: "bash", summary: "other", toolCallId: "two" });
+  await h.link.settled();
+  h.event("result-turn", { type: "tool_end", name: "bash", ok: false, output, toolCallId: "one" });
+  h.timers.flush();
+  await h.link.settled();
+  expect(h.events.filter((e) => e.type === "tool").map((e) => e.data)).toContainEqual(expect.objectContaining({ id: "one", input, output, ok: false }));
+  h.event("result-turn", { type: "turn_end", aborted: false });
+  await h.link.settled();
+  await h.adapter.sendReply(null, { kind: "reply", turnId: "result-turn", text: "Search failed.", toolCount: 2 }, { outboxId: "result-reply", ledger: { isSent: () => false, markSent: () => {} }, plain: false });
+  expect(historyPage(h.log, { limit: 30 }, { maxBytes: 100_000 }).items).toMatchObject([{ type: "assistant", tools: [{ id: "one", input, output }, { id: "two" }] }]);
+});

@@ -1976,7 +1976,7 @@ for (const width of [412, 1280]) {
 		await expect(request).toHaveCount(0);
 		const call = page.locator('[data-tool-call="send-call"]');
 		await expect(call).toContainText('Running');
-		await expect(call.locator('[data-slot=collapsible-trigger]')).toContainText('Approved');
+		await expect(call.locator('[data-slot=collapsible-trigger]')).toContainText('Running');
 		await call.locator('[data-slot=collapsible-trigger]').click();
 		await expect(call).toContainText('Approved');
 		await page.screenshot({ path: `/tmp/chat-approval-resolved-${width}.png` });
@@ -2079,11 +2079,11 @@ test('Review focuses the request, so a held Enter never decides it', async ({ pa
 		1
 	);
 	const confirmation = page.locator('[data-surface="tool-confirmation"]');
-	await expect(confirmation.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+	await expect(confirmation.getByRole('button', { name: 'Allow once', exact: true })).toBeVisible();
 	await page.locator('[data-channel-activity]').getByRole('button', { name: 'Review' }).click();
 	await expect(confirmation).toBeFocused();
 	await holdEnter(page);
-	await expect(confirmation.getByRole('button', { name: 'Approve', exact: true })).toBeEnabled();
+	await expect(confirmation.getByRole('button', { name: 'Allow once', exact: true })).toBeEnabled();
 	expect(posts('/api/chat/asks')).toEqual([]);
 	// The decision stays one Tab away and still answers.
 	await page.keyboard.press('Tab');
@@ -2146,7 +2146,7 @@ for (const width of [412, 1280]) {
 			await expect(confirmation).toContainText('Approval needed');
 			await expect(confirmation).toContainText('ws-consolidate --status');
 			await page.screenshot({ path: `/tmp/chat-confirmation-pending-${width}-${theme}.png` });
-			await confirmation.getByRole('button', { name: 'Approve', exact: true }).click();
+			await confirmation.getByRole('button', { name: 'Allow once', exact: true }).click();
 			await push(page, 'ask_resolved', { askId: 'confirm-ask', answer: 'Yes' }, 2);
 			await expect(confirmation).toContainText('Approved');
 			await expect(confirmation.locator('[data-slot=collapsible-trigger]')).not.toContainText(
@@ -2169,8 +2169,8 @@ for (const width of [412, 1280]) {
 			});
 			await expect(confirmation).toHaveCount(0);
 			const executed = page.locator('[data-tool-call="confirm-call"]');
-			await expect(executed.locator('[data-slot=collapsible-trigger]')).toContainText('Approved');
-			await expect(executed.locator('[data-slot=collapsible-trigger]')).toContainText('Finished');
+
+			await expect(executed.locator('[data-slot=collapsible-trigger]')).toContainText('Completed');
 			await expect(page.locator('[data-tool-call="next-call"]')).toBeVisible();
 			expect(
 				await page.evaluate(() => {
@@ -2181,7 +2181,8 @@ for (const width of [412, 1280]) {
 			).toBe(true);
 			await page.screenshot({ path: `/tmp/chat-confirmation-resolved-${width}-${theme}.png` });
 			await executed.locator('[data-slot=collapsible-trigger]').click();
-			await expect(executed).toContainText('Reason');
+			await expect(executed).toContainText('Why approval was requested');
+			await expect(executed.locator('[data-approval-record]')).toContainText('Approved');
 			await expect(executed).toContainText('Review the command');
 			expect(
 				await page.evaluate(
@@ -2220,7 +2221,10 @@ test('another-device decision with a long command reflows at 320px', async ({ pa
 	);
 	await push(page, 'ask_resolved', { askId: 'long-ask', answer: 'Yes' }, 2);
 	const summary = page.locator('[data-tool-call="long-call"] [data-slot=collapsible-trigger]');
-	await expect(summary).toContainText('Approved on another device');
+	await summary.click();
+	await expect(page.locator('[data-tool-call="long-call"] [data-approval-record]')).toContainText(
+		'Approved on another device'
+	);
 	await expect(summary).toContainText('Running');
 	expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 	// A long outcome truncates beside the tool's name instead of squeezing it out.
@@ -2508,3 +2512,42 @@ test('document attachments upload unchanged and preserve their draft after reloa
 		.poll(() => posts('/api/chat/messages').at(0)?.body)
 		.toMatchObject({ text: '', uploadIds: [UPLOAD_ID] });
 });
+
+for (const width of [320, 1280]) {
+	test(`tool failure shows its error before expansion and preserves details at ${width}px`, async ({
+		page,
+		context
+	}) => {
+		await chatServer(context);
+		await page.setViewportSize({ width, height: 915 });
+		await open(page);
+		const command = 'maps search "bulk Halloween candy stores Cupertino CA" --limit 10';
+		await push(page, 'tool', {
+			turnId: 'output',
+			id: 'failed-search',
+			name: 'bash',
+			summary: 'maps search…',
+			input: JSON.stringify({ command })
+		});
+		await push(page, 'tool', {
+			turnId: 'output',
+			id: 'failed-search',
+			name: 'bash',
+			summary: 'maps search…',
+			ok: false,
+			output: 'maps: command not found\nExit code: 127'
+		});
+		const row = page.locator('[data-tool-call="failed-search"]');
+		await expect(row.locator('[data-slot=collapsible-trigger]')).toContainText(
+			'maps: command not found'
+		);
+		await row.locator('[data-slot=collapsible-trigger]').click();
+		await expect(row.locator('pre').first()).toHaveText(command);
+		await expect(row).toContainText('Exit code: 127');
+		expect(
+			await page.evaluate(
+				() => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+			)
+		).toBe(true);
+	});
+}

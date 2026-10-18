@@ -1,3 +1,4 @@
+import { redact } from "./secretPatterns.ts";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { ChatEventPayload, ChatUsage } from "../orchestration/contracts.ts";
 import { summarizeToolArgs } from "../agentRuntime/piShared.ts";
@@ -8,6 +9,14 @@ import { isNoReply, TOOL_DIFF_MAX_CHARS } from "../orchestration/contracts.ts";
 export { NO_REPLY, isNoReply } from "../orchestration/contracts.ts";
 
 const TOOL_SUMMARY_MAX = 120;
+const TOOL_DETAIL_MAX = 8000;
+
+/** Text only: never serialize image payloads or internal result metadata into chat. */
+function toolDetail(value: unknown, label = "Output"): string | undefined {
+  const text = typeof value === "string" ? value : undefined;
+  if (text === undefined) return undefined;
+  return redact(text.slice(0, TOOL_DETAIL_MAX + 256)).slice(0, TOOL_DETAIL_MAX) + (text.length > TOOL_DETAIL_MAX ? `\n[${label} truncated]` : "");
+}
 
 /** What one agent run (prompt → settled, including steers) has produced so far. */
 export interface RunAccumulator {
@@ -68,16 +77,17 @@ export function mapSessionEvent(event: AgentSessionEvent, acc: RunAccumulator): 
       acc.outputStarted = true;
       acc.modelActivity = undefined;
       const summary = summarizeToolArgs(event.args).replace(/\s+/g, " ").trim().slice(0, TOOL_SUMMARY_MAX);
-      return [{ type: "tool_start", name: event.toolName, summary, toolCallId: event.toolCallId }];
+      return [{ type: "tool_start", name: event.toolName, summary, input: toolDetail(JSON.stringify(event.args, null, 2), "Input"), toolCallId: event.toolCallId }];
     }
     case "tool_execution_end": {
       // Use the patch returned after the edit succeeded, not a preview of its requested arguments.
-      const result = event.result as { details?: { patch?: unknown } } | null;
+      const result = event.result as { content?: Array<{ type: string; text?: string }>; details?: { patch?: unknown } } | null;
       const patch = event.toolName === "edit" && !event.isError ? result?.details?.patch : undefined;
       const diff = typeof patch === "string" && patch.length
         ? { patch: patch.slice(0, TOOL_DIFF_MAX_CHARS), ...(patch.length > TOOL_DIFF_MAX_CHARS ? { truncated: true } : {}) }
         : undefined;
-      return [{ type: "tool_end", name: event.toolName, ok: event.isError !== true, toolCallId: event.toolCallId, ...(diff ? { diff } : {}) }];
+      const output = toolDetail(typeof event.result === "string" ? event.result : result?.content?.filter((block) => block.type === "text" && typeof block.text === "string").map((block) => block.text).join("\n"));
+      return [{ type: "tool_end", name: event.toolName, ok: event.isError !== true, toolCallId: event.toolCallId, ...(diff ? { diff } : {}), ...(output ? { output } : {}) }];
     }
     case "message_update": {
       const m = event.assistantMessageEvent;

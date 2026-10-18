@@ -287,7 +287,7 @@ test('real taps on and just below a disclosure never fire the decision under it'
 }) => {
 	await surfaces(page);
 	for (const [probe, decision, fired] of [
-		['push', /^Deny$/, 'push:'],
+		['push', /^Cancel$/, 'push:'],
 		['inline', /^Deny/, 'inline:']
 	] as const) {
 		const surface = page.locator(`[data-surface-probe="${probe}"]`);

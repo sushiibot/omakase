@@ -376,10 +376,12 @@ for (const width of [320, 412, 1280]) {
 			await expectNoSideScroll(page, 'GitHub push approval');
 			expect(await axe(page)).toEqual([]);
 			await page.screenshot({ path: `/tmp/github-push-${width}-${theme}.png` });
-			await card.getByRole('button', { name: 'Approve', exact: true }).click();
+			await card.getByRole('button', { name: 'Push to GitHub', exact: true }).click();
 			await push(page, 'ask_resolved', { askId: 'push-ask', answer: 'Yes' }, 2);
 			await expect(card.locator('[data-slot=collapsible-trigger]')).toContainText('Approved');
-			await expect(card.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+			await expect(card.getByRole('button', { name: 'Push to GitHub', exact: true })).toHaveCount(
+				0
+			);
 			await expectNoSideScroll(page, 'resolved GitHub push approval');
 		});
 	}

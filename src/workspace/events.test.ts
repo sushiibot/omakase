@@ -52,7 +52,7 @@ test("an interrupted reasoning stream returns to waiting before the next provide
 
 test("tool execution events preserve Pi call IDs for exact approval/result correlation", () => {
   const acc = newRunAccumulator();
-  expect(mapSessionEvent({ type: "tool_execution_start", toolCallId: "call1", toolName: "bash", args: { command: "ls" } } as AgentSessionEvent, acc)).toEqual([{ type: "tool_start", name: "bash", summary: "ls", toolCallId: "call1" }]);
+  expect(mapSessionEvent({ type: "tool_execution_start", toolCallId: "call1", toolName: "bash", args: { command: "ls" } } as AgentSessionEvent, acc)).toEqual([{ type: "tool_start", name: "bash", summary: "ls", input: JSON.stringify({ command: "ls" }, null, 2), toolCallId: "call1" }]);
   expect(mapSessionEvent({ type: "tool_execution_end", toolCallId: "call1", toolName: "bash", isError: false, result: { content: [] } } as unknown as AgentSessionEvent, acc)).toEqual([{ type: "tool_end", name: "bash", ok: true, toolCallId: "call1" }]);
 });
 
@@ -75,4 +75,13 @@ test("successful edit results carry the actual unified patch with a bounded payl
   expect(end(patch, true)[0]).not.toHaveProperty("diff");
   expect(end(123)[0]).not.toHaveProperty("diff");
   expect(end("x".repeat(20_000))[0]).toMatchObject({ diff: { patch: "x".repeat(16_384), truncated: true } });
+});
+
+
+test("tool output carries bounded redacted text, excluding images and internal metadata", () => {
+  const end = (result: unknown) => mapSessionEvent({ type: "tool_execution_end", toolCallId: "failed", toolName: "bash", isError: true, result } as AgentSessionEvent, newRunAccumulator())[0];
+  expect(end({ content: [{ type: "text", text: "Unauthorized Bearer secret-value" }, { type: "image", data: "PRIVATE_IMAGE" }], details: { internal: "PRIVATE_METADATA" } })).toEqual({ type: "tool_end", toolCallId: "failed", name: "bash", ok: false, output: "Unauthorized Bearer [REDACTED]" });
+  const large = end({ content: [{ type: "text", text: "x".repeat(20_000) }] });
+  expect(large).toMatchObject({ output: "x".repeat(8000) + "\n[Output truncated]" });
+  expect(end("command not found")).toMatchObject({ output: "command not found" });
 });
