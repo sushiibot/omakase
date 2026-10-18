@@ -4,6 +4,7 @@
  * The baseline is an exact debt inventory: remove fixed entries; never refresh it to hide new debt.
  */
 import ts from "typescript";
+import { isBuiltin } from "node:module";
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
@@ -92,7 +93,7 @@ export function analyze(root: string): { edges: Edge[]; violations: string[] } {
         violations.add(`orchestration-web: ${from} -> ${to}`);
       }
       // Explicit wire contracts, not every file called types.ts: SDK type dependencies are portable.
-      if (isContract(from) && (local ? !isContract(to) : (!typeOnly && !["zod", "zod/v4"].includes(specifier)) || /^(node:|bun(?:$|:))/.test(specifier))) {
+      if (isContract(from) && (local ? !isContract(to) : (!typeOnly && !["zod", "zod/v4"].includes(specifier)) || (isBuiltin(specifier) || /^(node:|bun(?:$|:))/.test(specifier)))) {
         violations.add(`contract-portability: ${from} -> ${to}`);
       }
 

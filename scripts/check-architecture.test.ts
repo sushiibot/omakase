@@ -71,6 +71,18 @@ describe("backend architecture boundaries", () => {
     ]);
   });
 
+  test("portable contracts reject bare Node builtin types but allow SDK types", () => {
+    const root = fixture({
+      "src/accounts/contracts.ts": 'import type { SDK } from "ai";',
+    });
+    expect(analyze(root).violations).toEqual([]);
+    writeFileSync(join(root, "src/accounts/contracts.ts"), 'import type { Stats } from "fs"; import type { FileHandle } from "fs/promises";');
+    expect(analyze(root).violations).toEqual([
+      "contract-portability: src/accounts/contracts.ts -> fs",
+      "contract-portability: src/accounts/contracts.ts -> fs/promises",
+    ]);
+  });
+
   test("runtime cycles include dynamic imports, require and barrels, but exclude explicit type edges", () => {
     const root = fixture({
       "src/a.ts": 'export * from "./b"; import type { C } from "./c";',
