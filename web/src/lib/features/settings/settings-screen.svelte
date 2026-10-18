@@ -53,7 +53,7 @@
 		onreload
 	}: {
 		nativeSettings?: Snippet;
-		back?: { href: string; label: string; onclick?: (e: MouseEvent) => void };
+		back?: { href: string; label: string; desktop?: boolean; onclick?: (e: MouseEvent) => void };
 		me: RemoteLike & { data?: { login: string; displayName?: string } };
 		/** What the agent calls you; absent in screens that don't show it. */
 		ownerName?: RemoteLike & { data?: { name: string | null } };
@@ -134,7 +134,7 @@
 	</p>
 {/snippet}
 
-<DetailScreen title="App settings" {back} {banner} toast={updateReady ? toast : undefined}>
+<DetailScreen title="Preferences" {back} {banner} toast={updateReady ? toast : undefined}>
 	<ScreenContent>
 		<div class="flex flex-col gap-8 md:gap-10">
 			<Section id="account" title="Account">

@@ -1,7 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { axe, horizontalOverflow, smallTargets, stubStream, fixtureApp } from './helpers';
 
-const LIVE_NAV = ['Channels', 'Tasks', 'Activity', 'Workspace', 'App settings'];
+const LIVE_NAV = ['Channels', 'Tasks', 'Activity', 'Workspace', 'Settings'];
 
 /** Live navigation never depends on /api/me; overrides enable only fixture previews. */
 async function server(context: BrowserContext, opts: { override?: string; me?: 'hang' } = {}) {
@@ -38,7 +38,7 @@ test('the app opens on chat and all live screens appear in the drawer by default
 	const menu = await drawer(page);
 	for (const label of LIVE_NAV)
 		await expect(menu.getByRole('link', { name: label, exact: true })).toBeVisible();
-	for (const label of ['Memory', 'History', 'Agent settings'])
+	for (const label of ['Memory', 'History'])
 		await expect(menu.getByRole('link', { name: label, exact: true })).toHaveCount(0);
 	await expect(menu.getByRole('link', { name: 'Main', exact: true })).toHaveAttribute(
 		'aria-current',
@@ -54,15 +54,7 @@ test('Workspace groups secondary destinations and keeps fixture previews gated',
 	await page.goto('/workspace');
 	await expect(page.getByRole('heading', { name: 'Workspace', level: 1 })).toBeVisible();
 	const content = page.locator('main');
-	for (const label of [
-		'Memory',
-		'History',
-		'Agent settings',
-		'Briefing',
-		'Skills',
-		'Schedules',
-		'Browser'
-	])
+	for (const label of ['Memory', 'History', 'Briefing', 'Skills', 'Schedules', 'Browser'])
 		await expect(content.getByRole('link', { name: new RegExp(`^${label}`) })).toBeVisible();
 	await expect(page.getByRole('region', { name: 'Development previews' })).toBeVisible();
 	const menu = await drawer(page);
@@ -81,7 +73,7 @@ test('Workspace contains live information without enabling fixture previews', as
 	await server(context);
 	await page.goto('/workspace');
 	const content = page.locator('main');
-	for (const label of ['Memory', 'History', 'Agent settings'])
+	for (const label of ['Memory', 'History'])
 		await expect(content.getByRole('link', { name: new RegExp(`^${label}`) })).toBeVisible();
 	for (const label of ['Skills', 'Schedules', 'Browser', 'Briefing'])
 		await expect(content.getByRole('link', { name: new RegExp(`^${label}`) })).toHaveCount(0);

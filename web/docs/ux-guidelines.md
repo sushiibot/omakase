@@ -107,6 +107,8 @@ A standalone PWA has no browser toolbar. App back controls and the Android back 
 - **No `target="_blank"` for in-app routes.** Why: it opens a Custom Tab and breaks back. Check: `review`.
 - **The app opens on chat. Channels, Tasks, Activity, Workspace, and Settings use persistent desktop navigation and mobile navigation. Nested detail and creation screens show a back chevron to their parent.** Why: the chat keeps the full height (no tab bar under the composer), and one navigation system per screen. The drawer is a native modal `<dialog>`, so Android back and Escape close it. The menu button carries a dot when the inbox has something waiting or unread. Check: `shot`, `pw` (`e2e/nav.test.ts`).
 
+Settings has one entry point. Keep preferences, website accounts, mail, API integrations, MCP servers, file stores, and permissions at the same navigation level. On desktop, show settings sections in the sidebar. On mobile, show a searchable directory with direct links. Avoid intermediate category menus.
+
 ## Interaction and information hierarchy
 
 These rules guide new screens and changes to existing screens. They describe the required behavior, not completed implementation.

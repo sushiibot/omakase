@@ -15,8 +15,7 @@ describe('workspace navigation', () => {
 		expect(workspaceFor(liveOnly).map((entry) => entry.href)).toEqual([
 			'/artifacts',
 			'/memory',
-			'/history',
-			'/workspace/agent-settings'
+			'/history'
 		]);
 		expect(
 			workspaceFor(allOn)
@@ -32,11 +31,6 @@ describe('workspace navigation', () => {
 		for (const route of [
 			'/memory/[file]/diff',
 			'/history/[day]',
-			'/connectors/[name]',
-			'/settings/mail',
-			'/settings/permissions',
-			'/workspace/agent-settings',
-			'/file-stores',
 			'/skills/[name]/versions',
 			'/more',
 			'/workspace',
@@ -46,7 +40,17 @@ describe('workspace navigation', () => {
 		expect(activeNav('/assistant')).toBe('assistant');
 		expect(activeNav('/tasks/[id]')).toBe('tasks');
 		expect(activeNav('/runs/[id]')).toBe('runs');
-		expect(activeNav('/settings')).toBe('settings');
+		for (const route of [
+			'/settings',
+			'/settings/preferences',
+			'/settings/mail',
+			'/settings/permissions',
+			'/connectors/[name]',
+			'/accounts',
+			'/file-stores',
+			'/workspace/agent-settings'
+		])
+			expect(activeNav(route)).toBe('settings');
 		expect(activeNav(null)).toBeUndefined();
 		expect(activeNav('/unknown')).toBeUndefined();
 	});

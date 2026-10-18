@@ -7,6 +7,8 @@
 	import { restorePageScroll } from '$lib/core/nav/scroll';
 	import { previousPathIs } from '$lib/core/nav/back';
 	import { activeNav, navFor } from '$lib/core/nav/nav';
+	import { isSettingsPath, settingsGroups } from '$lib/core/nav/settings';
+	import SettingsNavigation from '$lib/ui/shell/settings-navigation.svelte';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import { markBooted } from '$lib/core/pwa/boot-recovery';
 	import { hub } from '$lib/core/realtime/hub.svelte';
@@ -73,6 +75,7 @@
 			pendingNavigation = null;
 		}
 	}
+	const settingsMode = $derived(isSettingsPath(page.url.pathname));
 	const channelRoute = $derived(
 		page.url.pathname === '/chat' ||
 			/^\/chats\/[^/]+$/.test(page.url.pathname) ||
@@ -154,7 +157,8 @@
 			if (pendingNavigation === null) navigation.close();
 		}}
 		onnavigate={(href) => void navigateFromSidebar(href)}
-		navigation={channelNavigation}
+		navigation={settingsMode ? settingsNavigation : channelNavigation}
+		{settingsMode}
 		badges={{
 			chats:
 				catalog.list.data?.channels.reduce((total, channel) => total + channel.pending.total, 0) ??
@@ -254,4 +258,8 @@
 		onretry={() => void pwa.prepareUpdate()}
 		oninstall={() => void androidUpdates.install()}
 	/>
+{/snippet}
+
+{#snippet settingsNavigation()}
+	<SettingsNavigation groups={settingsGroups} path={page.url.pathname} compact />
 {/snippet}

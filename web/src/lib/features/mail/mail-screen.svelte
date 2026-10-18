@@ -31,7 +31,7 @@
 		error: string | null;
 		notice: string | null;
 		online: boolean;
-		back: { href: string; label: string; onclick?: (e: MouseEvent) => void };
+		back: { href: string; label: string; desktop?: boolean; onclick?: (e: MouseEvent) => void };
 		onretry: () => void;
 		onsave: (input: {
 			provider: string;

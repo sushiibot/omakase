@@ -2,11 +2,9 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { backTo } from '$lib/core/nav/back';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import { MailScreen, MailStore } from '$lib/features/mail';
 	const store = new MailStore();
-	const back = backTo(resolve('/workspace/agent-settings'));
 	onMount(() => {
 		const outcome = page.url.searchParams.get('connection');
 		if (outcome === 'connected') store.notice = 'Mail account connected.';
@@ -25,7 +23,7 @@
 	error={store.error}
 	notice={store.notice}
 	online={pwa.online}
-	back={{ href: resolve('/workspace/agent-settings'), label: 'Agent settings', onclick: back }}
+	back={{ href: resolve('/settings'), label: 'Settings', desktop: false }}
 	onretry={() => void store.load()}
 	onsave={(input) => store.save(input)}
 	onremove={(id) => void store.remove(id)}

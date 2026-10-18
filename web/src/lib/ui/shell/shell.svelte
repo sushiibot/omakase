@@ -35,6 +35,7 @@
 		oncloseNavigation,
 		onnavigate,
 		conversation = false,
+		settingsMode = false,
 		notice,
 		children
 	}: {
@@ -50,6 +51,7 @@
 		oncloseNavigation?: () => void;
 		onnavigate?: (href: string) => void;
 		conversation?: boolean;
+		settingsMode?: boolean;
 		notice?: Snippet;
 		children: Snippet;
 	} = $props();
@@ -444,8 +446,8 @@
 					{#snippet child({ props })}
 						<a
 							{...props}
-							href="/settings"
-							aria-label="App settings"
+							href={settingsMode ? '/chat' : '/settings'}
+							aria-label={settingsMode ? 'Back to app' : 'Settings'}
 							data-sveltekit-replacestate={navOpen ? '' : undefined}
 						>
 							<span
@@ -460,9 +462,13 @@
 							>
 							<span class="grid flex-1 text-start text-sm leading-tight">
 								<span class="truncate font-medium">sushii</span>
-								<span class="truncate text-xs text-muted-foreground">App settings</span>
+								<span class="truncate text-xs text-muted-foreground"
+									>{settingsMode ? 'Back to app' : 'Settings'}</span
+								>
 							</span>
-							<Settings class="ms-auto" />
+							{#if settingsMode}<ArrowLeft class="ms-auto" />{:else}<Settings
+									class="ms-auto"
+								/>{/if}
 						</a>
 					{/snippet}
 				</Sidebar.MenuButton>
@@ -471,7 +477,7 @@
 		{#if !navDocked}<Button
 				variant="ghost"
 				size="icon-sm"
-				aria-label="Close channels"
+				aria-label={settingsMode ? 'Close settings navigation' : 'Close channels'}
 				class="text-muted-foreground"
 				onclick={closePane}><X /></Button
 			>{/if}
@@ -501,7 +507,7 @@
 				</Sidebar.Menu>
 			</Sidebar.Group>
 		</Sidebar.Content>{/if}
-	{#if navigation}<Sidebar.Footer class="border-t border-sidebar-border">
+	{#if navigation && !settingsMode}<Sidebar.Footer class="border-t border-sidebar-border">
 			<nav aria-label="Workspace">
 				<Sidebar.Menu>
 					{#each footerNav as item (item.id)}
@@ -543,7 +549,7 @@
 			<Sidebar.Root
 				data-channel-navigation
 				role="navigation"
-				aria-label="Channel navigation"
+				aria-label={settingsMode ? 'Settings navigation' : 'Channel navigation'}
 				aria-hidden={!sidebarOpen || undefined}
 				class="pt-(--safe-top) pb-(--safe-bottom)"
 			>

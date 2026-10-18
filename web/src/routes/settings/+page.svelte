@@ -1,56 +1,24 @@
 <script lang="ts">
-	import { deviceFs } from '$lib/core/native/device-fs.svelte';
-	import { DeviceFsSettings } from '$lib/features/settings';
-	import { onMount } from 'svelte';
-	import { pwa } from '$lib/core/pwa/pwa.svelte';
-	import { SettingsScreen, settingsStore } from '$lib/features/settings';
-
-	const settings = settingsStore();
-	onMount(() => settings.open());
+	import { MediaQuery } from 'svelte/reactivity';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { MOBILE_BREAKPOINT } from '$lib/ui/breakpoints';
+	import { settingsGroups } from '$lib/core/nav/settings';
+	import { PreferencesScreen } from '$lib/features/settings';
+	import SettingsNavigation from '$lib/ui/shell/settings-navigation.svelte';
+	import DetailScreen from '$lib/ui/screen/detail-screen.svelte';
+	import ScreenContent from '$lib/ui/screen/screen-content.svelte';
+	const desktop = new MediaQuery(`min-width: ${MOBILE_BREAKPOINT}px`);
+	$effect(() => {
+		if (desktop.current) void goto(resolve('/settings/preferences'), { replaceState: true });
+	});
 </script>
 
-<svelte:head><title>App settings · sushii</title></svelte:head>
-
-{#snippet nativeSettings()}
-	{#if deviceFs.available}
-		<DeviceFsSettings
-			folders={deviceFs.folders}
-			multipleFolders={deviceFs.multipleFolders}
-			markdownOnly={deviceFs.markdownOnly}
-			connected={deviceFs.connected}
-			busy={deviceFs.busy}
-			error={deviceFs.error}
-			onchoose={() => void deviceFs.choose()}
-			ondisconnect={(id) => void deviceFs.disconnect(id)}
-		/>
-	{/if}
-{/snippet}
-
-<SettingsScreen
-	{nativeSettings}
-	me={settings.me}
-	ownerName={settings.ownerName}
-	nameSave={settings.nameSave}
-	nameError={settings.nameError}
-	push={settings.push}
-	pushBusy={settings.pushBusy}
-	pushError={settings.pushError}
-	pushSyncFailed={pwa.pushSync === 'failed'}
-	testBusy={settings.testBusy}
-	testResult={settings.testResult}
-	theme={settings.theme}
-	version={__APP_VERSION__}
-	standalone={pwa.standalone}
-	canInstall={pwa.canInstall}
-	installFailed={settings.installFailed}
-	swError={pwa.swError}
-	online={pwa.online}
-	onretryme={() => void settings.me.refetch()}
-	onretryname={() => void settings.ownerName.refetch()}
-	onsavename={(name) => void settings.saveName(name)}
-	ontogglepush={() => void settings.togglePush()}
-	ontest={() => void settings.sendTest()}
-	onchoosetheme={(t) => settings.chooseTheme(t)}
-	oninstall={() => void settings.install()}
-	onreload={() => pwa.reload()}
-/>
+<svelte:head><title>Settings · sushii</title></svelte:head>
+{#if desktop.current}
+	<PreferencesScreen />
+{:else}
+	<DetailScreen title="Settings" back={{ href: '/chat', label: 'Back to app' }}>
+		<ScreenContent><SettingsNavigation groups={settingsGroups} /></ScreenContent>
+	</DetailScreen>
+{/if}

@@ -15,7 +15,7 @@ async function workspaceName(): Promise<string | null | undefined> {
 test("a name saved in Settings reaches the agent's next turn, and clearing it removes it", async ({ page, watch }) => {
   const tag = nonce();
   const name = `Tester ${tag}`;
-  await page.goto("/settings");
+  await page.goto("/settings/preferences");
   await page.getByRole("button", { name: "Edit your name" }).click();
   const field = page.getByRole("textbox", { name: "Your name", exact: true });
   await expect(field).toBeEnabled();
@@ -32,7 +32,7 @@ test("a name saved in Settings reaches the agent's next turn, and clearing it re
   const named = await stack.waitForLlm((r) => r.userText.includes(text));
   expect(named.ownerName).toBe(name);
 
-  await page.goto("/settings");
+  await page.goto("/settings/preferences");
   await page.getByRole("button", { name: "Edit your name" }).click();
   await page.getByRole("button", { name: "Clear name" }).click();
   await expect(page.getByText("Cleared.", { exact: false })).toBeVisible();

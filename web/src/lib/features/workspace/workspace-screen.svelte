@@ -20,7 +20,7 @@
 	} = $props();
 	const sections = $derived(
 		[
-			{ label: 'Information and connections', items: entries.filter((entry) => !entry.feature) },
+			{ label: 'Information', items: entries.filter((entry) => !entry.feature) },
 			{ label: 'Development previews', items: entries.filter((entry) => entry.feature) }
 		].filter((section) => section.items.length)
 	);

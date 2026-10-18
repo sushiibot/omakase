@@ -117,9 +117,9 @@ test('hide survives navigation and reconnection, but a different task opens its 
 	stream.disconnect();
 	await expect(region).toContainText('Reconnecting');
 	await region.getByRole('button', { name: 'Hide browser preview' }).click();
-	await (await openDrawer(page)).getByRole('link', { name: 'App settings', exact: true }).click();
+	await (await openDrawer(page)).getByRole('link', { name: 'Settings', exact: true }).click();
 	await expect(page).toHaveURL(/\/settings$/);
-	await (await openDrawer(page)).getByRole('link', { name: /^Main(?:\s|$)/ }).click();
+	await page.getByRole('link', { name: 'Back to app', exact: true }).click();
 	await expect(region.getByRole('button', { name: 'Show', exact: true })).toBeVisible();
 	await expect(region.getByRole('img')).toBeHidden();
 	stream.set({ id: 'task-browser-2', url: 'https://two.example/download' });

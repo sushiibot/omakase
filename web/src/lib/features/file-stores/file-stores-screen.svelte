@@ -9,7 +9,12 @@
 		online = true,
 		ondirty
 	}: {
-		back?: { href: string; label: string; onclick?: (event: MouseEvent) => void };
+		back?: {
+			href: string;
+			label: string;
+			desktop?: boolean;
+			onclick?: (event: MouseEvent) => void;
+		};
 		online?: boolean;
 		ondirty?: (value: boolean) => void;
 	} = $props();

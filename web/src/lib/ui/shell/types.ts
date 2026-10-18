@@ -11,3 +11,14 @@ export interface NavItem {
 	/** What is behind it, in one line, where a list has room for it. */
 	description?: string;
 }
+
+export interface SettingsGroup {
+	title: string;
+	entries: {
+		href: string;
+		label: string;
+		description: string;
+		keywords?: string;
+		icon: NavItem['icon'];
+	}[];
+}

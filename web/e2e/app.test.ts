@@ -197,7 +197,7 @@ for (const outcome of ['activated', 'stalled', 'throws', 'controllerchange'] as 
 test('settings shows the signed-in login', async ({ page, context }) => {
 	await mockApi(context);
 	await stubPush(page);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	await expect(page.getByTestId('login')).toHaveText('drk@example.com');
 });
 
@@ -208,7 +208,7 @@ test('turning notifications on subscribes with the server key, and the test butt
 	await context.grantPermissions(['notifications']);
 	const { calls, subscribes } = await mockApi(context);
 	await stubPush(page);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	const toggle = toggleOf(page);
 	await expect(toggle).toHaveAttribute('aria-checked', 'false');
 	await expect(toggle).toBeEnabled();
@@ -248,7 +248,7 @@ test('a server failure while subscribing rolls the browser subscription back', a
 	await context.grantPermissions(['notifications']);
 	await mockApi(context, { subscribeStatus: 500 });
 	await stubPush(page);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	const toggle = toggleOf(page);
 	await toggle.click();
 	await expect(page.getByRole('alert')).toContainText('The agent had a problem', {
@@ -281,7 +281,7 @@ test('the app resends an existing subscription on every start, not only on setti
 	expect(subscribes().at(-1)!.contentType).toBe('application/json');
 
 	// Landing on settings shares the start-up resend instead of sending a second one.
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	await expect(toggleOf(page)).toHaveAttribute('aria-checked', 'true');
 	await page.waitForTimeout(500);
 	expect(subscribes().length).toBe(before + 2);
@@ -310,7 +310,7 @@ test('a failed resend keeps notifications on, says so, and retries', async ({ pa
 	await page.goto('/');
 	await page.evaluate(() => navigator.serviceWorker.ready);
 	await seedSubscription(page, KEY_BYTES);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 
 	const toggle = toggleOf(page);
 	await expect(toggle).toHaveAttribute('aria-checked', 'true');
@@ -328,7 +328,7 @@ test('a failed resend keeps notifications on, says so, and retries', async ({ pa
 test('the permission prompt waits until the server has a push key', async ({ page, context }) => {
 	await mockApi(context, { keyStatus: 404 });
 	await stubPush(page);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	await toggleOf(page).click();
 	await expect(page.getByRole('alert')).toContainText("aren't set up on the server");
 	expect(await page.evaluate(() => Notification.permission)).toBe('default');
@@ -340,7 +340,7 @@ test('denying the prompt shows the blocked help, and allowing it later re-enable
 }) => {
 	await mockApi(context);
 	await stubPush(page);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	const toggle = toggleOf(page);
 	await expect(toggle).toBeEnabled();
 	// Headless Chromium answers an unanswered prompt with "denied".
@@ -364,7 +364,7 @@ test('without permission change events, coming back to the app re-checks the blo
 	await page.addInitScript(() => {
 		Permissions.prototype.query = () => Promise.reject(new TypeError('unsupported'));
 	});
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	const toggle = toggleOf(page);
 	await toggle.click();
 	await expect(toggle).toHaveAccessibleDescription(/Blocked/);
@@ -380,7 +380,7 @@ test('without permission change events, coming back to the app re-checks the blo
 test('a failed account load says so and offers a retry', async ({ page, context }) => {
 	await mockApi(context, { meStatus: 403 });
 	await stubPush(page);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	await expect(page.getByRole('alert')).toContainText("isn't signed in as the owner");
 	await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
 });
@@ -432,7 +432,7 @@ test('the reflow check catches content wider than the screen', async ({ page, co
 });
 
 for (const colorScheme of ['light', 'dark'] as const) {
-	for (const path of ['/chat', '/settings']) {
+	for (const path of ['/chat', '/settings/preferences']) {
 		test(`${path} passes axe, 48px targets and reflow in ${colorScheme}`, async ({
 			page,
 			context
@@ -441,7 +441,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 			await mockApi(context);
 			await stubPush(page);
 			await page.goto(path);
-			if (path === '/settings') {
+			if (path === '/settings/preferences') {
 				await expect(page.getByTestId('login')).toBeVisible();
 				await expect(page.getByTestId('owner-name')).toHaveText('Sam');
 			} else await expect(page.getByText('Say hi to your agent.')).toBeVisible();
@@ -460,7 +460,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 test('settings saves and clears the name the agent calls you', async ({ page, context }) => {
 	const { calls } = await mockApi(context);
 	await stubPush(page);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	await page.getByRole('button', { name: 'Edit your name' }).click();
 	const field = page.getByLabel('Your name', { exact: true });
 	await expect(field).toHaveValue('Sam');
@@ -492,7 +492,7 @@ test('settings saves and clears the name the agent calls you', async ({ page, co
 test('name editing is disclosed on request and cancel does not save', async ({ page, context }) => {
 	const { calls } = await mockApi(context);
 	await stubPush(page);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	await expect(page.getByTestId('owner-name')).toHaveText('Sam');
 	await expect(page.getByRole('textbox', { name: 'Your name' })).toHaveCount(0);
 	const edit = page.getByRole('button', { name: 'Edit your name' });
@@ -530,7 +530,7 @@ for (const action of ['Save name', 'Clear name']) {
 			await responseReady;
 			await route.fulfill({ json: { name } });
 		});
-		await page.goto('/settings');
+		await page.goto('/settings/preferences');
 		await page.getByRole('button', { name: 'Edit your name' }).click();
 		const field = page.getByRole('textbox', { name: 'Your name' });
 		await field.fill('First draft');
@@ -547,7 +547,7 @@ for (const action of ['Save name', 'Clear name']) {
 test('a refused name keeps what you typed and says why', async ({ page, context }) => {
 	await mockApi(context, { nameStatus: 422 });
 	await stubPush(page);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	await page.getByRole('button', { name: 'Edit your name' }).click();
 	const field = page.getByLabel('Your name', { exact: true });
 	await expect(field).toHaveValue('Sam');
@@ -564,7 +564,7 @@ test('a refused name keeps what you typed and says why', async ({ page, context 
 test('a failed clear keeps the saved name in the field', async ({ page, context }) => {
 	await mockApi(context, { nameStatus: 500 });
 	await stubPush(page);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	await page.getByRole('button', { name: 'Edit your name' }).click();
 	const field = page.getByLabel('Your name', { exact: true });
 	await expect(field).toHaveValue('Sam');
@@ -577,7 +577,7 @@ test('a failed clear keeps the saved name in the field', async ({ page, context 
 test('the theme choices move with the arrow keys', async ({ page, context }) => {
 	await mockApi(context);
 	await stubPush(page);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	const group = page.getByRole('radiogroup', { name: 'Appearance' });
 	const system = group.getByRole('radio', { name: 'System' });
 	const light = group.getByRole('radio', { name: 'Light' });
@@ -605,8 +605,8 @@ test('the precached shell opens while offline', async ({ page, context }) => {
 	await page.goto('/');
 	await controlled(page);
 	await context.setOffline(true);
-	await page.goto('/settings');
-	await expect(page.getByRole('heading', { name: 'App settings' })).toBeVisible();
+	await page.goto('/settings/preferences');
+	await expect(page.getByRole('heading', { name: 'Preferences' })).toBeVisible();
 	await expect(page.getByText(/You're offline/)).toBeVisible();
 });
 
@@ -617,11 +617,11 @@ test('a 502 from the proxy during a restart still opens the cached shell', async
 	await mockApi(context);
 	await page.goto('/');
 	await controlled(page);
-	await context.route('**/settings', (route) =>
+	await context.route('**/settings/preferences', (route) =>
 		route.fulfill({ status: 502, contentType: 'text/plain', body: 'Bad gateway' })
 	);
-	await page.goto('/settings');
-	await expect(page.getByRole('heading', { name: 'App settings' })).toBeVisible();
+	await page.goto('/settings/preferences');
+	await expect(page.getByRole('heading', { name: 'Preferences' })).toBeVisible();
 	await expect(page.getByTestId('login')).toHaveText('drk@example.com');
 });
 
@@ -629,10 +629,10 @@ test('a 403 page from the proxy is shown as is', async ({ page, context }) => {
 	await mockApi(context);
 	await page.goto('/');
 	await controlled(page);
-	await context.route('**/settings', (route) =>
+	await context.route('**/settings/preferences', (route) =>
 		route.fulfill({ status: 403, contentType: 'text/plain', body: 'Not the owner' })
 	);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	await expect(page.getByText('Not the owner')).toBeVisible();
 });
 
@@ -678,7 +678,12 @@ test('a push message shows a notification from the service worker', async ({ pag
 	await page.goto('/');
 	await controlled(page);
 	const push = await pushChannel(page, context);
-	await push({ title: 'Run failed', body: 'Nightly sync', url: '/settings', tag: 'r1' });
+	await push({
+		title: 'Run failed',
+		body: 'Nightly sync',
+		url: '/settings',
+		tag: 'r1'
+	});
 	await expect
 		.poll(async () =>
 			(await shownNotifications(page)).map(({ title, body, tag, data }) => ({
@@ -689,14 +694,19 @@ test('a push message shows a notification from the service worker', async ({ pag
 			}))
 		)
 		.toEqual([
-			{ title: 'Run failed', body: 'Nightly sync', tag: 'r1', data: { url: '/settings' } }
+			{
+				title: 'Run failed',
+				body: 'Nightly sync',
+				tag: 'r1',
+				data: { url: '/settings' }
+			}
 		]);
 });
 
 test('a push honours its flags and never keeps a cross-origin url', async ({ page, context }) => {
 	await context.grantPermissions(['notifications']);
 	await mockApi(context);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	await controlled(page);
 	const push = await pushChannel(page, context);
 	await push({
@@ -748,7 +758,7 @@ test('opening the chat closes the chat notification and leaves others', async ({
 }) => {
 	await context.grantPermissions(['notifications']);
 	await mockApi(context);
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	await controlled(page);
 	const push = await pushChannel(page, context);
 	await push({ title: 'sushii-agent', body: 'done', url: '/', tag: 'chat' });
@@ -779,7 +789,7 @@ test('opening a pushed approval on Home closes its notification and leaves other
 			asks: []
 		};
 	});
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	await controlled(page);
 	const push = await pushChannel(page, context);
 	await push({
@@ -801,7 +811,7 @@ test('settings from the chat goes back to the chat', async ({ page, context }) =
 	await mockApi(context);
 	await stubPush(page);
 	await page.goto('/chat');
-	await (await openDrawer(page)).getByRole('link', { name: 'App settings' }).click();
+	await (await openDrawer(page)).getByRole('link', { name: 'Settings' }).click();
 	await expect(page).toHaveURL(/\/settings$/);
 	await page.goBack();
 	await expect(page).toHaveURL(/\/chat$/);
@@ -813,9 +823,9 @@ test('opening settings directly throws nothing', async ({ page, context }) => {
 	await stubPush(page);
 	const errors: string[] = [];
 	page.on('pageerror', (e) => errors.push(e.message));
-	await page.goto('/settings');
-	await expect(page.getByRole('heading', { name: 'App settings', level: 1 })).toBeVisible();
-	await expect(page.getByRole('button', { name: /^Menu/ })).toBeVisible();
+	await page.goto('/settings/preferences');
+	await expect(page.getByRole('heading', { name: 'Preferences', level: 1 })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
 	expect(errors).toEqual([]);
 });
 
@@ -849,7 +859,8 @@ test('the app runs under enforced Trusted Types with only its own policies', asy
 	expect(probe).toEqual({ innerHTML: 'blocked', policy: 'blocked' });
 	// The probe's own violations are expected; anything after it is not.
 	ttErrors.get(page)?.splice(0);
-	await (await openDrawer(page)).getByRole('link', { name: 'App settings' }).click();
+	await (await openDrawer(page)).getByRole('link', { name: 'Settings' }).click();
+	await page.getByRole('link', { name: /^Preferences/ }).click();
 	await expect(page.getByTestId('login')).toHaveText('drk@example.com');
 });
 
@@ -911,7 +922,7 @@ for (const outcome of ['success', 'failure'] as const) {
 				}
 			});
 		});
-		await page.goto('/settings');
+		await page.goto('/settings/preferences');
 		await expect(page.getByTestId('login')).toBeVisible();
 		await expect(page.getByLabel('App updates')).toHaveCount(0);
 		await expect
@@ -984,7 +995,7 @@ for (const supported of [true, false]) {
 				}
 			})
 		);
-		await page.goto('/settings');
+		await page.goto('/settings/preferences');
 		await expect(page.getByText('Android 1.0.1 available')).toBeVisible();
 		if (supported) {
 			await page.getByRole('button', { name: 'Install update' }).click();

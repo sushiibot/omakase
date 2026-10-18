@@ -1,3 +1,4 @@
+export { default as PreferencesScreen } from './preferences.svelte';
 export { default as SettingsScreen } from './settings-screen.svelte';
 export { configureSettings, settingsStore, type SettingsStore } from './settings.svelte';
 export type { SettingsApi } from './api';

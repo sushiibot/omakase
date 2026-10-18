@@ -154,19 +154,18 @@ test('a NAS connection saves several folders with separate write permissions', a
 	await expect(folderList.getByText('/public/Reference', { exact: true })).not.toBeVisible();
 });
 
-test('file stores opens from Agent settings and stays out of App settings', async ({
+test('file stores opens directly from Settings and preserves unsaved edits', async ({
 	page,
 	context
 }) => {
 	await api(context);
-	await page.goto('/workspace');
-	await page.getByRole('link', { name: /^Agent settings/ }).click();
+	await page.goto('/settings');
 	await expect(page.getByRole('link', { name: /^File stores/ })).toBeVisible();
 	await page.screenshot({ path: '/tmp/file-store-workspace.png', fullPage: true });
 	await page.getByRole('link', { name: /^File stores/ }).click();
 	await expect(page).toHaveURL(/\/file-stores$/);
 	await expect(page.getByRole('heading', { name: 'File stores', level: 1 })).toBeVisible();
-	await expect(page.getByRole('link', { name: 'Agent settings', exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Add file store' }).click();
 	await page.getByLabel('Name', { exact: true }).fill('Unsaved store');
 	page.once('dialog', (dialog) => dialog.dismiss());
@@ -174,7 +173,7 @@ test('file stores opens from Agent settings and stays out of App settings', asyn
 	await expect(page).toHaveURL(/\/file-stores$/);
 	page.once('dialog', (dialog) => dialog.accept());
 	await page.goBack();
-	await expect(page).toHaveURL(/\/workspace\/agent-settings$/);
+	await expect(page).toHaveURL(/\/settings$/);
 	await page.goto('/settings');
 	await expect(page.getByRole('button', { name: 'Add file store' })).toHaveCount(0);
 });

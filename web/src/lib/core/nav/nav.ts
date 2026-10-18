@@ -13,6 +13,7 @@ import Settings from '@lucide/svelte/icons/settings';
 import Sparkles from '@lucide/svelte/icons/sparkles';
 import Sunrise from '@lucide/svelte/icons/sunrise';
 import type { NavItem } from '$lib/ui/shell/types';
+import { isSettingsPath } from './settings';
 import type { ClientFeature } from '../features.svelte';
 
 /** Live navigation, with optional fixture previews. */
@@ -117,18 +118,11 @@ const moreEntries: NavEntry[] = [
 		description: "Watch the agent's browser, or take it over to sign in"
 	},
 	{
-		id: 'agent-settings',
-		href: '/workspace/agent-settings',
-		label: 'Agent settings',
-		icon: Settings,
-		description: 'Connections, file access and tool permissions'
-	},
-	{
 		id: 'settings',
 		href: '/settings',
-		label: 'App settings',
+		label: 'Settings',
 		icon: Settings,
-		description: 'Notifications, theme and this device'
+		description: 'Preferences, accounts, connections and permissions'
 	}
 ];
 
@@ -142,22 +136,15 @@ const workspace: NavEntry = {
 	href: '/workspace',
 	label: 'Workspace',
 	icon: PanelsTopLeft,
-	description: 'Memory, history, file stores, connectors and workspace tools'
+	description: 'Memory, history, artifacts and workspace tools'
 };
 
 /** Information and capabilities, rather than frequently used work destinations. */
 export function workspaceFor(on: FeatureCheck): NavEntry[] {
 	const entries = moreFor(on);
-	return [
-		'artifacts',
-		'memory',
-		'history',
-		'agent-settings',
-		'briefing',
-		'skills',
-		'schedules',
-		'browser'
-	].flatMap((id) => entries.filter((entry) => entry.id === id));
+	return ['artifacts', 'memory', 'history', 'briefing', 'skills', 'schedules', 'browser'].flatMap(
+		(id) => entries.filter((entry) => entry.id === id)
+	);
 }
 
 /** Stable primary destinations. Optional previews live inside Workspace. */
@@ -178,18 +165,10 @@ const sectionOf = (path: string) => path.match(/^\/[^/]+/)?.[0];
 /** The nav entry a route belongs to, which the drawer and sidebar light. */
 export function activeNav(routeId: string | null): string | undefined {
 	if (!routeId) return undefined;
+	if (isSettingsPath(pathOf(routeId))) return 'settings';
 	const section = sectionOf(pathOf(routeId));
 	if (section === '/chat' || section === '/inbox') return 'chats';
-	if (
-		section === '/workspace' ||
-		section === '/more' ||
-		section === '/connectors' ||
-		section === '/accounts' ||
-		section === '/file-stores' ||
-		pathOf(routeId).startsWith('/settings/mail') ||
-		pathOf(routeId).startsWith('/settings/permissions')
-	)
-		return 'workspace';
+	if (section === '/workspace' || section === '/more') return 'workspace';
 	const entry = [assistant, chats, ...moreEntries].find((e) => e.href === section);
 	return entry && workspaceFor(allOn).some((item) => item.id === entry.id)
 		? 'workspace'

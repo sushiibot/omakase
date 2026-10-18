@@ -56,7 +56,7 @@
 	};
 </script>
 
-<DetailScreen title="Accounts" back={{ href: '/connectors', label: 'Connectors' }}>
+<DetailScreen title="Accounts" back={{ href: '/settings', label: 'Settings', desktop: false }}>
 	<ScreenContent>
 		<div class="flex flex-col gap-6">
 			<p class="text-sm text-muted-foreground">

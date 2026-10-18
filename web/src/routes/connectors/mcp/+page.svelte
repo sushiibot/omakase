@@ -14,7 +14,7 @@
 <svelte:head><title>MCP servers · sushii</title></svelte:head>
 
 <ConnectorsScreen
-	back={{ href: resolve('/connectors'), label: 'Connectors' }}
+	back={{ href: resolve('/settings'), label: 'Settings', desktop: false }}
 	remote={list}
 	servers={list.data ?? []}
 	online={pwa.online}

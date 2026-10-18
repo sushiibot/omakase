@@ -258,12 +258,12 @@ test('refreshing a changed definition clears the previous approval and unsent cr
 test('connectors separates MCP servers from API integrations', async ({ page, context }) => {
 	await fixtureApp(context);
 	await page.goto('/connectors');
-	await expect(page.getByRole('heading', { name: 'Connectors', exact: true })).toBeVisible();
-	await page.getByRole('link', { name: /MCP servers Connect servers/ }).click();
+	await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+	await page.getByRole('link', { name: /^MCP servers/ }).click();
 	await expect(page).toHaveURL(/\/connectors\/mcp$/);
 	await expect(page.getByRole('heading', { name: 'MCP servers', exact: true })).toBeVisible();
 	await page.goBack();
-	await page.getByRole('link', { name: /API integrations Let the agent/ }).click();
+	await page.getByRole('link', { name: /^API integrations/ }).click();
 	await expect(page.getByRole('heading', { name: 'API integrations', exact: true })).toBeVisible();
 });
 

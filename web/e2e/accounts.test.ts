@@ -50,7 +50,7 @@ test('accounts are reachable; passwords load only on demand and clear on expiry 
 }) => {
 	const requests = await mock(context);
 	await page.goto('/connectors');
-	await page.getByRole('link', { name: /Accounts Passwords/ }).click();
+	await page.getByRole('link', { name: /^Website accounts/ }).click();
 	await expect(page.getByRole('heading', { name: 'Example account' })).toBeVisible();
 	expect(requests.filter((r) => r.path.endsWith('/reveal'))).toHaveLength(0);
 	await page.clock.install();
@@ -65,8 +65,8 @@ test('accounts are reachable; passwords load only on demand and clear on expiry 
 	await page.getByRole('button', { name: 'Reveal last confirmed password' }).click();
 	await expect(page.getByLabel('Revealed password')).toBeVisible();
 	expect(requests.at(-1)?.body).toEqual({ version: 1, purpose: 'reveal' });
-	await page.getByRole('link', { name: 'Connectors', exact: true }).click();
-	await page.getByRole('link', { name: /Accounts Passwords/ }).click();
+	await page.getByRole('link', { name: 'Settings', exact: true }).click();
+	await page.getByRole('link', { name: /^Website accounts/ }).click();
 	await expect(page.getByRole('heading', { name: 'Accounts', exact: true })).toBeVisible();
 	await expect(page.getByLabel('Revealed password')).toHaveCount(0);
 	expect(

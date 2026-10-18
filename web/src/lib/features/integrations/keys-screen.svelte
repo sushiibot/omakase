@@ -35,7 +35,11 @@
 {#snippet banner()}
 	{#if !online}<ConnectionBanner state={{ kind: 'app-offline' }} />{/if}
 {/snippet}
-<DetailScreen title="API integrations" back={{ href: '/connectors', label: 'Connectors' }} {banner}>
+<DetailScreen
+	title="API integrations"
+	back={{ href: '/settings', label: 'Settings', desktop: false }}
+	{banner}
+>
 	<ScreenContent>
 		<div class="flex flex-col gap-6">
 			<p class="text-sm text-muted-foreground">

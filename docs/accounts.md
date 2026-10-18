@@ -14,7 +14,7 @@ Use `revise` when a website rejects the candidate. Supply its password requireme
 
 Archive an unused account to prevent further browser fills and revisions. Archived passwords remain available to owner reveal and copy operations. They also remain in the redaction inventory.
 
-The owner can view accounts, reveal or copy passwords, inspect audit history, and archive accounts at `/accounts`.
+The owner can view accounts, reveal or copy passwords, inspect audit history, and archive accounts under Settings → Website accounts (`/accounts`).
 
 ## Encryption key and recovery
 

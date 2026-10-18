@@ -83,7 +83,7 @@ test('Android folders connect independently and retain the remaining grant', asy
 		if (path.endsWith('/history')) return json({ items: [], before: null });
 		return json({});
 	});
-	await page.goto('/settings');
+	await page.goto('/settings/preferences');
 	await expect(page.getByRole('button', { name: 'Add folder', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Add folder', exact: true }).click();
 	await expect(page.getByText('My files', { exact: true })).toBeVisible();
@@ -118,7 +118,7 @@ test('browser settings do not offer native folder access', async ({ page, contex
 			body: JSON.stringify({ threads: [], channels: [] })
 		})
 	);
-	await page.goto('/settings');
-	await expect(page.getByRole('heading', { name: 'App settings', exact: true })).toBeVisible();
+	await page.goto('/settings/preferences');
+	await expect(page.getByRole('heading', { name: 'Preferences', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Add folder', exact: true })).toHaveCount(0);
 });
