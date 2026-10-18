@@ -7,7 +7,7 @@
 	import { followAgentLink, openAgentFrom, openAgentPage } from '$lib/core/nav/agent-link';
 	import { PanelButton } from '$lib/features/tasks';
 	import { BrowserPreview, BrowserPreviewPanel } from '$lib/features/browser';
-	import { onMount, tick, untrack } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
@@ -20,7 +20,8 @@
 		ClearNotifications,
 		chatStore,
 		modelsStore,
-		Dictation,
+		conversationMedia,
+		conversationContext,
 		VoiceControl,
 		Voice,
 		VoiceCallBar,
@@ -54,15 +55,6 @@
 		);
 	});
 	const browser = new BrowserPreview('main');
-	$effect(() => {
-		const preview = browser;
-		return untrack(() => preview.start());
-	});
-	$effect(() => {
-		const preview = browser;
-		const expanded = browserSheet.open;
-		untrack(() => preview.setExpanded(expanded));
-	});
 	const voiceSheet = routedSheet('voice');
 	const voice = new Voice(() => store?.messages ?? []);
 	let voiceActive = $state(false);
@@ -85,32 +77,15 @@
 	let modelRole = $state<'main' | 'fallback'>('main');
 	// The transcript joins whatever is already in the box, like keyboard dictation. Kept on screen while
 	// it runs, so a feature flip can't hide the stop control of a recording in progress.
-	const dictation = new Dictation((text, send) => {
-		const draft = store.draft.trimEnd();
-		store.setDraft(draft ? `${draft} ${text}` : text);
-		if (send) void store.send(store.draft);
+	const dictation = conversationMedia({
+		conversationId: () => 'main',
+		store: () => store,
+		browser: () => browser,
+		expanded: () => browserSheet.open
 	});
 	const sheet = $derived((Object.keys(sheets) as ChatSheet[]).find((s) => sheets[s].open));
 	const focusAsk = $derived(page.url.searchParams.get('ask') ?? undefined);
-	$effect(() => {
-		if (sheet !== 'model' && sheet !== 'context') return;
-		untrack(() => models.refresh());
-	});
-
-	const contextRevision = $derived(
-		`${s?.running}:${JSON.stringify(s?.usage)}:${s?.items.findLast((i) => i.kind === 'divider')?.id}:${s?.items.findLast((i) => i.kind === 'assistant')?.id}`
-	);
-	$effect(() => {
-		contextRevision;
-		untrack(() => models.refresh());
-	});
-	$effect(() => {
-		const m = models;
-		const timer = setInterval(() => {
-			if (!document.hidden && (s.running || sheet === 'model' || sheet === 'context')) m.refresh();
-		}, 15_000);
-		return () => clearInterval(timer);
-	});
+	conversationContext({ store: () => store, models: () => models, sheet: () => sheet });
 
 	const connection = $derived.by((): ConnectionState | 'forbidden' | undefined => {
 		if (!pwa.online || offlineBrowsing.unreachable) return { kind: 'offline' };
@@ -128,15 +103,6 @@
 		if (hub.connection !== 'reconnecting') return;
 		const t = setInterval(() => (now = Date.now()), 1000);
 		return () => clearInterval(t);
-	});
-
-	onMount(() => {
-		void models.remote.ensure();
-		const unwatch = models.remote.watch();
-		return () => {
-			unwatch();
-			dictation.cancel();
-		};
 	});
 
 	// `!model`, another device or a workspace restart can change the model: reload whenever the agent

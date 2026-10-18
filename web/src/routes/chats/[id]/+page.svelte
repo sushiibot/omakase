@@ -16,7 +16,8 @@
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import {
 		modelsStore,
-		Dictation,
+		conversationMedia,
+		conversationContext,
 		VoiceControl,
 		Voice,
 		VoiceCallBar,
@@ -56,27 +57,14 @@
 		);
 	});
 	const browser = $derived(new BrowserPreview(id));
-	$effect(() => {
-		const preview = browser;
-		return untrack(() => preview.start());
-	});
-	$effect(() => {
-		const preview = browser;
-		const expanded = browserSheet.open;
-		untrack(() => preview.setExpanded(expanded));
-	});
 	const voiceSheet = routedSheet('voice');
 	const voice = new Voice(() => (detail && store ? threadMessages(detail, store.messages) : []));
 	let voiceActive = $state(false);
-	const dictation = new Dictation((text, send) => {
-		if (!store) return;
-		const draft = store.draft.trimEnd();
-		store.setDraft(draft ? `${draft} ${text}` : text);
-		if (send) void store.send(store.draft);
-	});
-	$effect(() => {
-		id;
-		return () => dictation.cancel();
+	const dictation = conversationMedia({
+		conversationId: () => id,
+		store: () => store,
+		browser: () => browser,
+		expanded: () => browserSheet.open
 	});
 	let viewer = $state<FileRef | undefined>();
 	let now = $state(Date.now());
@@ -100,27 +88,6 @@
 
 	const models = $derived(modelsStore(id));
 	let modelRole = $state<'main' | 'fallback'>('main');
-	$effect(() => {
-		const m = models;
-		untrack(() => void m.remote.ensure());
-		return m.remote.watch();
-	});
-
-	const contextRevision = $derived(
-		`${store?.running}:${JSON.stringify(store?.usage)}:${store?.items.findLast((i) => i.kind === 'divider')?.id}:${store?.items.findLast((i) => i.kind === 'assistant')?.id}`
-	);
-	$effect(() => {
-		contextRevision;
-		untrack(() => models.refresh());
-	});
-	$effect(() => {
-		const m = models;
-		const timer = setInterval(() => {
-			if (!document.hidden && (store?.running || sheet === 'model' || sheet === 'context'))
-				m.refresh();
-		}, 15_000);
-		return () => clearInterval(timer);
-	});
 
 	type AnySheet = ChatSheet | Exclude<ThreadSheet, 'branch'>;
 	const ids: AnySheet[] = [
@@ -140,11 +107,7 @@
 		ReturnType<typeof routedSheet>
 	>;
 	const sheet = $derived(ids.find((s) => sheets[s].open));
-	$effect(() => {
-		if (sheet !== 'model' && sheet !== 'context') return;
-		const m = models;
-		untrack(() => m.refresh());
-	});
+	conversationContext({ store: () => store, models: () => models, sheet: () => sheet });
 	const closeSheet = () => {
 		if (sheet) sheets[sheet].close();
 	};

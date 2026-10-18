@@ -115,7 +115,10 @@ export class ChatStore {
 	photos = $state<Photo[]>([]);
 	quotaFull = $state(false);
 	trayPhase = $state<'ready' | 'submitting'>('ready');
-	draft = $state('');
+	#draft = $state('');
+	get draft() {
+		return this.#draft;
+	}
 	/** Main is on screen. `seen` suppresses pushes, so it must only go out while the reader can see the chat. */
 	viewing = $state(false);
 
@@ -212,7 +215,7 @@ export class ChatStore {
 			this.#drafts.all().catch(() => [])
 		]);
 		const draft = saved.find((d) => d.id === this.conversationId);
-		if (draft?.text && !this.draft) this.draft = draft.text;
+		if (draft?.text && !this.draft) this.#draft = draft.text;
 		if (draft?.photos?.length && !this.photos.length) this.#restorePhotos(draft.photos);
 		this.#draftRestored = true;
 		const mine = entries.filter((e) => (e.conversationId ?? 'main') === this.conversationId);
@@ -444,7 +447,7 @@ export class ChatStore {
 	// ── Sending ──
 
 	setDraft(text: string) {
-		this.draft = text;
+		this.#draft = text;
 		if (this.#draftTimer) clearTimeout(this.#draftTimer);
 		this.#draftTimer = setTimeout(() => this.#saveDraft(), DRAFT_DEBOUNCE_MS);
 	}
@@ -556,7 +559,7 @@ export class ChatStore {
 		if (!options.preserveComposer) {
 			this.photos = [];
 			this.quotaFull = false;
-			this.draft = '';
+			this.#draft = '';
 			this.#saveDraft();
 		}
 		this.#commit();
@@ -686,7 +689,7 @@ export class ChatStore {
 				: { state: 'uploaded' as const, uploadId: p.uploadId, uploadedAt: p.uploadedAt })
 		}));
 		this.photos = [...restored, ...this.photos].slice(0, MESSAGE_UPLOADS_MAX);
-		this.draft = this.draft ? `${entry.text}\n\n${this.draft}` : entry.text;
+		this.#draft = this.draft ? `${entry.text}\n\n${this.draft}` : entry.text;
 		this.#saveDraft();
 		this.showToast('A photo in your message expired. Re-attach it and send again.');
 	}

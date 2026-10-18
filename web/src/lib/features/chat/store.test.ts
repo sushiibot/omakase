@@ -3,7 +3,7 @@ import { afterAll, expect, test } from 'bun:test';
 import type { ChatEnvelope } from '$lib/core/realtime/events';
 import { createHub } from '$lib/core/realtime/hub.svelte';
 import type { ChatTransport } from '$lib/core/realtime/transport';
-import type { KeyValue, OutboxEntry } from '$lib/core/storage/outbox';
+import type { Draft, KeyValue, OutboxEntry } from '$lib/core/storage/outbox';
 import { memoryKeyValue } from '$lib/core/storage/outbox';
 import type { ChatApi } from './api';
 import { ChatStore } from './store.svelte';
@@ -524,4 +524,68 @@ test('setup guidance preserves the draft and pending attachments', async () => {
 	expect(entries[0]?.uploadIds).toEqual([]);
 	expect(entries[0]?.photos).toEqual([]);
 	store.destroy();
+});
+
+test('composer commands persist edits and sending clears the saved draft before its debounce', async () => {
+	const { transport } = runningTurnStream();
+	const drafts = memoryKeyValue<Draft>((draft) => draft.id);
+	await drafts.put({ id: 'thread:task-one', text: 'saved task draft', photos: [] });
+	const store = new ChatStore('thread:task-one', {
+		hub: createHub({ transport }),
+		api: recordingApi([]),
+		outbox: memory(),
+		drafts
+	});
+	try {
+		await store.start();
+		expect(store.draft).toBe('saved task draft');
+		expect(() => Object.assign(store, { draft: 'bypassed command' })).toThrow();
+		store.setDraft('edited task draft');
+		await Bun.sleep(350);
+		expect((await drafts.all())[0]?.text).toBe('edited task draft');
+		store.setDraft('send before debounce');
+		await store.send(store.draft);
+		expect(store.draft).toBe('');
+		expect((await drafts.all())[0]?.text).toBe('');
+		await Bun.sleep(350);
+		expect((await drafts.all())[0]?.text).toBe('');
+	} finally {
+		store.destroy();
+	}
+});
+
+test('draft restoration does not overwrite text entered while storage is loading', async () => {
+	const { transport } = runningTurnStream();
+	let restore!: (drafts: Draft[]) => void;
+	const writes: Draft[] = [];
+	const drafts: KeyValue<Draft> = {
+		all: () =>
+			new Promise((resolve) => {
+				restore = resolve;
+			}),
+		put: async (draft) => {
+			writes.push(draft);
+		},
+		delete: async () => {}
+	};
+	const store = new ChatStore('main', {
+		hub: createHub({ transport }),
+		api: recordingApi([]),
+		outbox: memory(),
+		drafts
+	});
+	try {
+		const started = store.start();
+		store.setDraft('new input');
+		await Bun.sleep(350);
+		expect(writes).toEqual([]);
+		restore([{ id: 'main', text: 'older saved input', photos: [] }]);
+		await started;
+		expect(store.draft).toBe('new input');
+		store.setDraft('continued input');
+		await Bun.sleep(350);
+		expect(writes.map((draft) => draft.text)).toEqual(['continued input']);
+	} finally {
+		store.destroy();
+	}
 });

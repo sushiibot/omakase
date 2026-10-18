@@ -75,7 +75,7 @@
 	approvalSubmitting={store.trayPhase === 'submitting'}
 	toast={store.toast}
 	placeholder={store.running ? 'Steer this task…' : 'Follow up on this task…'}
-	ondraft={(text) => (store.draft = text)}
+	ondraft={(text) => store.setDraft(text)}
 	onsend={() => void store.send(store.draft)}
 	onstop={() => void store.stopTurn()}
 	onloadolder={() => store.loadOlder()}
