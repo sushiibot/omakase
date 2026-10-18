@@ -1,10 +1,17 @@
 /// <reference types="bun" />
-import { afterAll, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, expect, jest, test } from 'bun:test';
 import { createHub } from '$lib/core/realtime/hub.svelte';
 import { fakeTransport } from '$lib/core/realtime/fake-transport';
 import type { RunsApi } from './api';
 import { RunsStore } from './runs.svelte';
 import type { RunDetail, RunSummary } from './types';
+
+import { advance, restoreTimers, settle } from '../../../../tests/timers';
+
+beforeEach(() => {
+	jest.useFakeTimers();
+});
+afterEach(restoreTimers);
 
 const g = globalThis as unknown as { document?: unknown };
 // Removed after this file: a leftover document makes later files' UI libraries assume window exists.
@@ -77,10 +84,12 @@ test("a run event updates the run's status in the list and in its open detail", 
 	await view.remote.refetch();
 	all[2] = { ...all[2]!, status: 'failed', endedAt: new Date().toISOString() };
 	stream.emit('run', { runId: id(3), kind: 'subagent', status: 'failed' }, false);
-	await Bun.sleep(50);
+	await advance(16);
 	expect(store.list.data?.runs[0]).toMatchObject({ runId: id(3), status: 'failed' });
 	expect(view.remote.data?.run.status).toBe('failed');
-	await Bun.sleep(1200);
+	await advance(999);
+	expect(view.remote.data?.run.endedAt).toBeUndefined();
+	await advance(1);
 	expect(view.remote.data?.run.endedAt).toBeDefined();
 });
 
@@ -91,7 +100,10 @@ test('a new run joins the top of the list without losing older pages or repeatin
 	expect(shown(store)).toEqual(['run 6', 'run 5', 'run 4', 'run 3', 'run 2', 'run 1']);
 	all.push(run(7, 'running'));
 	stream.emit('run', { runId: id(7), kind: 'subagent', status: 'running' }, false);
-	await Bun.sleep(1200);
+	await advance(16);
+	await advance(999);
+	expect(shown(store)).not.toContain('run 7');
+	await advance(1);
 	expect(shown(store)).toEqual(['run 7', 'run 6', 'run 5', 'run 4', 'run 3', 'run 2', 'run 1']);
 	expect(store.before).toBeNull();
 });
@@ -110,11 +122,11 @@ test('type filters refresh their newest runs while preserving loaded pages', asy
 	expect(shown(store)).toHaveLength(6);
 	store.setFilter('subagent');
 	expect(store.older).toEqual([]);
-	await Bun.sleep(10);
+	await settle();
 	expect(shown(store)).toEqual(['run 6', 'run 4', 'run 2']);
 	expect(store.before).toBeNull();
 	store.setFilter('all');
-	await Bun.sleep(10);
+	await settle();
 	expect(shown(store)).toEqual(['run 6', 'run 5', 'run 4', 'run 3', 'run 2', 'run 1']);
 	expect(store.before).toBeNull();
 });
@@ -125,10 +137,10 @@ test('returning to a paginated filter preserves its cursor and accepts new runs 
 	await store.loadOlder();
 	expect(store.before).toBe(id(4));
 	store.setFilter('chat');
-	await Bun.sleep(10);
+	await settle();
 	all.push(run(10));
 	store.setFilter('all');
-	await Bun.sleep(10);
+	await settle();
 	expect(shown(store)).toEqual(['run 10', 'run 9', 'run 8', 'run 7', 'run 6', 'run 5', 'run 4']);
 	expect(store.before).toBe(id(4));
 	await store.loadOlder();
@@ -156,10 +168,10 @@ test('older-page errors belong to their filter and survive revisiting it', async
 	await store.loadOlder();
 	expect(store.olderError).toBe('Older page unavailable');
 	store.setFilter('chat');
-	await Bun.sleep(10);
+	await settle();
 	expect(store.olderError).toBeNull();
 	store.setFilter('all');
-	await Bun.sleep(10);
+	await settle();
 	expect(store.olderError).toBe('Older page unavailable');
 	expect(store.before).toBe(id(4));
 });

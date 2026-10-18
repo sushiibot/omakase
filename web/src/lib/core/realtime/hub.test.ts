@@ -1,10 +1,20 @@
 /// <reference types="bun" />
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 import type { ChatEnvelope } from './events';
 import { fakeTransport } from './fake-transport';
 import { conversationOf, createHub } from './hub.svelte';
 
-const tick = () => Bun.sleep(30);
+import { advance, restoreTimers, settle } from '../../../../tests/timers';
+
+beforeEach(() => {
+	jest.useFakeTimers();
+});
+afterEach(restoreTimers);
+
+async function ready(hub: ReturnType<typeof createHub>) {
+	await advance(0);
+	hub.flush();
+}
 
 function setup() {
 	const fake = fakeTransport({ seq: 10 });
@@ -37,7 +47,7 @@ describe('hub', () => {
 		const { hub, connects } = setup();
 		hub.start();
 		hub.start();
-		await tick();
+		await ready(hub);
 		expect(connects()).toBe(1);
 		expect(hub.connection).toBe('open');
 		expect(hub.headSeq).toBe(10);
@@ -49,12 +59,14 @@ describe('hub', () => {
 		const batches: (readonly ChatEnvelope[])[] = [];
 		hub.subscribe({}, (b) => batches.push(b));
 		hub.start();
-		await tick();
+		await ready(hub);
 		fake.emit('user', { key: 'a', text: 'hi', uploadIds: [], at: 'x' });
 		fake.emit('status', { clientId: 'a', state: 'accepted' });
 		fake.emit('delta', { turnId: 't', offset: 0, text: 'Hel' }, false);
 		expect(batches).toHaveLength(1);
-		await tick();
+		await advance(15);
+		expect(batches).toHaveLength(1);
+		await advance(1);
 		expect(types(batches)).toEqual([['hello'], ['user', 'status', 'delta']]);
 		expect(hub.headSeq).toBe(12);
 	});
@@ -64,12 +76,12 @@ describe('hub', () => {
 		const narrow: (readonly ChatEnvelope[])[] = [];
 		hub.subscribe({ conversation: 'main', types: ['reply'] }, (b) => narrow.push(b));
 		hub.start();
-		await tick();
+		await ready(hub);
 		fake.emit('user', { key: 'a', text: 'hi', uploadIds: [], at: 'x' });
 		fake.emit('workspace', { state: 'offline' }, false);
 		fake.emit('reset', { headSeq: 40, workspace: 'offline', pending: { approvals: [], asks: [] } });
 		fake.emit('reply', { key: 'r', text: 'ok', files: [] });
-		await tick();
+		hub.flush();
 		expect(types(narrow)).toEqual([['hello'], ['workspace', 'reset', 'reply']]);
 		expect(hub.workspace).toBe('offline');
 	});
@@ -83,12 +95,12 @@ describe('hub', () => {
 		);
 		hub.subscribe({ conversation: 'main' }, (b) => other.push(b));
 		hub.start();
-		await tick();
+		await ready(hub);
 		fake.emit('hello', hello([approval('p1')]), false);
 		fake.emit('approval', approval('n'));
 		fake.emit('approval_resolved', { nonce: 'n', decision: 'approve' });
 		fake.emit('reply', { key: 'r', text: 'ok', files: [] });
-		await tick();
+		hub.flush();
 		expect(types(main).at(-1)).toEqual(['hello', 'approval', 'approval_resolved', 'reply']);
 		expect(types(other).at(-1)).toEqual(['hello', 'reply']);
 		const pending = (b: (readonly ChatEnvelope[])[]) =>
@@ -107,9 +119,9 @@ describe('hub', () => {
 		hub.subscribe({ conversation: 'thread:trip' }, (b) => thread.push(b));
 		hub.subscribe({ conversation: 'main' }, (b) => main.push(b));
 		hub.start();
-		await tick();
+		await ready(hub);
 		fake.emit('reply', { key: 'r', text: 'ok', files: [] });
-		await tick();
+		hub.flush();
 		expect(types(thread).flat()).toEqual(['hello', 'reply']);
 		expect(types(main).flat()).toEqual(['hello']);
 	});
@@ -117,7 +129,7 @@ describe('hub', () => {
 	test('a subscriber that joins after hello gets it replayed with what changed since', async () => {
 		const { fake, hub } = setup();
 		hub.start();
-		await tick();
+		await ready(hub);
 		fake.emit('hello', hello([approval('p1'), approval('p2')], ['t1']), false);
 		fake.emit('approval_resolved', { nonce: 'p1', decision: 'deny' });
 		fake.emit('approval', approval('n1'));
@@ -127,7 +139,7 @@ describe('hub', () => {
 		fake.emit('workspace', { state: 'online' }, false);
 		fake.emit('reply', { key: 'r', text: 'missed', files: [] });
 		fake.emit('turn_final', { turnId: 't1', outcome: 'done', summary: null });
-		await tick();
+		hub.flush();
 
 		const late: (readonly ChatEnvelope[])[] = [];
 		hub.subscribe({ conversation: 'main', globals: ['approval', 'approval_resolved'] }, (b) =>
@@ -152,7 +164,7 @@ describe('hub', () => {
 	test('stop forgets the connection, so nothing stale replays or reports', async () => {
 		const { hub } = setup();
 		hub.start();
-		await tick();
+		await ready(hub);
 		hub.stop();
 		expect(hub.connection).toBe('connecting');
 		expect(hub.headSeq).toBeNull();
@@ -161,7 +173,7 @@ describe('hub', () => {
 		hub.onState((s) => heard.push(s));
 		const batches: (readonly ChatEnvelope[])[] = [];
 		hub.subscribe({}, (b) => batches.push(b));
-		await tick();
+		await advance(16);
 		expect(heard).toEqual([]);
 		expect(batches).toEqual([]);
 	});
@@ -171,11 +183,11 @@ describe('hub', () => {
 		const batches: (readonly ChatEnvelope[])[] = [];
 		hub.subscribe({}, (b) => batches.push(b));
 		hub.start();
-		await tick();
+		await ready(hub);
 		fake.emit('session', { kind: 'new' });
 		hub.flush();
 		expect(types(batches)).toEqual([['hello'], ['session']]);
-		await tick();
+		await advance(16);
 		expect(batches).toHaveLength(2);
 	});
 
@@ -184,7 +196,7 @@ describe('hub', () => {
 		const early: string[] = [];
 		hub.onState((s) => early.push(s));
 		hub.start();
-		await tick();
+		await ready(hub);
 		fake.setState('reconnecting');
 		expect(hub.reconnectingSince).not.toBeNull();
 		const late: string[] = [];
@@ -200,15 +212,15 @@ describe('hub', () => {
 		const batches: (readonly ChatEnvelope[])[] = [];
 		const off = hub.subscribe({}, (b) => batches.push(b));
 		hub.start();
-		await tick();
+		await ready(hub);
 		off();
 		fake.emit('session', { kind: 'new' });
-		await tick();
+		hub.flush();
 		expect(batches).toHaveLength(1);
 		hub.stop();
 		hub.subscribe({}, (b) => batches.push(b));
 		fake.emit('session', { kind: 'compacted' });
-		await tick();
+		await advance(16);
 		expect(batches).toHaveLength(1);
 	});
 });
@@ -216,13 +228,14 @@ describe('hub', () => {
 test('release announcements reach late subscribers and replace obsolete versions', async () => {
 	const { hub, fake } = setup();
 	hub.start();
-	await tick();
+	await ready(hub);
 	fake.emit('app_update', { web: 'one', android: null }, false);
 	fake.emit('app_update', { web: 'two', android: null }, false);
-	await tick();
+	hub.flush();
 	const batches: (readonly ChatEnvelope[])[] = [];
 	const off = hub.subscribe({ types: ['app_update'] }, (events) => batches.push(events));
-	await tick();
+	hub.flush();
+	await settle();
 	expect(
 		batches
 			.flat()

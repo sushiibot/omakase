@@ -1,5 +1,5 @@
 /// <reference types="bun" />
-import { afterAll, expect, test } from 'bun:test';
+import { afterAll, afterEach, expect, jest, test } from 'bun:test';
 import type { ChatEnvelope } from '$lib/core/realtime/events';
 import { createHub } from '$lib/core/realtime/hub.svelte';
 import type { ChatTransport } from '$lib/core/realtime/transport';
@@ -7,6 +7,12 @@ import type { Draft, KeyValue, OutboxEntry } from '$lib/core/storage/outbox';
 import { memoryKeyValue } from '$lib/core/storage/outbox';
 import type { ChatApi } from './api';
 import { ChatStore } from './store.svelte';
+
+import { advance, restoreTimers } from '../../../../tests/timers';
+
+afterEach(() => {
+	if (jest.isFakeTimers()) restoreTimers();
+});
 
 const g = globalThis as unknown as { document?: unknown };
 // Removed after this file: a leftover document makes later files' UI libraries assume window exists.
@@ -361,9 +367,13 @@ async function alertStore(viewing: boolean) {
 		drafts: memory()
 	});
 	await store.start();
+	jest.useFakeTimers();
 	store.setViewing(viewing);
 	alert();
-	await Bun.sleep(1300);
+	await advance(16);
+	await advance(999);
+	expect(seen).toEqual([]);
+	await advance(1);
 	return { store, seen };
 }
 
@@ -452,8 +462,12 @@ test('durable live replies refresh the offline history snapshot', async () => {
 	const hub = createHub({ transport });
 	const store = new ChatStore('main', { hub, api, outbox: memory(), drafts: memory() });
 	await store.start();
+	jest.useFakeTimers();
 	push({ type: 'reply', seq: 6, data: { key: 'new-reply', text: 'Saved reply', files: [] } });
-	await Bun.sleep(650);
+	await advance(16);
+	await advance(499);
+	expect(refreshed).toBe(0);
+	await advance(1);
 	expect(refreshed).toBe(1);
 	store.destroy();
 	hub.stop();
@@ -540,14 +554,17 @@ test('composer commands persist edits and sending clears the saved draft before 
 		await store.start();
 		expect(store.draft).toBe('saved task draft');
 		expect(() => Object.assign(store, { draft: 'bypassed command' })).toThrow();
+		jest.useFakeTimers();
 		store.setDraft('edited task draft');
-		await Bun.sleep(350);
+		await advance(299);
+		expect((await drafts.all())[0]?.text).toBe('saved task draft');
+		await advance(1);
 		expect((await drafts.all())[0]?.text).toBe('edited task draft');
 		store.setDraft('send before debounce');
 		await store.send(store.draft);
 		expect(store.draft).toBe('');
 		expect((await drafts.all())[0]?.text).toBe('');
-		await Bun.sleep(350);
+		await advance(350);
 		expect((await drafts.all())[0]?.text).toBe('');
 	} finally {
 		store.destroy();
@@ -575,15 +592,16 @@ test('draft restoration does not overwrite text entered while storage is loading
 		drafts
 	});
 	try {
+		jest.useFakeTimers();
 		const started = store.start();
 		store.setDraft('new input');
-		await Bun.sleep(350);
+		await advance(350);
 		expect(writes).toEqual([]);
 		restore([{ id: 'main', text: 'older saved input', photos: [] }]);
 		await started;
 		expect(store.draft).toBe('new input');
 		store.setDraft('continued input');
-		await Bun.sleep(350);
+		await advance(350);
 		expect(writes.map((draft) => draft.text)).toEqual(['continued input']);
 	} finally {
 		store.destroy();

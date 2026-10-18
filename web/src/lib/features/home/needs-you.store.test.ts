@@ -1,5 +1,5 @@
 /// <reference types="bun" />
-import { afterAll, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, expect, jest, test } from 'bun:test';
 import { createHub } from '$lib/core/realtime/hub.svelte';
 import { fakeTransport } from '$lib/core/realtime/fake-transport';
 import type { JobAlert } from '$lib/core/realtime/events';
@@ -8,6 +8,13 @@ import type { HomeApi } from './api';
 import { HEARTBEAT_KEY, homeData, nightlyAlert, RUN_IDS } from './fixtures';
 import { NeedsYouStore } from './needs-you.svelte';
 import type { HomeData } from './types';
+
+import { advance, restoreTimers, settle } from '../../../../tests/timers';
+
+beforeEach(() => {
+	jest.useFakeTimers();
+});
+afterEach(restoreTimers);
 
 const g = globalThis as unknown as { document?: unknown };
 // Removed after this file: a leftover document makes later files' UI libraries assume window exists.
@@ -64,19 +71,22 @@ async function setup(first?: HomeData | null) {
 	const srv = server(first);
 	const home = new NeedsYouStore({ hub, api: srv.api, chat: () => ({}) as ChatApi });
 	home.open();
-	await Bun.sleep(50);
+	await advance(16);
 	return { stream, hub, srv, home };
 }
 
 const ids = (home: NeedsYouStore) => Object.values(home.groups).flatMap((g) => g.map((i) => i.id));
 
 test('run and alert events refetch the server part once per burst', async () => {
-	const { stream, srv } = await setup();
+	const { stream, srv, hub } = await setup();
 	expect(srv.loads).toBe(1);
 	stream.emit('run', { runId: RUN_IDS.flights, kind: 'subagent', status: 'done' }, false);
 	stream.emit('alert', { key: 'o1', alert: job, text: 't' });
 	stream.emit('alert_cleared', { id: 'job:other', reason: 'recovered' });
-	await Bun.sleep(1200);
+	hub.flush();
+	await advance(999);
+	expect(srv.loads).toBe(1);
+	await advance(1);
 	expect(srv.loads).toBe(2);
 });
 
@@ -101,13 +111,13 @@ test('a dismissed alert stays hidden until a load after the dismissal, then the 
 test('alert_cleared hides the alert at once; a new failure for the job brings it back', async () => {
 	const { home, stream, srv } = await setup();
 	stream.emit('alert_cleared', { id: 'job:nightly-sync', reason: 'recovered' });
-	await Bun.sleep(50);
+	await advance(16);
 	expect(ids(home)).not.toContain('job:nightly-sync');
 	stream.emit('alert', { key: 'o2', alert: job, text: 't' });
-	await Bun.sleep(50);
+	await advance(16);
 	expect(ids(home)).toContain('job:nightly-sync');
 	srv.data = { ...homeData(NOW), failed: [nightlyAlert(NOW)] };
-	await Bun.sleep(1200);
+	await advance(1000);
 	expect(ids(home)).toContain('job:nightly-sync');
 });
 
@@ -125,7 +135,7 @@ test('opening a run posts it once and shows it read, still in the inbox', async 
 	const id = `run:${RUN_IDS.expenses}`;
 	home.markOpened(RUN_IDS.expenses);
 	home.markOpened(RUN_IDS.expenses);
-	await Bun.sleep(10);
+	await settle();
 	expect(srv.opened).toEqual([id]);
 	expect(home.groups.review.find((i) => i.id === id)).toMatchObject({ read: true });
 });
