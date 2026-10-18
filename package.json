@@ -8,6 +8,7 @@
     "workspace": "bun src/workspace/index.ts",
     "machine": "bun src/workspace/machine/index.ts",
     "test": "bun test",
+    "check:architecture": "bun scripts/check-architecture.ts",
     "e2e:system": "bun --no-env-file e2e-system/run.ts"
   },
   "dependencies": {
