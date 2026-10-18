@@ -11,13 +11,11 @@ import { transcriptItem, type SessionRecord, type SessionSummary, type Transcrip
 const dirs: string[] = [];
 const live: MachineSessions[] = [];
 afterEach(async () => {
-  for (const s of live.splice(0)) s.stop();
-  // Killed providers report their exit after this; let it land before the state dir goes.
-  await Bun.sleep(400);
+  await Promise.all(live.splice(0).map((s) => s.stop()));
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-function setup(opts: { stallMs?: number; dir?: string; keepFinished?: number } = {}) {
+function setup(opts: { stallMs?: number; dir?: string; keepFinished?: number; persistDelayMs?: number } = {}) {
   const dir = opts.dir ?? mkdtempSync(join(tmpdir(), "machine-sessions-"));
   if (!opts.dir) dirs.push(dir);
   const root = join(dir, "project");
@@ -30,7 +28,7 @@ function setup(opts: { stallMs?: number; dir?: string; keepFinished?: number } =
     join(dir, "state"),
     { codex: [process.execPath, fake], claude: [process.execPath, fake] },
     {
-      persistDelayMs: 20,
+      persistDelayMs: opts.persistDelayMs ?? 20,
       stopGraceMs: 2000,
       ...(opts.stallMs ? { stallMs: opts.stallMs } : {}),
       ...(opts.keepFinished !== undefined ? { keepFinished: opts.keepFinished } : {}),
@@ -194,7 +192,7 @@ test("a restart marks working sessions interrupted with a new version; old gatew
   const first = setup();
   await start(first.sessions, "s1", "codex", "wait");
   const running = await until(get(first.sessions, "s1"), (r) => r.turn?.id === "turn-1");
-  first.sessions.stop();
+  await first.sessions.stop();
   const second = setup({ dir: first.dir });
   const after = (await second.sessions.request({ action: "get", sessionId: "s1" })) as SessionRecord;
   expect(after.status).toBe("interrupted");
@@ -203,6 +201,29 @@ test("a restart marks working sessions interrupted with a new version; old gatew
   const legacy = wireRecord(after, false);
   expect(Object.keys(legacy)).not.toContain("stateVersion");
   expect(Object.keys(legacy)).not.toContain("turn");
+});
+
+test("shutdown drains final provider output and persists it before returning", async () => {
+  const { dir, root, sessions } = setup({ persistDelayMs: 60_000 });
+  writeFileSync(join(dir, "fake.ts"), FAKE_PROVIDER.replace(
+    "process.on('SIGTERM', () => process.exit(0));",
+    `process.on('SIGTERM', () => {
+      // Deliberately omit the newline: readline must drain its final partial line.
+      process.stdout.write(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Final shutdown output' }] } }), () => process.exit(0));
+    });`,
+  ));
+  await start(sessions, "c1", "claude", "wait");
+  await until(get(sessions, "c1"), (r) => r.threadId === "claude-one");
+
+  await sessions.stop();
+
+  expect(existsSync(join(root, "claude-live"))).toBe(false);
+  const saved = JSON.parse(readFileSync(join(dir, "state", "sessions.json"), "utf8"))[0] as SessionRecord;
+  expect(saved.output).toContain("Final shutdown output");
+  expect(saved.transcript).toContainEqual(expect.objectContaining({ kind: "message", text: "Final shutdown output" }));
+  // Shutdown leaves working sessions available for restart recovery.
+  expect(saved.status).toBe("running");
+  await sessions.stop();
 });
 
 test("an approval shows the approved thing whole and first; a model-written reason cannot hide it", async () => {

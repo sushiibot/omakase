@@ -347,12 +347,12 @@ export class MachineSessions {
     this.stallTimer.unref?.();
   }
   private stallTimer: ReturnType<typeof setInterval>;
-  /** Per session: resolves once its last provider process has exited. */
+  /** Per session: resolves after its last provider closes and its output drains. */
   private exits = new Map<string, Promise<void>>();
   private closing(id: string, process: JsonProcess) {
-    const exited = process.exited
-      ? Promise.resolve()
-      : new Promise<void>((resolve) => process.child.once("close", () => resolve()));
+    // Registered immediately after spawning, before close can fire. Exit alone
+    // does not guarantee that stdout and its synchronous callbacks have drained.
+    const exited = new Promise<void>((resolve) => process.child.once("close", () => resolve()));
     this.exits.set(id, exited);
     void exited.then(() => {
       if (this.exits.get(id) === exited) this.exits.delete(id);
@@ -1169,10 +1169,13 @@ export class MachineSessions {
     }
   }
   private stopping = false;
-  stop() {
+  async stop() {
     this.stopping = true;
     clearInterval(this.stallTimer);
     for (const active of this.active.values()) active.process.kill();
+    if (this.persistTimer) this.persist();
+    await Promise.all(this.exits.values());
+    // Final output can schedule another write while the providers are closing.
     if (this.persistTimer) this.persist();
   }
 }
