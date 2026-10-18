@@ -281,8 +281,11 @@ test('a dropped stream resumes from the last seq without duplicating anything', 
 });
 
 test('a reset reloads history and says so', async ({ page, context }) => {
-	const { calls, opts } = await chatServer(context);
+	const { calls, opts } = await chatServer(context, {
+		history: [{ type: 'user', id: 'u1', at: 'x', text: 'Before the reset', attachments: [] }]
+	});
 	await open(page);
+	await expect(page.getByText('Before the reset', { exact: true })).toBeVisible();
 	opts.history = [
 		{
 			type: 'assistant',
@@ -300,7 +303,9 @@ test('a reset reloads history and says so', async ({ page, context }) => {
 	});
 	await expect(page.getByText('Reloaded the conversation.', { exact: false })).toBeVisible();
 	await expect(page.getByText('From the reloaded history')).toBeVisible();
-	expect(calls.filter((c) => c.path.startsWith('/api/chat/history')).length).toBe(2);
+	await expect
+		.poll(() => calls.filter((c) => c.path.startsWith('/api/chat/history')).length)
+		.toBe(2);
 });
 
 test('history that is unavailable offers a retry', async ({ page, context }) => {
