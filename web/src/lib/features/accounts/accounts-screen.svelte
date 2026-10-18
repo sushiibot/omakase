@@ -84,7 +84,10 @@
 				>
 			{/if}
 			{#each accounts as account (account.id)}
-				<Section title={account.name}>
+				<Section
+					title={account.name}
+					class="[&_h2]:min-w-0 [&_h2_span]:min-w-0 [&_h2_span]:break-all"
+				>
 					<div class="flex min-w-0 flex-col gap-3 border-b pb-6">
 						<p class="text-sm break-all">{account.origin}</p>
 						<p class="text-sm break-all">
@@ -100,31 +103,31 @@
 							{#if account.confirmedVersion !== undefined && account.confirmedVersion !== account.version}
 								· Last confirmed: version {account.confirmedVersion}{/if}
 						</p>
-						{#if account.status !== 'archived'}
-							{#if account.confirmedVersion !== account.version}<p
-									class="text-sm text-muted-foreground"
+						{#if account.confirmedVersion !== account.version}<p
+								class="text-sm text-muted-foreground"
+							>
+								The latest password has not been confirmed as accepted by the website.
+							</p>{/if}
+						<div class="flex flex-wrap gap-2">
+							{#if secret?.id === account.id}<Button variant="outline" onclick={onhide}
+									>Hide password</Button
 								>
-									The latest password has not been confirmed as accepted by the website.
-								</p>{/if}
-							<div class="flex flex-wrap gap-2">
-								{#if secret?.id === account.id}<Button variant="outline" onclick={onhide}
-										>Hide password</Button
-									>
-								{:else}<Button
-										variant="outline"
-										disabled={busy || !online}
-										onclick={() => onreveal(account, 'reveal')}>Reveal password</Button
-									>{/if}
-								<Button
+							{:else}<Button
 									variant="outline"
 									disabled={busy || !online}
-									onclick={() =>
-										onreveal(
-											account,
-											'copy',
-											secret?.id === account.id ? secret.version : account.version
-										)}>Copy password</Button
-								>
+									onclick={() => onreveal(account, 'reveal')}>Reveal password</Button
+								>{/if}
+							<Button
+								variant="outline"
+								disabled={busy || !online}
+								onclick={() =>
+									onreveal(
+										account,
+										'copy',
+										secret?.id === account.id ? secret.version : account.version
+									)}>Copy password</Button
+							>
+							{#if account.status !== 'archived'}
 								<Button
 									variant="ghost"
 									disabled={busy || !online}
@@ -133,17 +136,17 @@
 										archiveId = account.id;
 									}}>Archive</Button
 								>
-							</div>
-							{#if account.confirmedVersion !== undefined && account.confirmedVersion !== account.version}
-								<div>
-									<Button
-										variant="outline"
-										disabled={busy || !online}
-										onclick={() => onreveal(account, 'reveal', account.confirmedVersion)}
-										>Reveal last confirmed password</Button
-									>
-								</div>
 							{/if}
+						</div>
+						{#if account.confirmedVersion !== undefined && account.confirmedVersion !== account.version}
+							<div>
+								<Button
+									variant="outline"
+									disabled={busy || !online}
+									onclick={() => onreveal(account, 'reveal', account.confirmedVersion)}
+									>Reveal last confirmed password</Button
+								>
+							</div>
 						{/if}
 						{#if secret?.id === account.id}
 							<div class="flex min-w-0 flex-col gap-1">

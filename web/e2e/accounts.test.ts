@@ -101,7 +101,17 @@ test('copy is audited without revealing, history loads on demand, archive requir
 		method: 'POST',
 		body: { expectedVersion: 2 }
 	});
-	await expect(page.getByRole('button', { name: 'Reveal password', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Archive', exact: true })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Account history' }).click();
+	await page.getByRole('button', { name: 'Reveal password', exact: true }).click();
+	await expect(page.getByLabel('Revealed password')).toHaveText(password);
+	await page.getByRole('button', { name: 'Copy password', exact: true }).click();
+	await expect.poll(() => requests.at(-1)?.body).toEqual({ version: 2, purpose: 'copy' });
+	await expect(page.getByLabel('Revealed password')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Reveal last confirmed password' }).click();
+	await expect(page.getByLabel('Revealed password')).toBeVisible();
+	await page.getByRole('button', { name: 'Copy password', exact: true }).click();
+	await expect.poll(() => requests.at(-1)?.body).toEqual({ version: 1, purpose: 'copy' });
 });
 test('errors never echo server content and refresh recovers', async ({ page, context }) => {
 	await mock(context);
@@ -159,4 +169,19 @@ test('a late reveal response cannot restore a hidden password', async ({ page, c
 	release?.();
 	await expect(page.getByRole('button', { name: 'Reveal password', exact: true })).toBeEnabled();
 	await expect(page.getByLabel('Revealed password')).toHaveCount(0);
+});
+
+test('a long account name wraps within the mobile screen', async ({ page, context }) => {
+	await mock(context);
+	const name = 'A'.repeat(160);
+	await context.route('**/api/accounts', (route) =>
+		route.fulfill({ json: { accounts: [{ ...account, name }] } })
+	);
+	await page.setViewportSize({ width: 320, height: 740 });
+	await page.goto('/accounts');
+	const heading = page.getByRole('heading', { name, exact: true });
+	await expect(heading).toBeVisible();
+	await expect.poll(() => heading.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+	await checkScreen(page);
+	await page.screenshot({ path: '/tmp/omakase-accounts-long-name-mobile.png' });
 });
