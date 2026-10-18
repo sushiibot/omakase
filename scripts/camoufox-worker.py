@@ -147,6 +147,10 @@ def command(args):
 
 def handle(request):
     global seq
+    if "accountFill" in request:
+        if page is None: raise ValueError("Account fill failed")
+        page.evaluate(request["script"], request["accountFill"])
+        return True
     if request.get("capture"):
         data = page.screenshot(type="jpeg", quality=60, scale="css", timeout=5000)
         size = Image.open(io.BytesIO(data)).size
@@ -173,7 +177,7 @@ try:
             if request.get("args") == ["close"]: break
         except Exception as error:
             # Owner input errors must never echo typed credentials.
-            message = "Browser input failed. Refresh the preview and try again." if "input" in request else str(error)[:2000]
+            message = "Browser input failed. Refresh the preview and try again." if "input" in request else ("Account fill failed" if "accountFill" in request else str(error)[:2000])
             print(json.dumps({"ok": False, "error": message}), flush=True)
 finally:
     if launcher:

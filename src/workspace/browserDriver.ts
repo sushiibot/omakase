@@ -1,3 +1,4 @@
+import { chromiumAccountFill, fillAccountPage } from "./accountBrowserFill.ts";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { buildAgentEnv } from "../agentRuntime/agentEnv.ts";
@@ -6,6 +7,7 @@ import type { BrowserEngine, BrowserFrame, BrowserInput } from "../orchestration
 export interface BrowserLaunch { engine: BrowserEngine; profile?: string }
 export interface BrowserDriver {
   run(session: string, args: string[], signal?: AbortSignal, launch?: BrowserLaunch): Promise<string>;
+  fillAccount?(session: string, input: Parameters<typeof fillAccountPage>[0], signal: AbortSignal | undefined, launch: BrowserLaunch): Promise<void>;
   connect(port: number): WebSocket;
   capture?(session: string): Promise<{ frame: BrowserFrame; url: string }>;
   input?(session: string, input: BrowserInput, launch: BrowserLaunch): Promise<void>;
@@ -95,6 +97,25 @@ export function localBrowserDriver(home: string): BrowserDriver {
   };
   return {
     run,
+    async fillAccount(session, input, signal, launch) {
+      try {
+        if (launch.engine === "camoufox") {
+          const worker = workers.get(session);
+          if (!worker) throw new Error();
+          await worker.request({ accountFill: input, script: fillAccountPage.toString() }, signal);
+          return;
+        }
+        const marker = `__account_fill_${crypto.randomUUID().replaceAll("-", "")}`;
+        // Marker and endpoint contain no credentials; only the private CDP request carries them.
+        await run(session, ["eval", `globalThis[${JSON.stringify(marker)}] = true; true`], signal, launch);
+        try {
+          const endpoint = await run(session, ["get", "cdp-url"], signal, launch);
+          await chromiumAccountFill(endpoint, marker, input, signal);
+        } finally {
+          await run(session, ["eval", `delete globalThis[${JSON.stringify(marker)}]; true`], signal, launch).catch(() => {});
+        }
+      } catch { throw new Error("Account fill failed."); }
+    },
     connect: (port) => new WebSocket(`ws://127.0.0.1:${port}/?pacing=ack&maxFps=15`),
     async capture(session) {
       const worker = workers.get(session);

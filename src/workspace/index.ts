@@ -1,3 +1,5 @@
+import { AccountsClient } from "./accounts.ts";
+import { configureOutboundRedaction } from "../agentRuntime/outboundRedaction.ts";
 import { startIntegrationBridge } from "./integrations.ts";
 import { MaintenanceService } from "./maintenance/service.ts";
 import { FastmailCalendar } from "./maintenance/calendar.ts";
@@ -129,7 +131,12 @@ async function main(): Promise<void> {
   // After the selector (its ChatGPT switch follows the deployed provider, not a pinned choice), before any
   // session or runner reads the config: a saved `!model` choice rewrites its model fields.
   const choice = new ModelChoice(config, config.stateDir);
-  const browsers = new BrowserManager(config.stateDir, localBrowserDriver(config.home));
+  const accounts = new AccountsClient(config.principalId, async params => {
+    if (!client?.connected) throw new Error("Account service unavailable.");
+    return client.request("accounts/internal", params, 30_000);
+  });
+  configureOutboundRedaction((payload, provider) => accounts.redact(payload, provider));
+  const browsers = new BrowserManager(config.stateDir, localBrowserDriver(config.home), Date.now, accounts);
   await browsers.recover();
   const turns = new MainTurnTracker();
   // Late-bound: main runs start only after the session exists.

@@ -58,7 +58,7 @@ function byName(s: ToolStubs, name: string, ctx?: Parameters<ToolStubs["definiti
 
 describe("manifest → stubs", () => {
   test("the known names match the bot's proxied tools", () => {
-    expect([...KNOWN_PROXIED_TOOLS].sort()).toEqual([...Object.keys(PROXIED_TOOLS), ...mailManifest.map(t => t.name), toolPolicyManifest.name, LOCATION_TOOL, taskManifest.name, machineFileManifest.name, codingAgentManifest.name, "list_channel_requests", "integrations"].sort());
+    expect([...KNOWN_PROXIED_TOOLS].sort()).toEqual([...Object.keys(PROXIED_TOOLS), ...mailManifest.map(t => t.name), toolPolicyManifest.name, LOCATION_TOOL, taskManifest.name, machineFileManifest.name, codingAgentManifest.name, "list_channel_requests", "integrations", "accounts"].sort());
   });
 
   test("one stub per known manifest entry, carrying its name, description and schema", () => {

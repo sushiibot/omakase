@@ -1,3 +1,4 @@
+import { accountFill, type AccountFill, type AccountsClient } from "./accounts.ts";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -39,7 +40,7 @@ export class BrowserManager {
   private readonly file: string;
   private readonly timer: ReturnType<typeof setInterval>;
   private readonly closing = new Map<string, Promise<void>>();
-  constructor(private readonly stateDir: string, private readonly driver: BrowserDriver, private readonly now = Date.now) {
+  constructor(private readonly stateDir: string, private readonly driver: BrowserDriver, private readonly now = Date.now, private readonly accounts?: AccountsClient) {
     this.file = join(stateDir, "browser-sessions.json");
     this.timer = setInterval(() => void this.sweep(), 1000);
     this.timer.unref();
@@ -153,6 +154,34 @@ export class BrowserManager {
         });
         if (result !== undefined) return result;
       }
+    } finally { entry.busy--; entry.touchedAt = this.now(); }
+  }
+
+  async fillAccount(entry: Entry, input: AccountFill, signal?: AbortSignal): Promise<string> {
+    if (!this.accounts || !this.driver.fillAccount) throw new Error("Account fill unavailable.");
+    entry.busy++;
+    entry.touchedAt = this.now();
+    try {
+      await this.waitForOwner(entry, signal);
+      return await this.serial(entry, async () => {
+        if (entry.status.control === "owner" || entry.status.state === "ended" || signal?.aborted) throw new Error("Account fill cancelled.");
+        await this.prepare(entry, signal);
+        let receiptId: string | undefined;
+        try {
+          const url = new URL((await this.driver.run(entry.session, ["get", "url"], signal, entry.launch)).trim());
+          if (url.protocol !== "https:" || url.username || url.password) throw new Error();
+          const secret = await this.accounts!.fill(input, url.origin, entry.launch.engine, entry.status.runId ?? undefined);
+          receiptId = secret.receiptId;
+          if (entry.status.control === "owner" || entry.status.state === "ended" || signal?.aborted) throw new Error();
+          await this.driver.fillAccount!(entry.session, { origin: url.origin, fields: input.fields, password: secret.password, username: secret.username }, signal, entry.launch);
+          await this.accounts!.result(receiptId, "filled");
+          receiptId = undefined;
+          return "Account fields filled. Verify the page before submitting; credentials have not been confirmed.";
+        } catch {
+          if (receiptId) await this.accounts!.result(receiptId, "failed").catch(() => {});
+          throw new Error("Account fill failed. Check the page and account origin before retrying.");
+        }
+      });
     } finally { entry.busy--; entry.touchedAt = this.now(); }
   }
 
@@ -304,12 +333,20 @@ export class BrowserBinding {
   tool(): ToolDefinition {
     return {
       name: "browser", label: "Browser",
-      description: "Managed browser with saved logins and owner preview. Chromium is default; use engine camoufox as a fallback, closing the old session first. Profiles are separate per engine. profile owner saves logins and queues access; use temporary for parallel anonymous research. Pass commands: open URL, snapshot -i, click @e3, fill @e3 text, press Enter, scroll down, get text body, tab, screenshot path, upload selector path. handoff pauses until the owner finishes sign-in in the preview. Take fresh snapshots after changes and verify outcomes. Never retry a submission automatically across engines. close stops the browser but retains saved logins. Use this tool, not Bash, for browser control.",
+      description: "Managed browser with saved logins and owner preview. Chromium is default; use engine camoufox as a fallback, closing the old session first. Profiles are separate per engine. profile owner saves logins and queues access; use temporary for parallel anonymous research. Pass commands: open URL, snapshot -i, click @e3, fill @e3 text, press Enter, scroll down, get text body, tab, screenshot path, upload selector path. handoff pauses until the owner finishes sign-in in the preview. Take fresh snapshots after changes and verify outcomes. Never retry a submission automatically across engines. close stops the browser but retains saved logins. Use this tool, not Bash, for browser control. To fill stored credentials, use args [fill-account], accountId, optional version, and fields {password, confirmPassword?, username?} containing unique CSS selectors (not @refs). Only password-type inputs accept passwords. This never submits or confirms an account.",
       promptSnippet: "browser: managed Chromium/Camoufox, saved logins, owner sign-in handoff; use temporary profiles for parallel research",
-      parameters: Type.Object({ args: Type.Array(Type.String({ maxLength: 16000 }), { minItems: 1, maxItems: 32 }), engine: Type.Optional(Type.Union([Type.Literal("chromium"), Type.Literal("camoufox")])), profile: Type.Optional(Type.Union([Type.Literal("owner"), Type.Literal("temporary")])) }) as ToolDefinition["parameters"],
+      parameters: Type.Object({ accountId: Type.Optional(Type.String()), version: Type.Optional(Type.Number()), fields: Type.Optional(Type.Object({ password: Type.String(), confirmPassword: Type.Optional(Type.String()), username: Type.Optional(Type.String()) })), args: Type.Array(Type.String({ maxLength: 16000 }), { minItems: 1, maxItems: 32 }), engine: Type.Optional(Type.Union([Type.Literal("chromium"), Type.Literal("camoufox")])), profile: Type.Optional(Type.Union([Type.Literal("owner"), Type.Literal("temporary")])) }) as ToolDefinition["parameters"],
       execute: async (_id: string, params: unknown, signal?: AbortSignal) => {
-        const { args, engine, profile } = params as { args: string[]; engine?: BrowserEngine; profile?: "owner" | "temporary" };
+        const { args, engine, profile, accountId, version, fields } = params as { accountId?: string; version?: number; fields?: AccountFill["fields"]; args: string[]; engine?: BrowserEngine; profile?: "owner" | "temporary" };
         if (engine && !["chromium", "camoufox"].includes(engine) || profile && !["owner", "temporary"].includes(profile)) throw new Error("Invalid browser engine or profile");
+        if (Array.isArray(args) && args[0] === "fill-account") {
+          if (args.length !== 1) throw new Error("Account fill takes selectors in fields, never credential values.");
+          const parsed = accountFill.safeParse({ accountId, version, fields });
+          if (!parsed.success) throw new Error("Invalid account fill fields.");
+          const text = await this.manager.fillAccount(await this.begin(engine, profile), parsed.data, signal);
+          return { content: [{ type: "text", text }], details: {} };
+        }
+        if (accountId !== undefined || fields !== undefined || version !== undefined) throw new Error("Use fill-account for account credentials.");
         if (!Array.isArray(args) || !ACTIONS.has(args[0]!) || args.some((a) => /^--(?:session|namespace|cdp|auto-connect|provider|all|config|executable-path|profile|persistent|state|restore|proxy|extension|args|headed|session-name)(?:=|$)/.test(a))) throw new Error("Use a browser action in the managed local session.");
         const entry = await this.begin(engine, profile);
         const text = await this.manager.execute(entry, args, signal);

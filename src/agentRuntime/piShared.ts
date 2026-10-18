@@ -1,3 +1,4 @@
+import { protectModelRuntime } from "./outboundRedaction.ts";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ModelRuntime, ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -153,6 +154,7 @@ export async function createOpenRouterModel(options: OpenRouterModelOptions) {
   if (!existsSync(authPath)) writeFileSync(authPath, "{}");
   if (!existsSync(modelsPath)) writeFileSync(modelsPath, "{}");
   const modelRuntime: ModelRuntime = await ModelRuntime.create({ authPath, modelsPath });
+  protectModelRuntime(modelRuntime);
   type Limit = { id: string; contextWindow: number; maxTokens: number; input: ("text" | "image")[]; guessed: boolean };
   const limits = new Map<string, Limit>();
   const resolve = async (ids: string[]) => {
