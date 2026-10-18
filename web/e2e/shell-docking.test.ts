@@ -81,7 +81,12 @@ test('Cmd+B and the header trigger collapse the sidebar, and the choice survives
 	await expect(trigger(page)).toHaveAttribute('aria-expanded', 'true');
 
 	// Collapsing from inside the nav hands focus to the header's trigger, not to the page body.
-	await nav(page).getByRole('link', { name: 'Main', exact: true }).focus();
+	const main = nav(page).getByRole('link', { name: 'Main', exact: true });
+	// The loading fallback is replaced by the channel row when /api/channels arrives.
+	// Only that loaded row has its title; focusing the fallback can leave focus on body.
+	await expect(main).toHaveAttribute('title', 'Main');
+	await main.focus();
+	await expect(main).toBeFocused();
 	await page.keyboard.press('ControlOrMeta+b');
 	await expect(sidebar).toHaveAttribute('data-state', 'collapsed');
 	await expect(page.locator(':focus')).toHaveAttribute('data-sidebar', 'trigger');

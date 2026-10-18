@@ -89,17 +89,21 @@ const DEEP: [string, string][] = [
 ];
 
 test.describe('markdown in V8', () => {
-	test('hostile nesting never throws from the parser or the component', async ({ page }) => {
-		const violations = await open(page);
-		for (const [name, text] of DEEP) {
-			const parsed = await page.evaluate((t) => (window as unknown as Win).h.parse(t), text);
-			expect(parsed.ok, `${name}: ${parsed.err}`).toBe(true);
-			expect(parsed.ms, `${name} parse time`).toBeLessThan(1_500);
-			const mounted = await page.evaluate((t) => (window as unknown as Win).h.render(t), text);
-			expect(mounted.ok, `${name}: ${mounted.err}`).toBe(true);
+	test(
+		'hostile nesting never throws from the parser or the component',
+		{ tag: '@performance' },
+		async ({ page }) => {
+			const violations = await open(page);
+			for (const [name, text] of DEEP) {
+				const parsed = await page.evaluate((t) => (window as unknown as Win).h.parse(t), text);
+				expect(parsed.ok, `${name}: ${parsed.err}`).toBe(true);
+				expect(parsed.ms, `${name} parse time`).toBeLessThan(1_500);
+				const mounted = await page.evaluate((t) => (window as unknown as Win).h.render(t), text);
+				expect(mounted.ok, `${name}: ${mounted.err}`).toBe(true);
+			}
+			expect(violations).toEqual([]);
 		}
-		expect(violations).toEqual([]);
-	});
+	);
 
 	test('one hostile reply leaves earlier and later replies rendering', async ({ page }) => {
 		await open(page);
@@ -204,86 +208,94 @@ function longReply(): string {
 }
 
 test.describe('streaming markdown in V8', () => {
-	test('a 16k reply in 20-char deltas averages under 8ms of parsing per delta', async ({
-		page
-	}) => {
-		const violations = await open(page);
-		const text = longReply();
-		expect(text.length).toBe(16_000);
-		const r = await page.evaluate((t) => (window as unknown as Win).h.streamCost(t, 20), text);
-		expect(r.ok, r.err).toBe(true);
-		const avg = r.ms.reduce((a, b) => a + b, 0) / r.ms.length;
-		console.log(
-			`stream parse: ${r.ms.length} deltas, avg ${avg.toFixed(2)}ms, max ${Math.max(...r.ms).toFixed(1)}ms, finish ${r.finishMs.toFixed(1)}ms`
-		);
-		expect(avg).toBeLessThan(8);
-		expect(violations).toEqual([]);
-	});
-
-	test('hostile replies streamed in deltas never throw and stay bounded', async ({ page }) => {
-		const violations = await open(page);
-		for (const [name, text] of DEEP) {
-			const r = await page.evaluate((t) => (window as unknown as Win).h.streamCost(t, 200), text);
-			expect(r.ok, `${name}: ${r.err}`).toBe(true);
-			// The budget drops a slow stream to plain text, so only a few parses can be slow.
-			const slow = r.ms.filter((ms) => ms > 50).length;
-			expect(slow, `${name} slow parses`).toBeLessThanOrEqual(1);
-			expect(
-				r.ms.reduce((a, b) => a + b, 0),
-				`${name} total`
-			).toBeLessThan(3_000);
-		}
-		const mounted = await page.evaluate(async (t) => {
-			const h = (window as unknown as Win).h;
-			await h.streamInto(t, 400);
-			return document.querySelector('#streamed')!.textContent!.length;
-		}, DEEP[0][1]);
-		expect(mounted).toBeGreaterThan(0);
-		expect(await page.evaluate(() => (window as unknown as Win).h.errors)).toEqual([]);
-		expect(violations).toEqual([]);
-	});
-
-	test('a reply that arrives whole, as on a reload mid-turn, costs about what its finished render does', async ({
-		page
-	}) => {
-		const violations = await open(page);
-		const payloads = [
-			'*a '.repeat(3000),
-			'_a '.repeat(3000),
-			'*a _a '.repeat(1500),
-			'**a '.repeat(1500)
-		];
-		for (const text of payloads) {
-			// Timed against the finished render of the same text in the same page, so a slow machine
-			// slows both sides. Before the limits applied to the shown text, the first update cost 40-80x.
-			const r = await page.evaluate((t) => {
-				const h = (window as unknown as Win).h;
-				const best = (f: () => number) => Math.min(f(), f(), f());
-				const time = (f: () => unknown) => {
-					const start = performance.now();
-					f();
-					return performance.now() - start;
-				};
-				return {
-					ok: h.streamCost(t, 20_000).ok,
-					first: best(() => h.streamCost(t, 20_000).ms[0]),
-					full: best(() => h.parse(t).ms),
-					mountStreaming: best(() => time(() => h.render(t, { streaming: true }))),
-					mountFinal: best(() => time(() => h.render(t)))
-				};
-			}, text);
-			const name = text.slice(0, 6);
+	test(
+		'a 16k reply in 20-char deltas averages under 8ms of parsing per delta',
+		{ tag: '@performance' },
+		async ({ page }) => {
+			const violations = await open(page);
+			const text = longReply();
+			expect(text.length).toBe(16_000);
+			const r = await page.evaluate((t) => (window as unknown as Win).h.streamCost(t, 20), text);
+			expect(r.ok, r.err).toBe(true);
+			const avg = r.ms.reduce((a, b) => a + b, 0) / r.ms.length;
 			console.log(
-				`${name}: first ${r.first.toFixed(1)}ms vs full ${r.full.toFixed(1)}ms; mount ${r.mountStreaming.toFixed(1)}ms vs ${r.mountFinal.toFixed(1)}ms`
+				`stream parse: ${r.ms.length} deltas, avg ${avg.toFixed(2)}ms, max ${Math.max(...r.ms).toFixed(1)}ms, finish ${r.finishMs.toFixed(1)}ms`
 			);
-			expect(r.ok).toBe(true);
-			expect(r.first, `${name} first update`).toBeLessThanOrEqual(3 * r.full + 15);
-			expect(r.mountStreaming, `${name} streaming mount`).toBeLessThanOrEqual(
-				3 * r.mountFinal + 30
-			);
+			expect(avg).toBeLessThan(8);
+			expect(violations).toEqual([]);
 		}
-		expect(violations).toEqual([]);
-	});
+	);
+
+	test(
+		'hostile replies streamed in deltas never throw and stay bounded',
+		{ tag: '@performance' },
+		async ({ page }) => {
+			const violations = await open(page);
+			for (const [name, text] of DEEP) {
+				const r = await page.evaluate((t) => (window as unknown as Win).h.streamCost(t, 200), text);
+				expect(r.ok, `${name}: ${r.err}`).toBe(true);
+				// The budget drops a slow stream to plain text, so only a few parses can be slow.
+				const slow = r.ms.filter((ms) => ms > 50).length;
+				expect(slow, `${name} slow parses`).toBeLessThanOrEqual(1);
+				expect(
+					r.ms.reduce((a, b) => a + b, 0),
+					`${name} total`
+				).toBeLessThan(3_000);
+			}
+			const mounted = await page.evaluate(async (t) => {
+				const h = (window as unknown as Win).h;
+				await h.streamInto(t, 400);
+				return document.querySelector('#streamed')!.textContent!.length;
+			}, DEEP[0][1]);
+			expect(mounted).toBeGreaterThan(0);
+			expect(await page.evaluate(() => (window as unknown as Win).h.errors)).toEqual([]);
+			expect(violations).toEqual([]);
+		}
+	);
+
+	test(
+		'a reply that arrives whole, as on a reload mid-turn, costs about what its finished render does',
+		{ tag: '@performance' },
+		async ({ page }) => {
+			const violations = await open(page);
+			const payloads = [
+				'*a '.repeat(3000),
+				'_a '.repeat(3000),
+				'*a _a '.repeat(1500),
+				'**a '.repeat(1500)
+			];
+			for (const text of payloads) {
+				// Timed against the finished render of the same text in the same page, so a slow machine
+				// slows both sides. Before the limits applied to the shown text, the first update cost 40-80x.
+				const r = await page.evaluate((t) => {
+					const h = (window as unknown as Win).h;
+					const best = (f: () => number) => Math.min(f(), f(), f());
+					const time = (f: () => unknown) => {
+						const start = performance.now();
+						f();
+						return performance.now() - start;
+					};
+					return {
+						ok: h.streamCost(t, 20_000).ok,
+						first: best(() => h.streamCost(t, 20_000).ms[0]),
+						full: best(() => h.parse(t).ms),
+						mountStreaming: best(() => time(() => h.render(t, { streaming: true }))),
+						mountFinal: best(() => time(() => h.render(t)))
+					};
+				}, text);
+				const name = text.slice(0, 6);
+				console.log(
+					`${name}: first ${r.first.toFixed(1)}ms vs full ${r.full.toFixed(1)}ms; mount ${r.mountStreaming.toFixed(1)}ms vs ${r.mountFinal.toFixed(1)}ms`
+				);
+				expect(r.ok).toBe(true);
+				expect(r.first, `${name} first update`).toBeLessThanOrEqual(3 * r.full + 15);
+				expect(r.mountStreaming, `${name} streaming mount`).toBeLessThanOrEqual(
+					3 * r.mountFinal + 30
+				);
+			}
+			expect(violations).toEqual([]);
+		}
+	);
 
 	test('a tail that is cheap to parse but slow to draw falls back instead of janking', async ({
 		page
