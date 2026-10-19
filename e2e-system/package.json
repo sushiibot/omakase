@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "bun --no-env-file run.ts",
+    "test": "bun --no-env-file launch.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

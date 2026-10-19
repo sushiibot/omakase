@@ -17,7 +17,7 @@ Chromium runs at 412×915 (mobile, touch) and goes through the proxy.
 ```sh
 bun install && (cd web && bun install) && (cd e2e-system && bun install)
 (cd e2e-system && bunx playwright install chromium)   # once
-bun run e2e:system                    # all flows
+bun run e2e:system                    # all flows (natively, or in Docker without loopback aliases)
 bun run e2e:system approval           # extra args go to `playwright test`
 E2E_SKIP_BUILD=1 bun run e2e:system   # reuse web/build
 ```
@@ -41,7 +41,13 @@ Every process is stopped on exit, including a failed start or Ctrl-C.
 | `E2E_TMP_DIR` | a new `$TMPDIR/sushii-e2e-*` | must be empty or absent (CI sets it to upload the dir) |
 | `E2E_SKIP_BUILD`, `E2E_KEEP` | unset | `1` to enable |
 
-**Loopback aliases.** Linux routes all of 127.0.0.0/8 to `lo`, so nothing needs setting up there, including GitHub's `ubuntu-latest`. On macOS, add the aliases first (`sudo ifconfig lo0 alias 127.0.0.2` and the same for `.3` and `.5`). The runner's preflight checks this and the ports before it starts anything.
+**Loopback aliases.** The stack needs 127.0.0.2, .3 and .5 so the gateway can tell the trusted proxy from an untrusted peer by source address. Linux routes all of 127.0.0.0/8 to `lo`, so nothing needs setting up there, including GitHub's `ubuntu-latest`. macOS routes only 127.0.0.1. `bun run e2e:system` (`launch.ts`) checks this first:
+
+- The aliases route: it runs natively. This is the default and the fast path.
+- They don't, and a Docker engine is running (Docker Desktop, OrbStack or colima): it runs the same `run.ts` in a Linux container from `Dockerfile` (the Playwright image for the pinned `@playwright/test`, plus the Bun version CI pins). The repo is mounted; `node_modules` live in `omakase-e2e-*` volumes, since several packages ship per-platform binaries. Logs and traces of a failed run land in `$TMPDIR/sushii-e2e-docker-*/run`. The first run pulls the image and installs dependencies, so it takes a few minutes.
+- Neither: it stops and says how to fix it. The aliases are `sudo ifconfig lo0 alias 127.0.0.2` and the same for `.3` and `.5`; they last until reboot.
+
+`E2E_DOCKER=1` always uses Docker, and `E2E_DOCKER=0` never does. Headed and UI modes need the native path. `run.ts`'s own preflight still checks the aliases and the ports before it starts anything.
 
 **Isolation.**
 - Each process gets an env built from scratch and runs with `bun --no-env-file`, so neither the repo `.env` nor the caller's tokens reach the stack.

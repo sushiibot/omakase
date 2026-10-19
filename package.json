@@ -9,7 +9,7 @@
     "machine": "bun src/workspace/machine/index.ts",
     "test": "bun test",
     "check:architecture": "bun scripts/check-architecture.ts",
-    "e2e:system": "bun --no-env-file e2e-system/run.ts"
+    "e2e:system": "bun --no-env-file e2e-system/launch.ts"
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "2.0.0",
