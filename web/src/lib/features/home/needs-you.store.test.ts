@@ -5,7 +5,7 @@ import { fakeTransport } from '$lib/core/realtime/fake-transport';
 import type { JobAlert } from '$lib/core/realtime/events';
 import type { ChatApi } from '$lib/features/chat';
 import type { HomeApi } from './api';
-import { HEARTBEAT_KEY, homeData, nightlyAlert, RUN_IDS } from './fixtures';
+import { HEARTBEAT_ITEMS_KEY, HEARTBEAT_KEY, homeData, nightlyAlert, RUN_IDS } from './fixtures';
 import { NeedsYouStore } from './needs-you.svelte';
 import type { HomeData } from './types';
 
@@ -151,4 +151,55 @@ test('done hides an item at once and Undo brings it back after the done lands', 
 	expect(srv.restored).toEqual([id]);
 	expect(home.undoable).toBeNull();
 	expect(ids(home)).toContain(id);
+});
+
+test("a reply to a job item goes to Main with the item's ref, shows at once, and rolls back if it can't be sent", async () => {
+	const stream = fakeTransport();
+	const hub = createHub({ transport: stream.transport });
+	const srv = server();
+	const sent: { text: string; ref: unknown }[] = [];
+	let ok = true;
+	const home = new NeedsYouStore({
+		hub,
+		api: srv.api,
+		chat: () => ({}) as ChatApi,
+		main: () => ({
+			start: async () => {},
+			send: async (text, _files, { ref }) => {
+				sent.push({ text, ref });
+				return ok;
+			}
+		})
+	});
+	home.open();
+	await advance(16);
+	const item = home.groups.review.find((i) => i.id === `msg:${HEARTBEAT_ITEMS_KEY}`)!;
+	await home.reply(item, 'lucid:mutants:main', 'Ignore mutation tests', 1);
+	expect(sent).toEqual([
+		{
+			text: 'Ignore mutation tests',
+			ref: {
+				input: { id: `msg:${HEARTBEAT_ITEMS_KEY}`, item: 'lucid:mutants:main', choice: 1 },
+				view: expect.objectContaining({
+					job: 'heartbeat',
+					runId: RUN_IDS.weeklyDeps,
+					item: { key: 'lucid:mutants:main', title: 'lucid mutation tests failing' },
+					choice: 'Ignore mutation tests'
+				})
+			}
+		}
+	]);
+	expect(home.answers[`msg:${HEARTBEAT_ITEMS_KEY}:lucid:mutants:main`]).toBe(
+		'Ignore mutation tests'
+	);
+	expect(home.results[`msg:${HEARTBEAT_ITEMS_KEY}`]?.ok).toBe(true);
+
+	ok = false;
+	await home.reply(item, 'sushii:deploy-reviews', 'Later');
+	expect(home.answers[`msg:${HEARTBEAT_ITEMS_KEY}:sushii:deploy-reviews`]).toBeUndefined();
+	expect(home.results[`msg:${HEARTBEAT_ITEMS_KEY}`]?.ok).toBe(false);
+	// An unknown item or choice sends nothing.
+	await home.reply(item, 'gone', 'x');
+	await home.reply(item, 'lucid:mutants:main', 'x', 7);
+	expect(sent).toHaveLength(2);
 });

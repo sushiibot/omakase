@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { WorkspaceConfigError, loadWorkspaceConfig, type WorkspaceConfig } from "./config.ts";
 import { BackendSelector } from "./chatgptFallback.ts";
 import type { ToolFreeJobInput, ToolFreeJobResult } from "./jobSession.ts";
-import type { DeliverJob } from "../orchestration/contracts.ts";
+import type { DeliverJob, JobItem } from "../orchestration/contracts.ts";
+import { JobFeedback } from "./jobFeedback.ts";
 import {
   DAILY_JOB_WINDOW_MS,
   heartbeatPrompt,
@@ -13,7 +14,9 @@ import {
   createHeartbeatJob,
   createPromptJob,
   isNoReply,
+  parseJobItems,
   recentDailyNotes,
+  renderJobItems,
   wireProactiveJobs,
   type PromptJobDeps,
 } from "./proactive.ts";
@@ -25,6 +28,7 @@ let clock: Date;
 const RUN = "01K6B4D2F4H6K8M0P2R4T6V8X0";
 let delivered: string[];
 let deliveredJobs: DeliverJob[];
+let deliveredItems: Array<JobItem[] | undefined>;
 let notes: Array<{ name: string; text: string }>;
 let runnerCalls: ToolFreeJobInput[];
 let reply: string;
@@ -56,9 +60,10 @@ function deps(overrides: Partial<PromptJobDeps> = {}): PromptJobDeps {
     runs: new RunLog(cfg.stateDir),
     selector: new BackendSelector({ primaryEnabled: false }),
     limiter: new ProactiveLimiter(cfg.stateDir, cfg.proactiveDailyCap),
-    deliver: (text, job) => {
+    deliver: (text, job, items) => {
       delivered.push(text);
       deliveredJobs.push(job);
+      deliveredItems.push(items);
     },
     note: async (name, text) => {
       notes.push({ name, text });
@@ -77,6 +82,7 @@ beforeEach(() => {
   clock = new Date("2026-09-29T12:00:00Z");
   delivered = [];
   deliveredJobs = [];
+  deliveredItems = [];
   notes = [];
   runnerCalls = [];
   reply = "NO_REPLY";
@@ -186,6 +192,68 @@ describe("heartbeat", () => {
     expect(notes[0]!.text).not.toContain("\n");
     expect(notes[0]!.text.endsWith("…")).toBe(true);
     expect(delivered[0]).toBe(reply);
+  });
+});
+
+describe("job items", () => {
+  const items = {
+    items: [
+      { key: "lucid:mutants:main", title: "lucid mutation tests failing", body: "All jobs failed on **main**.", url: "https://github.com/drklee3/lucid/actions/runs/1", choices: ["Look into the failure", "Ignore mutation tests", "Look into the failure"] },
+      { key: "Sushii Deploys", title: "6 deploy reviews pending", body: "Waiting on you.", url: "javascript:alert(1)", choices: [] },
+      { title: "  " },
+    ],
+  };
+
+  test("the heartbeat asks for items with stable keys and tap-able replies", () => {
+    const prompt = heartbeatPrompt();
+    expect(prompt).toContain('{"items":[');
+    expect(prompt).toContain("stable id");
+    expect(prompt).toContain("approves nothing by itself");
+  });
+
+  test("an items reply is delivered as items with a markdown rendering, and noted as that rendering", async () => {
+    reply = "```json\n" + JSON.stringify(items) + "\n```";
+    const outcome = await createHeartbeatJob(HEARTBEAT, deps()).run(scheduled);
+    expect(outcome.status).toBe("sent");
+    const sent = deliveredItems[0]!;
+    expect(sent.map((i) => i.key)).toEqual(["lucid:mutants:main", "sushii-deploys"]);
+    // Duplicate choices collapse; an unsafe link is dropped; an untitled item is skipped.
+    expect(sent[0]!.choices).toEqual(["Look into the failure", "Ignore mutation tests"]);
+    expect(sent[1]!.url).toBeUndefined();
+    expect(delivered[0]).toBe(renderJobItems(sent));
+    expect(delivered[0]).toContain("**lucid mutation tests failing**");
+    expect(notes[0]!.text).toContain("lucid mutation tests failing");
+  });
+
+  test("an empty items list is a quiet run; prose stays a plain message", async () => {
+    reply = '{"items":[]}';
+    expect((await createHeartbeatJob(HEARTBEAT, deps()).run(scheduled)).status).toBe("no_reply");
+    expect(parseJobItems("Your dentist is at 3pm.")).toBeNull();
+    expect(parseJobItems("{not json")).toBeNull();
+    reply = "Your dentist is at 3pm.";
+    await createHeartbeatJob(HEARTBEAT, deps()).run(scheduled);
+    expect(delivered).toEqual(["Your dentist is at 3pm."]);
+    expect(deliveredItems).toEqual([undefined]);
+  });
+
+  test("duplicate keys get a suffix and the list is capped", () => {
+    const many = { items: Array.from({ length: 9 }, () => ({ key: "same", title: "Same thing", body: "", choices: ["a", "b", "c", "d", "e"] })) };
+    const parsed = parseJobItems(JSON.stringify(many))!;
+    expect(parsed).toHaveLength(6);
+    expect(parsed.map((i) => i.key).slice(0, 3)).toEqual(["same", "same-2", "same-3"]);
+    expect(parsed[0]!.choices).toHaveLength(4);
+  });
+
+  test("the owner's replies reach the job's next prompt, and only that job's", async () => {
+    const feedback = new JobFeedback(config().stateDir);
+    feedback.record({ job: "heartbeat", at: clock.toISOString(), item: { key: "lucid:mutants:main", title: "lucid mutation tests failing" }, excerpt: "x", choice: "Ignore mutation tests" }, "Ignore mutation tests", clock);
+    feedback.record({ job: "digest", at: clock.toISOString(), excerpt: "x" }, "Shorter please", clock);
+    await createHeartbeatJob(HEARTBEAT, deps({ feedback: (job, at) => feedback.promptFor(job, at) })).run(scheduled);
+    const prompt = runnerCalls[0]!.prompt;
+    expect(prompt).toContain('"item":"lucid:mutants:main"');
+    expect(prompt).toContain('"tapped":"Ignore mutation tests"');
+    expect(prompt).not.toContain("Shorter please");
+    expect(feedback.promptFor("digest", new Date(clock.getTime() + 31 * 24 * 60 * 60_000))).toBe("");
   });
 });
 

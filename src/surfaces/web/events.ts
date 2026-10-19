@@ -328,7 +328,14 @@ export interface ChatEventMap {
 	/** `after` is outside the retained range: drop the local tail and reload history. */
 	reset: { headSeq: number; workspace: WorkspaceState; pending: PendingState };
 	/** `byAgent`: posted by the gateway for the agent, such as the message that starts a task. */
-	user: { key: string; text: string; uploadIds: string[]; at: string; byAgent?: true };
+	user: {
+		key: string;
+		text: string;
+		uploadIds: string[];
+		at: string;
+		byAgent?: true;
+		ref?: MessageRef;
+	};
 	status: { clientId: string; state: 'accepted' | 'steer' | 'queued' | 'stopped' | 'newSession' };
 	reply: { key: string; turnId?: string; text: string; usage?: ChatUsage; files: UploadRef[] };
 	proactive: { key: string; turnId?: string; text: string; usage?: ChatUsage; files: UploadRef[] };
@@ -452,6 +459,7 @@ export type WebHistoryItem =
 			text: string;
 			/** `file` is null when the upload is unknown to the bot: render a dead placeholder. */
 			attachments: { name: string; contentType: string; file: UploadRef | null }[];
+			ref?: MessageRef;
 	  }
 	| {
 			type: 'assistant';
@@ -517,6 +525,30 @@ export interface PostMessageBody {
 	clientId: string;
 	text: string;
 	uploadIds?: string[];
+	/** The Home message (and item) this answers; the bot resolves it from its own records. */
+	ref?: MessageRefInput;
+}
+
+/** Which Home message an owner message answers: `id` is `msg:<key>`, `item` an item key, `choice` an index into its choices. */
+export interface MessageRefInput {
+	id: string;
+	item?: string;
+	choice?: number;
+}
+
+/** A scheduled job's message (or one item of it) that an owner message answers, as the bot recorded it. */
+export interface MessageRef {
+	/** Home's item id, `msg:<key>`. */
+	id: string;
+	job: string;
+	runId?: string;
+	/** When the job's message arrived. */
+	at: string;
+	item?: { key: string; title: string };
+	/** The item's body or the message's text, clipped. Agent-written: render as markdown, never HTML. */
+	excerpt: string;
+	/** The reply the owner tapped. */
+	choice?: string;
 }
 export interface PostMessageResponse {
 	seq: number;
@@ -626,9 +658,25 @@ export interface HomeMessage {
 	key: string;
 	job: string;
 	runId?: string;
+	/** Every item rendered as one markdown message, or the job's plain reply. */
 	text: string;
 	at: string;
 	read: boolean;
+	/** When the job replied with separate items to answer. */
+	items?: HomeMessageItem[];
+	/** The owner's reply to the message as a whole. */
+	answer?: string;
+}
+
+/** One thing a job flagged, with replies the owner can tap. Agent-written: plain text and markdown only. */
+export interface HomeMessageItem {
+	key: string;
+	title: string;
+	body: string;
+	url?: string;
+	choices: string[];
+	/** The owner's reply once sent: the choice tapped, or the start of what they wrote. */
+	answer?: string;
 }
 
 export type ReviewRun = RunSummary & { read: boolean };

@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { INBOUND_RETENTION_MS } from "./chatLog.ts";
+import type { MessageRef } from "./events.ts";
 
 /** pending: not routed yet (never attempted, or the attempt was cut off); rejected: the connected workspace
  *  refused it, and only the owner's retry routes it again; discarded: the owner deleted it, so it is never routed. */
@@ -14,9 +15,11 @@ export interface InboundRow {
   createdAt: number;
   routedAt: number | null;
   state: InboundState;
+  /** The Home message this answers. */
+  ref?: MessageRef;
 }
 
-type Raw = { voice: number; client_id: string; text: string; upload_ids: string; seq: number; created_at: number; routed_at: number | null; state: InboundState };
+type Raw = { voice: number; ref: string | null; client_id: string; text: string; upload_ids: string; seq: number; created_at: number; routed_at: number | null; state: InboundState };
 
 /** web_inbound: each owner message, persisted before its 202 and routed until the workspace gives a receipt. */
 export class WebInboundStore {
@@ -37,7 +40,7 @@ export class WebInboundStore {
   }
 
   insert(row: Omit<InboundRow, "routedAt" | "state">): void {
-    this.db.run("INSERT INTO web_inbound (client_id, text, upload_ids, seq, created_at, conversation_id, voice) VALUES (?, ?, ?, ?, ?, ?, ?)", [
+    this.db.run("INSERT INTO web_inbound (client_id, text, upload_ids, seq, created_at, conversation_id, voice, ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [
       row.clientId,
       row.text,
       JSON.stringify(row.uploadIds),
@@ -45,6 +48,7 @@ export class WebInboundStore {
       row.createdAt,
       this.conversationId,
       row.voice ? 1 : 0,
+      row.ref ? JSON.stringify(row.ref) : null,
     ]);
   }
 
@@ -80,5 +84,5 @@ export class WebInboundStore {
 }
 
 function toRow(r: Raw): InboundRow {
-  return { ...(r.voice ? { voice: true } : {}), clientId: r.client_id, text: r.text, uploadIds: JSON.parse(r.upload_ids), seq: r.seq, createdAt: r.created_at, routedAt: r.routed_at, state: r.state };
+  return { ...(r.voice ? { voice: true } : {}), ...(r.ref ? { ref: JSON.parse(r.ref) as MessageRef } : {}), clientId: r.client_id, text: r.text, uploadIds: JSON.parse(r.upload_ids), seq: r.seq, createdAt: r.created_at, routedAt: r.routed_at, state: r.state };
 }

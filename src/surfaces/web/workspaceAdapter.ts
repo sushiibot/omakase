@@ -1,5 +1,5 @@
 import type { SessionBoundary } from "../../orchestration/sessionContracts.ts";
-import { ID_MAX, jobAlert, webChatOrigin, type AskResolution, type ChatOrigin, type DeliverFile, type DeliverJob, type JobAlertWire, type ToolCallResult } from "../../orchestration/contracts.ts";
+import { ID_MAX, jobAlert, webChatOrigin, type AskResolution, type ChatOrigin, type DeliverFile, type DeliverJob, type JobAlertWire, type JobItem, type ToolCallResult } from "../../orchestration/contracts.ts";
 import { MAX_OPEN_TURNS } from "../../orchestration/workspace/link.ts";
 import { realTimers, type Timers } from "../../orchestration/workspace/progress.ts";
 import {
@@ -185,7 +185,7 @@ export class WebWorkspaceAdapter implements SurfaceAdapter<WebInbound, WebHandle
     this.checkOrigin(origin);
     const key = outboxKey(attempt);
     // The last plain try goes to the chat, so a failing inbox never keeps a message unseen.
-    if (reply.kind === "proactive" && reply.job && this.deps.home && !attempt.plain) return this.fileMessage(key, reply.text, reply.job);
+    if (reply.kind === "proactive" && reply.job && this.deps.home && !attempt.plain) return this.fileMessage(key, reply.text, reply.job, reply.items);
     if (this.deps.log.find(reply.kind, key) || (reply.job && this.deps.home?.hasMessage(key))) return;
     this.spend();
     const { files, dropped } = await this.storeFiles(reply.files ?? [], key);
@@ -204,13 +204,13 @@ export class WebWorkspaceAdapter implements SurfaceAdapter<WebInbound, WebHandle
   }
 
   /** A job's message goes to Home's inbox instead of the chat; the agent's own session still has a note of it. */
-  private async fileMessage(key: string, text: string, job: DeliverJob): Promise<void> {
+  private async fileMessage(key: string, text: string, job: DeliverJob, items?: JobItem[]): Promise<void> {
     const home = this.deps.home!;
     // A resend of one filed before Home was turned on stays where it went.
     if (home.hasMessage(key) || this.deps.log.find("proactive", key)) return;
     this.spend();
     const shown = capText(text, REPLY_TEXT_MAX);
-    if (!home.addMessage({ key, job: job.name, ...(job.runId ? { runId: job.runId } : {}), text: shown })) return;
+    if (!home.addMessage({ key, job: job.name, ...(job.runId ? { runId: job.runId } : {}), text: shown, ...(items?.length ? { items } : {}) })) return;
     this.deps.log.publish({ type: "inbox", data: { key } });
     void this.notify(this.deps.log.head() + 1, { kind: "inbox", key, text: shown });
   }

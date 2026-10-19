@@ -11,6 +11,7 @@
 	import { ago, duration } from '$lib/ui/format/time';
 	import StatePill from '$lib/ui/status/state-pill.svelte';
 	import type { HomeItem } from '../types';
+	import JobItem from './job-item.svelte';
 
 	let {
 		item,
@@ -20,6 +21,8 @@
 		ondismiss,
 		ondone,
 		onreply,
+		onreplyitem,
+		answers = {},
 		onaskagent
 	}: {
 		item: Exclude<HomeItem, { kind: 'approval' | 'ask' }>;
@@ -29,6 +32,10 @@
 		ondismiss?: (id: string) => void;
 		ondone?: (id: string) => void;
 		onreply?: (item: HomeItem) => void;
+		/** A reply to one item of a job's message, sent to Main; `index` for a tapped choice. */
+		onreplyitem?: (item: HomeItem, key: string, text: string, index?: number) => void;
+		/** Replies sent from this device, by `<item id>:<item key>`, before Home reloads. */
+		answers?: Readonly<Record<string, string>>;
 		onaskagent?: (item: HomeItem) => void;
 	} = $props();
 
@@ -92,7 +99,19 @@
 	{:else if item.kind === 'message'}
 		{@const m = item.message}
 		<p class="text-sm text-muted-foreground">Scheduled · {m.job} · {ago(m.at, now)}</p>
-		<div class="text-ui [overflow-wrap:anywhere]"><Markdown text={m.text} /></div>
+		{#if m.items?.length}
+			<div class="flex flex-col gap-3">
+				{#each m.items as entry (entry.key)}
+					<JobItem
+						item={entry}
+						answer={answers[`${item.id}:${entry.key}`] ?? entry.answer}
+						onreply={(text, index) => onreplyitem?.(item, entry.key, text, index)}
+					/>
+				{/each}
+			</div>
+		{:else}
+			<div class="text-ui [overflow-wrap:anywhere]"><Markdown text={m.text} /></div>
+		{/if}
 		<div class="flex flex-col gap-2">
 			<Button onclick={() => onreply?.(item)}><Reply />Discuss</Button>
 			<div class="flex gap-2">

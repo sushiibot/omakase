@@ -11,7 +11,8 @@ import { threadsStore } from '$lib/features/threads';
 import { chatStore } from '$lib/features/chat';
 import {
 	deepLinkItem,
-	messagePreview,
+	messageRef,
+	messageTitle,
 	needsYou,
 	type HomeItem,
 	type HomePeek
@@ -187,7 +188,7 @@ export function createInbox(destination: '/chats' | '/assistant' = '/chats') {
 		if (!item) return;
 		const label =
 			item.kind === 'message'
-				? messagePreview(item.message.text)
+				? messageTitle(item.message)
 				: item.kind === 'run'
 					? item.run.title
 					: id;
@@ -212,12 +213,8 @@ export function createInbox(destination: '/chats' | '/assistant' = '/chats') {
 		}
 	}
 
+	/** An alert has no stored message to reference, so it goes into the draft as a quote. */
 	function discussionQuote(item: HomeItem): string {
-		if (item.kind === 'message')
-			return `> From ${item.message.job}:\n${item.message.text
-				.split('\n')
-				.map((line) => `> ${line}`)
-				.join('\n')}\n\n`;
 		if (item.kind === 'alert')
 			return [
 				`> Scheduled job ${item.alert.job} ${item.alert.kind === 'stuck' ? 'is stuck' : 'failed'}`,
@@ -249,8 +246,13 @@ export function createInbox(destination: '/chats' | '/assistant' = '/chats') {
 			}
 			await store.start();
 			if (!sheet.open || discussing?.id !== item.id) return;
-			const quote = discussionQuote(item);
-			store.setDraft(store.draft ? `${store.draft}\n\n${quote}` : quote);
+			// A job's message goes as a card above the draft, linked to its run; the draft text stays as it was.
+			const ref = item.kind === 'message' ? messageRef(item.message) : null;
+			if (ref) store.setDraftRef(ref);
+			else {
+				const quote = discussionQuote(item);
+				store.setDraft(store.draft ? `${store.draft}\n\n${quote}` : quote);
+			}
 			if (id === 'main') await goto(resolve('/chat'));
 			else await goto(resolve('/chats/[id]', { id }));
 		} catch (error) {

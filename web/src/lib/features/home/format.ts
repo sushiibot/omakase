@@ -1,4 +1,9 @@
+import type { HomeMessage } from '$lib/core/realtime/events';
+import type { DraftRef } from '$lib/core/storage/outbox';
 import type { HomePeek } from './types';
+
+/** Matches the bot's MESSAGE_REF_EXCERPT_MAX; the bot fills in its own copy on receipt. */
+const REF_EXCERPT_MAX = 2000;
 
 /** The peek sheet's heading, also its accessible name. */
 export function peekTitle(peek: HomePeek): string {
@@ -24,6 +29,41 @@ export function peekTitle(peek: HomePeek): string {
 		case 'message':
 			return `From ${item.message.job}`;
 	}
+}
+
+/** A job message's row title: its items' titles, or its text as one line. */
+export function messageTitle(message: HomeMessage): string {
+	return message.items?.length
+		? message.items.map((i) => i.title).join(' · ')
+		: messagePreview(message.text);
+}
+
+/**
+ * What an owner message about `message` (or its item `key`, or that item's choice `index`) carries:
+ * the ids the bot resolves, and the card shown until it does. Null for an unknown item or choice.
+ */
+export function messageRef(message: HomeMessage, key?: string, index?: number): DraftRef | null {
+	const id = `msg:${message.key}`;
+	const base = {
+		id,
+		job: message.job,
+		...(message.runId ? { runId: message.runId } : {}),
+		at: message.at
+	};
+	if (key === undefined)
+		return { input: { id }, view: { ...base, excerpt: message.text.slice(0, REF_EXCERPT_MAX) } };
+	const item = message.items?.find((i) => i.key === key);
+	const choice = index === undefined ? undefined : item?.choices[index];
+	if (!item || (index !== undefined && choice === undefined)) return null;
+	return {
+		input: { id, item: key, ...(index !== undefined ? { choice: index } : {}) },
+		view: {
+			...base,
+			item: { key, title: item.title },
+			excerpt: item.body.slice(0, REF_EXCERPT_MAX),
+			...(choice !== undefined ? { choice } : {})
+		}
+	};
 }
 
 /** A message's text as one plain line, for a row title. */

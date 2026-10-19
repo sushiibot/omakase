@@ -1,4 +1,4 @@
-import { createConversationService, messageBody, stopBody, WEB_ORIGIN, type ConversationLink, type ConversationOperations, type SubmitOutcome, type StopOutcome } from "./application/conversationService.ts";
+import { createConversationService, messageBody, stopBody, WEB_ORIGIN, type ConversationLink, type MessageRefs, type ConversationOperations, type SubmitOutcome, type StopOutcome } from "./application/conversationService.ts";
 import type { UpdateSource } from "./updates.ts";
 import { locationReply, type BrowserLocationRequests } from "../../orchestration/workspace/location.ts";
 import { z } from "zod";
@@ -52,6 +52,7 @@ export interface ChatRouteDeps {
   tools: Pick<WorkspaceTools, "decide">;
   workspaceEnabled: boolean;
   uploads?: WebUploadPort;
+  refs?: MessageRefs;
   location?: BrowserLocationRequests;
   origin?: ChatOrigin;
   now?: () => number;

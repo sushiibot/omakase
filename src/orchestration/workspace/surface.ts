@@ -1,5 +1,5 @@
 import type { SessionBoundary } from "../sessionContracts.ts";
-import type { AskResolution, ChatOrigin, ChatUsage, DeliverFile, DeliverJob, JobAlertWire, ToolCallResult, ToolDiff } from "../contracts.ts";
+import type { AskResolution, ChatMessageParams, ChatOrigin, ChatUsage, DeliverFile, DeliverJob, JobAlertWire, JobItem, ToolCallResult, ToolDiff } from "../contracts.ts";
 
 /** What a chat surface can render. The core consults these instead of assuming Discord's feature set. */
 export interface SurfaceCapabilities {
@@ -61,6 +61,8 @@ export interface ReplyView {
   files?: DeliverFile[];
   /** On a proactive message: the scheduled job that sent it. */
   job?: DeliverJob;
+  /** On a job's message: its items, each with replies to tap; `text` already renders them. */
+  items?: JobItem[];
 }
 
 export interface ToolConfirmation {
@@ -166,6 +168,8 @@ export interface InboundMessage {
   author: { id: string; name: string };
   isVoice: boolean;
   attachments: Array<{ url: string; name: string; contentType: string }>;
+  /** The scheduled-job message (or item) this answers. */
+  ref?: ChatMessageParams["ref"];
   /** The sender as an owner check sees it. Web sets the actor its gateway minted from the verified login;
    *  without one, the router builds a plain actor from `origin` and `author`. */
   actor?: SurfaceActor;

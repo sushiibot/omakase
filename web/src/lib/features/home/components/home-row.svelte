@@ -14,7 +14,7 @@
 	import { ago } from '$lib/ui/format/time';
 	import { Button } from '$lib/ui/button';
 	import { cn } from '$lib/utils';
-	import { messagePreview } from '../format';
+	import { messageTitle } from '../format';
 	import type { HomeItem } from '../types';
 
 	let {
@@ -126,7 +126,7 @@
 				};
 			case 'message':
 				return {
-					title: messagePreview(item.message.text),
+					title: messageTitle(item.message),
 					sub: `Scheduled · ${item.message.job}`,
 					when: ago(item.at, now)
 				};

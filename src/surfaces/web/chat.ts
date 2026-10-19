@@ -74,12 +74,13 @@ export function createWebChat(deps: WebChatDeps): WebChat {
     tools: deps.tools,
     workspaceEnabled: deps.workspaceEnabled,
     location,
+    refs: homeStore,
     ...(deps.uploads ? { uploads: deps.uploads } : {}),
   });
 
   const threads = new WebThreads({
     db: deps.db, main: { log: chatLog, adapter, routes }, link: deps.link,
-    chat: { link: deps.link, tools: deps.tools, workspaceEnabled: deps.workspaceEnabled, location, ...(deps.uploads ? { uploads: deps.uploads } : {}) },
+    chat: { link: deps.link, tools: deps.tools, workspaceEnabled: deps.workspaceEnabled, location, refs: homeStore, ...(deps.uploads ? { uploads: deps.uploads } : {}) },
     adapter: { push: { send: sendPush }, ...(deps.breakGlass ? { breakGlass: deps.breakGlass } : {}), ...(deps.uploads ? { uploads: deps.uploads } : {}) },
   });
 

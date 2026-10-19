@@ -18,6 +18,7 @@ import {
 	requestPersistence,
 	type Draft,
 	type DraftPhoto,
+	type DraftRef,
 	type KeyValue,
 	type OutboxEntry
 } from '$lib/core/storage/outbox';
@@ -119,6 +120,8 @@ export class ChatStore {
 	get draft() {
 		return this.#draft;
 	}
+	/** The Home message the draft answers, shown as a card above the composer. */
+	draftRef = $state.raw<DraftRef | null>(null);
 	/** Main is on screen. `seen` suppresses pushes, so it must only go out while the reader can see the chat. */
 	viewing = $state(false);
 
@@ -217,6 +220,7 @@ export class ChatStore {
 		const draft = saved.find((d) => d.id === this.conversationId);
 		if (draft?.text && !this.draft) this.#draft = draft.text;
 		if (draft?.photos?.length && !this.photos.length) this.#restorePhotos(draft.photos);
+		if (draft?.ref && !this.draftRef) this.draftRef = draft.ref;
 		this.#draftRestored = true;
 		const mine = entries.filter((e) => (e.conversationId ?? 'main') === this.conversationId);
 		for (const e of mine.sort((a, b) => a.at.localeCompare(b.at))) {
@@ -241,7 +245,8 @@ export class ChatStore {
 					};
 				}),
 				at: e.at,
-				delivery: e.failed ? 'failed' : 'sending'
+				delivery: e.failed ? 'failed' : 'sending',
+				...(e.ref ? { ref: e.ref.view } : {})
 			});
 			if (e.failed) this.#failed.add(e.clientId);
 		}
@@ -452,6 +457,12 @@ export class ChatStore {
 		this.#draftTimer = setTimeout(() => this.#saveDraft(), DRAFT_DEBOUNCE_MS);
 	}
 
+	/** Attaches (or with null, removes) the Home message the draft answers. */
+	setDraftRef(ref: DraftRef | null) {
+		this.draftRef = ref;
+		this.#saveDraft();
+	}
+
 	/** Writes the draft text and its prepared photos now. */
 	#saveDraft() {
 		if (this.#draftTimer) clearTimeout(this.#draftTimer);
@@ -474,7 +485,12 @@ export class ChatStore {
 				: []
 		);
 		void this.#drafts
-			.put({ id: this.conversationId, text: this.draft, photos })
+			.put({
+				id: this.conversationId,
+				text: this.draft,
+				photos,
+				...(this.draftRef ? { ref: $state.snapshot(this.draftRef) as DraftRef } : {})
+			})
 			.catch((err) => console.warn("Couldn't save the draft.", err));
 	}
 
@@ -505,11 +521,12 @@ export class ChatStore {
 		return this.photos.some((p) => p.state !== 'uploaded');
 	}
 
-	/** Sends text plus attached photos. preserveComposer sends text alone and keeps the current draft. */
+	/** Sends text plus attached photos and the draft's ref. preserveComposer sends text alone, with
+	 *  `options.ref` when given, and keeps the current draft. */
 	async send(
 		text: string,
 		files: File[] = [],
-		options: { preserveComposer?: boolean } = {}
+		options: { preserveComposer?: boolean; ref?: DraftRef } = {}
 	): Promise<boolean> {
 		if (files.length && !options.preserveComposer) {
 			await Promise.all(this.attach(files));
@@ -525,6 +542,8 @@ export class ChatStore {
 			return false;
 		}
 		const photos = options.preserveComposer ? [] : this.photos;
+		const ref =
+			options.ref ?? (options.preserveComposer ? undefined : (this.draftRef ?? undefined));
 		const entry: OutboxEntry = {
 			clientId: ulid(),
 			conversationId: this.conversationId,
@@ -537,7 +556,8 @@ export class ChatStore {
 				uploadedAt: p.uploadedAt!
 			})),
 			at: new Date().toISOString(),
-			posted: false
+			posted: false,
+			...(ref ? { ref } : {})
 		};
 		addLocalSend(this.#s, {
 			clientId: entry.clientId,
@@ -554,12 +574,14 @@ export class ChatStore {
 				}
 			})),
 			at: entry.at,
-			delivery: 'sending'
+			delivery: 'sending',
+			...(ref ? { ref: ref.view } : {})
 		});
 		if (!options.preserveComposer) {
 			this.photos = [];
 			this.quotaFull = false;
 			this.#draft = '';
+			this.draftRef = null;
 			this.#saveDraft();
 		}
 		this.#commit();
@@ -617,7 +639,8 @@ export class ChatStore {
 			const res = await this.#api.postMessage({
 				clientId: id,
 				text: entry.text,
-				...(entry.uploadIds.length ? { uploadIds: entry.uploadIds } : {})
+				...(entry.uploadIds.length ? { uploadIds: entry.uploadIds } : {}),
+				...(entry.ref ? { ref: entry.ref.input } : {})
 			});
 			this.#retrying.delete(id);
 			if (!this.#pending.has(id)) return;
@@ -690,6 +713,7 @@ export class ChatStore {
 		}));
 		this.photos = [...restored, ...this.photos].slice(0, MESSAGE_UPLOADS_MAX);
 		this.#draft = this.draft ? `${entry.text}\n\n${this.draft}` : entry.text;
+		if (entry.ref && !this.draftRef) this.draftRef = entry.ref;
 		this.#saveDraft();
 		this.showToast('A photo in your message expired. Re-attach it and send again.');
 	}

@@ -8,6 +8,7 @@ import type {
 	ChatEventMap,
 	ChatUsage,
 	JobAlert,
+	MessageRef,
 	PendingState,
 	RouterNotice,
 	SessionBoundary,
@@ -65,6 +66,7 @@ export type ChatItem =
 			attachments: Attachment[];
 			at: string;
 			delivery?: Delivery;
+			ref?: MessageRef;
 	  }
 	| {
 			kind: 'assistant';
@@ -501,7 +503,8 @@ export function applyEvent(s: ChatState, ev: ChatEnvelope, now = Date.now()): Ef
 					name: 'Photo',
 					ref: { id, contentType: 'image/jpeg', bytes: 0, name: 'Photo', inline: true }
 				})),
-				at: ev.data.at
+				at: ev.data.at,
+				...(ev.data.ref ? { ref: ev.data.ref } : {})
 			});
 			break;
 		}
@@ -752,7 +755,8 @@ function fromHistory(s: ChatState, h: WebHistoryItem): ChatItem | null {
 				clientId: h.clientId,
 				text: h.text,
 				attachments: h.attachments.map((a) => ({ name: a.name, ref: a.file })),
-				at: h.at
+				at: h.at,
+				...(h.ref ? { ref: h.ref } : {})
 			};
 		case 'assistant':
 			if (h.outboxId) {
@@ -892,7 +896,14 @@ export function dropApproval(s: ChatState, nonce: string, outcome: 'timeout' | '
 /** The optimistic bubble for a send, before any network call. */
 export function addLocalSend(
 	s: ChatState,
-	m: { clientId: string; text: string; attachments: Attachment[]; at: string; delivery: Delivery }
+	m: {
+		clientId: string;
+		text: string;
+		attachments: Attachment[];
+		at: string;
+		delivery: Delivery;
+		ref?: MessageRef;
+	}
 ) {
 	s.keys.add(`u:${m.clientId}`);
 	s.items.push({ kind: 'user', id: `local:${m.clientId}`, ...m });

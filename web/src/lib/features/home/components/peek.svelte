@@ -21,6 +21,8 @@
 		ondismiss,
 		ondone,
 		onreply,
+		onreplyitem,
+		answers,
 		onopenrun,
 		onopenchat,
 		onaskagent
@@ -34,6 +36,8 @@
 		ondismiss?: (id: string) => void;
 		ondone?: (id: string) => void;
 		onreply?: (item: HomeItem) => void;
+		onreplyitem?: (item: HomeItem, key: string, text: string, index?: number) => void;
+		answers?: Readonly<Record<string, string>>;
 		onopenrun?: (runId: string) => void;
 		onopenchat?: () => void;
 		onaskagent?: (item: HomeItem) => void;
@@ -82,6 +86,8 @@
 				{ondismiss}
 				{ondone}
 				{onreply}
+				{onreplyitem}
+				{answers}
 				{onaskagent}
 			/>
 		</div>

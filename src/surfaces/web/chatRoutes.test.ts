@@ -14,6 +14,7 @@ import { isVerifiedWebActor, mintWebActor } from "./actor.ts";
 import { INBOUND_RETENTION_MS, SqliteChatLog } from "./chatLog.ts";
 import { createChatRoutes, lastOwnerMessageAt, type ChatRouteLink } from "./chatRoutes.ts";
 import type { HistoryResponse } from "./events.ts";
+import { WebHomeStore } from "./homeStore.ts";
 import { WebInboundStore } from "./inbound.ts";
 import { png } from "./__fixtures__/images.ts";
 import { DiskUploadStore } from "./uploads.ts";
@@ -78,6 +79,7 @@ function setup(opts: { db?: Database; link?: FakeLink; uploads?: WebUploadPort; 
   const presence = createPresence({ head: () => log.head() });
   const adapter = new WebWorkspaceAdapter({ log, inbound, presence, ...(opts.uploads ? { uploads: opts.uploads } : {}) });
   const link = opts.link ?? new FakeLink();
+  const home = new WebHomeStore(db);
   const decisions: Array<{ nonce: string; decision: string; actor: SurfaceActor }> = [];
   const tools = {
     decide: (nonce: string, decision: "approve" | "deny", actor: SurfaceActor) => {
@@ -95,6 +97,7 @@ function setup(opts: { db?: Database; link?: FakeLink; uploads?: WebUploadPort; 
     link: link as unknown as ChatRouteLink,
     tools,
     workspaceEnabled: true,
+    refs: home,
     ...(opts.uploads ? { uploads: opts.uploads } : {}),
     ...(opts.historyMaxBytes ? { historyMaxBytes: opts.historyMaxBytes } : {}),
     ...(opts.discardWaitMs ? { discardWaitMs: opts.discardWaitMs } : {}),
@@ -102,7 +105,7 @@ function setup(opts: { db?: Database; link?: FakeLink; uploads?: WebUploadPort; 
   });
   const config = webConfig();
   const handler = createWebHandler({ config, peers: createPeerMatcher(config.trustedPeers), chat: routes });
-  return { db, log, inbound, adapter, link, routes, handler, decisions, location };
+  return { db, log, inbound, adapter, link, routes, handler, decisions, location, home };
 }
 
 function call(handler: WebHandler, path: string, init: { method?: string; body?: unknown; raw?: string; site?: string | null; headers?: Record<string, string> } = {}) {
@@ -160,6 +163,35 @@ describe("POST /api/chat/messages", () => {
     expect(isVerifiedWebActor(h.link.ownerChecks[0]!)).toBe(true);
     expect(h.inbound.get(CLIENT)!.routedAt).not.toBeNull();
     expect(h.log.list(["status"]).map((e) => e.data)).toEqual([{ clientId: CLIENT, state: "accepted" }]);
+  });
+
+  test("a reply to a Home job item carries the bot's own record of it to the log, history and workspace", async () => {
+    const h = setup();
+    const RUN = "01J0000000000000000000000A";
+    h.home.addMessage({
+      key: "o1",
+      job: "heartbeat",
+      runId: RUN,
+      text: "**lucid CI failing**\nAll jobs failed.",
+      items: [{ key: "lucid:ci", title: "lucid CI failing", body: "All jobs failed.", choices: ["Look into it", "Ignore it"] }],
+    });
+    const res = await post(h.handler, "/api/chat/messages", { clientId: CLIENT, text: "Ignore it", ref: { id: "msg:o1", item: "lucid:ci", choice: 1 } });
+    expect(res.status).toBe(202);
+    await h.routes.idle();
+    const ref = { id: "msg:o1", job: "heartbeat", runId: RUN, at: expect.any(String), item: { key: "lucid:ci", title: "lucid CI failing" }, excerpt: "All jobs failed.", choice: "Ignore it" };
+    expect(userEvents(h.log)[0]!.data).toEqual(expect.objectContaining({ text: "Ignore it", ref }));
+    // The workspace gets the ref without Home's item id.
+    const { id: _id, ...wire } = ref;
+    expect(h.link.sent[0]!.ref).toEqual(wire);
+    const history = (await (await call(h.handler, "/api/chat/history")).json()) as HistoryResponse;
+    expect(history.items[0]).toEqual(expect.objectContaining({ type: "user", ref }));
+    expect(h.home.messages()[0]).toEqual(expect.objectContaining({ read: true, items: [expect.objectContaining({ key: "lucid:ci", answer: "Ignore it" })] }));
+
+    // An unknown item still sends, without a card; a choice out of range is refused by the schema.
+    await post(h.handler, "/api/chat/messages", { clientId: CLIENT2, text: "about that", ref: { id: "msg:o1", item: "gone" } });
+    await h.routes.idle();
+    expect(userEvents(h.log)[1]!.data).not.toHaveProperty("ref");
+    expect((await post(h.handler, "/api/chat/messages", { clientId: "01J9Z3W8K2M4N6P8Q0R2S4T6VA", text: "x", ref: { id: "msg:o1", item: "lucid:ci", choice: 9 } })).status).toBe(400);
   });
 
   test("a duplicate POST returns the same seq and never routes twice", async () => {

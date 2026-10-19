@@ -197,6 +197,7 @@ async function route<M extends InboundMessage>(message: M, deps: OwnerRouterDeps
         author: message.author,
         ...(attachments.length ? { attachments } : {}),
         ...(voice ? { voice: true } : {}),
+        ...(message.ref ? { ref: message.ref } : {}),
       });
     try {
       let res;

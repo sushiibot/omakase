@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { ID_MAX, WEB_CONVERSATION_ID, uploadUrl, type ChatMessageParams, type ChatOrigin } from "../../../orchestration/contracts.ts";
+import { ID_MAX, JOB_ITEM_CHOICES_MAX, JOB_ITEM_KEY_RE, WEB_CONVERSATION_ID, uploadUrl, type ChatMessageParams, type ChatOrigin } from "../../../orchestration/contracts.ts";
 import type { WorkspaceLink } from "../../../orchestration/workspace/link.ts";
 import { handleOwnerMessage, type OwnerRouterDeps } from "../../../orchestration/workspace/router.ts";
 import type { InboundMessage, RouterNotice, SurfaceActor } from "../../../orchestration/workspace/surface.ts";
 import { getLogger } from "../../../logger.ts";
 import { INBOUND_RETENTION_MS, type SqliteChatLog } from "../chatLog.ts";
-import { CLIENT_ID_RE, MESSAGE_TEXT_MAX, MESSAGE_UPLOADS_MAX, UPLOAD_ID_RE, type UploadRef } from "../events.ts";
+import { CLIENT_ID_RE, MESSAGE_TEXT_MAX, MESSAGE_UPLOADS_MAX, UPLOAD_ID_RE, type MessageRef, type MessageRefInput, type UploadRef } from "../events.ts";
 import type { InboundRow, WebInboundStore } from "../inbound.ts";
 import type { WebUploadPort, WebWorkspaceAdapter } from "../workspaceAdapter.ts";
 const log = getLogger("web/conversationService");
@@ -35,10 +35,18 @@ export interface ConversationDeps {
   link: ConversationLink;
   workspaceEnabled: boolean;
   uploads?: WebUploadPort;
+  /** Home's job messages, which an owner message can answer; without it a message's ref is dropped. */
+  refs?: MessageRefs;
   origin?: ChatOrigin;
   now?: () => number;
 }
-export type SubmitMessage = { clientId: string; text: string; voice?: boolean; uploadIds?: string[] };
+
+export interface MessageRefs {
+  /** Null when the message, item or choice is unknown. */
+  messageRef(input: MessageRefInput): MessageRef | null;
+  answerMessage(ref: MessageRef, answer: string): void;
+}
+export type SubmitMessage = { clientId: string; text: string; voice?: boolean; uploadIds?: string[]; ref?: MessageRefInput };
 export type StopConversation = { turnId?: string };
 export type SubmitOutcome =
   | { kind: "accepted"; seq: number; routed: boolean }
@@ -56,6 +64,14 @@ export const messageBody = z
     text: z.string().max(MESSAGE_TEXT_MAX),
     voice: z.boolean().optional(),
     uploadIds: z.array(z.string().regex(UPLOAD_ID_RE)).max(MESSAGE_UPLOADS_MAX).optional(),
+    ref: z
+      .object({
+        id: z.string().min(1).max(ID_MAX),
+        item: z.string().regex(JOB_ITEM_KEY_RE).optional(),
+        choice: z.number().int().min(0).max(JOB_ITEM_CHOICES_MAX - 1).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .refine((b) => b.text.trim() !== "" || (b.uploadIds?.length ?? 0) > 0, "empty message");
@@ -82,7 +98,7 @@ export function createConversationService(deps: ConversationDeps) {
 
   /** Routes a persisted message through the owner router. A receipt (or a consuming notice) marks it
    *  routed; a workspaceOffline notice leaves it for the client to resend. */
-  function drive(row: { clientId: string; text: string; uploadIds: string[]; voice?: boolean }, actor: SurfaceActor): void {
+  function drive(row: { clientId: string; text: string; uploadIds: string[]; voice?: boolean; ref?: MessageRef }, actor: SurfaceActor): void {
     // Checked in the same tick routing starts, so a delete either sees this route in flight or wins outright.
     if (rewinding || routing.has(row.clientId) || inbound.get(row.clientId)?.state !== "pending") return;
     const run = (async () => {
@@ -99,6 +115,7 @@ export function createConversationService(deps: ConversationDeps) {
         isVoice: false,
         attachments,
         actor,
+        ...(row.ref ? { ref: wireRef(row.ref) } : {}),
       };
       const routerLink: OwnerRouterDeps<InboundMessage>["link"] = {
         isConnected: () => link.isConnected(),
@@ -199,6 +216,9 @@ export function createConversationService(deps: ConversationDeps) {
       return { kind: "accepted", seq: existing.seq, routed: existing.state === "routed" };
     }
     if (uploadIds.length && !deps.uploads) return { kind: "invalid", error: "uploads are not available" };
+    // A message about an item Home no longer has still goes, just without the card.
+    const ref = body.ref ? (deps.refs?.messageRef(body.ref) ?? undefined) : undefined;
+    if (body.ref && !ref) log.warn({ clientId: body.clientId, ref: body.ref.id }, "a web message answers an unknown Home message; sending it without the reference");
     const at = now();
     let row: InboundRow;
     try {
@@ -209,9 +229,10 @@ export function createConversationService(deps: ConversationDeps) {
         // In the same transaction as the insert, so a message held for days never loses its photos to orphan GC.
         const missing = uploadIds.length ? deps.uploads!.markReferenced(uploadIds, body.clientId).missing : [];
         if (missing.length) throw new UploadMissing(missing);
-        const seq = chatLog.append("user", { key: body.clientId, text: body.text, uploadIds, at: new Date(at).toISOString(), ...(source === "agent" ? { byAgent: true as const } : {}) }, body.clientId);
-        const stored = { clientId: body.clientId, text: body.text, uploadIds, seq, createdAt: at, ...(body.voice ? { voice: true } : {}) };
+        const seq = chatLog.append("user", { key: body.clientId, text: body.text, uploadIds, at: new Date(at).toISOString(), ...(source === "agent" ? { byAgent: true as const } : {}), ...(ref ? { ref } : {}) }, body.clientId);
+        const stored = { clientId: body.clientId, text: body.text, uploadIds, seq, createdAt: at, ...(body.voice ? { voice: true } : {}), ...(ref ? { ref } : {}) };
         inbound.insert(stored);
+        if (ref) deps.refs!.answerMessage(ref, ref.choice ?? body.text);
         return { ...stored, routedAt: null, state: "pending" as const };
       });
     } catch (err) {
@@ -271,4 +292,9 @@ class UploadMissing extends Error {
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** The workspace's view of a ref: Home's item id stays on the gateway. */
+function wireRef({ id: _id, ...ref }: MessageRef): NonNullable<ChatMessageParams["ref"]> {
+  return ref;
 }

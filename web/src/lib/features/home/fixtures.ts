@@ -97,6 +97,36 @@ export function heartbeatMessage(now: number): HomeMessage {
 	};
 }
 
+export const HEARTBEAT_ITEMS_KEY = 'ob-heartbeat-0';
+
+/** An earlier heartbeat that sent separate items with replies to tap; already read. */
+export function heartbeatItemsMessage(now: number): HomeMessage {
+	const items = [
+		{
+			key: 'lucid:mutants:main',
+			title: 'lucid mutation tests failing',
+			body: 'All jobs failed on `main` at 12:48 UTC, with 12 annotations on the cargo-mutants job.',
+			url: 'https://github.com/drklee3/lucid/actions',
+			choices: ['Look into the failure', 'Ignore mutation tests', 'Remind me tomorrow']
+		},
+		{
+			key: 'sushii:deploy-reviews',
+			title: '6 deployment reviews pending',
+			body: 'Five more arrived since 01:01 UTC, all unread.',
+			choices: ['Approve the latest', 'Stop counting these', 'Snooze 1 day']
+		}
+	];
+	return {
+		key: HEARTBEAT_ITEMS_KEY,
+		job: 'heartbeat',
+		runId: RUN_IDS.weeklyDeps,
+		text: items.map((i) => `**${i.title}**\n${i.body}`).join('\n\n'),
+		at: iso(now, 180),
+		read: true,
+		items
+	};
+}
+
 export function depsRun(now: number): RunSummary {
 	return {
 		runId: RUN_IDS.weeklyDeps,
@@ -117,7 +147,7 @@ export function homeData(now: number): HomeData {
 		asOf: iso(now, 0),
 		auth: null,
 		failed: [nightlyAlert(now)],
-		inbox: [heartbeatMessage(now)],
+		inbox: [heartbeatMessage(now), heartbeatItemsMessage(now)],
 		workspace: {
 			state: 'online',
 			running: [triageRun(now)],

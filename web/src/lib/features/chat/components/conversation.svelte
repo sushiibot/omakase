@@ -25,6 +25,7 @@
 	import { cn } from '$lib/utils';
 	import AskCard from './ask-card.svelte';
 	import FilesBlock from './files-block.svelte';
+	import RefCard from './ref-card.svelte';
 	import MessageText from './message-text.svelte';
 	import WorkingRow from './working-row.svelte';
 	import ToolRow from './tool-row.svelte';
@@ -399,6 +400,8 @@
 								{/if}
 							</span>
 						</p>
+					{:else if part.type === 'data-ref'}
+						<RefCard ref={part.data} />
 					{:else if part.type === 'data-notice'}
 						<a
 							href={part.data.href}

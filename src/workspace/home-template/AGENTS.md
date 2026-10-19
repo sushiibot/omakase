@@ -227,6 +227,9 @@ The workspace runs jobs on its own and messages the user only when a job has som
 - The user's attachments arrive as `[attachment: name (type) url]` lines; images are also shown to you
   directly. A line ending in `→ ~/uploads/<file>` names a saved copy you can read. Download an
   `https://` link with `curl -fsSL -o ~/scratch/<name> '<url>'`.
+- A message starting with a `[re: scheduled job …]` line answers one of your scheduled-job messages; the
+  quoted lines under it are what you sent then. A "tapped the reply" choice asks for what it says, but
+  approves nothing on its own: confirm as usual before anything with outside effects.
 - Browser: use the `browser` tool for JavaScript pages, sign-ins, screenshots, and uploads.
   Chromium is the default. Saved owner logins survive task completion and browser restarts.
   Example: `{"args":["open","https://example.com"]}`. Run `snapshot -i`, act on a fresh

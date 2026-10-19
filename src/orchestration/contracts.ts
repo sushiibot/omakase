@@ -91,6 +91,8 @@ export const chatMessageParams = z.object({
   voice: z.boolean().optional(),
   // The origin surface can upload files a reply carries; without it send_file refuses rather than lose them.
   fileUploads: z.boolean().optional(),
+  // The scheduled-job message (or one of its items) the owner is answering, as the surface recorded it.
+  ref: z.lazy(() => messageRef).optional(),
 });
 export type ChatMessageParams = z.infer<typeof chatMessageParams>;
 /** `queued`: the workspace took the message but holds it until its current turn ends; the bot keeps
@@ -587,6 +589,36 @@ export type JobAlertWire = z.infer<typeof jobAlert>;
 export const deliverJob = z.object({ name: z.string().min(1).max(JOB_NAME_MAX), runId: runId.optional() });
 export type DeliverJob = z.infer<typeof deliverJob>;
 
+/** A job item's stable key, so feedback on it applies to the same thing in a later run. */
+export const JOB_ITEM_KEY_RE = /^[a-z0-9][a-z0-9:._/-]{0,79}$/i;
+export const JOB_ITEMS_MAX = 6;
+export const JOB_ITEM_CHOICES_MAX = 4;
+export const JOB_ITEM_TITLE_MAX = 120;
+export const JOB_ITEM_BODY_MAX = 2000;
+export const JOB_ITEM_CHOICE_MAX = 60;
+/** One thing a scheduled job flags, with the replies the owner can tap. Agent-written: render as untrusted text. */
+export const jobItem = z.object({
+  key: z.string().regex(JOB_ITEM_KEY_RE),
+  title: z.string().min(1).max(JOB_ITEM_TITLE_MAX),
+  body: z.string().max(JOB_ITEM_BODY_MAX),
+  url: z.string().max(2048).refine(isHttpsUrl, "must be an https: URL").optional(),
+  choices: z.array(z.string().min(1).max(JOB_ITEM_CHOICE_MAX)).max(JOB_ITEM_CHOICES_MAX),
+});
+export type JobItem = z.infer<typeof jobItem>;
+
+export const MESSAGE_REF_EXCERPT_MAX = 2000;
+/** What an owner message answers: a scheduled job's message, optionally one item of it and the choice tapped. */
+export const messageRef = z.object({
+  job: z.string().min(1).max(JOB_NAME_MAX),
+  runId: runId.optional(),
+  /** When the job's message arrived. */
+  at: z.string().max(64),
+  item: z.object({ key: z.string().regex(JOB_ITEM_KEY_RE), title: z.string().max(JOB_ITEM_TITLE_MAX) }).optional(),
+  excerpt: z.string().max(MESSAGE_REF_EXCERPT_MAX),
+  choice: z.string().max(JOB_ITEM_CHOICE_MAX).optional(),
+});
+export type MessageRef = z.infer<typeof messageRef>;
+
 export const CHAT_DELIVER_KINDS = ["reply", "proactive", "ask", "ask_resolved", "auth", "alert", "session"] as const;
 export type ChatDeliverKind = (typeof CHAT_DELIVER_KINDS)[number];
 
@@ -642,11 +674,14 @@ export const chatDeliverParams = z
     alert: jobAlert.optional(),
     // kind "proactive": the scheduled job that sent it, so a surface with an inbox can file it there.
     job: deliverJob.optional(),
+    // kind "proactive" with job: the message as separate items with replies to tap; `text` renders them all.
+    items: z.array(jobItem).min(1).max(JOB_ITEMS_MAX).optional(),
   })
   .refine((p) => (p.kind === "session") === (p.session !== undefined), { message: 'kind "session" needs session, and only it may carry one', path: ["session"] })
   .refine((p) => (p.kind === "ask_resolved") === (p.askResolution !== undefined), { message: 'kind "ask_resolved" needs askResolution, and only it may carry one', path: ["askResolution"] })
   .refine((p) => (p.kind === "alert") === (p.alert !== undefined), { message: 'kind "alert" needs alert, and only it may carry one', path: ["alert"] })
-  .refine((p) => p.job === undefined || p.kind === "proactive", { message: 'only kind "proactive" may carry job', path: ["job"] });
+  .refine((p) => p.job === undefined || p.kind === "proactive", { message: 'only kind "proactive" may carry job', path: ["job"] })
+  .refine((p) => p.items === undefined || p.job !== undefined, { message: "only a job's message may carry items", path: ["items"] });
 export type ChatDeliverParams = z.infer<typeof chatDeliverParams>;
 
 export const TOOL_DIFF_MAX_CHARS = 16_384;

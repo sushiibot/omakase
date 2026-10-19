@@ -84,7 +84,7 @@ function toItem(
         return { name: file?.name ?? "file", contentType: file?.contentType ?? "application/octet-stream", file };
       });
       // An imported message's key isn't a clientId: it never had an outbox entry to settle.
-      return { type: "user", id, ...(CLIENT_ID_RE.test(d.key) ? { clientId: d.key } : {}), at: d.at, text: d.text, attachments };
+      return { type: "user", id, ...(CLIENT_ID_RE.test(d.key) ? { clientId: d.key } : {}), at: d.at, text: d.text, attachments, ...(d.ref ? { ref: d.ref } : {}) };
     }
     case "reply":
     case "proactive": {

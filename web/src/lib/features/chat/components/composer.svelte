@@ -22,6 +22,8 @@
 	import { cn } from '$lib/utils';
 	import type { Snippet } from 'svelte';
 	import type { DictationState, PhotoDraft } from '../types';
+	import type { MessageRef } from '$lib/core/realtime/events';
+	import RefCard from './ref-card.svelte';
 
 	let {
 		value = $bindable(''),
@@ -51,7 +53,9 @@
 		dictation = null,
 		ondictate,
 		ondictatesend,
-		status
+		status,
+		reference = null,
+		onremovereference
 	}: {
 		value?: string;
 		placeholder?: string;
@@ -96,6 +100,9 @@
 		ondictatesend?: () => void;
 		/** A muted line under the box, such as the last reply's usage. */
 		status?: Snippet;
+		/** The Home message the draft answers; sent with it. */
+		reference?: MessageRef | null;
+		onremovereference?: () => void;
 	} = $props();
 	const uid = $props.id();
 	let picker = $state<HTMLInputElement | null>(null);
@@ -264,6 +271,11 @@
 	<div
 		class="flex flex-col rounded-3xl border bg-card focus-within:ring-2 focus-within:ring-ring/40"
 	>
+		{#if reference}
+			<div class="px-3 pt-3">
+				<RefCard ref={reference} onremove={onremovereference} />
+			</div>
+		{/if}
 		{#if photos.length}
 			<ul aria-label="Attachments to send" class="flex gap-3 overflow-x-auto px-3 pt-4 pr-5 pb-1">
 				{#each photos as photo, i (photo.id)}

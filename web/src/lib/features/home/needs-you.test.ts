@@ -2,7 +2,7 @@
 import { expect, test } from 'bun:test';
 import type { ChatEnvelope } from '$lib/core/realtime/events';
 import { RUN_ID_RE } from '$lib/features/runs/types';
-import { emailApproval, HEARTBEAT_KEY, homeData, RUN_IDS } from './fixtures';
+import { emailApproval, HEARTBEAT_ITEMS_KEY, HEARTBEAT_KEY, homeData, RUN_IDS } from './fixtures';
 import { applyLive, deepLinkItem, emptyLive, homeItems, type LocalState } from './needs-you';
 import type { HomeGroups } from './types';
 
@@ -78,12 +78,14 @@ test('dismissed items leave Failed; opened inbox items stay, read; done ones lea
 	const flights = `run:${RUN_IDS.flights}`;
 	const expenses = `run:${RUN_IDS.expenses}`;
 	const heartbeat = `msg:${HEARTBEAT_KEY}`;
+	const items = `msg:${HEARTBEAT_ITEMS_KEY}`;
 	const read = (g: HomeGroups) => g.review.map((i) => [i.id, 'read' in i && i.read]);
 	const all = homeItems(emptyLive(), data, local);
 	expect(all.failed.map((i) => i.id)).toEqual(['job:nightly-sync', flights]);
 	expect(read(all)).toEqual([
 		[heartbeat, false],
-		[expenses, false]
+		[expenses, false],
+		[items, true]
 	]);
 	const after = homeItems(emptyLive(), data, {
 		...local,
@@ -93,10 +95,11 @@ test('dismissed items leave Failed; opened inbox items stay, read; done ones lea
 	expect(after.failed.map((i) => i.id)).toEqual([flights]);
 	expect(read(after)).toEqual([
 		[heartbeat, false],
-		[expenses, true]
+		[expenses, true],
+		[items, true]
 	]);
 	const done = homeItems(emptyLive(), data, { ...local, dismissed: [heartbeat] });
-	expect(done.review.map((i) => i.id)).toEqual([expenses]);
+	expect(done.review.map((i) => i.id)).toEqual([expenses, items]);
 });
 
 test('a workspace that is not online contributes no running or failed runs', () => {

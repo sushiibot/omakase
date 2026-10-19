@@ -337,6 +337,8 @@ export const webInbound = sqliteTable(
     createdAt: integer("created_at").notNull(),
     routedAt: integer("routed_at"),
     state: text("state").notNull().default("pending"),
+    // The MessageRef JSON the message answers, as the gateway resolved it; null for a plain message.
+    ref: text("ref"),
   },
   (table) => [index("idx_web_inbound_created").on(table.createdAt)],
 );
@@ -385,6 +387,10 @@ export const webInbox = sqliteTable(
     at: integer("at").notNull(),
     readAt: integer("read_at"),
     doneAt: integer("done_at"),
+    // The job's JobItem[] JSON, when it replied with items.
+    items: text("items"),
+    // { [itemKey]: the owner's reply } JSON; "" is the key for the message as a whole.
+    answers: text("answers"),
   },
   (table) => [index("idx_web_inbox_done").on(table.doneAt, table.at)],
 );

@@ -44,6 +44,8 @@
 		ondismiss,
 		ondone,
 		onreply,
+		onreplyitem,
+		answers,
 		undo,
 		onundo,
 		onopenrun,
@@ -81,6 +83,9 @@
 		/** Marks an inbox item done. */
 		ondone?: (id: string) => void;
 		onreply?: (item: HomeItem) => void;
+		/** A reply to one item of a job's message; `index` for a tapped choice. */
+		onreplyitem?: (item: HomeItem, key: string, text: string, index?: number) => void;
+		answers?: Readonly<Record<string, string>>;
 		/** What was last marked done, while Undo is offered. */
 		undo?: { label: string } | null;
 		onundo?: () => void;
@@ -228,6 +233,8 @@
 			{ondismiss}
 			{ondone}
 			{onreply}
+			{onreplyitem}
+			{answers}
 			{onopenrun}
 			{onopenchat}
 			{onaskagent}

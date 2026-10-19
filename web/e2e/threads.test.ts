@@ -489,8 +489,11 @@ test('Discuss puts a heartbeat in the selected topic draft, preserves text and d
 	await picker.getByRole('button', { name: 'October trip', exact: true }).click();
 	await expect(page).toHaveURL(/\/chats\/oct-trip$/);
 	await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue(
-		/^Keep these travel notes\.\n\n> From heartbeat:\n> Your passport renewal/
+		'Keep these travel notes.'
 	);
+	await expect(
+		page.getByRole('region', { name: 'Replying to heartbeat', exact: true })
+	).toContainText('Your passport renewal');
 	expect(sent).toEqual([]);
 });
 
@@ -508,9 +511,10 @@ test('Discuss creates a named conversation with the heartbeat in an unsent draft
 	await picker.getByRole('textbox', { name: 'Conversation name' }).fill('Passport renewal');
 	await picker.getByRole('button', { name: 'Create conversation', exact: true }).click();
 	await expect(page.getByRole('heading', { name: 'Passport renewal', level: 1 })).toBeVisible();
-	await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue(
-		/^> From heartbeat:\n> Your passport renewal/
-	);
+	await expect(
+		page.getByRole('region', { name: 'Replying to heartbeat', exact: true })
+	).toContainText('Your passport renewal');
+	await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('');
 });
 
 test('Discuss can return to the item and recover from a conversation load failure', async ({
@@ -535,9 +539,9 @@ test('Discuss can return to the item and recover from a conversation load failur
 	await page.getByRole('dialog').getByRole('button', { name: 'Discuss', exact: true }).click();
 	await picker.getByRole('button', { name: 'Main chat', exact: true }).click();
 	await expect(page).toHaveURL(/\/chat$/);
-	await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue(
-		/^> From heartbeat:/
-	);
+	await expect(
+		page.getByRole('region', { name: 'Replying to heartbeat', exact: true })
+	).toBeVisible();
 });
 
 test('Main has an options menu and its renamed title survives reload', async ({

@@ -143,6 +143,13 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
   // 400 is outside Pi's retryable errors, so the run fails at once.
   if (userText.includes("E2E-JOBFAIL")) return Response.json({ error: { message: "E2E-JOBFAIL scripted failure", code: 400 } }, { status: 400 });
   if (userText.includes("E2E-NOREPLY")) return stream(["NO_REPLY"], 10, undefined);
+  // A scheduled job's reply as items; the item quotes an echo, so a reply to it shows the agent got the quote.
+  const items = /E2E-ITEMS key-([a-z0-9]{4,16})\b/.exec(userText);
+  if (items) {
+    const k = items[1]!;
+    const item = { key: `e2e:ci:${k}`, title: `E2E CI failing ${k}`, body: `All jobs failed. E2E-ECHO item-${k} #${k}`, url: "https://example.com/ci", choices: ["Look into it", "Ignore it"] };
+    return stream([JSON.stringify({ items: [item] })], 10, undefined);
+  }
   if (userText.includes("E2E-LIST-CHECKS")) return toolCall("list_scheduled_checks", { includeFinished: true });
   if (userText.includes("E2E-SCHEDULE")) {
     const key = /key-([a-z0-9]{4,16})\b/.exec(userText)?.[1] ?? tag ?? "test";

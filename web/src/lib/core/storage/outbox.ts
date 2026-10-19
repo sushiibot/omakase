@@ -1,3 +1,11 @@
+import type { MessageRef, MessageRefInput } from '$lib/core/realtime/events';
+
+/** What a message answers: `input` is what the bot resolves, `view` the card shown until it does. */
+export interface DraftRef {
+	input: MessageRefInput;
+	view: MessageRef;
+}
+
 export interface OutboxEntry {
 	clientId: string;
 	/** Missing on rows written before conversations had ids; those belong to Main. */
@@ -13,6 +21,7 @@ export interface OutboxEntry {
 	attempted?: boolean;
 	/** Refused (by the workspace or the bot); only the owner's Retry sends it again, even after a reload. */
 	failed?: boolean;
+	ref?: DraftRef;
 }
 
 /** A composer photo kept with the draft, so an attached photo survives the app being killed. */
@@ -31,6 +40,8 @@ export interface Draft {
 	id: string;
 	text: string;
 	photos?: DraftPhoto[];
+	/** The Home message the draft answers. */
+	ref?: DraftRef;
 }
 
 export interface KeyValue<T> {

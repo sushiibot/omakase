@@ -254,6 +254,8 @@
 						stopping: store.stopping,
 						draft: store.draft,
 						photos: store.photos,
+						reference: store.draftRef?.view ?? null,
+						onremovereference: () => store.setDraftRef(null),
 						quotaFull: store.quotaFull,
 						dictation: {
 							state: dictation.state,

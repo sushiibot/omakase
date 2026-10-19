@@ -289,6 +289,8 @@
 			approvals={store.approvals}
 			draft={s.draft}
 			photos={s.photos}
+			reference={s.draftRef?.view ?? null}
+			onremovereference={() => s.setDraftRef(null)}
 			quotaFull={s.quotaFull}
 			usage={s.usage}
 			models={models.remote.data ?? null}

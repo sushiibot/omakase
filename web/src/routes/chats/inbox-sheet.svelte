@@ -52,6 +52,8 @@
 	}}
 	ondone={inbox.done}
 	onreply={inbox.discuss}
+	onreplyitem={(item, key, text, index) => void home.reply(item, key, text, index)}
+	answers={home.answers}
 	onopenrun={(id) => void inbox.leaveTo(resolve('/runs/[id]', { id }))}
 	onopenchat={inbox.openChat}
 	onaskagent={inbox.discuss}

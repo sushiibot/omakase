@@ -54,6 +54,7 @@ import { topicConversationExists } from "./topicCatalog.ts";
 import { recordTaskRuns } from "./taskRuns.ts";
 import { applyRegisteredOwnerName, loadOwnerName, ownerHandlers } from "./owner.ts";
 import { AgentResults } from "./agentResults.ts";
+import { JobFeedback } from "./jobFeedback.ts";
 
 const log = getLogger("workspace");
 
@@ -177,7 +178,9 @@ async function main(): Promise<void> {
   const connectors = new ConnectorManager(config.agentDir, undefined, undefined, new ConnectorDecisions(config, runs).classify);
   await connectors.start();
   const maintenance = new MaintenanceService(config.stateDir, new FastmailCalendar(connectors));
+  const jobFeedback = new JobFeedback(config.stateDir);
   const personalOptions = {
+    jobFeedback,
     ownerName: () => config.ownerName,
     boundaryReport: { home: config.home, context: loadedContextFiles },
     principalId: config.principalId,
@@ -312,7 +315,8 @@ async function main(): Promise<void> {
     runs,
     selector,
     toolStubs,
-    deliver: (text, job) => personal.deliverOutOfBand({ kind: "proactive", text, job }),
+    deliver: (text, job, items) => personal.deliverOutOfBand({ kind: "proactive", text, job, ...(items ? { items } : {}) }),
+    feedback: (job, at) => jobFeedback.promptFor(job, at),
     note: async (name, text) => {
       await personal.handleMessage({
         origin: { surface: "workspace", conversationId: "schedule" },

@@ -30,7 +30,7 @@
 	import Conversation from './components/conversation.svelte';
 	import { messagePlainText } from './render/plain-text';
 	import { modelName } from './render/usage';
-	import type { ChatUsage, ModelsResponse } from '$lib/core/realtime/events';
+	import type { ChatUsage, MessageRef, ModelsResponse } from '$lib/core/realtime/events';
 	import type { ChatMessage, ChatSheet, FileRef, PhotoDraft } from './types';
 
 	let {
@@ -105,6 +105,8 @@
 		oncommand,
 		onattach,
 		onremovephoto,
+		reference = null,
+		onremovereference,
 		onretryphoto,
 		onloadolder,
 		onretryhistory,
@@ -209,6 +211,9 @@
 		oncommand?: (command: 'new' | 'compact') => void | Promise<void>;
 		onattach?: (files: File[]) => void;
 		onremovephoto?: (id: string) => void;
+		/** The Home message the draft answers. */
+		reference?: MessageRef | null;
+		onremovereference?: () => void;
 		onretryphoto?: (id: string) => void;
 		onloadolder?: () => Promise<void>;
 		onretryhistory?: () => void;
@@ -734,6 +739,8 @@
 				onopenattachments={onopensheet ? () => onopensheet?.('attachments') : undefined}
 				oncloseattachments={closeSheet}
 				onremovephoto={(id) => onremovephoto?.(id)}
+				{reference}
+				{onremovereference}
 				onretryphoto={(id) => onretryphoto?.(id)}
 				model={models ? modelName(models.current ?? 'Default') : null}
 				context={models?.context?.percent ?? null}

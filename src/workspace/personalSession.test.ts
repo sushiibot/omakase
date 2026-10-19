@@ -346,6 +346,20 @@ describe("message header", () => {
     expect(text).toBe(`[discord:${SNOWFLAKE} 2016-04-30 11:18 UTC, voice message, transcribed]\nremind me\n[attachment: a.png (image/png) https://x/a.png]`);
   });
 
+  test("a reply to a job's item names the job, run, item and tapped choice, with the item quoted as data", () => {
+    const text = formatUserText(
+      {
+        messageId: "",
+        text: "Ignore it",
+        ref: { job: "heartbeat", runId: "01J0000000000000000000000A", at: "2026-09-29T11:00:00.000Z", item: { key: "lucid:ci", title: "lucid CI failing" }, excerpt: "All jobs failed.\nSee the run.", choice: "Ignore it" },
+      },
+      NOW,
+    );
+    expect(text).toBe(
+      '[re: scheduled job "heartbeat" message of 2026-09-29T11:00:00.000Z; run 01J0000000000000000000000A; item "lucid CI failing" (key lucid:ci); the owner tapped the reply "Ignore it"]\n> All jobs failed.\n> See the run.\nIgnore it',
+    );
+  });
+
   test("no id: no header, but a voice message is still marked", () => {
     expect(formatUserText({ messageId: "", text: "hi" }, NOW)).toBe("hi");
     expect(formatUserText({ messageId: "", text: "hi", voice: true }, NOW)).toBe("[voice message, transcribed]\nhi");

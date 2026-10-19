@@ -3,15 +3,26 @@ import { HttpError } from '$lib/core/http';
 import type { ChatEnvelope } from '$lib/core/realtime/events';
 import { hub as appHub, type Hub } from '$lib/core/realtime/hub.svelte';
 import { Remote } from '$lib/core/remote.svelte';
-import { chatApi, type ChatApi } from '$lib/features/chat';
+import { chatApi, chatStore, type ChatApi } from '$lib/features/chat';
+import type { DraftRef } from '$lib/core/storage/outbox';
+import { messageRef } from './format';
 import { httpHomeApi, type HomeApi } from './api';
 import { applyLive, emptyLive, homeItems, type LiveState, type LocalState } from './needs-you';
-import type { HomeData, HomeGroups } from './types';
+import type { HomeData, HomeGroups, HomeItem } from './types';
 
 export interface HomeDeps {
 	hub?: Hub;
 	api?: HomeApi;
 	chat?: () => ChatApi;
+	/** Main chat, where replies to job items go. */
+	main?: () => {
+		start(): Promise<void>;
+		send(
+			text: string,
+			files: File[],
+			options: { preserveComposer: true; ref: DraftRef }
+		): Promise<boolean>;
+	};
 }
 
 type Result = { ok: boolean; text: string };
@@ -39,6 +50,8 @@ export class NeedsYouStore {
 	submitting = $state.raw<readonly string[]>([]);
 	/** What happened to the last thing done from Home, by item id. */
 	results = $state.raw<Readonly<Record<string, Result>>>({});
+	/** Replies to job items sent from this device, by `<item id>:<item key>`, until Home reloads with them. */
+	answers = $state.raw<Readonly<Record<string, string>>>({});
 	/** The item last marked done, while Undo is offered. */
 	undoable = $state.raw<{ id: string; label: string } | null>(null);
 
@@ -51,6 +64,7 @@ export class NeedsYouStore {
 	#hub: Hub;
 	#api: HomeApi;
 	#chat: () => ChatApi;
+	#main: NonNullable<HomeDeps['main']>;
 	#stop: (() => void) | null = null;
 	#greeted = false;
 	#refetchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -66,6 +80,7 @@ export class NeedsYouStore {
 		this.#hub = deps.hub ?? appHub;
 		this.#api = deps.api ?? httpHomeApi;
 		this.#chat = deps.chat ?? chatApi;
+		this.#main = deps.main ?? (() => chatStore());
 		this.data = new Remote(() => this.#load(), { refetchOnFocus: true });
 	}
 
@@ -240,6 +255,36 @@ export class NeedsYouStore {
 					: failureText(err, 'answer')
 			});
 		}
+	}
+
+	/** Sends a reply to one item of a job's message to Main, with the item attached, as the owner's message. */
+	async reply(item: HomeItem, key: string, text: string, index?: number) {
+		if (item.kind !== 'message') return;
+		const ref = messageRef(item.message, key, index);
+		if (!ref) return;
+		const id = `${item.id}:${key}`;
+		const before = this.answers[id];
+		this.answers = { ...this.answers, [id]: text };
+		this.#result(item.id, null);
+		this.markRead(item.id);
+		let sent = false;
+		try {
+			const main = this.#main();
+			await main.start();
+			sent = await main.send(text, [], { preserveComposer: true, ref });
+		} catch {
+			sent = false;
+		}
+		if (!sent) {
+			const answers = { ...this.answers };
+			if (before === undefined) delete answers[id];
+			else answers[id] = before;
+			this.answers = answers;
+			this.#result(item.id, { ok: false, text: "Couldn't send your reply. Try again." });
+			return;
+		}
+		this.#result(item.id, { ok: true, text: 'Sent to Main chat. The agent answers there.' });
+		this.#scheduleRefetch();
 	}
 
 	async dismiss(id: string) {

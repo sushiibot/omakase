@@ -1,6 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { fakeBackend, type Scenario } from './fake-backend';
 import { channelFixture } from '../src/lib/features/channels/fixtures';
+import { HEARTBEAT_ITEMS_KEY, RUN_IDS } from '../src/lib/features/home/fixtures';
 import {
 	expandConversationInboxes,
 	axe,
@@ -50,6 +51,16 @@ async function homeServer(
 	const resolveApproval = (nonce: string) => {
 		pendingApprovals = pendingApprovals.filter((item) => item.nonce !== nonce);
 	};
+	// Main's log: what was posted, with the item each one answers as the bot would record it.
+	const posted: {
+		type: 'user';
+		id: string;
+		clientId: string;
+		at: string;
+		text: string;
+		attachments: [];
+		ref?: unknown;
+	}[] = [];
 	await stubStream(context);
 	await context.addInitScript(
 		({ pending, streamStatus }) => {
@@ -96,7 +107,45 @@ async function homeServer(
 				]
 			});
 		}
-		if (url.pathname === '/api/chat/history') return json({ items: [], before: null });
+		if (url.pathname === '/api/chat/history') return json({ items: posted, before: null });
+		if (url.pathname === '/api/chat/messages') {
+			const body = JSON.parse(raw!) as {
+				clientId: string;
+				text: string;
+				ref?: { id: string; item?: string };
+			};
+			const at = new Date().toISOString();
+			posted.push({
+				type: 'user',
+				id: String(posted.length + 1),
+				clientId: body.clientId,
+				at,
+				text: body.text,
+				attachments: [],
+				...(body.ref
+					? {
+							ref: {
+								id: body.ref.id,
+								job: 'heartbeat',
+								at,
+								excerpt: 'From the fixture.',
+								...(body.ref.item
+									? {
+											item: {
+												key: body.ref.item,
+												title:
+													body.ref.item === 'lucid:mutants:main'
+														? 'lucid mutation tests failing'
+														: body.ref.item
+											}
+										}
+									: {})
+							}
+						}
+					: {})
+			});
+			return json({ seq: posted.length, routed: true }, 202);
+		}
 		if (url.pathname.startsWith('/api/chat/approvals/')) {
 			if (opts.decide && opts.decide !== 200) return json({ error: 'x' }, opts.decide);
 			resolveApproval(decodeURIComponent(url.pathname.split('/').at(-1)!));
@@ -498,7 +547,7 @@ test('opening a run tells the bot once, and it stays in the inbox as read on eve
 	);
 });
 
-test("a job's message opens in full, Reply quotes it into the chat, and it stays read", async ({
+test("a job's message opens in full, Discuss attaches it to the chat as a card, and it stays read", async ({
 	page,
 	context
 }) => {
@@ -513,11 +562,58 @@ test("a job's message opens in full, Reply quotes it into the chat, and it stays
 	await sheet(page).getByRole('button', { name: 'Discuss', exact: true }).click();
 	await sheet(page).getByRole('button', { name: 'Main chat', exact: true }).click();
 	await expect(page).toHaveURL(/\/chat$/);
-	await expect(page.getByRole('textbox')).toHaveValue(
-		/^> From heartbeat:\n> Your passport renewal is due \*\*Friday\*\*/
+	const card = page.getByRole('region', { name: 'Replying to heartbeat', exact: true });
+	await expect(card).toContainText('Your passport renewal is due Friday');
+	await expect(card.getByRole('link', { name: 'View run' })).toHaveAttribute(
+		'href',
+		`/runs/${RUN_IDS.weeklyDeps}`
 	);
+	await expect(page.getByRole('textbox')).toHaveValue('');
+	await card.getByRole('button', { name: 'Remove the reference' }).click();
+	await expect(card).toBeHidden();
 	await (await openDrawer(page)).getByRole('link', { name: 'Channels' }).click();
 	await expect(page.getByRole('button', { name: /Read: Your passport renewal/ })).toBeVisible();
+});
+
+test("tapping a heartbeat item's reply sends it to Main with the item attached", async ({
+	page,
+	context
+}) => {
+	const { posts } = await homeServer(context);
+	await page.goto('/inbox');
+	await page.getByRole('button', { name: /lucid mutation tests failing/ }).click();
+	await expect(sheet(page).getByRole('heading', { name: 'From heartbeat' })).toBeVisible();
+	const item = sheet(page).getByRole('region', { name: 'lucid mutation tests failing' });
+	await expect(item.getByRole('link', { name: 'Open link' })).toHaveAttribute(
+		'href',
+		'https://github.com/drklee3/lucid/actions'
+	);
+	await item.getByRole('button', { name: 'Ignore mutation tests' }).click();
+	await expect
+		.poll(() => posts('/api/chat/messages').map((c) => c.body))
+		.toEqual([
+			expect.objectContaining({
+				text: 'Ignore mutation tests',
+				ref: { id: `msg:${HEARTBEAT_ITEMS_KEY}`, item: 'lucid:mutants:main', choice: 1 }
+			})
+		]);
+	await expect(item).toContainText('You replied: Ignore mutation tests');
+	await expect(
+		sheet(page).getByRole('status').filter({ hasText: 'Sent to Main chat' })
+	).toBeVisible();
+
+	// A typed reply to the other item goes the same way, without a choice.
+	const other = sheet(page).getByRole('region', { name: '6 deployment reviews pending' });
+	await other.getByRole('textbox', { name: /Your own reply/ }).fill('Approve the two oldest');
+	await other.getByRole('button', { name: 'Send reply' }).click();
+	await expect
+		.poll(() => posts('/api/chat/messages').map((c) => (c.body as { ref?: unknown }).ref))
+		.toContainEqual({ id: `msg:${HEARTBEAT_ITEMS_KEY}`, item: 'sushii:deploy-reviews' });
+
+	await page.goto('/chat');
+	await expect(
+		page.getByRole('region', { name: 'Replying to heartbeat: lucid mutation tests failing' })
+	).toBeVisible();
 });
 
 test('Done takes an item off Home on every device, and Undo brings it back', async ({

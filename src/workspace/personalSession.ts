@@ -26,6 +26,9 @@ import {
   type ChatNewResult,
   type ChatOrigin,
   type JobAlertWire,
+  type MessageRef,
+  jobItem,
+  JOB_ITEMS_MAX,
   parseUploadUrl,
 } from "../orchestration/contracts.ts";
 import { DeliveryTransport } from "./deliveryTransport.ts";
@@ -220,6 +223,8 @@ export interface PersonalSessionOptions {
   images?: ImageFetchOptions;
   /** Where owner uploads (`upload:<id>` attachments) are saved; without it they reach the agent as a note only. */
   uploads?: { dir: string; timeoutMs?: number };
+  /** Records owner replies to scheduled-job messages, for the job's later runs. */
+  jobFeedback?: { record(ref: MessageRef, text: string, at: Date): void };
   /** Time zone the history files are bucketed in. Default UTC. */
   tz?: string;
 }
@@ -562,6 +567,13 @@ export class PersonalSession {
       return { accepted: true, mode: "context" };
     }
     this.recordFileUploads(params.origin.surface, params.fileUploads === true);
+    if (params.ref && this.opts.jobFeedback) {
+      try {
+        this.opts.jobFeedback.record(params.ref, params.text, receivedAt);
+      } catch (err) {
+        log.warn({ err, job: params.ref.job }, "saving the owner's reply to a job message failed");
+      }
+    }
     // Downloaded in parallel with the queue, awaited in it, so a slow download can't let a later message overtake.
     const attachments = this.attachmentsFor(params);
     const mode = await this.enqueue(async () => {
@@ -1515,7 +1527,8 @@ export class PersonalSession {
   };
 
   /** A message outside any turn (a login prompt or result, a notice): outboxed like a reply, never added to the session. */
-  deliverOutOfBand(d: Pick<ChatDeliverParams, "kind" | "text" | "origin" | "auth" | "authResult" | "loginId" | "job">): void {
+  deliverOutOfBand(d: Pick<ChatDeliverParams, "kind" | "text" | "origin" | "auth" | "authResult" | "loginId" | "job" | "items">): void {
+    const job = d.job && deliverJob.safeParse(d.job).success ? d.job : undefined;
     const entry: ChatDeliverParams = {
       ...(d.origin ? { origin: d.origin } : {}),
       outboxId: this.newId(),
@@ -1526,7 +1539,9 @@ export class PersonalSession {
       ...(d.authResult ? { authResult: d.authResult } : {}),
       ...(d.loginId ? { loginId: d.loginId } : {}),
       // A job name the contract refuses would be resent forever; without it the message goes to the chat.
-      ...(d.job && deliverJob.safeParse(d.job).success ? { job: d.job } : {}),
+      ...(job ? { job } : {}),
+      // Likewise items: without them `text` still carries every item.
+      ...(job && d.items?.length && jobItem.array().max(JOB_ITEMS_MAX).safeParse(d.items).success ? { items: d.items } : {}),
     };
     this.outbox.append(entry);
     this.markDelivery(entry, false);
@@ -1775,7 +1790,7 @@ export function messageHeader(messageId: string, receivedAt: Date, opts: { surfa
 }
 
 export function formatUserText(
-  params: Pick<ChatMessageParams, "messageId" | "text" | "voice" | "attachments"> & { origin?: ChatOrigin },
+  params: Pick<ChatMessageParams, "messageId" | "text" | "voice" | "attachments" | "ref"> & { origin?: ChatOrigin },
   receivedAt: Date,
   /** Upload ids written to `~/uploads`; only those get a path. */
   saved: ReadonlySet<string> = new Set(),
@@ -1784,7 +1799,8 @@ export function formatUserText(
   const spoken = params.voice && params.origin?.surface === "web"
     ? "[Live voice conversation: All user-visible text in this turn is spoken aloud as it streams, including progress updates. Keep tool arguments and private reasoning out of that text. For this reply only, use one or two short spoken sentences, usually under 40 words. Lead with the answer or result. Ask one question at a time. Avoid markdown, lists, URLs and reading tool logs aloud. Give more detail only when requested or needed for safety. Never claim work is complete without confirmation.]\n"
     : "";
-  let text = header ? `${header}\n${spoken}${params.text}` : `${spoken}${params.text}`;
+  const re = params.ref ? `${refLine(params.ref)}\n` : "";
+  let text = header ? `${header}\n${spoken}${re}${params.text}` : `${spoken}${re}${params.text}`;
   // Only the host's own flush prompts may start with the marker; flushRanThisCycle trusts it.
   if (text.startsWith(FLUSH_MARKER)) text = `[message]\n${text}`;
   // Image attachments also reach the model as images when it accepts them; every attachment stays a link it can fetch.
@@ -1794,6 +1810,16 @@ export function formatUserText(
     text += `\n[attachment: ${a.name} (${a.contentType}) ${a.url}${path}]`;
   }
   return text;
+}
+
+/** What an owner message answers, for the agent: the job's message (data, quoted) and the choice tapped. */
+function refLine(ref: MessageRef): string {
+  const parts = [`scheduled job "${ref.job}" message of ${ref.at}`];
+  if (ref.runId) parts.push(`run ${ref.runId}`);
+  if (ref.item) parts.push(`item ${JSON.stringify(ref.item.title)} (key ${ref.item.key})`);
+  if (ref.choice !== undefined) parts.push(`the owner tapped the reply ${JSON.stringify(ref.choice)}`);
+  const quoted = ref.excerpt.split("\n").map((l) => `> ${l}`).join("\n");
+  return `[re: ${parts.join("; ")}]\n${quoted}`;
 }
 
 function uniqueName(name: string, taken: readonly StagedFile[]): string {

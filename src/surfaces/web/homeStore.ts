@@ -1,5 +1,6 @@
 import type { Database, Statement } from "bun:sqlite";
-import type { HomeAlert, HomeMessage, JobAlert } from "./events.ts";
+import { MESSAGE_REF_EXCERPT_MAX, type JobItem } from "../../orchestration/contracts.ts";
+import type { HomeAlert, HomeMessage, HomeMessageItem, JobAlert, MessageRef, MessageRefInput } from "./events.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Longer than HOME_RECENT_HOURS, so a run stays opened for as long as Home could list it. */
@@ -10,7 +11,10 @@ export const DONE_MESSAGES_RETENTION_MS = 30 * DAY_MS;
 /** Undone messages Home lists; older ones wait behind them. */
 export const HOME_MESSAGES_MAX = 50;
 
-type MessageRow = { key: string; job: string; run_id: string | null; text: string; at: number; read_at: number | null };
+type MessageRow = { key: string; job: string; run_id: string | null; text: string; at: number; read_at: number | null; items: string | null; answers: string | null };
+/** The answers key for a reply to the message as a whole. */
+const WHOLE = "";
+const ANSWER_MAX = 200;
 type AlertRow = { job: string; state: "open" | "cleared"; alert: string; first_at: string; seq: number; key: string; dismissed_at: number | null; updated_at: number };
 
 const startedMs = (a: { startedAt: string }) => Date.parse(a.startedAt);
@@ -106,15 +110,41 @@ export class WebHomeStore {
   }
 
   /** Files a job's message; false when its key is already filed. */
-  addMessage(m: { key: string; job: string; runId?: string; text: string }): boolean {
-    const res = this.db.run("INSERT INTO web_inbox (key, job, run_id, text, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(key) DO NOTHING", [
+  addMessage(m: { key: string; job: string; runId?: string; text: string; items?: JobItem[] }): boolean {
+    const res = this.db.run("INSERT INTO web_inbox (key, job, run_id, text, at, items) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(key) DO NOTHING", [
       m.key,
       m.job,
       m.runId ?? null,
       m.text,
       this.now(),
+      m.items?.length ? JSON.stringify(m.items) : null,
     ]);
     return res.changes > 0;
+  }
+
+  /** What an owner message answers, from the stored message; null when the message or item is unknown. */
+  messageRef(input: MessageRefInput): MessageRef | null {
+    const key = /^msg:(.+)$/.exec(input.id)?.[1];
+    if (key === undefined) return null;
+    const row = this.db.query("SELECT * FROM web_inbox WHERE key = ?").get(key) as MessageRow | null;
+    if (!row) return null;
+    const base = { id: input.id, job: row.job, ...(row.run_id ? { runId: row.run_id } : {}), at: new Date(row.at).toISOString() };
+    if (input.item === undefined) return input.choice === undefined ? { ...base, excerpt: clip(row.text, MESSAGE_REF_EXCERPT_MAX) } : null;
+    const item = parseItems(row.items).find((i) => i.key === input.item);
+    if (!item) return null;
+    const choice = input.choice === undefined ? undefined : item.choices[input.choice];
+    if (input.choice !== undefined && choice === undefined) return null;
+    return { ...base, item: { key: item.key, title: item.title }, excerpt: clip(item.body, MESSAGE_REF_EXCERPT_MAX), ...(choice !== undefined ? { choice } : {}) };
+  }
+
+  /** Records the owner's reply to a message or one of its items, which also reads the message. */
+  answerMessage(ref: Pick<MessageRef, "id" | "item">, answer: string): void {
+    const key = /^msg:(.+)$/.exec(ref.id)?.[1];
+    if (key === undefined) return;
+    const row = this.db.query("SELECT answers FROM web_inbox WHERE key = ?").get(key) as Pick<MessageRow, "answers"> | null;
+    if (!row) return;
+    const answers = { ...parseAnswers(row.answers), [ref.item?.key ?? WHOLE]: clip(answer.replace(/\s+/g, " ").trim(), ANSWER_MAX) };
+    this.db.run("UPDATE web_inbox SET answers = ?, read_at = COALESCE(read_at, ?) WHERE key = ?", [JSON.stringify(answers), this.now(), key]);
   }
 
   hasMessage(key: string): boolean {
@@ -124,16 +154,22 @@ export class WebHomeStore {
   /** Messages not marked done, newest first. */
   messages(): HomeMessage[] {
     const rows = this.db
-      .query("SELECT key, job, run_id, text, at, read_at FROM web_inbox WHERE done_at IS NULL ORDER BY at DESC, rowid DESC LIMIT ?")
+      .query("SELECT key, job, run_id, text, at, read_at, items, answers FROM web_inbox WHERE done_at IS NULL ORDER BY at DESC, rowid DESC LIMIT ?")
       .all(HOME_MESSAGES_MAX) as MessageRow[];
-    return rows.map((r) => ({
-      key: r.key,
-      job: r.job,
-      ...(r.run_id ? { runId: r.run_id } : {}),
-      text: r.text,
-      at: new Date(r.at).toISOString(),
-      read: r.read_at !== null,
-    }));
+    return rows.map((r) => {
+      const answers = parseAnswers(r.answers);
+      const items: HomeMessageItem[] = parseItems(r.items).map((i) => ({ ...i, ...(answers[i.key] !== undefined ? { answer: answers[i.key] } : {}) }));
+      return {
+        key: r.key,
+        job: r.job,
+        ...(r.run_id ? { runId: r.run_id } : {}),
+        text: r.text,
+        at: new Date(r.at).toISOString(),
+        read: r.read_at !== null,
+        ...(items.length ? { items } : {}),
+        ...(answers[WHOLE] !== undefined ? { answer: answers[WHOLE] } : {}),
+      };
+    });
   }
 
   /** False when there is no such message. */
@@ -187,4 +223,29 @@ export class WebHomeStore {
     const rows = this.db.query(`SELECT run_id FROM ${table} WHERE run_id IN (${ids.map(() => "?").join(",")})`).all(...ids) as { run_id: string }[];
     return new Set(rows.map((r) => r.run_id));
   }
+}
+
+/** Stored items were checked against the contract on delivery; anything unreadable shows as none. */
+function parseItems(raw: string | null): JobItem[] {
+  if (!raw) return [];
+  try {
+    const items = JSON.parse(raw) as unknown;
+    return Array.isArray(items) ? (items as JobItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseAnswers(raw: string | null): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const answers = JSON.parse(raw) as unknown;
+    return answers && typeof answers === "object" && !Array.isArray(answers) ? (answers as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function clip(s: string, max: number): string {
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }

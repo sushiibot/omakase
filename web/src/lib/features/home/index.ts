@@ -1,6 +1,6 @@
 export { default as HomeScreen } from './home-screen.svelte';
 export { default as UndoToast } from './components/undo-toast.svelte';
-export { messagePreview } from './format';
+export { messagePreview, messageRef, messageTitle } from './format';
 export { deepLinkItem } from './needs-you';
 export { configureHome, needsYou, type NeedsYouStore } from './needs-you.svelte';
 export type {

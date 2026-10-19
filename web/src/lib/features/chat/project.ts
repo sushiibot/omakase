@@ -196,6 +196,7 @@ export function toMessages(
 		switch (item.kind) {
 			case 'user': {
 				const parts: MessagePart[] = [];
+				if (item.ref) parts.push({ type: 'data-ref', data: item.ref });
 				if (item.attachments.length) {
 					parts.push({ type: 'data-files', data: { files: item.attachments.map(attachmentRef) } });
 				}
