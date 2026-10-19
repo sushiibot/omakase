@@ -1,12 +1,10 @@
 <script lang="ts">
-	import { Spinner } from '$lib/ui/spinner';
 	import ToolIcon from './tool-icon.svelte';
 	import ToolDiff from './tool-diff.svelte';
 	import { toolPresentation } from '../tool-presentation';
 	import { toolCategory } from '../tool-activity';
-	import CircleX from '@lucide/svelte/icons/circle-x';
-	import * as Collapsible from '$lib/ui/collapsible';
-	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
+	import * as Trace from '$lib/ui/trace';
+	import * as CodeBlock from '$lib/ui/code-block';
 	import ApprovalInline from './approval-inline.svelte';
 	import type { TurnStep, PendingApproval, ApprovalOutcome } from '../types';
 	import type { LocationReply } from '../location';
@@ -46,6 +44,19 @@
 		'denied-elsewhere': 'Denied on another device'
 	};
 	const presentation = $derived(toolPresentation(step.tool, step.input, step.label));
+	const failed = $derived(step.state === 'failed' && !executionUnknown);
+	const lineStatus = $derived(
+		step.state === 'running' && !executionUnknown ? 'running' : failed ? 'error' : undefined
+	);
+	const statusLabel = $derived(
+		executionUnknown && approval
+			? labels[approval.outcome]
+			: step.state === 'running'
+				? 'Running'
+				: step.state === 'failed'
+					? 'Failed'
+					: 'Completed'
+	);
 	const errorPreview = $derived(
 		step.state === 'failed' ? step.output?.trim().split('\n').find(Boolean) : undefined
 	);
@@ -54,48 +65,26 @@
 {#if pending && approval?.outcome === 'pending'}
 	<ApprovalInline {pending} {submitting} {onapprove} {ondeny} />
 {:else}
-	<Collapsible.Root
-		bind:open
-		data-tool-call={step.id}
-		class="min-w-0 text-ui text-muted-foreground"
-	>
-		<DisclosureTrigger class="py-1">
-			<ToolIcon kind={toolCategory(step.tool).kind} />
-			{#if step.state === 'failed'}<CircleX
-					class="size-4 shrink-0 text-failed"
-					aria-hidden="true"
-				/>{/if}
-			<span class="min-w-0 flex-1 py-1">
-				<span class="block font-medium [overflow-wrap:anywhere] text-foreground" data-tool-label
-					>{presentation.title}</span
+	<Trace.Collapsible bind:open data-tool-call={step.id} class="text-ui">
+		<Trace.CollapsibleTrigger class="max-w-full">
+			<Trace.Line status={lineStatus}>
+				<Trace.Icon><ToolIcon kind={toolCategory(step.tool).kind} /></Trace.Icon>
+				<Trace.Title class="min-w-16"
+					><span class="font-medium" data-tool-label>{presentation.title}</span
+					>{#if presentation.detail}
+						<span class="font-mono text-code">{presentation.detail}</span>{/if}</Trace.Title
 				>
-				{#if presentation.detail}<span class="line-clamp-2 block text-meta [overflow-wrap:anywhere]"
-						>{presentation.detail}</span
-					>{/if}
-				<span
-					class="flex flex-wrap items-center gap-1 text-meta"
-					class:text-failed={step.state === 'failed' && !executionUnknown}
-				>
-					{#if step.state === 'running'}<Spinner decorative class="size-3.5" />{/if}
-					<span
-						>{executionUnknown && approval
-							? labels[approval.outcome]
-							: step.state === 'running'
-								? 'Running'
-								: step.state === 'failed'
-									? 'Failed'
-									: 'Completed'}</span
-					>
-					<span aria-hidden="true"> · </span>{open ? 'Hide details' : 'View details'}
-				</span>
-				{#if errorPreview}<span
-						class="mt-1 line-clamp-3 block text-meta [overflow-wrap:anywhere] text-failed"
-						>{errorPreview}</span
-					>{/if}
-			</span>
-		</DisclosureTrigger>
-		<Collapsible.Content hiddenUntilFound>
-			<dl class="flex min-w-0 flex-col gap-2 border-t py-2 text-meta">
+				<Trace.Description class="min-w-0 truncate text-meta">{statusLabel}</Trace.Description>
+			</Trace.Line>
+		</Trace.CollapsibleTrigger>
+		{#if errorPreview}<p
+				class="line-clamp-3 ps-6 text-meta [overflow-wrap:anywhere] text-failed"
+				data-tool-error
+			>
+				{errorPreview}
+			</p>{/if}
+		<Trace.CollapsibleContent hiddenUntilFound>
+			<dl class="flex min-w-0 flex-col gap-2 text-meta">
 				{#if approval}<div>
 						<dt class="sr-only">Decision</dt>
 						<dd data-approval-record>
@@ -111,14 +100,18 @@
 						<dd class="whitespace-pre-wrap">{approvalReason}</dd>
 					</div>{/if}
 				<div>
-					<dt class="text-muted-foreground">Tool</dt>
+					<dt>Tool</dt>
 					<dd class="font-mono text-code">{step.tool}</dd>
 				</div>
-				{#if step.input}<div>
+				{#if step.input}<div class="flex flex-col gap-1">
 						<dt>Input</dt>
 						<dd>
-							<pre
-								class="max-h-48 overflow-auto font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{presentation.input}</pre>
+							<CodeBlock.Root size="sm" class="text-code">
+								<CodeBlock.Actions>
+									<CodeBlock.CopyButton value={presentation.input} label="Copy input" />
+								</CodeBlock.Actions>
+								<CodeBlock.Content class="max-h-48 pe-11" code={presentation.input} />
+							</CodeBlock.Root>
 						</dd>
 					</div>{/if}
 				{#if step.diff}<div>
@@ -129,11 +122,16 @@
 						<dt class="sr-only">File changes</dt>
 						<dd>Diff was not recorded for this call.</dd>
 					</div>{/if}
-				{#if step.output}<div>
+				{#if step.output}<div class="flex flex-col gap-1">
 						<dt>{step.state === 'failed' ? 'Error details' : 'Result'}</dt>
 						<dd>
-							<pre
-								class="max-h-64 overflow-auto font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{step.output}</pre>
+							<CodeBlock.Root
+								size="sm"
+								variant={step.state === 'failed' ? 'destructive' : 'default'}
+								class="text-code"
+							>
+								<CodeBlock.Content class="max-h-64" wrap code={step.output} />
+							</CodeBlock.Root>
 						</dd>
 					</div>{/if}
 				{#if !step.output && step.state !== 'running' && !executionUnknown}
@@ -143,6 +141,6 @@
 					</div>
 				{/if}
 			</dl>
-		</Collapsible.Content>
-	</Collapsible.Root>
+		</Trace.CollapsibleContent>
+	</Trace.Collapsible>
 {/if}

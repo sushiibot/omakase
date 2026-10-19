@@ -38,8 +38,8 @@ export const DYNAMIC_TAG_EXEMPT = new Set<string>([]);
 
 // Agent text renders here, so it may never emit a control, handler or the approval surface.
 export const MARKDOWN = 'src/lib/features/chat/render/markdown.svelte';
-// Markdown's one control: an icon button that copies its own code block.
-export const COPY_BUTTON = 'src/lib/features/chat/render/code-copy-button.svelte';
+// Markdown's code block, holding its one control: an icon button that copies the block's own text.
+export const COPY_BUTTON = 'src/lib/features/chat/render/markdown-code.svelte';
 // The row under every message, agent replies included, sits next to agent text.
 export const MESSAGE_ACTIONS = 'src/lib/features/chat/components/message-actions.svelte';
 const LOOKALIKE = new Set([MARKDOWN, COPY_BUTTON, MESSAGE_ACTIONS]);
@@ -47,7 +47,7 @@ const MARKDOWN_IMPORTS = new Set([
 	'../types',
 	'./markdown',
 	'./streaming',
-	'./code-copy-button.svelte'
+	'./markdown-code.svelte'
 ]);
 
 // Every feature shows agent- or server-supplied text somewhere, so none may borrow the approval

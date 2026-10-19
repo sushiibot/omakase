@@ -254,6 +254,7 @@ export const STOCK_NAMES = new Set([
 	'carousel',
 	'chart',
 	'checkbox',
+	'code-block',
 	'collapsible',
 	'command',
 	'context-menu',
@@ -298,7 +299,8 @@ export const STOCK_NAMES = new Set([
 	'textarea',
 	'toggle',
 	'toggle-group',
-	'tooltip'
+	'tooltip',
+	'trace'
 ]);
 
 /** GitHub-style heading anchors of a markdown document, ignoring fenced code. */

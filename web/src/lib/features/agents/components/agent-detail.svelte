@@ -15,6 +15,7 @@
 	import AgentHeader from './agent-header.svelte';
 	import ApprovalCard from './approval-card.svelte';
 	import WorkGroup from './work-group.svelte';
+	import * as CodeBlock from '$lib/ui/code-block';
 	import { agentAge, agentMeta, agentState, placeRequests, requestKey, turns } from '../model';
 	import type { AgentRecord, AgentSession, Decision } from '../types';
 	let {
@@ -285,13 +286,14 @@
 				<Collapsible.Root open class="min-w-0">
 					<DisclosureTrigger><span>Activity</span></DisclosureTrigger>
 					<Collapsible.Content hiddenUntilFound>
-						{#if session.output}<pre
-								class="max-h-96 overflow-auto rounded-lg border bg-muted/30 p-3 font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap"
-								aria-label="Raw output">{session.output}</pre>{:else}<p
-								class="text-meta text-muted-foreground"
-							>
-								No output yet.
-							</p>{/if}
+						{#if session.output}<CodeBlock.Root class="text-code"
+								><CodeBlock.Content
+									class="max-h-96"
+									wrap
+									aria-label="Raw output"
+									code={session.output}
+								/></CodeBlock.Root
+							>{:else}<p class="text-meta text-muted-foreground">No output yet.</p>{/if}
 					</Collapsible.Content>
 				</Collapsible.Root>
 				{#if session.final}<div class="min-w-0 text-body" data-answer>

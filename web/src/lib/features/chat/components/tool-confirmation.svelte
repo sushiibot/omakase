@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as CodeBlock from '$lib/ui/code-block';
 	import { Spinner } from '$lib/ui/spinner';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import { Button } from '$lib/ui/button';
@@ -70,8 +71,10 @@
 				</Collapsible.Root>
 			</div>
 		{:else}
-			<pre
-				class="my-2 max-h-32 overflow-auto rounded-lg bg-muted px-3 py-2 font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{presentation.input}</pre>
+			<CodeBlock.Root size="sm" class="my-2 text-code">
+				<!-- Out of the tab order, so the decision stays one Tab from the request. -->
+				<CodeBlock.Content class="max-h-32" wrap tabindex={-1} code={presentation.input} />
+			</CodeBlock.Root>
 		{/if}
 		<p class="my-2 text-meta">This action is waiting for your decision.</p>
 		{#if confirmation.reason}<p class="my-2 text-meta text-muted-foreground">

@@ -411,7 +411,7 @@ test('an approval shows inline Approve/Deny and posts the decision', async ({ pa
 	await expect(approve).toBeHidden();
 	await expect(
 		page
-			.locator('[data-tool-call] [data-slot=collapsible-trigger]')
+			.locator('[data-tool-call] [data-slot$=collapsible-trigger]')
 			.getByText('Denied', { exact: true })
 	).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
@@ -427,14 +427,14 @@ test('an approval decided on another device and a timeout both say so', async ({
 	await push(page, 'approval_resolved', { nonce: 'n1', decision: 'approve' }, 2);
 	await expect(
 		page
-			.locator('[data-tool-call] [data-slot=collapsible-trigger]')
+			.locator('[data-tool-call] [data-slot$=collapsible-trigger]')
 			.getByText('Approved on another device')
 	).toBeVisible();
 	await push(page, 'approval', approval('n2', 'run_shell'), 3);
 	await push(page, 'approval_resolved', { nonce: 'n2', decision: 'timeout' }, 4);
 	await expect(
 		page
-			.locator('[data-tool-call] [data-slot=collapsible-trigger]')
+			.locator('[data-tool-call] [data-slot$=collapsible-trigger]')
 			.getByText('Expired', { exact: true })
 	).toBeVisible();
 });
@@ -1976,8 +1976,8 @@ for (const width of [412, 1280]) {
 		await expect(request).toHaveCount(0);
 		const call = page.locator('[data-tool-call="send-call"]');
 		await expect(call).toContainText('Running');
-		await expect(call.locator('[data-slot=collapsible-trigger]')).toContainText('Running');
-		await call.locator('[data-slot=collapsible-trigger]').click();
+		await expect(call.locator('[data-slot$=collapsible-trigger]')).toContainText('Running');
+		await call.locator('[data-slot$=collapsible-trigger]').click();
 		await expect(call).toContainText('Approved');
 		await page.screenshot({ path: `/tmp/chat-approval-resolved-${width}.png` });
 	});
@@ -2017,15 +2017,15 @@ for (const width of [320, 412, 1280]) {
 		}
 		const group = page.locator('[data-tool-activity]');
 		await expect(group).toHaveCount(1);
-		await expect(group.locator(':scope > [data-slot=collapsible-trigger]')).toContainText(
+		await expect(group.locator(':scope > [data-slot$=collapsible-trigger]')).toContainText(
 			'Read × 2'
 		);
-		await expect(group.locator(':scope > [data-slot=collapsible-trigger]')).toContainText(
+		await expect(group.locator(':scope > [data-slot$=collapsible-trigger]')).toContainText(
 			'Bash × 1'
 		);
 		await expect(page.locator('[data-tool-call="read-1"]')).not.toBeVisible();
 		expect(
-			(await group.locator(':scope > [data-slot=collapsible-trigger]').boundingBox())!.height
+			(await group.locator(':scope > [data-slot$=collapsible-trigger]').boundingBox())!.height
 		).toBe(44);
 		await push(page, 'tool', {
 			turnId: 'grouped',
@@ -2037,11 +2037,11 @@ for (const width of [320, 412, 1280]) {
 		});
 		await expect(page.locator('[data-tool-call="bad"]')).toBeVisible();
 		await expect(
-			page.locator('[data-tool-call="bad"] [data-slot=collapsible-trigger]')
+			page.locator('[data-tool-call="bad"] [data-slot$=collapsible-trigger]')
 		).toContainText('Failed');
-		await group.locator(':scope > [data-slot=collapsible-trigger]').click();
+		await group.locator(':scope > [data-slot$=collapsible-trigger]').click();
 		await expect(page.locator('[data-tool-call="read-1"]')).toBeVisible();
-		await page.locator('[data-tool-call="read-1"] [data-slot=collapsible-trigger]').click();
+		await page.locator('[data-tool-call="read-1"] [data-slot$=collapsible-trigger]').click();
 		await expect(page.locator('[data-tool-call="read-1"]')).toContainText('Input');
 		await expect(page.locator('[data-tool-call="read-1"]')).toContainText('read read-1');
 		expect(
@@ -2149,7 +2149,7 @@ for (const width of [412, 1280]) {
 			await confirmation.getByRole('button', { name: 'Allow once', exact: true }).click();
 			await push(page, 'ask_resolved', { askId: 'confirm-ask', answer: 'Yes' }, 2);
 			await expect(confirmation).toContainText('Approved');
-			await expect(confirmation.locator('[data-slot=collapsible-trigger]')).not.toContainText(
+			await expect(confirmation.locator('[data-slot$=collapsible-trigger]')).not.toContainText(
 				'Finished'
 			);
 			await push(page, 'tool', {
@@ -2170,7 +2170,7 @@ for (const width of [412, 1280]) {
 			await expect(confirmation).toHaveCount(0);
 			const executed = page.locator('[data-tool-call="confirm-call"]');
 
-			await expect(executed.locator('[data-slot=collapsible-trigger]')).toContainText('Completed');
+			await expect(executed.locator('[data-slot$=collapsible-trigger]')).toContainText('Completed');
 			await expect(page.locator('[data-tool-call="next-call"]')).toBeVisible();
 			expect(
 				await page.evaluate(() => {
@@ -2180,7 +2180,7 @@ for (const width of [412, 1280]) {
 				})
 			).toBe(true);
 			await page.screenshot({ path: `/tmp/chat-confirmation-resolved-${width}-${theme}.png` });
-			await executed.locator('[data-slot=collapsible-trigger]').click();
+			await executed.locator('[data-slot$=collapsible-trigger]').click();
 			await expect(executed).toContainText('Why approval was requested');
 			await expect(executed.locator('[data-approval-record]')).toContainText('Approved');
 			await expect(executed).toContainText('Review the command');
@@ -2220,7 +2220,7 @@ test('another-device decision with a long command reflows at 320px', async ({ pa
 		1
 	);
 	await push(page, 'ask_resolved', { askId: 'long-ask', answer: 'Yes' }, 2);
-	const summary = page.locator('[data-tool-call="long-call"] [data-slot=collapsible-trigger]');
+	const summary = page.locator('[data-tool-call="long-call"] [data-slot$=collapsible-trigger]');
 	await summary.click();
 	await expect(page.locator('[data-tool-call="long-call"] [data-approval-record]')).toContainText(
 		'Approved on another device'
@@ -2296,12 +2296,12 @@ for (const width of [390, 1280]) {
 		}));
 		await expect(dialog.getByText('Book the Osaka hotel.')).toBeVisible();
 		await dialog
-			.locator('[data-slot=collapsible-trigger]')
+			.locator('[data-slot$=collapsible-trigger]')
 			.filter({ hasText: 'memory/travel.md' })
 			.click();
 		await expect(dialog.getByText('Stay near the station.')).toBeVisible();
 		await dialog
-			.locator('[data-slot=collapsible-trigger]')
+			.locator('[data-slot$=collapsible-trigger]')
 			.filter({ hasText: 'MEMORY.md' })
 			.click();
 		await expect(dialog.getByText('Osaka trip planned.')).toBeVisible();
@@ -2382,7 +2382,7 @@ for (const width of [412, 1280]) {
 			name: 'read',
 			summary: 'First file'
 		});
-		await page.locator('[data-tool-call="first"] [data-slot=collapsible-trigger]').click();
+		await page.locator('[data-tool-call="first"] [data-slot$=collapsible-trigger]').click();
 		await expect(page.locator('[data-tool-call="first"]')).toHaveAttribute('data-state', 'open');
 		await push(page, 'tool', {
 			turnId: 'expand',
@@ -2404,7 +2404,7 @@ for (const width of [412, 1280]) {
 		await push(page, 'delta', { turnId: 'expand', offset: 0, text: 'Here is the result.' });
 		await expect(group).toHaveAttribute('data-state', 'open');
 		await expect(page.locator('[data-tool-call="first"]')).toHaveAttribute('data-state', 'open');
-		await group.locator(':scope > [data-slot=collapsible-trigger]').click();
+		await group.locator(':scope > [data-slot$=collapsible-trigger]').click();
 		await expect(group).toHaveAttribute('data-state', 'closed');
 		await push(page, 'tool', {
 			turnId: 'expand',
@@ -2459,10 +2459,13 @@ for (const width of [412, 1280]) {
 				ok: true,
 				diff
 			});
-			await page.locator('[data-tool-call="edit-file"] [data-slot=collapsible-trigger]').click();
+			await page.locator('[data-tool-call="edit-file"] [data-slot$=collapsible-trigger]').click();
 			const changes = page.getByRole('region', { name: 'File changes' });
-			await expect(changes).toContainText('-Use long explanations.');
-			await expect(changes).toContainText('+Keep replies concise.');
+			// The +/− marks are the line gutter, drawn outside the copyable text.
+			await expect(changes.locator('[data-variant=removed]')).toContainText(
+				'Use long explanations.'
+			);
+			await expect(changes.locator('[data-variant=added]')).toContainText('Keep replies concise.');
 			await expect(page.locator('[data-tool-diff]')).toContainText('+1');
 			await expect(page.locator('[data-tool-diff]')).toContainText('−1');
 			await page.screenshot({ path: `/tmp/chat-edit-diff-${width}-${theme}.png` });
@@ -2478,8 +2481,8 @@ for (const width of [412, 1280]) {
 				}
 			];
 			await page.reload();
-			await page.locator('[data-tool-call="edit-file"] [data-slot=collapsible-trigger]').click();
-			await expect(changes).toContainText('+Keep replies concise.');
+			await page.locator('[data-tool-call="edit-file"] [data-slot$=collapsible-trigger]').click();
+			await expect(changes.locator('[data-variant=added]')).toContainText('Keep replies concise.');
 		});
 	}
 }
@@ -2538,10 +2541,8 @@ for (const width of [320, 1280]) {
 			output: 'maps: command not found\nExit code: 127'
 		});
 		const row = page.locator('[data-tool-call="failed-search"]');
-		await expect(row.locator('[data-slot=collapsible-trigger]')).toContainText(
-			'maps: command not found'
-		);
-		await row.locator('[data-slot=collapsible-trigger]').click();
+		await expect(row.locator('[data-tool-error]')).toContainText('maps: command not found');
+		await row.locator('[data-slot$=collapsible-trigger]').click();
 		await expect(row.locator('pre').first()).toHaveText(command);
 		await expect(row).toContainText('Exit code: 127');
 		expect(

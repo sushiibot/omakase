@@ -28,12 +28,12 @@ test('Channels keeps Main first, a shared inbox and working channel search', asy
 	await expect(page.getByRole('heading', { name: 'Topics', level: 2 })).toBeVisible();
 	const archive = page.getByRole('region', { name: /^Archived/ });
 	await expect(archive.locator('[data-slot=collapsible]')).toHaveAttribute('data-state', 'closed');
-	await expect(archive.locator('[data-slot=collapsible-trigger]')).toHaveAttribute(
+	await expect(archive.locator('[data-slot$=collapsible-trigger]')).toHaveAttribute(
 		'aria-expanded',
 		'false'
 	);
 	await expect(archive.getByRole('link', { name: /Couch delivery/ })).toBeHidden();
-	await archive.locator('[data-slot=collapsible-trigger]').click();
+	await archive.locator('[data-slot$=collapsible-trigger]').click();
 	await expect(page.getByRole('region', { name: /^Archived/ })).toContainText('Couch delivery');
 	await openSharedInbox(page);
 	await expect(page.locator('[data-inbox="shared"]')).toContainText('nightly-sync failed');
@@ -59,7 +59,7 @@ test('closing an inbox expanded by a slow load stays closed when its records arr
 	});
 	await page.goto('/chats');
 	const inbox = page.locator('[data-inbox="shared"]');
-	const trigger = inbox.locator('[data-slot=collapsible-trigger]');
+	const trigger = inbox.locator('[data-slot$=collapsible-trigger]');
 	try {
 		await expect(inbox).toHaveAttribute('data-state', 'open');
 		await expect(trigger).toHaveAttribute('aria-expanded', 'true');
@@ -106,7 +106,7 @@ test('decisions name their source while topic work and heartbeats share one inbo
 	const main = page.getByRole('region', { name: 'Main chat', exact: true });
 	expect((await attention.boundingBox())!.y).toBeLessThan((await main.boundingBox())!.y);
 	const inbox = page.locator('[data-inbox="shared"]');
-	await inbox.locator('[data-slot=collapsible-trigger]').click();
+	await inbox.locator('[data-slot$=collapsible-trigger]').click();
 	await expect(inbox).toContainText('Compare flight prices for the October trip');
 	await expect(inbox).toContainText('Your passport renewal is due Friday');
 	await expect(main).not.toContainText('Compare flight prices');
@@ -265,7 +265,7 @@ test('row options rename archived threads and Back cancels unsaved changes', asy
 	await page.goto('/chats');
 	await page
 		.getByRole('region', { name: /^Archived/ })
-		.locator('[data-slot=collapsible-trigger]')
+		.locator('[data-slot$=collapsible-trigger]')
 		.click();
 	await page.getByRole('button', { name: 'Options for Couch delivery' }).click();
 	const sheet = page.getByRole('dialog', { name: 'Conversation settings' });

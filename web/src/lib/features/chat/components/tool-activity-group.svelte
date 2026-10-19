@@ -1,8 +1,6 @@
 <script lang="ts">
-	import { Spinner } from '$lib/ui/spinner';
 	import { untrack } from 'svelte';
-	import * as Collapsible from '$lib/ui/collapsible';
-	import DisclosureTrigger from '$lib/ui/collapsible/disclosure-trigger.svelte';
+	import * as Trace from '$lib/ui/trace';
 	import ToolIcon from './tool-icon.svelte';
 	import ToolRow from './tool-row.svelte';
 	import { activityCategories } from '../tool-activity';
@@ -27,26 +25,20 @@
 	);
 </script>
 
-<Collapsible.Root bind:open data-tool-activity class="min-w-0 text-ui text-muted-foreground">
-	<DisclosureTrigger aria-label={label} class="py-1">
-		<span class="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
+<Trace.Collapsible bind:open data-tool-activity class="text-ui">
+	<Trace.CollapsibleTrigger aria-label={label} class="max-w-full">
+		<Trace.Line status={running ? 'running' : undefined}>
 			{#each categories.slice(0, 2) as category (category.key)}
-				<span class="flex min-w-0 items-center gap-1.5 whitespace-nowrap"
-					><ToolIcon kind={category.kind} /><span class="truncate"
-						>{category.label} × {category.count}</span
-					></span
-				>
+				<Trace.Icon><ToolIcon kind={category.kind} /></Trace.Icon>
 			{/each}
-			{#if categories.length > 2}<span class="shrink-0 text-meta">+{categories.length - 2}</span
+			<Trace.Title>{categories.map((c) => `${c.label} × ${c.count}`).join(', ')}</Trace.Title>
+			{#if running}<Trace.Description class="text-meta text-running">Running</Trace.Description
 				>{/if}
-		</span>
-		{#if running}<span class="flex shrink-0 items-center gap-1 text-meta text-running"
-				><Spinner decorative class="size-3.5" /><span>Running</span></span
-			>{/if}
-	</DisclosureTrigger>
-	<Collapsible.Content hiddenUntilFound>
-		<ul class="min-w-0 border-l pl-3">
-			{#each steps as step, index (`${index}:${step.id}`)}<li>
+		</Trace.Line>
+	</Trace.CollapsibleTrigger>
+	<Trace.CollapsibleContent hiddenUntilFound>
+		<Trace.Root role="list">
+			{#each steps as step, index (`${index}:${step.id}`)}<div role="listitem">
 					<ToolRow
 						{step}
 						focused={openStep === step.id}
@@ -55,7 +47,7 @@
 							(value) => (expandedSteps[index] = value)
 						}
 					/>
-				</li>{/each}
-		</ul>
-	</Collapsible.Content>
-</Collapsible.Root>
+				</div>{/each}
+		</Trace.Root>
+	</Trace.CollapsibleContent>
+</Trace.Collapsible>

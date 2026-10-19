@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as CodeBlock from '$lib/ui/code-block';
 	import { Spinner } from '$lib/ui/spinner';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import Check from '@lucide/svelte/icons/check';
@@ -59,11 +60,14 @@
 	{#if view.exact}
 		<div class="flex flex-col gap-1">
 			<p id="{uid}-exact" class="text-meta text-muted-foreground">Exact input</p>
-			<pre
-				aria-labelledby="{uid}-exact"
-				class="max-h-60 overflow-auto rounded-lg border bg-background p-3 font-mono text-code [overflow-wrap:anywhere] whitespace-pre-wrap">{revealInvisible(
-					view.exact
-				)}</pre>
+			<CodeBlock.Root class="text-code">
+				<CodeBlock.Content
+					aria-labelledby="{uid}-exact"
+					class="max-h-60"
+					wrap
+					code={revealInvisible(view.exact)}
+				/>
+			</CodeBlock.Root>
 		</div>
 		<p class="text-meta [overflow-wrap:anywhere] text-muted-foreground">
 			{#if request.detail?.cwd}In <span class="font-mono"

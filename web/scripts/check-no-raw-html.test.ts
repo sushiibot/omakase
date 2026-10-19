@@ -138,7 +138,7 @@ describe('check-no-raw-html', () => {
 		expect(rules(md, '<a onkeydown={go}>x</a>')).toContain('markdown: event handler');
 	});
 
-	test('markdown imports only its renderer, types and the Copy button', () => {
+	test('markdown imports only its renderer, types and its code block', () => {
 		const md = MARKDOWN;
 		const script = (body: string) => `<script lang="ts">\n${body}\n</script>`;
 		expect(
@@ -147,7 +147,7 @@ describe('check-no-raw-html', () => {
 				script(
 					[
 						"import type { MdBlock } from '../types';",
-						"import CodeCopyButton from './code-copy-button.svelte';",
+						"import MarkdownCode from './markdown-code.svelte';",
 						"import { parseMarkdown } from './markdown';",
 						"import { caretHost, MarkdownStream } from './streaming';"
 					].join('\n')

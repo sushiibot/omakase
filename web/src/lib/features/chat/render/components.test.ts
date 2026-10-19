@@ -42,8 +42,12 @@ const decode = (s: string) =>
 		.replace(/&quot;/g, '"')
 		.replace(/&amp;/g, '&');
 
-const disclosure = (e: El) => e.attrs['data-slot'] === 'collapsible';
-const decision = (e: El) => e.tag === 'button' && e.attrs['data-slot'] !== 'collapsible-trigger';
+const disclosure = (e: El) => !!e.attrs['data-slot']?.endsWith('collapsible');
+// Disclosure toggles and Copy are not decisions.
+const decision = (e: El) =>
+	e.tag === 'button' &&
+	!e.attrs['data-slot']?.endsWith('collapsible-trigger') &&
+	e.attrs['data-slot'] !== 'code-block-copy-button';
 
 const ID = 'AbCdEfGhIjKlMnOpQrStUv';
 
@@ -455,12 +459,13 @@ test('file diffs render escaped additions and deletions, including truncation', 
 			truncated: true
 		}
 	});
-	expect(text).toContain('-old');
-	expect(text).toContain('+<script>alert(1)</script>');
+	// The +/− marks are the line gutter (CodeBlock line variants), not part of the text.
+	expect(text).toContain('old');
+	expect(text).toContain('<script>alert(1)</script>');
 	expect(html).not.toContain('<script>');
 	expect(text).toContain('This diff is truncated');
-	expect(html).toContain('bg-add');
-	expect(html).toContain('bg-del');
+	expect(html).toContain('data-variant="added"');
+	expect(html).toContain('data-variant="removed"');
 });
 
 test('artifact links render as document cards inside the app', async () => {

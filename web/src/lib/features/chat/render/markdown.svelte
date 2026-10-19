@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { MdBlock } from '../types';
-	import CodeCopyButton from './code-copy-button.svelte';
+	import MarkdownCode from './markdown-code.svelte';
 	import {
 		fromLegacyBlocks,
 		parseDocumentMarkdown,
@@ -166,15 +166,12 @@
 				</h6>
 			{/if}
 		{:else if node.kind === 'code'}
-			<div class="relative">
-				<pre
-					class="min-h-11 overflow-x-auto rounded-lg bg-muted py-2 pr-10 pl-3 font-mono text-code leading-relaxed"
-					data-lang={node.lang}><code
-						>{node.text}{#if node === caretAt}{@render caret()}{/if}</code
-					></pre>
-				<!-- Code still streaming would copy a truncated command. -->
-				<CodeCopyButton text={node.text} disabled={streaming && node === caretAt} />
-			</div>
+			<MarkdownCode
+				code={node.text}
+				lang={node.lang}
+				streaming={streaming && node === caretAt}
+				caret={node === caretAt ? caret : undefined}
+			/>
 		{:else if node.kind === 'quote'}
 			<blockquote class="flex flex-col gap-2 border-l-2 pl-3 text-muted-foreground">
 				{@render blockList(node.children)}

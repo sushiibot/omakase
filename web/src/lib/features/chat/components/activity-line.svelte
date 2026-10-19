@@ -20,7 +20,12 @@
 		<p
 			data-typing
 			role="status"
-			class={activity.kind === 'typing' ? 'sr-only' : 'min-w-0 flex-1 truncate'}
+			class={activity.kind === 'typing'
+				? 'sr-only'
+				: [
+						'min-w-0 flex-1 truncate',
+						activity.kind !== 'thinking' && activity.kind !== 'waiting' && 'shimmer'
+					]}
 		>
 			{activity.label}
 		</p>

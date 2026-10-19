@@ -14,12 +14,15 @@
 	"checkbox": {
 		"drift": "coarse-pointer hit area 48px wide and 40px tall, so 44px rows never overlap (ux-guidelines.md#shared-component-patterns)"
 	},
+	"code-block": {
+		"drift": "copy button takes a label, defaults to icon-sm and announces \"Couldn't copy\" (ux-guidelines.md#long-content-on-narrow-screens); diff lines use the --add/--del tokens (ux-guidelines.md#long-content-on-narrow-screens); the highlighter and its hook live in this dir, not the lib root (ux-guidelines.md#shared-component-patterns)"
+	},
 	"collapsible": {
 		"drift": "app-owned DisclosureTrigger, the one disclosure row (ux-guidelines.md#shared-component-patterns)"
 	},
 	"diff": {
 		"source": "app",
-		"reason": "line diff view (ux-guidelines.md#long-content-on-narrow-screens)"
+		"reason": "memory and skill line diff over the stock CodeBlock (ux-guidelines.md#long-content-on-narrow-screens)"
 	},
 	"dropdown-menu": {
 		"drift": "a CloseWatcher while open, so Android back closes the menu (ux-guidelines.md#back-gesture-and-navigation)"
@@ -112,6 +115,9 @@
 	},
 	"tooltip": {
 		"drift": "none"
+	},
+	"trace": {
+		"drift": "collapsible trigger is 44px tall on coarse pointers (ux-guidelines.md#reach-and-touch-targets); no close animation, which never runs on hiddenUntilFound content, and no open animation under reduced motion (ux-guidelines.md#motion); description text at full muted-foreground for AA contrast (ux-guidelines.md#accessibility)"
 	},
 	"workspace": {
 		"source": "app",
