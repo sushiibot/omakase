@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "921909723305",
+    "project_id": "sushii-d8a99",
+    "storage_bucket": "sushii-d8a99.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:921909723305:android:fd996d7effcfd5858ba9b8",
+        "android_client_info": {
+          "package_name": "bot.sushii.omakase"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_-Pg66Y_2-6PJPxtZKuMQVdkobPnu1Fs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
