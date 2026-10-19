@@ -47,7 +47,7 @@ Every process is stopped on exit, including a failed start or Ctrl-C.
 - They don't, and a Docker engine is running (Docker Desktop, OrbStack or colima): it runs the same `run.ts` in a Linux container from `Dockerfile` (the Playwright image for the pinned `@playwright/test`, plus the Bun version CI pins). The repo is mounted; `node_modules` live in `omakase-e2e-*` volumes, since several packages ship per-platform binaries. Logs and traces of a failed run land in `$TMPDIR/sushii-e2e-docker-*/run`. The first run pulls the image and installs dependencies, so it takes a few minutes.
 - Neither: it stops and says how to fix it. The aliases are `sudo ifconfig lo0 alias 127.0.0.2` and the same for `.3` and `.5`; they last until reboot.
 
-`E2E_DOCKER=1` always uses Docker, and `E2E_DOCKER=0` never does. Headed and UI modes need the native path. `run.ts`'s own preflight still checks the aliases and the ports before it starts anything.
+`E2E_DOCKER=1` always uses Docker, and `E2E_DOCKER=0` never does. `--headed`, `--ui` and `--debug` (or `PWDEBUG`) need a display, so they never fall back: without the aliases they stop and print the alias commands. The first Docker run says it is building the image. `run.ts`'s own preflight still checks the aliases and the ports before it starts anything.
 
 **Isolation.**
 - Each process gets an env built from scratch and runs with `bun --no-env-file`, so neither the repo `.env` nor the caller's tokens reach the stack.

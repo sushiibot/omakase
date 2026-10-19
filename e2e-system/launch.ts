@@ -12,6 +12,8 @@ const HERE = import.meta.dir;
 const REPO = resolve(HERE, "..");
 const args = process.argv.slice(2);
 const mode = process.env["E2E_DOCKER"]?.trim();
+/** Playwright modes that need a display or the inspector, which the container doesn't have. */
+const interactive = args.some((a) => /^--(headed|ui|ui-host|ui-port|debug)(=|$)/.test(a)) || !!process.env["PWDEBUG"];
 
 function run(cmd: string, argv: string[], opts: { cwd?: string; quiet?: boolean } = {}): Promise<number> {
   return new Promise((res) => {
@@ -58,6 +60,8 @@ async function viaDocker(): Promise<number> {
   const v = versions();
   const image = `omakase-e2e:pw${v.playwright}-bun${v.bun}`;
   console.log(`[e2e] running in Docker (${image})`);
+  if ((await run("docker", ["image", "inspect", image], { quiet: true })) !== 0)
+    console.log("[e2e] first Docker run: pulling the Playwright image (about 2 GB), building and installing dependencies. This takes a few minutes; later runs reuse them.");
   const built = await run("docker", ["build", "-q", "--load", "-t", image, "--build-arg", `PLAYWRIGHT_VERSION=${v.playwright}`, "--build-arg", `BUN_VERSION=${v.bun}`, HERE]);
   if (built !== 0) return built;
 
@@ -89,19 +93,30 @@ async function viaDocker(): Promise<number> {
   return code;
 }
 
+function aliasCommand(): string {
+  const { addrs } = stackConfig();
+  return [addrs.gateway, addrs.trustedPeer, addrs.untrusted].map((a) => `sudo ifconfig lo0 alias ${a}`).join(" && ");
+}
+
 async function main(): Promise<number> {
   const native = () => run(process.execPath, ["--no-env-file", join(HERE, "run.ts"), ...args]);
+  if (mode === "1" && interactive) {
+    console.error("[e2e] --headed, --ui and --debug need a display, which the Docker run doesn't have. Run natively instead (E2E_DOCKER unset or 0).");
+    return 1;
+  }
   if (mode === "1") return viaDocker();
   if (mode === "0" || (await aliasesRoute())) return native();
+  if (interactive) {
+    console.error(`[e2e] --headed, --ui and --debug run natively only, which needs the loopback aliases here (they last until reboot): ${aliasCommand()}`);
+    return 1;
+  }
   if ((await run("docker", ["info"], { quiet: true })) === 0) {
     console.log("[e2e] 127.0.0.2/.3/.5 don't route to loopback here, so the stack runs in Docker");
     return viaDocker();
   }
-  const { addrs } = stackConfig();
   console.error(
-    `[e2e] ${addrs.gateway}, ${addrs.trustedPeer} and ${addrs.untrusted} don't route to loopback, and no Docker engine is running. Either start one ` +
-      `(Docker Desktop, OrbStack or colima), or add the aliases: sudo ifconfig lo0 alias ${addrs.gateway} && ` +
-      `sudo ifconfig lo0 alias ${addrs.trustedPeer} && sudo ifconfig lo0 alias ${addrs.untrusted}`,
+    "[e2e] 127.0.0.2/.3/.5 don't route to loopback, and no Docker engine is running. Either start one " +
+      `(Docker Desktop, OrbStack or colima) and rerun, or add the aliases: ${aliasCommand()}`,
   );
   return 1;
 }
