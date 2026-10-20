@@ -363,7 +363,8 @@ export class SubagentHost {
       throw err;
     }
     try { if (this.opts.tasks) {
-      const parentTask = this.opts.tasks.list().find(t => t.workConversationId === turn?.origin?.conversationId);
+      const origin = turn?.origin?.conversationId;
+      const parentTask = origin ? this.opts.tasks.list().find(t => t.workConversationId === origin) : undefined;
       const prior = args.continue ? this.opts.tasks.forRun(args.continue) : undefined;
       const existing = prior ?? this.opts.tasks.list().find(t => t.id === taskId || t.legacyKey === taskId);
       const assigned = existing ?? this.opts.tasks.manage({ action: "create", title: task.slice(0, 120), brief: task.slice(0, 16000), conversationId: parentTask?.sourceConversationId ?? turn?.origin?.conversationId ?? "main", ...(parentTask ? { parentTaskId: parentTask.id } : {}) }).tasks[0]!;

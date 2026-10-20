@@ -176,3 +176,30 @@ test("a stored task from before agents were separate keeps loading without its r
   expect("execution" in task).toBe(false);
   expect(JSON.parse(readFileSync(join(state, "tasks-v2.json"), "utf8"))[0].execution).toBeUndefined();
 });
+
+test("detaching stray runs restores the result and last activity from the newest remaining run", () => {
+  const { home, state } = env();
+  const store = new TaskStore(state, home);
+  const task = store.manage({ action: "create", title: "Add product images" }).tasks[0]!;
+  store.attachRun(task.id, "real", "researcher");
+  store.settleRun("real", "done", "Images added.");
+  store.manage({ action: "update", id: task.id, revision: store.get(task.id).revision, patch: { status: "done" } });
+  store.attachRun(task.id, "job-1", "Sushii");
+  store.settleRun("job-1", "done", "Consolidation applied.");
+  store.attachRun(task.id, "job-2", "Sushii");
+  const before = store.get(task.id);
+  const runs: Record<string, { startedAt: string; endedAt?: string; resultSummary?: string }> = {
+    real: { startedAt: "2026-09-20T10:00:00.000Z", endedAt: "2026-09-20T10:05:00.000Z", resultSummary: "Images added." },
+  };
+  store.detachRuns((id) => id.startsWith("job-"), (id) => runs[id]);
+  const after = new TaskStore(state, home).get(task.id);
+  expect(after.runIds).toEqual(["real"]);
+  expect(after.result).toBe("Images added.");
+  expect(after.updatedAt).toBe("2026-09-20T10:05:00.000Z");
+  expect(after.status).toBe("done");
+  expect(after.revision).toBe(before.revision + 1);
+
+  // Nothing stray: nothing rewritten.
+  store.detachRuns(() => false, (id) => runs[id]);
+  expect(store.get(task.id).revision).toBe(after.revision);
+});

@@ -18,6 +18,7 @@ test("task recorder associates roots only, records before task changes, and forw
     list: () => [{ id: "task", workConversationId: "topic-a" }] as ReturnType<TaskStore["list"]>,
     attachRun: (id, run, actor) => { events.push(["attach", id, run, actor]); },
     settleRun: (id, status, summary) => { events.push(["settle", id, status, summary]); },
+    detachRuns: () => {},
   };
   const runs = recordTaskRuns(records, tasks);
   const input = { agentName: "main", task: "work", sessionFile: "session", conversationId: "topic-a" };
@@ -47,7 +48,35 @@ test("a failed run write cannot attach or settle a task", () => {
     getRun: () => null, listRuns: () => [],
   };
   const unexpected = () => { throw new Error("task should not change"); };
-  const runs = recordTaskRuns(records, { setRunActivity: () => {}, list: unexpected, attachRun: unexpected, settleRun: unexpected });
+  const runs = recordTaskRuns(records, { setRunActivity: () => {}, list: unexpected, attachRun: unexpected, settleRun: unexpected, detachRuns: () => {} });
   expect(() => runs.startRun({ agentName: "main", task: "work", sessionFile: "file" })).toThrow(failure);
   expect(() => runs.endRun("run", { status: "done" })).toThrow(failure);
+});
+
+test("a scheduled job run (no conversation) never attaches to a task without a conversation", () => {
+  const attached: string[] = [];
+  const records: RunRecorder = { startRun: () => "job-run", endRun: () => {}, getRun: () => null, listRuns: () => [] };
+  const runs = recordTaskRuns(records, {
+    setRunActivity: () => {},
+    list: () => [{ id: "old-task" }] as ReturnType<TaskStore["list"]>,
+    attachRun: id => { attached.push(id); },
+    settleRun: () => {},
+    detachRuns: () => {},
+  });
+  runs.startRun({ agentName: "job:consolidation", task: "consolidate", sessionFile: "" });
+  expect(attached).toEqual([]);
+});
+
+test("startup detaches only root runs without a conversation", () => {
+  const byId: Record<string, RunRecord> = {
+    job: { runId: "job", agentName: "job:consolidation", status: "done" } as RunRecord,
+    chat: { runId: "chat", agentName: "main", status: "done", conversationId: "topic" } as RunRecord,
+    sub: { runId: "sub", agentName: "researcher", status: "done", parentRunId: "chat" } as RunRecord,
+  };
+  let stray!: (id: string) => boolean;
+  recordTaskRuns({ startRun: () => "", endRun: () => {}, getRun: id => byId[id] ?? null, listRuns: () => [] }, {
+    setRunActivity: () => {}, list: () => [], attachRun: () => {}, settleRun: () => {},
+    detachRuns: s => { stray = s; },
+  });
+  expect(["job", "chat", "sub", "rotated-away"].filter(id => stray(id))).toEqual(["job"]);
 });

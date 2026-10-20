@@ -160,6 +160,31 @@ export class TaskStore {
       this.save(task);
     }
   }
+  /**
+   * Drops run links `stray` rejects. A repaired task takes its result and last activity from its newest remaining
+   * run, since stray runs overwrote both; it keeps its creation time when none remain.
+   */
+  detachRuns(
+    stray: (runId: string) => boolean,
+    run: (runId: string) => { endedAt?: string; startedAt: string; resultSummary?: string } | undefined,
+  ) {
+    let changed = false;
+    this.records = this.records.map((original) => {
+      const runIds = original.runIds.filter((id) => !stray(id));
+      if (runIds.length === original.runIds.length) return original;
+      changed = true;
+      const last = runIds.map(run).filter((r) => r !== undefined).at(-1);
+      const { result: _, ...rest } = original;
+      return taskRecord.parse({
+        ...rest,
+        runIds,
+        ...(last?.resultSummary ? { result: last.resultSummary.slice(0, 4000) } : {}),
+        revision: original.revision + 1,
+        updatedAt: last?.endedAt ?? last?.startedAt ?? original.createdAt,
+      });
+    });
+    if (changed) this.persist();
+  }
   forRun(runId: string) {
     return this.list().find((t) => t.runIds.includes(runId));
   }
