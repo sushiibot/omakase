@@ -158,7 +158,11 @@
 	});
 </script>
 
-<div class="relative overflow-hidden rounded-xl" bind:clientWidth={width}>
+<div
+	class="relative overflow-hidden rounded-xl"
+	bind:clientWidth={width}
+	data-row-swipe={ondone ? '' : undefined}
+>
 	{#if ondone && offset !== 0}
 		<div
 			class={cn(

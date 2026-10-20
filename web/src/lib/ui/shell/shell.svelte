@@ -231,6 +231,10 @@
 	}
 	const excluded =
 		'a,button,input,textarea,select,summary,pre,code,[contenteditable],[role="slider"],[role="tab"],[data-tab-pager]';
+	// Screens like Home are mostly row links, so a drag may start on one; a tap still opens it, and the click
+	// ending a drag is suppressed. Rows with their own sideways swipe opt out.
+	const excludedOffConversation =
+		'input,textarea,select,pre,code,[contenteditable],[role="slider"],[role="tab"],[data-tab-pager],[data-row-swipe]';
 	let suppressClick = false;
 	function down(e: PointerEvent) {
 		suppressClick = false;
@@ -239,7 +243,6 @@
 			!e.isPrimary ||
 			e.button !== 0 ||
 			e.pointerType === 'mouse' ||
-			(!conversation && pane === 'chat') ||
 			(pane !== 'chat' && !overlaid)
 		)
 			return;
@@ -254,7 +257,9 @@
 			target.closest(
 				paneSurface
 					? 'input,textarea,select,pre,code,[contenteditable],[role="slider"],[role="checkbox"],[data-tab-pager]'
-					: excluded
+					: conversation
+						? excluded
+						: excludedOffConversation
 			) ||
 			document.getSelection()?.isCollapsed === false
 		)

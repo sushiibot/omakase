@@ -297,3 +297,24 @@ for (const interruption of ['cancel', 'blur', 'resize'] as const) {
 		await expect.poll(offset).toBeCloseTo(320, 0);
 	});
 }
+
+test('on Home a drag that starts on a row reveals channels, and a tap still opens the row', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	await page.goto('/assistant');
+	const row = page.locator('[data-assistant-home] a[href]').first();
+	await expect(row).toBeVisible();
+	const box = (await row.boundingBox())!;
+	const y = box.y + box.height / 2;
+	const menu = page.getByRole('dialog', { name: 'Menu', exact: true });
+	await swipe(page, [box.x + 60, y], [box.x + 300, y]);
+	await expect(menu).toBeVisible();
+	await expect(page).toHaveURL(/\/assistant$/);
+	await page.getByRole('button', { name: 'Return to conversation', exact: true }).click();
+	await expect(menu).toBeHidden();
+	const href = await row.getAttribute('href');
+	await row.tap();
+	await expect(page).toHaveURL(new RegExp(`${href!.replace(/[?]/g, '\\?')}$`));
+});
