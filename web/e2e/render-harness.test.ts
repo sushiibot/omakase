@@ -591,6 +591,15 @@ test.describe('interactive reply blocks', () => {
 				},
 				text.slice(0, text.indexOf(upTo))
 			);
+		// Warm the parser first: one cold parse over the 50ms stream budget drops the rest of a reply
+		// to plain text by design (streaming.ts), which a busy CI runner can hit before the JIT warms.
+		await page.evaluate((t) => {
+			const { h } = window as unknown as Win;
+			for (let i = 0; i < 3; i++) {
+				for (let n = 20; n <= t.length; n += 20) h.parse(t.slice(0, n));
+				h.streamCost(t, 7);
+			}
+		}, text);
 		await page.evaluate(() => {
 			(window as unknown as Win).h.api.stream = { text: '', streaming: true };
 		});
