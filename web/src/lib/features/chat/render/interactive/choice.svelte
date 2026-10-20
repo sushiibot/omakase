@@ -3,27 +3,34 @@
 	import { Button } from '$lib/ui/button';
 	import type { RichData } from '../rich/blocks';
 	import ReplyPanel from './reply-panel.svelte';
+	import type { LiveBinding } from '../rich/live';
 
 	// A question with options. One pick sends at once; with `multiple`, picks toggle and Send sends
 	// them joined, exactly as shown.
 	let {
 		data,
 		reply,
-		partial = false
+		partial = false,
+		live
 	}: {
 		data: RichData<'choice'>;
 		reply?: (text: string) => void;
 		/** Still streaming: shown, never live (no `reply` either). */
 		partial?: boolean;
+		/** The stored block: what was sent from it shows on every device. */
+		live?: LiveBinding;
 	} = $props();
 	let picked = $state<string[]>([]);
-	let sent = $state<string | null>(null);
+	let localSent = $state<string | null>(null);
+	// Answered on any device: the stored block says so, and this one stops sending too.
+	const sent = $derived(live?.block.state.sent ?? localSent);
 	const disabled = $derived(!reply || sent !== null);
 
 	function send(text: string) {
 		if (!reply || sent !== null || !text) return;
-		sent = text;
+		localSent = text;
 		reply(text);
+		live?.apply([{ op: 'sent', text }]);
 	}
 	function toggle(option: string) {
 		picked = picked.includes(option) ? picked.filter((p) => p !== option) : [...picked, option];

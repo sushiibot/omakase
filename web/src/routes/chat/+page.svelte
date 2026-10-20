@@ -28,7 +28,8 @@
 		channelActivity,
 		type ChatSheet,
 		type ChatMessage,
-		type FileRef
+		type FileRef,
+		liveBlocksStore
 	} from '$lib/features/chat';
 	import { BranchSheet, threadsStore } from '$lib/features/threads';
 	import type { ConnectionState } from '$lib/ui/connection-banner.svelte';
@@ -363,6 +364,7 @@
 			onrewind={(id, text) => s.rewind(id, text)}
 			onanswer={(askId, answer) => s.answer(askId, answer)}
 			onreply={(text) => void s.send(text, [], { preserveComposer: true })}
+			live={liveBlocksStore()}
 			onapprove={(nonce, location) => void s.decide(nonce, 'approve', location)}
 			ondeny={(nonce) => void s.decide(nonce, 'deny')}
 			oninstall={() => pwa.install()}

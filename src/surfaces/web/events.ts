@@ -316,6 +316,69 @@ export interface AppVersions {
 }
 
 /** Payload of each SSE event, by event name. */
+/** Stateful rich blocks in replies (checklist, recipe, timer, and the reply blocks), stored in the
+ *  workspace so the owner and the agent both read and change them. `id` is `<messageKey>.<index>`:
+ *  the reply's outbox key and the block's place among the reply's live blocks. */
+export type LiveBlockType = 'checklist' | 'recipe' | 'timer' | 'actions' | 'choice' | 'form';
+
+export interface LiveChecklistItem {
+	id: number;
+	text: string;
+	done: boolean;
+}
+
+export interface LiveBlockState {
+	/** checklist */
+	items?: LiveChecklistItem[];
+	nextItem?: number;
+	/** recipe: servings shown, and the indexes of ticked ingredients. */
+	serves?: number;
+	got?: number[];
+	/** timer: when it ends while running (ISO), else the seconds left. */
+	endsAt?: string | null;
+	left?: number;
+	/** actions, choice, form: what the owner sent from it. */
+	sent?: string | null;
+}
+
+export interface LiveBlockChange {
+	at: string;
+	by: 'owner' | 'agent';
+	summary: string;
+}
+
+export interface LiveBlock {
+	id: string;
+	messageKey: string;
+	index: number;
+	conversationId: string;
+	type: LiveBlockType;
+	title: string;
+	/** Hash of the block's data as written in the reply, so a renderer binds only the block it drew. */
+	fingerprint: string;
+	data: unknown;
+	state: LiveBlockState;
+	revision: number;
+	createdAt: string;
+	updatedAt: string;
+	updatedBy: 'owner' | 'agent';
+	/** The latest changes, newest last. */
+	changes: LiveBlockChange[];
+}
+
+export type LiveBlockOp =
+	| { op: 'check'; item: number; done: boolean }
+	| { op: 'add'; text: string }
+	| { op: 'edit'; item: number; text: string }
+	| { op: 'remove'; item: number }
+	| { op: 'serves'; n: number }
+	| { op: 'got'; item: number; done: boolean }
+	| { op: 'start' }
+	| { op: 'pause' }
+	| { op: 'reset' }
+	| { op: 'duration'; seconds: number }
+	| { op: 'sent'; text: string };
+
 export interface ChatEventMap {
 	app_update: AppVersions;
 	rewind: { clientId: string };
@@ -387,6 +450,8 @@ export interface ChatEventMap {
 	/** A background run started or ended; refetch what shows it. */
 	/** Refetch topic metadata and the Chats list; conversation content stays on its own stream. */
 	threads: { id: string };
+	/** A live block changed, by the owner on any device or by the agent. */
+	block: { block: LiveBlock };
 	run: {
 		conversationId?: string;
 		repo?: string;
@@ -427,7 +492,8 @@ export const EPHEMERAL_EVENTS = [
 	'workspace',
 	'run',
 	'inbox',
-	'threads'
+	'threads',
+	'block'
 ] as const;
 
 export type FirstFrameEventType = (typeof FIRST_FRAME_EVENTS)[number];

@@ -116,6 +116,7 @@
 		onrewind,
 		onanswer,
 		onreply,
+		live,
 		onapprove,
 		ondeny,
 		oninstall,
@@ -225,6 +226,8 @@
 		onanswer?: (askId: string, answer: string) => void;
 		/** Sends a reply block's text as the owner's message, keeping the composer's draft. */
 		onreply?: (text: string) => void;
+		/** Stored live blocks, synced across devices and with the agent. */
+		live?: import('./render/rich/live').LiveBlockAccess;
 		onapprove?: (nonce: string, location?: LocationReply) => void;
 		ondeny?: (nonce: string) => void;
 		oninstall?: () => Promise<'accepted' | 'dismissed' | 'failed'>;
@@ -832,6 +835,7 @@
 				{onrewind}
 				onanswer={(askId, answer) => onanswer?.(askId, answer)}
 				{onreply}
+				{live}
 				onretryhistory={() => onretryhistory?.()}
 				{onspeak}
 				{readingId}

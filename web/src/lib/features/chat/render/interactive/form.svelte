@@ -4,24 +4,30 @@
 	import * as NativeSelect from '$lib/ui/native-select';
 	import type { RichData } from '../rich/blocks';
 	import ReplyPanel from './reply-panel.svelte';
+	import type { LiveBinding } from '../rich/live';
 
 	// A few details the agent needs. Send posts one "Label: value" line per filled field as the
 	// owner's message, so what is sent is exactly what was typed.
 	let {
 		data,
 		reply,
-		partial = false
+		partial = false,
+		live
 	}: {
 		data: RichData<'form'>;
 		reply?: (text: string) => void;
 		/** Still streaming: shown, never live (no `reply` either). */
 		partial?: boolean;
+		/** The stored block: what was sent from it shows on every device. */
+		live?: LiveBinding;
 	} = $props();
 	const uid = $props.id();
 	// A number input binds a number (or null when cleared), so values are read through `entry`.
 	let values = $state<(string | number | null | undefined)[]>([]);
 	const entry = (i: number): string => String(values[i] ?? '').trim();
-	let sent = $state<string | null>(null);
+	let localSent = $state<string | null>(null);
+	// Answered on any device: the stored block says so, and this one stops sending too.
+	const sent = $derived(live?.block.state.sent ?? localSent);
 	let tried = $state(false);
 	const disabled = $derived(!reply || sent !== null);
 	const missing = $derived(data.fields.map((f, i) => !f.optional && !entry(i)));
@@ -35,8 +41,9 @@
 			.filter(([, v]) => v)
 			.map(([label, v]) => `${label}: ${v}`)
 			.join('\n');
-		sent = text.replace(/\n/g, '; ');
+		localSent = text.replace(/\n/g, '; ');
 		reply(text);
+		live?.apply([{ op: 'sent', text: localSent.slice(0, 2000) }]);
 	}
 </script>
 

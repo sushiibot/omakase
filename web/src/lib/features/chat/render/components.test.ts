@@ -110,7 +110,9 @@ describe('markdown', () => {
 			(_, k) => `${k}: ${JSON.stringify(`${evil} ${++n}`)}`
 		);
 		const { els, html } = await dom(Markdown, { text: '```' + type + '\n' + body + '\n```' });
-		const interactive = ['recipe', 'timer', 'actions', 'choice', 'form'].includes(type);
+		const interactive = ['recipe', 'timer', 'actions', 'choice', 'form', 'checklist'].includes(
+			type
+		);
 		assertInert(els, { richControls: interactive });
 		if (!interactive) expect(els.some((e) => 'data-rich-control' in e.attrs)).toBe(false);
 		// Without a reply callback (not the latest reply), nothing can send.

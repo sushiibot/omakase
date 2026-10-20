@@ -2,6 +2,7 @@ import { WorkspaceApi, MESSAGE_TIMEOUT_MS, CONTROL_TIMEOUT_MS, NEW_SESSION_TIMEO
 export { WorkspaceBadResponseError, MESSAGE_TIMEOUT_MS } from "./api.ts";
 import type { MaintenanceRequest } from "../maintenanceContracts.ts";
 import type { TaskRequest } from "../taskContracts.ts";
+import { BLOCKS_CHANGED, blocksChangedParams, type BlockRequest, type BlocksChangedParams } from "../blockContracts.ts";
 import type { BrowserControlRequest, BrowserReadResult } from "../browserContracts.ts";
 import type { AgentResultParams } from "../machines/contracts.ts";
 import type { AttentionRequest, AttentionResult, ConnectorRequest, ConnectorsResult } from "../contracts.ts";
@@ -245,6 +246,7 @@ export class WorkspaceLink {
   private readonly numberedAsks = new Map<string, { askId: string; count: number }>();
   private readonly connectionListeners = new Set<(connected: boolean) => void>();
   private readonly runListeners = new Set<(p: RunsChangedParams) => void>();
+  private readonly blockListeners = new Set<(p: BlocksChangedParams) => void>();
   private replaying: Promise<void> | null = null;
   private replayAgain = false;
   // turnId → tool count for turns that have ended; null when the count is unknown (a restart).
@@ -308,6 +310,12 @@ export class WorkspaceLink {
   }
 
   /** Called with each `runs/changed` notification from the principal's workspace; returns an unsubscribe. */
+  /** A live block changed in the workspace (an owner or agent edit). */
+  onBlocksChanged(listener: (p: BlocksChangedParams) => void): () => void {
+    this.blockListeners.add(listener);
+    return () => void this.blockListeners.delete(listener);
+  }
+
   onRunsChanged(listener: (p: RunsChangedParams) => void): () => void {
     this.runListeners.add(listener);
     return () => void this.runListeners.delete(listener);
@@ -354,6 +362,10 @@ export class WorkspaceLink {
 
   async tasksManage(request: TaskRequest) {
     return this.api.tasksManage(request);
+  }
+
+  async blocksManage(request: BlockRequest) {
+    return this.api.blocksManage(request);
   }
 
   async maintenance(request: MaintenanceRequest) {
@@ -848,6 +860,21 @@ export class WorkspaceLink {
   }
 
   private onNotification(conn: ConnectionInfo, method: string, params: unknown): void {
+    if (method === BLOCKS_CHANGED) {
+      const parsed = blocksChangedParams.safeParse(params);
+      if (!parsed.success || parsed.data.principalId !== conn.principalId || parsed.data.principalId !== this.opts.principalId) {
+        log.debug({ method }, "dropping a malformed or foreign blocks/changed");
+        return;
+      }
+      for (const l of [...this.blockListeners]) {
+        try {
+          l(parsed.data);
+        } catch (err) {
+          log.warn({ err }, "blocks/changed listener threw");
+        }
+      }
+      return;
+    }
     if (method === RPC_METHODS.runsChanged) {
       const parsed = runsChangedParams.safeParse(params);
       if (!parsed.success || parsed.data.principalId !== conn.principalId || parsed.data.principalId !== this.opts.principalId) {

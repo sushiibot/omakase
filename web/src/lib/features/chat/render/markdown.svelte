@@ -16,6 +16,7 @@
 		type MdInlineNode
 	} from './markdown';
 	import { caretHost, MarkdownStream } from './streaming';
+	import type { LiveBlockAccess } from './rich/live';
 
 	// Agent text is untrusted: no controls besides Copy and no security-surface styling here, so
 	// nothing in a reply can pass for a decision card. scripts/check-no-raw-html.ts enforces it.
@@ -25,7 +26,9 @@
 		files = [],
 		streaming = false,
 		document = false,
-		reply
+		reply,
+		live,
+		liveKey
 	}: {
 		/** Raw markdown from the agent. Takes precedence over `blocks`. */
 		text?: string;
@@ -41,6 +44,10 @@
 		/** Sends text as the owner's message. Only the latest finished reply in chat gets it, so
 		 *  reply blocks (actions, choice, form) in older replies or documents can't send. */
 		reply?: (text: string) => void;
+		/** The live-block store, and this reply's key in it: stored checklists, recipes, timers and
+		 *  reply blocks then sync across devices and with the agent. Without them they stay local. */
+		live?: LiveBlockAccess;
+		liveKey?: string;
 	} = $props();
 
 	// A string, so a new but equal `files` array does not trigger a re-parse.
@@ -265,7 +272,14 @@
 		{:else if node.kind === 'rule'}
 			<hr class="border-border" />
 		{:else if node.kind === 'rich'}
-			<RichBlock block={node.block} {reply} partial={node.partial} />
+			<RichBlock
+				block={node.block}
+				{reply}
+				partial={node.partial}
+				live={streaming ? undefined : live}
+				{liveKey}
+				liveIndex={node.live}
+			/>
 		{:else if node.kind === 'rich-pending'}
 			<RichPending type={node.type} />
 		{:else if node.kind === 'callout'}

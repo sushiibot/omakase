@@ -7,15 +7,18 @@
 	import { Button } from '$lib/ui/button';
 	import { formatDuration } from '../rich/blocks';
 	import { loadLocal, saveLocal } from './local-state';
+	import type { LiveBinding } from '../rich/live';
 
-	// A countdown kept on this device. A running timer stores its end time, so it keeps counting
-	// through a reload or the app going to the background.
+	// A countdown. Bound to a stored block (`live`), its end time is shared by every device and the
+	// agent; otherwise it is kept on this device. A running timer stores its end time either way, so
+	// it keeps counting through a reload or the app going to the background.
 	let {
 		label,
 		seconds,
 		storeKey,
 		compact = false,
-		disabled = false
+		disabled = false,
+		live
 	}: {
 		label: string;
 		seconds: number;
@@ -23,13 +26,19 @@
 		compact?: boolean;
 		/** Shown but not startable yet: the block is still streaming and its key isn't final. */
 		disabled?: boolean;
+		live?: LiveBinding;
 	} = $props();
 
 	type Saved = { endsAt: number | null; left: number };
 	// A block's key and duration come from its text, which doesn't change once rendered.
 	const initial = untrack(() => loadLocal<Saved | null>(`timer:${storeKey}`, null));
-	let endsAt = $state<number | null>(initial?.endsAt ?? null);
-	let left = $state(initial?.left ?? untrack(() => seconds));
+	let localEndsAt = $state<number | null>(initial?.endsAt ?? null);
+	let localLeft = $state(initial?.left ?? untrack(() => seconds));
+	const total = $derived(live ? (live.block.data as { duration: number }).duration : seconds);
+	const endsAt = $derived(
+		live ? (live.block.state.endsAt ? Date.parse(live.block.state.endsAt) : null) : localEndsAt
+	);
+	const left = $derived(live ? (live.block.state.left ?? total) : localLeft);
 	let now = $state(Date.now());
 	const remaining = $derived(
 		endsAt === null ? left : Math.max(0, Math.ceil((endsAt - now) / 1000))
@@ -51,23 +60,26 @@
 	});
 
 	function persist() {
-		saveLocal(`timer:${storeKey}`, { endsAt, left } satisfies Saved);
+		saveLocal(`timer:${storeKey}`, { endsAt: localEndsAt, left: localLeft } satisfies Saved);
 	}
 	function start() {
 		now = Date.now();
-		endsAt = now + (done ? seconds : left) * 1000;
 		buzzed = false;
+		if (live) return live.apply([{ op: 'start' }]);
+		localEndsAt = now + (done ? total : left) * 1000;
 		persist();
 	}
 	function pause() {
-		left = remaining;
-		endsAt = null;
+		if (live) return live.apply([{ op: 'pause' }]);
+		localLeft = remaining;
+		localEndsAt = null;
 		persist();
 	}
 	function reset() {
-		left = seconds;
-		endsAt = null;
 		buzzed = false;
+		if (live) return live.apply([{ op: 'reset' }]);
+		localLeft = total;
+		localEndsAt = null;
 		persist();
 	}
 </script>
@@ -108,7 +120,7 @@
 			onclick={start}><Play /></Button
 		>
 	{/if}
-	{#if endsAt !== null || left !== seconds}
+	{#if endsAt !== null || left !== total}
 		<Button
 			data-rich-control
 			variant="ghost"

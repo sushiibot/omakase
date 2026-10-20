@@ -13,6 +13,7 @@ import { WebHomeStore } from "./homeStore.ts";
 import { WebInboundStore } from "./inbound.ts";
 import { createPresence } from "./presence.ts";
 import { sendPush } from "./push.ts";
+import type { ChatEventMap } from "./events.ts";
 import { WebWorkspaceAdapter, type WebUploadPort } from "./workspaceAdapter.ts";
 
 const log = getLogger("web/chat");
@@ -145,8 +146,15 @@ export function createWebChat(deps: WebChatDeps): WebChat {
           data: { runId: r.runId, kind: r.kind, status: r.status, ...(r.parentRunId ? { parentRunId: r.parentRunId } : {}), ...(r.jobName ? { jobName: r.jobName } : {}) },
         }),
       );
+      // Ephemeral: a device that missed one refetches its blocks on reconnect (hello).
+      const offBlocks = deps.link.onBlocksChanged(({ block }) => {
+        const ev = { type: "block" as const, data: { block: block as ChatEventMap["block"]["block"] } };
+        chatLog.publish(ev);
+        threads.publish(ev);
+      });
       if (deps.workspaceEnabled && deps.link.isConnected()) void importer.run().then(catchUpIndex);
       return () => {
+        offBlocks();
         clearInterval(timer);
         clearInterval(indexTimer);
         off();

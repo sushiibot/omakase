@@ -54,7 +54,8 @@ const MARKDOWN_IMPORTS = new Set([
 	'./rich/disclosure.svelte',
 	'./rich/container-card.svelte',
 	'./interactive/check-item.svelte',
-	'./interactive/tabs-block.svelte'
+	'./interactive/tabs-block.svelte',
+	'./rich/live'
 ]);
 // Rich reply blocks render agent-written data, so they get markdown's rules too: no controls, no
 // handlers, no spread attributes, no approval look.

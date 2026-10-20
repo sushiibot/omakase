@@ -54,6 +54,7 @@ export interface WebHandlerDeps {
   chat?: ChatRoutes;
   threads?: import("./threadRoutes.ts").WebThreads;
   tasks?: import("./taskRoutes.ts").TaskRoutes;
+  blocks?: import("./blockRoutes.ts").BlockRoutes;
   machines?: import("./machineRoutes.ts").MachineRoutes;
   fileStores?: import("./fileStoreRoutes.ts").FileStoreRoutes;
   accounts?: import("./accountRoutes.ts").AccountRoutes;
@@ -150,6 +151,10 @@ export function createWebHandler(deps: WebHandlerDeps): WebHandler {
     }
     if (deps.tasks) {
       const res = await deps.tasks.handle(req, path, actor, server);
+      if (res) return res;
+    }
+    if (deps.blocks) {
+      const res = await deps.blocks.handle(req, path);
       if (res) return res;
     }
     if (chat) {
@@ -273,6 +278,7 @@ export interface WebServerOptions {
   chat?: ChatRoutes;
   threads?: import("./threadRoutes.ts").WebThreads;
   tasks?: import("./taskRoutes.ts").TaskRoutes;
+  blocks?: import("./blockRoutes.ts").BlockRoutes;
   machines?: import("./machineRoutes.ts").MachineRoutes;
   fileStores?: import("./fileStoreRoutes.ts").FileStoreRoutes;
   accounts?: import("./accountRoutes.ts").AccountRoutes;
@@ -314,6 +320,7 @@ export async function startWebServer(config: WebConfig, db: Database, opts: WebS
     ...(opts.chat ? { chat: opts.chat } : {}),
     ...(opts.threads ? { threads: opts.threads } : {}),
     ...(opts.tasks ? { tasks: opts.tasks } : {}),
+    ...(opts.blocks ? { blocks: opts.blocks } : {}),
     ...(opts.machines ? { machines: opts.machines } : {}),
     ...(opts.fileStores ? { fileStores: opts.fileStores } : {}),
     ...(opts.accounts ? { accounts: opts.accounts } : {}),

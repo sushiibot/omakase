@@ -1,6 +1,7 @@
 import { createWorkspaceBashTool, browserLifecycle } from "./executionTools.ts";
 import { MAINTENANCE_INSTRUCTIONS, MAINTENANCE_TOOLS, type MaintenanceService } from "./maintenance/service.ts";
 import { ArtifactStore, ARTIFACT_TOOLS } from "./artifacts.ts";
+import { BlockStore, BLOCK_TOOLS } from "./blocks.ts";
 import { OwnerRequests, ownerRequestAsks } from "./ownerRequests.ts";
 import { memoryEvidence, MEMORY_TOOL_NAMES, RECALL_INSTRUCTIONS } from "./memoryEvidence.ts";
 import { ownerNameLine } from "../orchestration/ownerLabel.ts";
@@ -62,7 +63,7 @@ const memoryLog = getLogger("workspace.memory");
 const autoModeLog = getLogger("workspace.automode");
 
 const PROVIDER_ID = "sushii-workspace-openrouter";
-const WORKSPACE_TOOLS = ["codemode", "read", "edit", "write", "grep", "find", "ls", "bash", SEND_FILE_TOOL, ...MEMORY_TOOL_NAMES, ...ARTIFACT_TOOLS];
+const WORKSPACE_TOOLS = ["codemode", "read", "edit", "write", "grep", "find", "ls", "bash", SEND_FILE_TOOL, ...MEMORY_TOOL_NAMES, ...ARTIFACT_TOOLS, ...BLOCK_TOOLS];
 
 // Kept for callers that historically obtained the shell tool from this module.
 export { createWorkspaceBashTool } from "./executionTools.ts";
@@ -175,6 +176,8 @@ export function createPiChatSessionFactory(
   opts: {
     runs?: RunRecorder;
     tasks?: TaskStore;
+    /** Live blocks; absent (tests) uses an unannounced store in the state dir. */
+    blocks?: BlockStore;
     wakeups?: WakeupManager;
     ownerRequests?: OwnerRequests;
     toolStubs?: ToolStubs;
@@ -300,6 +303,7 @@ export function createPiChatSessionFactory(
         { name: "sushii-codemode", factory: createCodemodeExtension({ mode: "on", models: false }) },
         ...(opts.maintenance ? [{ name: "sushii-maintenance", factory: opts.maintenance.extension() }] : []),
         { name: "sushii-artifacts", factory: new ArtifactStore(config.stateDir).extension(opts.origin?.conversationId ?? "main") },
+        { name: "sushii-live-blocks", factory: (opts.blocks ?? new BlockStore(config.stateDir)).extension(opts.origin?.conversationId ?? "main") },
         ...(opts.tasks ? [{ name: "sushii-tasks", factory: taskAwareness(opts.tasks, opts.origin?.conversationId ?? "main") }] : []),
         ...(opts.ownerRequests ? [{ name: "sushii-owner-requests", factory: opts.ownerRequests.awareness() }] : []),
         ...(opts.wakeups ? [{ name: "sushii-scheduled-checks", factory: opts.wakeups.awareness() }] : []),

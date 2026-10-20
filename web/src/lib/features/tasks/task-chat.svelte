@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack, type Snippet } from 'svelte';
 	import { getWorkspace } from '$lib/ui/workspace/context';
-	import { ChatScreen, chatStore, createHttpChatApi } from '$lib/features/chat';
+	import { ChatScreen, chatStore, createHttpChatApi, liveBlocksStore } from '$lib/features/chat';
 	import { AgentCards, type AgentRecord } from '$lib/features/agents';
 	import { createHub } from '$lib/core/realtime/hub.svelte';
 	import { fetchSse } from '$lib/core/realtime/transport';
@@ -81,6 +81,7 @@
 	onloadolder={() => store.loadOlder()}
 	onanswer={(id, answer) => store.answer(id, answer)}
 	onreply={(text) => void store.send(text, [], { preserveComposer: true })}
+	live={liveBlocksStore()}
 	onapprove={(nonce) => store.decide(nonce, 'approve')}
 	ondeny={(nonce) => store.decide(nonce, 'deny')}
 	onretryhistory={() => void store.retryHistory()}

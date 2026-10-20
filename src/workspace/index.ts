@@ -4,6 +4,7 @@ import { startIntegrationBridge } from "./integrations.ts";
 import { MaintenanceService } from "./maintenance/service.ts";
 import { FastmailCalendar } from "./maintenance/calendar.ts";
 import { ArtifactStore } from "./artifacts.ts";
+import { BlockStore } from "./blocks.ts";
 import { OwnerRequests } from "./ownerRequests.ts";
 import { exitAfterBackoff } from "../crashBackoff.ts";
 import { TaskStore } from "./taskStore.ts";
@@ -91,6 +92,7 @@ async function main(): Promise<void> {
   });
   let client: OrchestrationClient | null = null;
   const taskStore = new TaskStore(config.stateDir, config.home);
+  const blockStore = new BlockStore(config.stateDir, { principalId: config.principalId, notify: (method, params) => client?.notify(method, params) });
   const recordedRuns = notifyRunChanges(recordHistory(runLog, history, historyLog), (method, params) => client?.notify(method, params), config.principalId, log);
   const runs = recordTaskRuns(recordedRuns, taskStore);
   const toolStubs = new ToolStubs({
@@ -182,6 +184,7 @@ async function main(): Promise<void> {
   const jobFeedback = new JobFeedback(config.stateDir);
   const attention = new AttentionPrefs(config.stateDir);
   const personalOptions = {
+    onReply: (reply: { outboxId: string; conversationId: string; text: string }) => void blockStore.register(reply.conversationId, reply.outboxId, reply.text),
     jobFeedback,
     ownerName: () => config.ownerName,
     boundaryReport: { home: config.home, context: loadedContextFiles },
@@ -193,7 +196,7 @@ async function main(): Promise<void> {
     conversationId: "main",
     tz: config.tz,
     uploads: { dir: join(config.home, UPLOADS_DIR) },
-    factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, wakeups, ownerRequests, toolStubs, selector, subagents, choice, github, connectors, maintenance, browsers, parentTurn: () => { const turnId = personalTurn?.currentTurnId(); return turnId ? turns.get(turnId) : null; }, mainTurnId: () => personalTurn?.currentTurnId() }),
+    factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, blocks: blockStore, wakeups, ownerRequests, toolStubs, selector, subagents, choice, github, connectors, maintenance, browsers, parentTurn: () => { const turnId = personalTurn?.currentTurnId(); return turnId ? turns.get(turnId) : null; }, mainTurnId: () => personalTurn?.currentTurnId() }),
     memory: {
       compactionTrigger,
       reload: reloadContext,
@@ -270,7 +273,7 @@ async function main(): Promise<void> {
         ...personalOptions,
         stateDir: join(config.stateDir, "topics", id),
         conversationId: id,
-        factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, wakeups, ownerRequests, toolStubs, selector, subagents, choice, github, connectors, maintenance, browsers, parentTurn: () => { const turnId = topic.currentTurnId(); return turnId ? { turnId, origin: { surface: "web", conversationId: id } } : null; }, origin: { surface: "web", conversationId: id }, sessionDir: join(config.agentDir, "topics", id), agentName: `topic:${id}`, mainTurnId: () => topic.currentTurnId() }),
+        factory: createPiChatSessionFactory(config, { runs, tasks: taskStore, blocks: blockStore, wakeups, ownerRequests, toolStubs, selector, subagents, choice, github, connectors, maintenance, browsers, parentTurn: () => { const turnId = topic.currentTurnId(); return turnId ? { turnId, origin: { surface: "web", conversationId: id } } : null; }, origin: { surface: "web", conversationId: id }, sessionDir: join(config.agentDir, "topics", id), agentName: `topic:${id}`, mainTurnId: () => topic.currentTurnId() }),
         context: { ...personalOptions.context, busy: () => subagents.isBusy({ surface: "web", conversationId: id }) },
       });
       return topic;
@@ -371,6 +374,7 @@ async function main(): Promise<void> {
       // Session roots come from the host's own agent dir (process env set by the deploy), never from a run record.
       ...runsHandlers({ principalId: config.principalId, stateDir: config.stateDir, home: config.home, tz: config.tz, agentDirs: [config.agentDir] }),
       ...new ArtifactStore(config.stateDir).handlers(config.principalId),
+      ...blockStore.handlers(config.principalId),
       ...memoryHandlers({ home: config.home, principalId: config.principalId }),
       ...historyHandlers({ principalId: config.principalId, home: config.home, stateDir: config.stateDir }),
       ...historySearchHandlers(new HistorySearch({ principalId: config.principalId, home: config.home })),

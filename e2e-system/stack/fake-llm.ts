@@ -117,6 +117,19 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
     return stream([`offering choices\n\n\`\`\`actions\nprompt: Pick one\nitems:\n  - "E2E-ECHO picked-${tag} #${tag}"\n  - Something else\n\`\`\``], 10, tag);
   }
   if (userText.includes("E2E-RICH")) return stream(richReply("```bars\ntitle: Spend\nitems:\n  - { label: Food, value: 412 dollars }\n```"), 150, tag);
+  // Live blocks: the agent finds the owner's checklist, then adds to it and ticks an item.
+  if (last?.role === "tool" && userText.includes("E2E-LIVE-AGENT")) {
+    const result = JSON.parse(textOf(last.content));
+    if (Array.isArray(result)) {
+      const list = result.find((b: { type: string; title: string }) => b.type === "checklist" && b.title.startsWith("Groceries"));
+      return list ? toolCall("update_block", { id: list.id, ops: [{ op: "add", text: "rice" }, { op: "check", item: 1, done: true }] }) : stream(["No checklist found."], 10, tag);
+    }
+    return stream([`Updated: ${result.state}`], 10, tag);
+  }
+  if (userText.includes("E2E-LIVE-AGENT")) return toolCall("list_blocks", {});
+  if (userText.includes("E2E-LIVE")) {
+    return stream([`live list\n\n\`\`\`checklist\ntitle: Groceries ${tag}\nitems:\n  - milk\n  - eggs\n\`\`\``], 10, tag);
+  }
   if (last?.role === "tool") {
     if (userText.includes("E2E-ACCOUNT")) return stream([textOf(last.content)], 10, tag);
     if (userText.includes("E2E-INTEGRATIONS")) return stream([textOf(last.content), "\n[Set up API keys](/connectors/keys)"], 10, tag);

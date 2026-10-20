@@ -23,6 +23,7 @@ import {
 	type Tone
 } from './rich/blocks';
 import { fenceClosed, parseReplyTree } from './rich/syntax';
+import { isLiveType } from './rich/live';
 
 // Every security decision about agent text happens here. markdown.svelte only switches on `kind`
 // and interpolates strings, so what is validated is exactly what reaches the DOM.
@@ -62,7 +63,14 @@ export type MdBlockNode =
 	/** A validated rich block (`breakdown`, `flow`, ...): data only, laid out by its component.
 	 *  `partial`: its fence is still streaming and this is what it holds so far (lists may be short
 	 *  or empty, cross-field rules not yet checked); the closed fence replaces it. */
-	| { kind: 'rich'; block: RichBlock; partial?: true }
+	| {
+			kind: 'rich';
+			block: RichBlock;
+			partial?: true;
+			/** Place among the reply's live blocks (checklist, recipe, timer, reply blocks), numbered as
+			 *  the workspace does (live.ts `liveBlocks`); with the reply's key it names the stored block. */
+			live?: number;
+	  }
 	/** A rich block whose fence is still streaming, before anything in it can show: a placeholder. */
 	| { kind: 'rich-pending'; type: RichType }
 	| { kind: 'callout'; tone: Tone; title: string | null; children: MdBlockNode[] }
@@ -141,6 +149,8 @@ class Renderer {
 	private readonly definitions = new Map<string, Definition>();
 	private readonly imageIds: ReadonlySet<string>;
 	private readonly origin: string | undefined;
+
+	private liveCount = 0;
 
 	/** `source` is the text `root` was parsed from; `pending` means it is still streaming. */
 	constructor(
@@ -251,7 +261,10 @@ class Renderer {
 		}
 		const result = parseRichBlock(lang, node.value);
 		if (!result.ok) return { ...code, invalid: formatIssues(result.issues) };
-		return { kind: 'rich', block: this.linked(result.block) };
+		const block = this.linked(result.block);
+		return isLiveType(lang)
+			? { kind: 'rich', block, live: this.liveCount++ }
+			: { kind: 'rich', block };
 	}
 
 	/** Applies the markdown link rule to a block's links; one that fails it is dropped. */

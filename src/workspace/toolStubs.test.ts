@@ -269,7 +269,7 @@ describe("assertExactTools with stubs", () => {
 describe("real Pi session", () => {
   let root: string;
   const realFetch = globalThis.fetch;
-  const BUILTINS = ["codemode", "find_artifacts", "save_artifact", "bash", "edit", "find", "get_thread_history", "grep", "list_threads", "ls", "memory_read", "memory_search", "read", "send_file", "write"].sort();
+  const BUILTINS = ["codemode", "find_artifacts", "save_artifact", "list_blocks", "read_block", "update_block", "bash", "edit", "find", "get_thread_history", "grep", "list_threads", "ls", "memory_read", "memory_search", "read", "send_file", "write"].sort();
 
   beforeEach(() => {
   clearOpenRouterCatalog();

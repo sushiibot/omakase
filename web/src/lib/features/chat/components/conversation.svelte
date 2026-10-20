@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { LiveBlockAccess } from '../render/rich/live';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import { Textarea } from '$lib/ui/textarea';
 	import Mic from '@lucide/svelte/icons/mic';
@@ -54,6 +55,7 @@
 		onrewind,
 		onanswer,
 		onreply,
+		live,
 		onretryhistory,
 		oncopy,
 		onspeak,
@@ -90,6 +92,8 @@
 		onanswer?: (askId: string, answer: string) => void;
 		/** Sends text as the owner's message, from a reply block in the latest finished reply. */
 		onreply?: (text: string) => void;
+		/** Stored live blocks (checklists, recipes, timers, reply blocks), synced across devices. */
+		live?: LiveBlockAccess;
 		onretryhistory?: () => void;
 		/** Copy under each message; without it messages have no action row. */
 		oncopy?: (message: ChatMessage) => void;
@@ -290,6 +294,8 @@
 							streaming={message.streaming && (owner || i === lastText)}
 							files={message.uploads}
 							reply={message.id === replyTarget && i === lastText ? onreply : undefined}
+							{live}
+							liveKey={owner ? undefined : message.sourceId}
 						/>
 					{:else if part.type === 'data-auth'}
 						<p class="text-body leading-relaxed [overflow-wrap:anywhere]">

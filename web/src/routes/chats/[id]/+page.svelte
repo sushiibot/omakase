@@ -23,7 +23,8 @@
 		VoiceCallBar,
 		channelActivity,
 		type ChatSheet,
-		type FileRef
+		type FileRef,
+		liveBlocksStore
 	} from '$lib/features/chat';
 	import {
 		ThreadScreen,
@@ -337,6 +338,7 @@
 						onrewind: (id, text) => store.rewind(id, text),
 						onanswer: (askId, answer) => store.answer(askId, answer),
 						onreply: (text) => void store.send(text, [], { preserveComposer: true }),
+						live: liveBlocksStore(),
 						onapprove: (nonce, location) => void store.decide(nonce, 'approve', location),
 						ondeny: (nonce) => void store.decide(nonce, 'deny')
 					}

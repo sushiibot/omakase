@@ -15,7 +15,9 @@
 	import Actions from '../interactive/actions.svelte';
 	import Choice from '../interactive/choice.svelte';
 	import Form from '../interactive/form.svelte';
+	import Checklist from '../interactive/checklist.svelte';
 	import { hashText } from '../markdown';
+	import { fingerprint, type LiveBinding, type LiveBlockAccess } from './live';
 	import Stats from './stats.svelte';
 	import Timeline from './timeline.svelte';
 	import Tree from './tree.svelte';
@@ -27,7 +29,10 @@
 	let {
 		block,
 		reply,
-		partial = false
+		partial = false,
+		live,
+		liveKey,
+		liveIndex
 	}: {
 		block: RichBlock;
 		/** Sends text as the owner's message; only the latest reply in chat passes it. */
@@ -35,7 +40,24 @@
 		/** The fence is still streaming and `block` is what it holds so far: lists grow, controls are
 		 *  off, and a caret shows it is still being written. */
 		partial?: boolean;
+		/** The live-block store, the reply's key, and this block's place among its live blocks. */
+		live?: LiveBlockAccess;
+		liveKey?: string;
+		liveIndex?: number;
 	} = $props();
+
+	const canBind = $derived(!partial && !!live && !!liveKey && liveIndex !== undefined);
+	$effect(() => {
+		if (canBind) live!.watch([liveKey!]);
+	});
+	const print = $derived(canBind ? fingerprint(block.data) : '');
+	// Bound only to the stored block drawn from this exact data, so a renumbering can't cross wires.
+	const bound = $derived.by((): LiveBinding | undefined => {
+		if (!canBind) return undefined;
+		const stored = live!.get(liveKey!, liveIndex!);
+		if (!stored || stored.type !== block.type || stored.fingerprint !== print) return undefined;
+		return { block: stored, apply: (ops) => live!.apply(stored.id, ops) };
+	});
 </script>
 
 <!-- A partial block sits in its own wrapper, so the closed fence mounts the block afresh: recipe and
@@ -67,7 +89,8 @@
 	{:else if block.type === 'matrix'}<Matrix data={block.data} />
 	{:else if block.type === 'tree'}<Tree data={block.data} />
 	{:else if block.type === 'cards'}<Cards data={block.data} />
-	{:else if block.type === 'recipe'}<Recipe data={block.data} {partial} />
+	{:else if block.type === 'recipe'}<Recipe data={block.data} {partial} live={bound} />
+	{:else if block.type === 'checklist'}<Checklist data={block.data} {partial} live={bound} />
 	{:else if block.type === 'event'}<Event data={block.data} />
 	{:else if block.type === 'place'}<Place data={block.data} />
 	{:else if block.type === 'timer'}<Timer
@@ -75,21 +98,25 @@
 			seconds={block.data.duration}
 			storeKey={hashText(JSON.stringify(block.data))}
 			disabled={partial}
+			live={bound}
 		/>
 	{:else if block.type === 'actions'}<Actions
 			data={block.data}
 			reply={partial ? undefined : reply}
 			{partial}
+			live={bound}
 		/>
 	{:else if block.type === 'choice'}<Choice
 			data={block.data}
 			reply={partial ? undefined : reply}
 			{partial}
+			live={bound}
 		/>
 	{:else if block.type === 'form'}<Form
 			data={block.data}
 			reply={partial ? undefined : reply}
 			{partial}
+			live={bound}
 		/>
 	{/if}
 {/snippet}

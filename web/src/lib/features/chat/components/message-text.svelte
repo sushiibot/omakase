@@ -9,7 +9,9 @@
 		streaming = false,
 		markdown = false,
 		files,
-		reply
+		reply,
+		live,
+		liveKey
 	}: {
 		text: string;
 		owner?: boolean;
@@ -18,12 +20,14 @@
 		markdown?: boolean;
 		files?: ComponentProps<typeof Markdown>['files'];
 		reply?: ComponentProps<typeof Markdown>['reply'];
+		live?: ComponentProps<typeof Markdown>['live'];
+		liveKey?: string;
 	} = $props();
 </script>
 
 {#if markdown}
 	<div data-message-text class={cn(partial && 'text-muted-foreground italic')}>
-		<Markdown {text} {streaming} {files} {reply} />
+		<Markdown {text} {streaming} {files} {reply} {live} {liveKey} />
 	</div>
 {:else}
 	<p

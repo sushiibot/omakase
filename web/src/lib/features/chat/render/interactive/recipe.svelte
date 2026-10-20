@@ -12,17 +12,21 @@
 	import { loadLocal, saveLocal } from './local-state';
 	import { scaleQty } from './scale';
 	import Timer from './timer.svelte';
+	import type { LiveBinding } from '../rich/live';
 
 	// A recipe: servings rescale the amounts, ingredients tick off, and a step that names a time
-	// gets a timer. All of it stays on this device.
+	// gets a timer. Bound to a stored block (`live`), servings and ticks are shared by every device
+	// and the agent; otherwise they stay on this device. Step timers are always local.
 	let {
 		data,
-		partial = false
+		partial = false,
+		live
 	}: {
 		data: RichData<'recipe'>;
 		/** Still streaming: lists grow and the controls wait for the finished block, whose key the
 		 *  saved state belongs to. rich-block.svelte mounts the finished block afresh. */
 		partial?: boolean;
+		live?: LiveBinding;
 	} = $props();
 	const uid = $props.id();
 	const key = $derived(hashText(JSON.stringify(data)));
@@ -30,8 +34,12 @@
 	const saved = untrack(() =>
 		loadLocal<{ serves?: number; got?: Record<number, boolean> }>(`recipe:${key}`, {})
 	);
-	let serves = $state(saved.serves ?? untrack(() => data.serves) ?? 0);
-	let got = $state<Record<number, boolean>>(saved.got ?? {});
+	let localServes = $state(saved.serves ?? untrack(() => data.serves) ?? 0);
+	let localGot = $state<Record<number, boolean>>(saved.got ?? {});
+	const serves = $derived(live ? (live.block.state.serves ?? data.serves ?? 0) : localServes);
+	const got = $derived<Record<number, boolean>>(
+		live ? Object.fromEntries((live.block.state.got ?? []).map((i) => [i, true])) : localGot
+	);
 	// While partial, `serves` (read once, above) may predate the line that sets it.
 	const shownServes = $derived(partial ? (data.serves ?? 0) : serves);
 	const factor = $derived(data.serves && shownServes ? shownServes / data.serves : 1);
@@ -44,10 +52,17 @@
 	);
 
 	function persist() {
-		saveLocal(`recipe:${key}`, { serves, got });
+		saveLocal(`recipe:${key}`, { serves: localServes, got: localGot });
 	}
 	function setServes(n: number) {
-		serves = Math.min(100, Math.max(1, n));
+		const next = Math.min(100, Math.max(1, n));
+		if (live) return live.apply([{ op: 'serves', n: next }]);
+		localServes = next;
+		persist();
+	}
+	function tick(i: number, done: boolean) {
+		if (live) return live.apply([{ op: 'got', item: i, done }]);
+		localGot = { ...localGot, [i]: done };
 		persist();
 	}
 </script>
@@ -97,10 +112,7 @@
 							aria-labelledby="{uid}-ing-{i}"
 							disabled={partial}
 							checked={got[i] ?? false}
-							onCheckedChange={(v) => {
-								got = { ...got, [i]: v === true };
-								persist();
-							}}
+							onCheckedChange={(v) => tick(i, v === true)}
 						/>
 						<span
 							id="{uid}-ing-{i}"

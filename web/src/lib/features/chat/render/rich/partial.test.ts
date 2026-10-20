@@ -1,4 +1,5 @@
 /// <reference types="bun" />
+import { isLiveType } from './live';
 import { describe, expect, test } from 'bun:test';
 import { render } from 'svelte/server';
 import Markdown from '../markdown.svelte';
@@ -171,7 +172,11 @@ describe('streaming a rich block', () => {
 			expect(closed).toBe(true);
 			const done = stream.finish(text, {});
 			expect(JSON.stringify(done)).toBe(JSON.stringify(parseMarkdown(text)));
-			expect(done[1]).toEqual({ kind: 'rich', block: strict.block });
+			expect(done[1]).toEqual({
+				kind: 'rich',
+				block: strict.block,
+				...(isLiveType(type) ? { live: 0 } : {})
+			});
 		});
 	}
 

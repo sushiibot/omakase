@@ -122,6 +122,24 @@ function duration(): Schema<number> {
 }
 
 const label = (max = 60) => str({ max });
+
+/** A checklist item: plain text, or `{ text, done }` for one that starts ticked. */
+function checklistItem(): Schema<{ text: string; done: boolean }> {
+	const text = str({ max: 200 });
+	const full = obj({ text: str({ max: 200 }), done: opt(bool()) });
+	return {
+		...text,
+		parse(value, path, issues, partial) {
+			if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+				const item = full.parse(value, path, issues, partial);
+				return item && { text: item.text, done: item.done ?? false };
+			}
+			const plain = text.parse(value, path, issues);
+			return plain === undefined ? undefined : { text: plain, done: false };
+		},
+		doc: () => 'text | { text, done }'
+	};
+}
 const tone = () => opt(oneOf(TONES));
 
 interface TreeNode {
@@ -323,6 +341,7 @@ const schemas = {
 		href: opt(url())
 	}),
 	timer: obj({ label: label(60), duration: duration() }),
+	checklist: obj({ title: opt(label(80)), items: arr(checklistItem(), { min: 1, max: 50 }) }),
 	actions: obj({
 		prompt: opt(str({ max: 120 })),
 		items: arr(label(80), { min: 1, max: 4 })
@@ -558,6 +577,14 @@ location: Eastside Animal Clinic`
 address: 123 Main St, Seattle, WA
 rating: 4.7`
 	},
+	checklist: {
+		use: 'a list the owner ticks off (shopping, packing, to-dos); saved, so you can read and change it later.',
+		example: `title: Groceries
+items:
+  - Salmon fillets
+  - White miso
+  - { text: Butter, done: true }`
+	},
 	timer: {
 		use: 'a countdown the owner can start (steeping, resting, a break).',
 		example: `label: Steep the tea
@@ -599,7 +626,8 @@ export const RICH_RULES: readonly [string, string][] = [
 	['2–4 options compared across the same attributes', '```compare'],
 	['one dated event or appointment', '```event'],
 	['a schedule or itinerary with times or dates', '```timeline'],
-	['a countdown the owner asked for', '```timer']
+	['a countdown the owner asked for', '```timer'],
+	['a list the owner will tick off (shopping, packing, to-dos)', '```checklist']
 ];
 
 /** The prompt section: the two syntax rules, then each block with its fields and an example. */
@@ -623,7 +651,7 @@ export function richOutputInstructions(): string {
 		blocks,
 		`2. Containers wrap ordinary markdown in \`:::name{key="value"}\` … \`:::\`, one level only (never nest them): ${containers}. tone is one of ${TONES.join('|')}. In \`columns\`, a line with \`---\` starts the next column; in \`steps\`, write an ordered list; in \`tabs\`, each \`##\` heading starts a tab.`,
 		':::callout{tone="warn" title="Heads up"}\nThe ferry fills up on Fridays.\n:::',
-		'Interactive: task lists (- [ ] item) can be ticked by the owner; recipe steps that mention a time get a timer. actions, choice and form send the owner’s answer as their next message, so ask with them instead of asking in prose, and put them last.',
+		'Saved blocks: checklist, recipe, timer, actions, choice and form are stored with an id; the owner changes them on any device, and the "Live blocks" section of your context shows their state. Change one with update_block (list_blocks, read_block to find it) rather than writing it again. actions, choice and form send the owner’s answer as their message: ask with them, last in the reply. Plain task lists (- [ ]) tick on one device only.',
 		'After your reply, each block is checked. If one is invalid you will get the exact errors and write the reply again with them fixed.'
 	].join('\n\n');
 }
@@ -785,6 +813,10 @@ export function richPlainText(block: RichBlock): string {
 				block.data.rating !== undefined ? `Rating ${block.data.rating}` : undefined,
 				block.data.detail
 			);
+			break;
+		case 'checklist':
+			push(block.data.title);
+			for (const item of block.data.items) push(`- [${item.done ? 'x' : ' '}] ${item.text}`);
 			break;
 		case 'timer':
 			push(`${block.data.label}: ${formatDuration(block.data.duration)}`);

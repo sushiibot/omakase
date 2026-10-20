@@ -26,6 +26,7 @@ import { createSettingsRoutes } from "./surfaces/web/settingsRoutes.ts";
 import { personalConfig } from "./surfaces/web/config.ts";
 import { TaskService } from "./surfaces/web/application/taskService.ts";
 import { TaskRoutes } from "./surfaces/web/taskRoutes.ts";
+import { BlockRoutes } from "./surfaces/web/blockRoutes.ts";
 import { lastOwnerMessageAt } from "./surfaces/web/chatRoutes.ts";
 import { FileStores } from "./orchestration/workspace/fileStores/service.ts";
 import { FileStoreRoutes } from "./surfaces/web/fileStoreRoutes.ts";
@@ -129,6 +130,7 @@ async function main() {
     chat: webChat.routes,
     threads: webChat.threads,
     tasks: taskRoutes,
+    blocks: new BlockRoutes(workspace.link),
     machines: machineRoutes,
     fileStores: new FileStoreRoutes(fileStores),
     mail: new MailRoutes(mail, agentState),

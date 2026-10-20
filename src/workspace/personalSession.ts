@@ -227,6 +227,8 @@ export interface PersonalSessionOptions {
   jobFeedback?: { record(ref: MessageRef, text: string, at: Date): void };
   /** Time zone the history files are bucketed in. Default UTC. */
   tz?: string;
+  /** Called once per reply put in the outbox, e.g. to register its live blocks. Must not throw. */
+  onReply?: (reply: { outboxId: string; conversationId: string; text: string }) => void;
 }
 
 interface OpenRun {
@@ -1468,6 +1470,14 @@ export class PersonalSession {
       ...(usage ? { usage } : {}),
       ...(files.length ? { stagedFiles: files } : {}),
     };
+    // Before delivery, so a device that renders the reply can already read its blocks.
+    if (text) {
+      try {
+        this.opts.onReply?.({ outboxId: entry.outboxId, conversationId: origin?.conversationId ?? this.opts.conversationId ?? "main", text });
+      } catch (err) {
+        log.warn({ err }, "registering the reply's live blocks failed");
+      }
+    }
     this.outbox.append(entry);
     this.markDelivery(entry, inTranscript);
     this.delivery.send(entry);

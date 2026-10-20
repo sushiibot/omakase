@@ -71,6 +71,6 @@ describe("rich output gate", () => {
   test("the prompt section comes from the catalog", () => {
     expect(RICH_OUTPUT_INSTRUCTIONS).toContain("```breakdown");
     expect(RICH_OUTPUT_INSTRUCTIONS).toContain(":::callout");
-    expect(RICH_OUTPUT_INSTRUCTIONS.length).toBeLessThan(9000);
+    expect(RICH_OUTPUT_INSTRUCTIONS.length).toBeLessThan(9500);
   });
 });
