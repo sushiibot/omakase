@@ -59,9 +59,15 @@ Unresolved rejection leaves all evidence pending. There is no partial applicatio
 
 The reviewer is fallible. This design separates structural guarantees from semantic judgments rather than claiming to prove truth.
 Review uses the OpenRouter key, even when chat uses a ChatGPT sign-in.
-The selected decision provider receives the review evidence through OpenRouter.
-The default reviewer is `perplexity/pplx-decider-v1.1-27b`.
-Set `WORKSPACE_MEMORY_REVIEW_MODEL` to another Decisions API model, such as `typesafe/jev-1.13` or `microsoft/microsoft-decision-1`.
+Review walks a chain of Decisions API models until one returns a complete typed answer set (`src/workspace/decisions.ts`).
+The default chain is `perplexity/pplx-decider-v1.2`, `~perplexity/pplx-decider-latest`, `~typesafe/jev-latest`, `upstage/solar-decide`, `cloudflare/clef-omni` and `microsoft/microsoft-decision-1`.
+Providers retire pinned checkpoints: `pplx-decider-v1.1-27b` lost every endpoint when v1.2 shipped, and every review failed with no way back.
+A retired model (404), another provider error or a malformed answer moves to the next model. A 429, 5xx, timeout or network error first retries the same model once.
+A 401, 402 or 403 stops the chain, because no other model can fix the account. The whole chain is bounded at three minutes.
+Every model in the chain receives the same review evidence through OpenRouter.
+Set `WORKSPACE_MEMORY_REVIEW_MODEL` to a comma-separated list to try other models first; the built-in chain still follows.
+The connector read-only classifier uses the same chain.
+A run answered by a fallback records the answering model and every failed attempt in its summary.
 The endpoint uses `OPENAI_BASE_URL`, with `/v1` replaced by `/alpha/decisions`. Custom gateways must support this route.
 Run logs record the reviewer model, token usage, cost, and acceptance count when available.
 The proposal model still writes JSON updates. Proposal errors and review errors have separate failure messages.
@@ -87,6 +93,7 @@ The first failed review opens `reviewOutage`, which records when it started, the
 While the outage is open, capture waits for the same exponential delay after its latest failure, whatever the inputs.
 These runs are skipped before the proposal call. Nothing is consumed, so pending evidence waits.
 A successful review closes the outage.
+The outage and the same-input backoff record the reviewer's model chain. A deploy that changes the chain retries on the next run instead of waiting out the backoff.
 
 Alerts follow the outage rather than individual runs.
 Only the run that opens an outage returns a visible failure. The scheduler then opens one failed-job streak, which Home shows as a single failed item.

@@ -371,6 +371,28 @@ test("a reviewer outage alerts once, backs off whatever the inputs, keeps eviden
   expect(state().reviewOutage).toBeUndefined();
 });
 
+test("a changed reviewer (e.g. a retired model replaced) retries at once instead of waiting out the backoff", async () => {
+  const d = deps(upsert());
+  const at = Date.parse("2026-10-14T12:00:00Z");
+  d.now = () => new Date(at);
+  d.reviewer = "perplexity/pplx-decider-v1.1-27b";
+  d.review = async () => { throw new MemoryReviewError("http_404"); };
+  expect((await runConsolidation(d, { capture: true })).status).toBe("rejected");
+  expect(state().reviewOutage).toMatchObject({ failures: 1, reviewer: "perplexity/pplx-decider-v1.1-27b" });
+
+  // Same reviewer, same inputs, minutes later: backed off.
+  d.now = () => new Date(at + 5 * 60_000);
+  expect((await runConsolidation(d, { capture: true })).status).toBe("skipped");
+
+  // A deploy with a new chain: neither the outage nor the same-input backoff holds it back.
+  d.reviewer = "perplexity/pplx-decider-v1.2,~typesafe/jev-latest";
+  d.review = approveAll;
+  const recovered = await runConsolidation(d, { capture: true });
+  expect(recovered.status).toBe("applied");
+  expect(recovered.alert).toBeUndefined();
+  expect(state().reviewOutage).toBeUndefined();
+});
+
 const longMemory = "# Memory\n" + Array.from({ length: 36 }, (_, i) => `- Observation: project detail ${i} ${"x".repeat(160)} (src: 2026-10-01)`).join("\n") + "\n";
 const bigFiles: MemoryFiles = { ...before, "MEMORY.md": longMemory };
 const addition = (): MemoryUpdate["operations"][number] => ({ op: "upsert", file: "MEMORY.md", text: `Bought tofu. ${"y".repeat(400)}`, kind: "observation", sources: [evidence.id] });

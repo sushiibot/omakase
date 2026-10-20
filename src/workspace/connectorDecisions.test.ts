@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConnectorDecisions } from "./connectorDecisions.ts";
 import type { EndRunInput, RunRecorder } from "./runLog.ts";
-import type { DecisionRequest } from "./memoryDecisions.ts";
+import type { DecisionRequest } from "./decisions.ts";
 
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -15,7 +15,7 @@ function setup(request: DecisionRequest) {
   const config = { agentDir, apiKey: "secret", baseUrl: "https://gateway.example/router/v1/" };
   const ends: EndRunInput[] = [];
   const runs: RunRecorder = { startRun: () => "review", endRun: (_id, r) => { ends.push(r); }, listRuns: () => [], getRun: () => null };
-  return { classifier: new ConnectorDecisions(config, runs, request), config, runs, ends };
+  return { classifier: new ConnectorDecisions(config, runs, request, { sleep: async () => {} }), config, runs, ends };
 }
 const answer = (score: number) => Response.json({ model: "decider", answers: { tool_0: { type: "noul", noul: score } } });
 
@@ -62,11 +62,24 @@ test.each([
 });
 
 test("request failure excludes tools, records no private provider error, and retries next scan", async () => {
-  let calls = 0;
-  const s = setup(async () => { if (++calls === 1) throw new Error("private provider text"); return answer(1); });
+  let failing = true;
+  const s = setup(async () => { if (failing) throw new Error("private provider text"); return answer(1); });
   expect(await s.classifier.classify(server, [tool])).toEqual(new Set());
   expect(JSON.stringify(s.ends)).not.toContain("private provider text");
+  expect(s.ends[0]?.resultSummary).toContain("perplexity/pplx-decider-v1.2 network");
+  failing = false;
   expect(await s.classifier.classify(server, [tool])).toEqual(new Set(["search"]));
+});
+
+test("a retired model falls through to the next model in the chain", async () => {
+  const models: string[] = [];
+  const s = setup(async (_url, init) => {
+    const { model } = JSON.parse(init.body as string);
+    models.push(model);
+    return model === "perplexity/pplx-decider-v1.2" ? Response.json({ error: "No endpoints found" }, { status: 404 }) : answer(1);
+  });
+  expect(await s.classifier.classify(server, [tool])).toEqual(new Set(["search"]));
+  expect(models).toEqual(["perplexity/pplx-decider-v1.2", "~perplexity/pplx-decider-latest"]);
 });
 
 test("large inventories use bounded batches; concurrent discovery shares cached assessments", async () => {

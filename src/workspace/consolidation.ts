@@ -1,4 +1,5 @@
 import { MemoryReviewError, reviewMemoryDecisions } from "./memoryDecisions.ts";
+import { decisionModels } from "./decisions.ts";
 import { MEMORY_UPDATE_RULES, MEMORY_REVIEW_SYSTEM, coreBudget, overCapProblem, memoryEntries, memorySources, normalizeMemoryUpdate, parseMemoryUpdate, renderMemoryUpdate, reviewItems, reviewProblems } from "./memoryUpdates.ts";
 import { createHash } from "node:crypto";
 import { ownerLabel, ownerNameLine, ownerPossessive } from "../orchestration/ownerLabel.ts";
@@ -102,6 +103,8 @@ interface ReviewOutage {
   alertedAt: string;
   /** The reviewer's safe error class, e.g. `http_404` or `timeout`. */
   error: string;
+  /** `ConsolidationDeps.reviewer` when the outage last failed. */
+  reviewer?: string;
 }
 
 export const RETRY_BASE_MS = 30 * 60_000;
@@ -140,7 +143,8 @@ function readState(stateDir: string): ConsolidationState {
     ...(rejected && typeof rejected.fingerprint === "string" ? { lastRejected: { fingerprint: rejected.fingerprint, at: String(rejected.at), count,
       ...(rejected.outcome === "over_cap" || rejected.outcome === "rejected" ? { outcome: rejected.outcome } : {}) } } : {}),
     ...(outage && typeof outage.since === "string" && typeof outage.lastAt === "string" && Number.isInteger(outage.failures) && outage.failures > 0
-      ? { reviewOutage: { since: outage.since, lastAt: outage.lastAt, failures: outage.failures, alertedAt: String(outage.alertedAt ?? outage.since), error: String(outage.error ?? "unknown") } }
+      ? { reviewOutage: { since: outage.since, lastAt: outage.lastAt, failures: outage.failures, alertedAt: String(outage.alertedAt ?? outage.since), error: String(outage.error ?? "unknown"),
+        ...(typeof outage.reviewer === "string" ? { reviewer: outage.reviewer } : {}) } }
       : {}),
   };
 }
@@ -505,6 +509,11 @@ export interface ConsolidationDeps {
   propose(systemPrompt: string, prompt: string, reads?: Map<string, Evidence>): Promise<{ text: string; model: string }>;
   /** A fresh, tool-free semantic decision call. Production always supplies this. */
   review?(systemPrompt: string, prompt: string): Promise<{ text: string; model: string }>;
+  /**
+   * Identifies the reviewer (its model chain). A changed reviewer ends the backoff of an outage or of a run the old
+   * one failed, so a fix to a retired model takes effect on the next run instead of after hours.
+   */
+  reviewer?: string;
   evidence?: MemoryEvidence;
   commit(message: string, paths: string[]): Promise<{ committed: boolean; sha?: string }>;
   live?: LiveSession;
@@ -647,7 +656,8 @@ export async function runConsolidation(deps: ConsolidationDeps, opts: { force?: 
     log.info({ why: g.why }, "consolidation skipped");
     return { status: "skipped", summary: `skipped: ${g.why}` };
   }
-  const fingerprint = sha256(inputFingerprint(before, pending.chunks) + JSON.stringify([deps.evidence?.generation, batch?.cursor, deps.evidence?.latestSequence(), documentsBefore]));
+  const fingerprint = sha256(inputFingerprint(before, pending.chunks) + JSON.stringify([deps.evidence?.generation, batch?.cursor, deps.evidence?.latestSequence(), documentsBefore])
+    + (deps.reviewer ? `\n${deps.reviewer}` : ""));
   const retryAt = (at: string, count: number) => Date.parse(at) + retryDelayMs(count);
   const last = state.lastRejected;
   if (!opts.force && last?.fingerprint === fingerprint && (!deps.review || started.getTime() < retryAt(last.at, last.count))) {
@@ -657,7 +667,7 @@ export async function runConsolidation(deps: ConsolidationDeps, opts: { force?: 
   }
   // A reviewer outage backs off whatever the inputs; nothing is consumed, so the evidence stays pending.
   const outage = state.reviewOutage;
-  if (!opts.force && deps.review && outage && started.getTime() < retryAt(outage.lastAt, outage.failures)) {
+  if (!opts.force && deps.review && outage && outage.reviewer === deps.reviewer && started.getTime() < retryAt(outage.lastAt, outage.failures)) {
     log.info({ since: outage.since, failures: outage.failures, error: outage.error }, "consolidation skipped: memory reviewer unavailable");
     return { status: "skipped", summary: `skipped: memory reviewer unavailable since ${outage.since} (${outage.error}, ${outage.failures} failed reviews); evidence stays pending; next attempt after ${new Date(retryAt(outage.lastAt, outage.failures)).toISOString()}` };
   }
@@ -790,7 +800,8 @@ export async function runConsolidation(deps: ConsolidationDeps, opts: { force?: 
       const prev = state.reviewOutage;
       const at = started.toISOString();
       const realert = !prev || started.getTime() - Date.parse(prev.alertedAt) >= OUTAGE_REALERT_MS;
-      state.reviewOutage = { since: prev?.since ?? at, lastAt: at, failures: (prev?.failures ?? 0) + 1, alertedAt: realert ? at : prev!.alertedAt, error: reviewError ?? "error" };
+      state.reviewOutage = { since: prev?.since ?? at, lastAt: at, failures: (prev?.failures ?? 0) + 1, alertedAt: realert ? at : prev!.alertedAt, error: reviewError ?? "error",
+        ...(deps.reviewer ? { reviewer: deps.reviewer } : {}) };
       silent = !realert;
     }
     writeState(deps.stateDir, state);
@@ -967,6 +978,7 @@ export function createConsolidationJob(
             return { text, model };
           },
           review: async (_systemPrompt, prompt) => reviewMemoryDecisions(config, prompt, opts.runs),
+          reviewer: decisionModels(config.memoryReviewModel).join(","),
           commit,
           ...(opts.live ? { live: opts.live } : {}),
           ...(opts.limits ? { limits: opts.limits } : {}),

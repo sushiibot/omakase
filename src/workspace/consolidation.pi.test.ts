@@ -91,7 +91,7 @@ const PROPOSAL = JSON.stringify({ operations: [
   { op: "upsert", id: entries[1]!.id, file: "MEMORY.md", text: "Deploys from main via CI on every push.", kind: "fact", sources: [entries[1]!.id, entries[0]!.id] },
   { op: "upsert", file: "MEMORY.md", text: "Uses uv for Python.", kind: "fact", sources: [noteId] },
 ], documents: [], summary: "merged deploy entries" });
-const REVIEW = { model: "perplexity/pplx-decider-v1.1-27b", answers: Object.fromEntries([0, 1, 2].map(i => [`item_${i}`, { type: "noul", noul: 0.99 }])), usage: { input_tokens: 100, output_tokens: 3, cost: 0.000002 } };
+const REVIEW = { model: "perplexity/pplx-decider-v1.2", answers: Object.fromEntries([0, 1, 2].map(i => [`item_${i}`, { type: "noul", noul: 0.99 }])), usage: { input_tokens: 100, output_tokens: 3, cost: 0.000002 } };
 
 beforeAll(() => {
   for (const [k, v] of Object.entries(GIT_ENV)) {

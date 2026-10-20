@@ -13,7 +13,10 @@ export interface WorkspaceConfig {
   chatgptModel: string;
   /** OpenRouter model id. */
   model: string;
-  /** Decisions API model for semantic memory review; independent of the chat model. */
+  /**
+   * Comma-separated Decisions API models tried first for memory review and connector classification; the built-in
+   * fallback chain follows. Independent of the chat model.
+   */
   memoryReviewModel?: string;
   apiKey: string;
   baseUrl: string;
@@ -202,7 +205,7 @@ export function loadWorkspaceConfig(env: NodeJS.ProcessEnv = process.env): Works
     provider,
     chatgptModel: env.WORKSPACE_CHATGPT_MODEL?.trim() || "gpt-6.1-sol",
     model: env.WORKSPACE_MODEL || "openai/gpt-6-luna",
-    memoryReviewModel: env.WORKSPACE_MEMORY_REVIEW_MODEL?.trim() || "perplexity/pplx-decider-v1.1-27b",
+    ...(env.WORKSPACE_MEMORY_REVIEW_MODEL?.trim() ? { memoryReviewModel: env.WORKSPACE_MEMORY_REVIEW_MODEL.trim() } : {}),
     apiKey,
     baseUrl: env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1",
     // Pi's own variable, so the `pi` CLI (used for /login) and this process share auth.json.
