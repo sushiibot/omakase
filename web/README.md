@@ -190,9 +190,10 @@ the transcript, approvals, navigation, and the precedent behind them.
 
 ## Artifacts
 
-Workspace includes an Artifacts library for saved Markdown reports and documents.
+Documents are saved items: Workspace › Saved lists them with stored checklists, recipes and timers
+([Saved items](docs/ux-guidelines.md#saved-items)); `/artifacts` opens Saved's documents.
 The agent uses `save_artifact` to create or update a document and returns its stable link in chat.
-Chat shows that link as a document card. The reader links back to the source conversation.
+Chat shows that link as a document card. The reader links back to the reply that shared it.
 The library searches titles and document content. `find_artifacts` gives the agent the same search and read access.
 
 Documents persist in the workspace state directory, separately from chat sessions.

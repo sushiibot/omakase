@@ -2,7 +2,13 @@ import { SvelteMap } from 'svelte/reactivity';
 import { featureHttp } from '$lib/core/feature-http';
 import type { ChatEnvelope, LiveBlock, LiveBlockOp } from '$lib/core/realtime/events';
 import { hub as appHub, type Hub } from '$lib/core/realtime/hub.svelte';
-import { applyLiveOps, isMessageKey, liveBlockId, type LiveBlockAccess } from './render/rich/live';
+import {
+	applyLiveOps,
+	isMessageKey,
+	liveBlockId,
+	type LiveBlockAccess,
+	type SavedAccess
+} from './render/rich/live';
 
 // Live blocks (checklists, recipes, timers, reply blocks) as stored in the workspace. Replies on
 // screen ask for their blocks by reply key; changes apply here at once (the same live.ts logic as
@@ -24,6 +30,8 @@ const BATCH = 50;
 
 export class LiveBlocks implements LiveBlockAccess {
 	readonly records = new SvelteMap<string, LiveBlock>();
+	/** Set by the saved-items store, so blocks in chat can offer Pin and Open. */
+	saved = $state<SavedAccess | undefined>(undefined);
 	#requested = new Set<string>();
 	#queue = new Set<string>();
 	#timer: ReturnType<typeof setTimeout> | null = null;

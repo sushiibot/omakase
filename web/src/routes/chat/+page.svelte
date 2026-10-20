@@ -2,7 +2,7 @@
 	import { INSPECTOR_BREAKPOINT } from '$lib/ui/breakpoints';
 	import { getWorkspace } from '$lib/ui/workspace/context';
 	const workspaceLayout = getWorkspace();
-	import { TaskWorkspace } from '$lib/features/tasks';
+	import { TaskWorkspace, type PanelTab } from '$lib/features/tasks';
 	import { AgentCards } from '$lib/features/agents';
 	import { followAgentLink, openAgentFrom, openAgentPage } from '$lib/core/nav/agent-link';
 	import { PanelButton } from '$lib/features/tasks';
@@ -42,7 +42,7 @@
 	const branch = routedSheet('branch');
 	const browserSheet = routedSheet('browser-preview');
 	const taskPane = routedSheet('tasks');
-	let panelTab = $state<'tasks' | 'agents'>('tasks');
+	let panelTab = $state<PanelTab>('tasks');
 	let panelAgent = $state<string | undefined>();
 	$effect(() => {
 		if (!page.url.searchParams.has('agent')) return;

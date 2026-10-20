@@ -14,3 +14,6 @@ export const taskSections: TaskRecord['status'][] = [
 	'done',
 	'cancelled'
 ];
+
+/** The side panel tabs: this conversation tasks, its coding agents, and its saved items. */
+export type PanelTab = 'tasks' | 'agents' | 'saved';

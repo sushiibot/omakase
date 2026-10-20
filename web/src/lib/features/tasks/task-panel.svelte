@@ -8,12 +8,13 @@
 	import * as Tabs from '$lib/ui/tabs';
 	import { Badge } from '$lib/ui/badge';
 	import { AgentsPanel, agentList } from '$lib/features/agents';
-	import type { TaskRecord } from './types';
+	import { SavedPanel } from '$lib/features/saved';
+	import type { PanelTab, TaskRecord } from './types';
 	let {
 		conversationId,
 		selectedId = $bindable<string | undefined>(),
 		onclose,
-		tab = $bindable<'tasks' | 'agents'>('tasks'),
+		tab = $bindable<PanelTab>('tasks'),
 		agentId = $bindable<string | undefined>(),
 		docked = true,
 		onnavigate
@@ -21,8 +22,8 @@
 		conversationId?: string;
 		selectedId?: string;
 		onclose?: () => void;
-		/** The side panel's tab: this conversation's tasks or its coding agents. */
-		tab?: 'tasks' | 'agents';
+		/** The side panel's tab: this conversation's tasks, its coding agents, or its saved items. */
+		tab?: PanelTab;
 		/** The agent open in the docked panel. */
 		agentId?: string;
 		docked?: boolean;
@@ -92,7 +93,7 @@
 			aria-label="Side panel"
 			class="-ms-1.5 any-pointer-coarse:group-data-horizontal/tabs:h-auto"
 		>
-			{#each [{ value: 'tasks', label: 'Tasks' }, { value: 'agents', label: 'Agents' }] as item (item.value)}
+			{#each [{ value: 'tasks', label: 'Tasks' }, { value: 'agents', label: 'Agents' }, { value: 'saved', label: 'Saved' }] as item (item.value)}
 				<Tabs.Trigger value={item.value} class="any-pointer-coarse:h-10"
 					>{item.label}{#if item.value === 'agents' && agents?.pending}<Badge
 							class="bg-waiting-soft text-waiting tabular-nums"
@@ -121,5 +122,8 @@
 			{docked}
 			onnavigate={(href) => onnavigate?.(href)}
 		/>
+	</Tabs.Content>
+	<Tabs.Content value="saved" class="flex min-h-0 flex-col text-base">
+		<SavedPanel conversationId={conversationId ?? 'main'} />
 	</Tabs.Content>
 </Tabs.Root>

@@ -13,7 +13,7 @@ describe('workspace navigation', () => {
 			'/settings'
 		]);
 		expect(workspaceFor(liveOnly).map((entry) => entry.href)).toEqual([
-			'/artifacts',
+			'/saved',
 			'/memory',
 			'/history'
 		]);

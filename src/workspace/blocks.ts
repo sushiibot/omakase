@@ -112,15 +112,15 @@ export class BlockStore {
     return [...new Set(messageKeys)].flatMap((key) => this.read(key));
   }
 
-  /** The most recently changed blocks, newest first, optionally in one conversation. */
-  recent(conversationId?: string, limit = LIST_MAX): LiveBlockRecord[] {
+  /** Reply keys holding blocks, most recently changed first. */
+  private keysByTime(): string[] {
     let names: string[];
     try {
       names = readdirSync(this.root()).filter((n) => /^[0-9A-Za-z_-]{8,64}\.json$/.test(n));
     } catch {
       return [];
     }
-    const byTime = names
+    return names
       .map((name) => {
         try {
           return { key: name.slice(0, -5), mtime: statSync(join(this.root(), name)).mtimeMs };
@@ -130,7 +130,27 @@ export class BlockStore {
       })
       .filter((x) => x !== null)
       .sort((a, b) => b.mtime - a.mtime)
-      .slice(0, LIST_MAX * 2);
+      .map((x) => x.key);
+  }
+
+  /** Every stored block of the most recently changed `maxReplies` replies (saved items). Unreadable
+   *  files are skipped, so one bad file never hides the rest. */
+  scan(maxReplies = 2000): { blocks: LiveBlockRecord[]; truncated: boolean } {
+    const keys = this.keysByTime();
+    const blocks: LiveBlockRecord[] = [];
+    for (const key of keys.slice(0, maxReplies)) {
+      try {
+        blocks.push(...this.read(key));
+      } catch {
+        // Skipped: a link, an oversized or a corrupt file.
+      }
+    }
+    return { blocks, truncated: keys.length > maxReplies };
+  }
+
+  /** The most recently changed blocks, newest first, optionally in one conversation. */
+  recent(conversationId?: string, limit = LIST_MAX): LiveBlockRecord[] {
+    const byTime = this.keysByTime().slice(0, LIST_MAX * 2).map((key) => ({ key }));
     const out: LiveBlockRecord[] = [];
     for (const { key } of byTime) {
       for (const block of this.read(key)) if (!conversationId || block.conversationId === conversationId) out.push(block);

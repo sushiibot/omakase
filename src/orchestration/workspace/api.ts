@@ -2,6 +2,7 @@ import { MAINTENANCE, maintenanceParams, maintenanceResult, type MaintenanceRequ
 import { artifactReadParams, artifactList, artifactDocument } from "../artifactContracts.ts";
 import { TASKS_MANAGE, tasksParams, tasksResult, type TaskRequest } from "../taskContracts.ts";
 import { BLOCKS_MANAGE, blocksParams, blocksResult, type BlockRequest } from "../blockContracts.ts";
+import { SAVED_MANAGE, savedParams, savedResult, type SavedRequest } from "../savedContracts.ts";
 import {
   BROWSER_READ,
   BROWSER_CONTROL,
@@ -107,6 +108,10 @@ export class WorkspaceApi {
 
   async blocksManage(request: BlockRequest) {
     return this.read(BLOCKS_MANAGE, blocksParams, blocksResult, { request }, RUNS_TIMEOUT_MS);
+  }
+
+  async savedManage(request: SavedRequest) {
+    return this.read(SAVED_MANAGE, savedParams, savedResult, { request }, RUNS_TIMEOUT_MS);
   }
 
   async maintenance(request: MaintenanceRequest) {

@@ -6,6 +6,8 @@ export { default as Markdown } from './render/markdown.svelte';
 export { default as Composer } from './components/composer.svelte';
 export { chatApi, chatStore, configureChat } from './store.svelte';
 export { liveBlocksStore, LiveBlocks, type LiveBlocksApi } from './live-blocks.svelte';
+export { default as LiveBlockView } from './render/interactive/live-block-view.svelte';
+export { parseLiveBlockId, type SavedAccess } from './render/rich/live';
 export { Dictation, type DictationState, type Transcribe } from './dictation.svelte';
 export { default as VoiceControl } from './voice-control.svelte';
 export {

@@ -12,7 +12,7 @@ export interface Edge { from: string; to: string; typeOnly: boolean }
 const portableContracts = new Set([
   "src/core/contracts.ts", "src/orchestration/contracts.ts", "src/accounts/contracts.ts",
   "src/orchestration/machines/contracts.ts",
-  ...["artifact", "block", "browser", "maintenance", "maps", "memory", "session", "task"].map(
+  ...["artifact", "block", "browser", "maintenance", "maps", "memory", "saved", "session", "task"].map(
     (name) => `src/orchestration/${name}Contracts.ts`,
   ),
 ]);

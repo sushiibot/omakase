@@ -11,9 +11,14 @@ import { createFixtureMemoryApi } from '../src/lib/features/memory/fake';
 import { createFixtureSchedulesApi } from '../src/lib/features/schedules/fake';
 import { createFixtureSkillsApi } from '../src/lib/features/skills/fake';
 import { createFixtureThreadsApi } from '../src/lib/features/threads/fake';
+import { createFixtureSavedApi } from '../src/lib/features/saved/fake';
+import { savedBlocks } from '../src/lib/features/saved/fixtures';
+import type { SavedAction, SavedKind } from '../src/lib/features/saved/types';
+import { applyLiveOps } from '../src/lib/features/chat/render/rich/live';
+import type { LiveBlock, LiveBlockOp } from '../src/lib/core/realtime/events';
 
 export type FixtureFeature =
-	'threads' | 'memory' | 'skills' | 'schedules' | 'browser' | 'briefing' | 'connectors';
+	'threads' | 'memory' | 'skills' | 'schedules' | 'browser' | 'briefing' | 'connectors' | 'saved';
 
 export interface FixtureRoutes {
 	set(feature: FixtureFeature, scenario: FixtureScenario): void;
@@ -40,6 +45,9 @@ export async function fixtureRoutes(
 	const browser = createFixtureBrowserApi(pick('browser'));
 	const briefing = createFixtureBriefingApi(pick('briefing'));
 	const connectors = createFixtureConnectorsApi(pick('connectors'));
+	const saved = createFixtureSavedApi(pick('saved'));
+	// The saved checklists, recipes and timers as stored blocks, changed by POST /api/blocks.
+	const blocks = new Map<string, LiveBlock>(savedBlocks(Date.now()).map((b) => [b.id, b]));
 
 	const answer = async (route: Route, feature: FixtureFeature, run: () => Promise<unknown>) => {
 		try {
@@ -111,6 +119,43 @@ export async function fixtureRoutes(
 				});
 			if (sub === 'messages') return route.fulfill({ status: 202, json: { seq: 1, routed: true } });
 			return route.fulfill({ status: 204 });
+		}
+		if (path === '/saved') {
+			const q = new URL(req.url()).searchParams;
+			if (post)
+				return answer(route, 'saved', async () => ({
+					items: [await saved.act(body.id, body.action as SavedAction)]
+				}));
+			if (q.get('id'))
+				return answer(route, 'saved', async () => {
+					const item = await saved.get(q.get('id')!);
+					return item ? { items: [item] } : null;
+				});
+			return answer(route, 'saved', () =>
+				saved.list({
+					status: (q.get('status') as 'active' | 'done' | 'all' | null) ?? 'active',
+					...(q.get('kind') ? { kind: q.get('kind') as SavedKind } : {}),
+					...(q.get('conversation') ? { conversationId: q.get('conversation')! } : {}),
+					...(q.get('pinned') ? { pinned: q.get('pinned') === '1' } : {}),
+					...(q.get('q') ? { query: q.get('q')! } : {})
+				})
+			);
+		}
+		if ((hit = m(/^\/artifacts\/([0-9a-f-]{36})$/)))
+			return answer(route, 'saved', () => saved.document(hit![1]));
+		if (path === '/blocks') {
+			if (post) {
+				const current = blocks.get(body.id);
+				if (!current) return route.fulfill({ status: 404, json: { error: 'gone' } });
+				const result = applyLiveOps(current, body.ops as LiveBlockOp[], 'owner', new Date());
+				if (!result.ok) return route.fulfill({ status: 409, json: { error: result.error } });
+				blocks.set(result.block.id, result.block);
+				return route.fulfill({ json: { blocks: [result.block] } });
+			}
+			const keys = (new URL(req.url()).searchParams.get('keys') ?? '').split(',');
+			return route.fulfill({
+				json: { blocks: [...blocks.values()].filter((b) => keys.includes(b.messageKey)) }
+			});
 		}
 		if (path === '/channels') return answer(route, 'threads', () => channels.list());
 		if (path === '/chats') return answer(route, 'threads', () => threads.list());

@@ -9,7 +9,8 @@
 		TaskChat,
 		TaskRuns,
 		tasksStore,
-		type TaskRecord
+		type TaskRecord,
+		type PanelTab
 	} from '$lib/features/tasks';
 	import { backTo } from '$lib/core/nav/back';
 	import { routedSheet } from '$lib/core/nav/sheet';
@@ -24,7 +25,7 @@
 	const workspaceLayout = getWorkspace();
 	const docked = () =>
 		workspaceLayout?.docked ?? matchMedia(`(min-width: ${INSPECTOR_BREAKPOINT}px)`).matches;
-	let panelTab = $state<'tasks' | 'agents'>('tasks');
+	let panelTab = $state<PanelTab>('tasks');
 	let panelAgent = $state<string | undefined>();
 	function showAgent(id: string) {
 		panelTab = 'agents';

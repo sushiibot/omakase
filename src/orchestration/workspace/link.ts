@@ -3,6 +3,7 @@ export { WorkspaceBadResponseError, MESSAGE_TIMEOUT_MS } from "./api.ts";
 import type { MaintenanceRequest } from "../maintenanceContracts.ts";
 import type { TaskRequest } from "../taskContracts.ts";
 import { BLOCKS_CHANGED, blocksChangedParams, type BlockRequest, type BlocksChangedParams } from "../blockContracts.ts";
+import { SAVED_CHANGED, savedChangedParams, type SavedChangedParams, type SavedRequest } from "../savedContracts.ts";
 import type { BrowserControlRequest, BrowserReadResult } from "../browserContracts.ts";
 import type { AgentResultParams } from "../machines/contracts.ts";
 import type { AttentionRequest, AttentionResult, ConnectorRequest, ConnectorsResult } from "../contracts.ts";
@@ -247,6 +248,7 @@ export class WorkspaceLink {
   private readonly connectionListeners = new Set<(connected: boolean) => void>();
   private readonly runListeners = new Set<(p: RunsChangedParams) => void>();
   private readonly blockListeners = new Set<(p: BlocksChangedParams) => void>();
+  private readonly savedListeners = new Set<(p: SavedChangedParams) => void>();
   private replaying: Promise<void> | null = null;
   private replayAgain = false;
   // turnId → tool count for turns that have ended; null when the count is unknown (a restart).
@@ -316,6 +318,12 @@ export class WorkspaceLink {
     return () => void this.blockListeners.delete(listener);
   }
 
+  /** A saved item's pin, archive or source changed, or a document was saved. */
+  onSavedChanged(listener: (p: SavedChangedParams) => void): () => void {
+    this.savedListeners.add(listener);
+    return () => void this.savedListeners.delete(listener);
+  }
+
   onRunsChanged(listener: (p: RunsChangedParams) => void): () => void {
     this.runListeners.add(listener);
     return () => void this.runListeners.delete(listener);
@@ -366,6 +374,10 @@ export class WorkspaceLink {
 
   async blocksManage(request: BlockRequest) {
     return this.api.blocksManage(request);
+  }
+
+  async savedManage(request: SavedRequest) {
+    return this.api.savedManage(request);
   }
 
   async maintenance(request: MaintenanceRequest) {
@@ -871,6 +883,21 @@ export class WorkspaceLink {
           l(parsed.data);
         } catch (err) {
           log.warn({ err }, "blocks/changed listener threw");
+        }
+      }
+      return;
+    }
+    if (method === SAVED_CHANGED) {
+      const parsed = savedChangedParams.safeParse(params);
+      if (!parsed.success || parsed.data.principalId !== conn.principalId || parsed.data.principalId !== this.opts.principalId) {
+        log.debug({ method }, "dropping a malformed or foreign saved/changed");
+        return;
+      }
+      for (const l of [...this.savedListeners]) {
+        try {
+          l(parsed.data);
+        } catch (err) {
+          log.warn({ err }, "saved/changed listener threw");
         }
       }
       return;

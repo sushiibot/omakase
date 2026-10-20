@@ -25,7 +25,20 @@ export interface LiveBlockAccess {
 	watch(keys: readonly string[]): void;
 	get(messageKey: string, index: number): LiveBlock | undefined;
 	apply(id: string, ops: readonly LiveBlockOp[]): void;
+	/** Saved items (checklists, recipes, timers): pin state and the item page, when available. */
+	readonly saved?: SavedAccess;
 }
+
+/** The saved-items store, as a live block in chat sees it (features/saved). */
+export interface SavedAccess {
+	pinned(id: string): boolean;
+	setPinned(id: string, pinned: boolean): void;
+	/** The item page of a stored block. */
+	href(block: LiveBlock): string;
+}
+
+/** Live block types that are also saved items (the rest are reply blocks). */
+export const SAVED_LIVE_TYPES: readonly LiveBlockType[] = ['checklist', 'recipe', 'timer'];
 
 /** One stored block, bound to the block a component draws. */
 export interface LiveBinding {

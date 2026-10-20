@@ -30,7 +30,9 @@
 		maintenanceCount = 0,
 		maintenanceAttention,
 		maintenanceUpdates,
-		maintenanceWatching
+		maintenanceWatching,
+		inUse,
+		inUseCount = 0
 	}: {
 		tab?: string;
 		groups: HomeGroups;
@@ -48,6 +50,9 @@
 		maintenanceAttention?: Snippet;
 		maintenanceUpdates?: Snippet;
 		maintenanceWatching?: Snippet;
+		/** Saved items in use (pinned, running timers, open checklists), after Needs you. */
+		inUse?: Snippet;
+		inUseCount?: number;
 	} = $props();
 	const work = $derived(homeWork(tasks, groups));
 	const channelWaiting = $derived(channels.filter((c) => c.kind !== 'main' && c.pending.total > 0));
@@ -59,6 +64,7 @@
 	const running = $derived(work.running);
 	const noWork = $derived(
 		!attentionCount &&
+			!inUseCount &&
 			!recent.length &&
 			!groups.review.length &&
 			!running.length &&
@@ -150,6 +156,7 @@
 						<Check class="size-4" />Nothing needs your attention.
 					</p>
 				{/if}
+				{@render inUse?.()}
 				{@render maintenanceUpdates?.()}
 				{#if recent.length}
 					<Section title="Continue">

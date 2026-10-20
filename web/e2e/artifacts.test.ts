@@ -10,35 +10,65 @@ const document = {
 	version: 2,
 	conversationId: 'main'
 };
+const REPLY = '01JREPORTREPLY000000000000';
+/** The document as a saved item (GET /api/saved). */
+const savedItem = (doc: typeof document) => ({
+	kind: 'document',
+	id: doc.id,
+	title: doc.title,
+	conversationId: doc.conversationId,
+	sourceMessageId: REPLY,
+	status: 'active',
+	pinned: false,
+	archived: false,
+	createdAt: doc.createdAt,
+	updatedAt: doc.updatedAt,
+	updatedBy: 'agent',
+	summary: `Version ${doc.version}`
+});
+/** Serves documents as saved items: lists (with a query naming what matches), reads and changes. */
+function serveSaved(docs: (typeof document)[]) {
+	return (route: import('@playwright/test').Route) => {
+		const url = new URL(route.request().url());
+		const query = (url.searchParams.get('q') ?? '').toLowerCase();
+		const id = url.searchParams.get('id') ?? route.request().postDataJSON()?.id;
+		if (id) {
+			const doc = docs.find((d) => d.id === id);
+			return doc
+				? route.fulfill({ json: { items: [savedItem(doc)] } })
+				: route.fulfill({ status: 404, json: { error: 'gone' } });
+		}
+		const items = docs
+			.filter((d) => `${d.title}\n${d.content}`.toLowerCase().includes(query))
+			.map(savedItem);
+		return route.fulfill({ json: { items } });
+	};
+}
 for (const width of [412, 1440]) {
-	test(`artifact library search and reader at ${width}px`, async ({ page, context }) => {
+	test(`the old library address opens Saved's documents, and a document links to its reply at ${width}px`, async ({
+		page,
+		context
+	}) => {
 		await fixtureApp(context);
 		await page.setViewportSize({ width, height: 915 });
-		await context.route('**/api/artifacts**', (route) => {
-			const url = new URL(route.request().url());
-			const query = url.searchParams.get('q') ?? '';
-			return route.fulfill({
-				json: url.pathname.endsWith(id)
-					? document
-					: { artifacts: query === 'absent' ? [] : [document], truncated: false }
-			});
-		});
+		await context.route('**/api/artifacts**', (route) => route.fulfill({ json: document }));
+		await context.route('**/api/saved**', serveSaved([document]));
 		await page.goto('/artifacts');
-		await expect(page.getByRole('heading', { name: 'Artifacts', exact: true })).toBeVisible();
+		await expect(page).toHaveURL(/\/saved\?kind=docs$/);
+		await expect(page.getByRole('heading', { name: 'Saved', exact: true })).toBeVisible();
 		await page.getByRole('searchbox').fill('absent');
-		await expect(page.getByText('No matching documents')).toBeVisible();
+		await expect(page.getByText('No matching items')).toBeVisible();
 		await page.getByRole('searchbox').fill('Revenue');
 		await page.getByRole('link', { name: /Quarterly report/ }).click();
 		await expect(
 			page.getByRole('heading', { name: 'Quarterly report', exact: true })
 		).toBeVisible();
 		await expect(page.getByRole('heading', { name: 'Findings' })).toBeVisible();
-		await expect(page.getByRole('link', { name: 'Open source chat' })).toHaveAttribute(
+		await expect(page.locator('[data-saved-provenance]').getByRole('link')).toHaveAttribute(
 			'href',
-			'/chat'
+			`/chat?m=${REPLY}`
 		);
 		expect(await horizontalOverflow(page)).toEqual([]);
-		await page.screenshot({ path: `/tmp/omakase-artifact-${width}.png` });
 		await page.reload();
 		await expect(page.getByRole('heading', { name: 'Findings' })).toBeVisible();
 	});
@@ -98,12 +128,13 @@ test('long artifact renders Markdown before and after navigating to a shorter do
 					: { artifacts: [long, short], truncated: false }
 		});
 	});
+	await context.route('**/api/saved**', serveSaved([long, short]));
 	await page.goto(`/artifacts/${id}`);
 	await expect(page.getByRole('heading', { name: 'Long report', exact: true })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Next steps' })).toBeVisible();
 	await expect(page.locator('article strong')).toHaveText('Review');
 	await expect(page.getByRole('table')).toContainText('Ready');
-	await page.getByRole('link', { name: 'Artifacts', exact: true }).click();
+	await page.getByRole('link', { name: 'Saved', exact: true }).click();
 	await page.getByRole('link', { name: /Short report/ }).click();
 	await expect(page.getByRole('heading', { name: 'Summary', exact: true })).toBeVisible();
 	await page.goBack();

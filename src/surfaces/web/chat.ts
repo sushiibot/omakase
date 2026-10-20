@@ -152,9 +152,16 @@ export function createWebChat(deps: WebChatDeps): WebChat {
         chatLog.publish(ev);
         threads.publish(ev);
       });
+      // Ephemeral too: saved lists refetch on it, and on reconnect (hello).
+      const offSaved = deps.link.onSavedChanged(({ kind, id }) => {
+        const ev = { type: "saved" as const, data: { kind, id } };
+        chatLog.publish(ev);
+        threads.publish(ev);
+      });
       if (deps.workspaceEnabled && deps.link.isConnected()) void importer.run().then(catchUpIndex);
       return () => {
         offBlocks();
+        offSaved();
         clearInterval(timer);
         clearInterval(indexTimer);
         off();

@@ -16,8 +16,9 @@
 	import Choice from '../interactive/choice.svelte';
 	import Form from '../interactive/form.svelte';
 	import Checklist from '../interactive/checklist.svelte';
+	import SavedControls from '../interactive/saved-controls.svelte';
 	import { hashText } from '../markdown';
-	import { fingerprint, type LiveBinding, type LiveBlockAccess } from './live';
+	import { fingerprint, SAVED_LIVE_TYPES, type LiveBinding, type LiveBlockAccess } from './live';
 	import Stats from './stats.svelte';
 	import Timeline from './timeline.svelte';
 	import Tree from './tree.svelte';
@@ -58,6 +59,10 @@
 		if (!stored || stored.type !== block.type || stored.fingerprint !== print) return undefined;
 		return { block: stored, apply: (ops) => live!.apply(stored.id, ops) };
 	});
+	// A stored checklist, recipe or timer is a saved item: it offers Pin and Open.
+	const saved = $derived(
+		bound && SAVED_LIVE_TYPES.includes(bound.block.type) ? live?.saved : undefined
+	);
 </script>
 
 <!-- A partial block sits in its own wrapper, so the closed fence mounts the block afresh: recipe and
@@ -75,6 +80,7 @@
 	</div>
 {:else}
 	{@render body()}
+	{#if saved && bound}<SavedControls block={bound.block} {saved} />{/if}
 {/if}
 
 {#snippet body()}

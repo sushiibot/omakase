@@ -263,6 +263,15 @@ Agent replies can include data blocks (a fenced block with a YAML body, ` ```bre
 - **While streaming, an open block fills in as its lines arrive, never as raw YAML.** It shows its whole lines only, each list's valid prefix, and a skeleton until its required fields (a recipe's title, an event's start) arrive. Its controls stay off and a caret marks it until the fence closes; then the block mounts again from the finished data and the strict check decides. Why: a long recipe or chart is readable while it streams, and nothing shown disappears. Check: `bun test rich`, `render-harness.test.ts`.
 - **Headline numbers in `breakdown`, `stats` and `event` may use `text-2xl`/`text-lg`.** They are the block's point, like a markdown heading.
 
+### Saved items
+
+Things the agent made that the owner comes back to are saved items: documents (`save_artifact`) and stored `checklist`, `recipe` and `timer` blocks. Reply blocks (`actions`, `choice`, `form`) and display blocks are not. One list (`saved/manage`, `/api/saved`, `features/saved`) covers both stores; nothing is filed by hand.
+
+- **No folders.** Folders don't help people find their own things again (Whittaker et al., "Am I wasting my time organizing email?", CHI 2011). An item is found by where it came from, whether it is still in use, and one manual signal, pin. Check: `review`.
+- **Provenance is automatic.** Each item keeps its conversation and source reply. A block's source is its reply; a document's is the first delivered reply that links `/artifacts/<id>`, and later replies don't move it. "From <conversation>" links use `conversationHref(id, { message })` ([message links](message-links.md)). Check: `bun test saved`, `e2e-system/flows/saved-items.e2e.ts`.
+- **Status follows fixed rules, never a guess.** A checklist is done when every item is ticked and it has been left for 24h; a timer when it has finished or sat unstarted for 7 days; a recipe or document after 30 days without an update or opening. Pinned is always active. Archive forces done and restore brings an item back; both the owner and the agent (`list_saved_items`, `update_saved_item`) can do either. Done items stay reachable under Done and at their page. Check: `bun test saved`.
+- **Surfaces.** Workspace › Saved is the library: Active by default, Pinned first, then grouped by conversation, with kind chips (All, Docs, Lists, Recipes, Timers), an Active/Done toggle and search over titles and document text. Each item has a page, `/saved/<kind>/<id>`, with its provenance, Pin and Archive, and the item itself: a document reads as before, and a block is the same interactive component as in chat, live-synced. `/artifacts/<id>` shows the same page. The side panel's Saved tab lists the conversation's items, active then done. Home's "In use", after Needs you, shows up to four pinned items, running timers and open checklists. A stored block in chat carries quiet Pin and Open controls under it. Check: `pw` (`e2e/saved.test.ts`).
+
 ### Never-silent states
 
 Blocking waits and required actions need visible feedback. Cached background refreshes can remain quiet. A spinner alone does not explain a wait.
@@ -638,7 +647,7 @@ Record untested device behavior explicitly. Do not describe an automated pass as
 
 ## Tasks beside chat
 
-The side panel has two tabs: **Tasks** and **Agents** ([Agents](agents.md)).
+The side panel has three tabs: **Tasks**, **Agents** ([Agents](agents.md)) and **Saved** ([Saved items](#saved-items)).
 
 Use the task workspace for conversation-scoped assignments.
 On desktop, the right panel shares the available width with chat.

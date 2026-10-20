@@ -28,6 +28,7 @@
 	import { routedSheet, leaveSheet } from '$lib/core/nav/sheet';
 	import { goto } from '$app/navigation';
 	import { needsYou } from '$lib/features/home';
+	import { savedStore } from '$lib/features/saved';
 	import AppUpdates from '$lib/ui/pwa/app-updates.svelte';
 	import { androidUpdates } from '$lib/core/native/updates.svelte';
 	import Shell from '$lib/ui/shell/shell.svelte';
@@ -40,6 +41,8 @@
 	hub.start();
 	// Listens from the start, so the inbox badge counts what waits whatever screen is open.
 	const catalog = channelsStore();
+	// Lets stored checklists, recipes and timers in any chat offer Pin and Open; loads on first use.
+	savedStore();
 	const navigation = routedSheet('channels');
 	const createChannel = routedSheet('channel-create');
 	let channelTitle = $state('');
