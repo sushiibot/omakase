@@ -379,20 +379,28 @@ describe("web adapter push rules", () => {
     await h.adapter.approvalPrompt(null, view, "n".repeat(16));
     await h.adapter.askPrompt(null, { askId: "A", question: "Which **one**?", choices: ["x"] }, attempt("o1"));
     await h.adapter.authPrompt(null, { url: "https://example.com/login", instructions: "Sign in" }, attempt("o2"));
-    await h.adapter.sendReply(null, { kind: "reply", text: `# Title\n${"word ".repeat(60)}`, toolCount: null }, attempt("o3"));
-    await h.adapter.sendReply(null, { kind: "proactive", text: "Reminder", toolCount: null }, attempt("o4"));
+    await h.adapter.sendReply(null, { kind: "reply", text: `# Title\n${"word ".repeat(60)}`, toolCount: null }, attempt("reply-outbox-3"));
+    await h.adapter.sendReply(null, { kind: "proactive", text: "Reminder", toolCount: null }, attempt("proactive-outbox-4"));
     const handle = await h.adapter.progressCreate(null, { turnId: "t1", startedAt: 0, lines: [{ name: "bash", summary: "ls", state: "run" }], toolCount: 1, text: "" });
     await h.adapter.progressDelta(handle, "hi", { turnId: "t1", startedAt: 0, lines: [], toolCount: 1, text: "hi" });
     await h.adapter.progressFinalize(null, handle, { outcome: "done", summary: null });
     await h.adapter.progressFinalize(null, { id: "t2" }, { outcome: "stopped", summary: null });
     await h.adapter.progressFinalize(null, { id: "t3" }, { outcome: "interrupted", summary: null });
+    // An interrupted turn that already replied links to that reply.
+    await h.adapter.sendReply(null, { kind: "reply", text: "Partial", turnId: "t4", toolCount: null }, attempt("t4-reply-outbox"));
+    await h.adapter.progressFinalize(null, { id: "t4" }, { outcome: "interrupted", summary: null });
+    // A key that can't be a message id falls back to the conversation.
+    await h.adapter.sendReply(null, { kind: "reply", text: "Short", toolCount: null }, attempt("o5"));
     await tick();
     expect(h.pushes.map((p) => [p.tag, p.url])).toEqual([
-      [`approval:${"n".repeat(16)}`, `/?approve=${"n".repeat(16)}`],
-      ["ask:A", "/?ask=A"],
+      [`approval:${"n".repeat(16)}`, `/chat?approve=${"n".repeat(16)}`],
+      ["ask:A", "/chat?ask=A"],
       ["auth", "/chat"],
+      ["chat", "/chat?m=reply-outbox-3"],
+      ["chat", "/chat?m=proactive-outbox-4"],
       ["chat", "/chat"],
-      ["chat", "/chat"],
+      ["chat", "/chat?m=t4-reply-outbox"],
+      ["chat", "/chat?m=t4-reply-outbox"],
       ["chat", "/chat"],
     ]);
     expect(h.pushes[0]!.requireInteraction).toBe(true);

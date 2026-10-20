@@ -17,7 +17,13 @@ export type HistoryResult = { ok: true; page: HistoryResponse; cached?: boolean 
 export interface ChatApi {
 	/** Refresh the durable offline snapshot after a live message lands. */
 	refreshHistoryCache?(): Promise<void>;
-	history(q: { before?: string; limit: number }): Promise<HistoryResult>;
+	/** A page: the newest (no cursor), older than `before`, newer than `after`, or around a message id. */
+	history(q: {
+		before?: string;
+		after?: string;
+		around?: string;
+		limit: number;
+	}): Promise<HistoryResult>;
 	postMessage(body: PostMessageBody): Promise<PostMessageResponse>;
 	/** Asks the bot to never deliver a posted message. `unknown`: it never stored it. */
 	discardMessage(clientId: string): Promise<'discarded' | 'routed' | 'unknown'>;
@@ -50,9 +56,11 @@ export function createHttpChatApi(base = '/chat'): ChatApi {
 		async refreshHistoryCache() {
 			await send('GET', `${base}/history?limit=40`);
 		},
-		async history({ before, limit }) {
+		async history({ before, after, around, limit }) {
 			const q = new URLSearchParams({ limit: String(limit) });
 			if (before) q.set('before', before);
+			if (after) q.set('after', after);
+			if (around) q.set('around', around);
 			try {
 				const res = await send('GET', `${base}/history?${q}`);
 				return {

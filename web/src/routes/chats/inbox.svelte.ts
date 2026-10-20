@@ -3,6 +3,7 @@ import { afterNavigate, goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { page } from '$app/state';
 import { previousPathIs } from '$lib/core/nav/back';
+import { conversationHref } from '$lib/core/nav/conversation';
 import type { RoutedSheet } from '$lib/core/nav/sheet';
 import { closeShownNotifications } from '$lib/core/pwa/notifications';
 import { pwa } from '$lib/core/pwa/pwa.svelte';
@@ -181,7 +182,13 @@ export function createInbox(destination: '/chats' | '/assistant' = '/chats') {
 
 	// Forward navigation keeps review underneath. Back returns to its exact URL and state.
 	const leaveTo = (href: string) => goto(href);
-	const openChat = () => goto(resolve('/chat'));
+	// A running turn opens at its working row (docs/message-links.md).
+	const openChat = (item?: HomeItem) =>
+		goto(
+			item?.kind === 'turn'
+				? conversationHref('main', { turn: item.turn.turnId })
+				: resolve('/chat')
+		);
 
 	function done(id: string) {
 		const item = items.find((i) => i.id === id);

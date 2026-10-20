@@ -21,6 +21,7 @@
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import Copy from '@lucide/svelte/icons/copy';
+	import Link from '@lucide/svelte/icons/link';
 	import Share2 from '@lucide/svelte/icons/share-2';
 	import { Button } from '$lib/ui/button';
 	import { cn } from '$lib/utils';
@@ -58,6 +59,8 @@
 		live,
 		onretryhistory,
 		oncopy,
+		oncopylink,
+		landed,
 		onspeak,
 		readingId,
 		readingState,
@@ -97,6 +100,10 @@
 		onretryhistory?: () => void;
 		/** Copy under each message; without it messages have no action row. */
 		oncopy?: (message: ChatMessage) => void;
+		/** Copies a link to a message with a stable key (docs/message-links.md). */
+		oncopylink?: (message: ChatMessage) => void;
+		/** The message a link just landed on: tinted, then fading; an outline under reduced motion. */
+		landed?: { id: string; mode: 'tint' | 'fade' | 'outline' } | null;
 		onspeak?: (message: ChatMessage) => void;
 		readingId?: string | null;
 		readingState?: 'idle' | 'loading' | 'playing';
@@ -111,7 +118,7 @@
 		onapprove?: (nonce: string, location?: LocationReply) => void;
 		/** Deny a pending tool call. */
 		ondeny?: (nonce: string) => void;
-		/** The message just copied, whose Copy shows a check for a moment. */
+		/** The message just copied, whose Copy shows a check for a moment; `link:<id>` for its link. */
 		copied?: string;
 		/** Pending approvals for inline rendering of data-approval parts. */
 		approvals?: PendingApproval[];
@@ -179,8 +186,21 @@
 			icon: copied === message.id ? Check : Copy,
 			onclick: () => oncopy(message)
 		};
+		const settled =
+			!message.delivery || message.delivery === 'sent' || message.delivery === 'steered';
+		const link: MessageAction[] =
+			oncopylink && message.key && settled && !message.streaming
+				? [
+						{
+							id: 'link',
+							label: 'Copy link',
+							icon: copied === `link:${message.id}` ? Check : Link,
+							onclick: () => oncopylink(message)
+						}
+					]
+				: [];
 		if (message.role === 'user') {
-			const out = [copy];
+			const out = [copy, ...link];
 			if (
 				onrewind &&
 				(!message.delivery || message.delivery === 'sent' || message.delivery === 'steered') &&
@@ -201,7 +221,7 @@
 			}
 			return out;
 		}
-		const out = [copy];
+		const out = [copy, ...link];
 		if (onspeak && !message.streaming && hasText(message))
 			out.push({
 				id: 'speak',
@@ -268,12 +288,23 @@
 			!message.id.startsWith('voice:')
 				? actionsFor(message)
 				: []}
+		{@const lit = landed?.id === message.id ? landed.mode : undefined}
 		<li
 			data-message-id={message.id}
+			data-message-key={message.key}
 			data-turn-id={message.turnId}
+			data-landed={lit}
 			tabindex="-1"
 			data-voice-message={message.voice || undefined}
-			class="min-w-0 rounded-lg focus:bg-muted/60 focus:outline-2 focus:outline-ring"
+			class={cn(
+				'min-w-0 rounded-lg focus:bg-muted/60 focus:outline-2 focus:outline-ring',
+				// Over the focus fill, so the tint shows on the focused row.
+				(lit === 'tint' || lit === 'fade') &&
+					'relative before:pointer-events-none before:absolute before:inset-0 before:rounded-lg before:bg-brand/10',
+				lit === 'fade' &&
+					'before:opacity-0 before:transition-opacity before:duration-(--duration-medium)',
+				lit === 'outline' && 'outline-2 outline-offset-2 outline-brand focus:outline-brand'
+			)}
 		>
 			<div
 				class={cn(
@@ -590,7 +621,7 @@
 						always={message.id === latestReply || message.id === readingId}
 						align={owner ? 'end' : 'start'}
 						pending={message.streaming}
-						beside={owner && actions.length === 1}
+						beside={owner && actions.length <= 2}
 					/>
 				{/if}
 				{#if readingId === message.id}<p role="status" class="sr-only">

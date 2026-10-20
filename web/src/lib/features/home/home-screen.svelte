@@ -96,7 +96,8 @@
 		onundo?: () => void;
 		onopenrun?: (runId: string) => void;
 		onaskagent?: (item: HomeItem) => void;
-		onopenchat?: () => void;
+		/** Opens the chat, at a running turn when `item` is one. */
+		onopenchat?: (item?: HomeItem) => void;
 		onreload?: () => void;
 	} = $props();
 
@@ -214,7 +215,8 @@
 			empty: {
 				title: 'Nothing needs you',
 				body: 'Approvals, questions and failed runs show up here when the agent needs you.',
-				action: !embedded && onopenchat ? { label: 'Open chat', onclick: onopenchat } : undefined
+				action:
+					!embedded && onopenchat ? { label: 'Open chat', onclick: () => onopenchat() } : undefined
 			}
 		}}
 		{sections}

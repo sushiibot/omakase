@@ -176,8 +176,43 @@ export function createFakeBackend(
 	}
 
 	const api: ChatApi = {
-		async history({ before, limit }) {
+		async history({ before, after, around, limit }) {
 			await sleep(300);
+			// Cursors are indexes into `all`: `before` ends a page, `after` starts one.
+			if (around) {
+				const at = all.findIndex(
+					(h) =>
+						`s${h.id}` === around ||
+						(h.type === 'assistant' && (h.outboxId === around || h.turnId === around)) ||
+						(h.type === 'user' && h.clientId === around) ||
+						(h.type === 'ask' && h.askId === around)
+				);
+				const side = Math.max(1, Math.floor(limit / 2));
+				const start = at < 0 ? Math.max(0, all.length - limit) : Math.max(0, at - side);
+				const end = at < 0 ? all.length : Math.min(all.length, at + side + 1);
+				return {
+					ok: true,
+					page: {
+						items: all.slice(start, end),
+						before: start > 0 ? String(start) : null,
+						after: end < all.length ? String(end) : null,
+						target: at < 0 ? null : all[at].id,
+						...(at < 0 ? { missing: true } : {})
+					}
+				};
+			}
+			if (after) {
+				const start = Number(after);
+				const end = Math.min(all.length, start + limit);
+				return {
+					ok: true,
+					page: {
+						items: all.slice(start, end),
+						before: String(start),
+						after: end < all.length ? String(end) : null
+					}
+				};
+			}
 			const end = before ? Number(before) : all.length;
 			const start = Math.max(0, end - limit);
 			return {

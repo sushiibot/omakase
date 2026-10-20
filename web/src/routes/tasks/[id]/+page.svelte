@@ -13,6 +13,8 @@
 	} from '$lib/features/tasks';
 	import { backTo } from '$lib/core/nav/back';
 	import { routedSheet } from '$lib/core/nav/sheet';
+	import { leaveMessageLink } from '$lib/core/nav/message-link';
+	import { linkTarget } from '$lib/features/chat';
 	import { getWorkspace } from '$lib/ui/workspace/context';
 	import { followAgentLink, openAgentFrom, openAgentPage } from '$lib/core/nav/agent-link';
 	import { untrack } from 'svelte';
@@ -68,9 +70,8 @@
 				<TaskChat
 					{task}
 					headerActions={actions}
-					focusTurn={page.url.searchParams.get('turn') ?? undefined}
-					focusAsk={page.url.searchParams.get('ask') ?? undefined}
-					focusApproval={page.url.searchParams.get('approve') ?? undefined}
+					link={linkTarget(page.url.searchParams)}
+					onleavelink={leaveMessageLink}
 					onopenagent={(agent, event) =>
 						openAgentFrom(event, agent.id, {
 							docked: docked(),

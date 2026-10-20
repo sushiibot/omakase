@@ -31,7 +31,8 @@
 		item: Exclude<HomeItem, { kind: 'approval' | 'ask' }>;
 		now: number;
 		onopenrun?: (runId: string) => void;
-		onopenchat?: () => void;
+		/** Opens the chat, at a running turn when `item` is one. */
+		onopenchat?: (item?: HomeItem) => void;
 		ondismiss?: (id: string) => void;
 		ondone?: (id: string) => void;
 		onreply?: (item: HomeItem) => void;
@@ -177,7 +178,7 @@
 			['Running for', duration(now - item.turn.startedAt)],
 			['Steps so far', String(item.turn.toolCount)]
 		])}
-		<Button onclick={() => onopenchat?.()}><MessageSquare />Open chat</Button>
+		<Button onclick={() => onopenchat?.(item)}><MessageSquare />Open chat</Button>
 	{:else}
 		<p class="text-sm">
 			The agent sent a sign-in link in the chat and is waiting until you use it.

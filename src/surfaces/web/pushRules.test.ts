@@ -6,16 +6,31 @@ describe("pushFor", () => {
     expect(pushFor({ kind: "approval", nonce: "n1", tool: "file_linear_issue" })).toEqual({
       title: "Approval needed",
       body: "sushii-agent needs your approval to run file_linear_issue",
-      url: "/?approve=n1",
+      url: "/chat?approve=n1",
       tag: "approval:n1",
       requireInteraction: true,
     });
-    expect(pushFor({ kind: "ask", askId: "a 1", question: "Which?" })).toEqual({ title: "The agent asks", body: "Which?", url: "/?ask=a%201", tag: "ask:a 1" });
+    expect(pushFor({ kind: "ask", askId: "a 1", question: "Which?" })).toEqual({ title: "The agent asks", body: "Which?", url: "/chat?ask=a%201", tag: "ask:a 1" });
     expect(pushFor({ kind: "auth" })).toMatchObject({ tag: "auth", body: "Sign-in link ready" });
     expect(pushFor({ kind: "reply", text: "done" })).toEqual({ title: "sushii-agent", body: "done", url: "/chat", tag: "chat", renotify: false });
+    expect(pushFor({ kind: "reply", text: "done", key: "01J9Z3W8K2M4N6P8Q0R2S4T6V8" })).toMatchObject({ url: "/chat?m=01J9Z3W8K2M4N6P8Q0R2S4T6V8", tag: "chat" });
+    expect(pushFor({ kind: "proactive", text: "x", key: "proactive-key" })).toMatchObject({ url: "/chat?m=proactive-key", tag: "chat" });
+    expect(pushFor({ kind: "interrupted", message: "reply-of-turn" })).toMatchObject({ url: "/chat?m=reply-of-turn", tag: "chat" });
     expect(pushFor({ kind: "proactive", text: "" })).toMatchObject({ tag: "chat", body: "Sent a file" });
     expect(pushFor({ kind: "interrupted" })).toMatchObject({ tag: "chat", body: "Turn interrupted" });
     expect(pushFor({ kind: "quota", usedBytes: 4, capBytes: 5 })).toEqual({ title: "Photo storage almost full", body: "80% of the photo quota is used.", url: "/chat", tag: "quota" });
+  });
+
+  test("conversation links open the item in its own conversation, keeping their params", () => {
+    expect(pushFor({ kind: "reply", text: "x", key: "reply-key-1" }, "trip-plans")).toMatchObject({ url: "/chats/trip-plans?m=reply-key-1", tag: "chat" });
+    expect(pushFor({ kind: "ask", askId: "pick", question: "q" }, "trip-plans")).toMatchObject({ url: "/chats/trip-plans?ask=pick", tag: "ask:pick" });
+    expect(pushFor({ kind: "approval", nonce: "n1", tool: "t" }, "task-t-login")).toMatchObject({ url: "/tasks/t-login?view=conversation&approve=n1" });
+    expect(pushFor({ kind: "reply", text: "x", key: "reply-key-1" }, "task-t-login")).toMatchObject({ url: "/tasks/t-login?view=conversation&m=reply-key-1" });
+    expect(pushFor({ kind: "auth" }, "trip-plans")).toMatchObject({ url: "/chats/trip-plans" });
+    // A key that can't be a message id links to the conversation.
+    expect(pushFor({ kind: "reply", text: "x", key: "o1" }, "trip-plans")).toMatchObject({ url: "/chats/trip-plans" });
+    // Screens outside the conversation keep their own links.
+    expect(pushFor({ kind: "inbox", key: "k", text: "t" }, "trip-plans")).toMatchObject({ url: "/inbox?item=msg%3Ak" });
   });
 
   test("an ask without an id falls back to the chat tag and still rings", () => {

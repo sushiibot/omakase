@@ -123,9 +123,9 @@ export class WebWorkspaceAdapter implements SurfaceAdapter<WebInbound, WebHandle
   }
 
   private pushPayload(event: PushEvent): PushPayload {
-    const p = pushFor(event);
     const id = this.deps.log.conversationId;
-    return id === "main" ? p : { ...p, url: `/chats/${encodeURIComponent(id)}`, tag: `${p.tag}:${id}` };
+    const p = pushFor(event, id);
+    return id === "main" ? p : { ...p, tag: `${p.tag}:${id}` };
   }
 
   private checkOrigin(origin: ChatOrigin | null): void {
@@ -196,7 +196,7 @@ export class WebWorkspaceAdapter implements SurfaceAdapter<WebInbound, WebHandle
     const anchor = turnId ? this.deps.log.turnAnchor(turnId) : null;
     const { seq, created } = this.deps.log.appendResult(reply.kind, data, key, anchor ?? undefined);
     if (created) {
-      void this.notify(seq, { kind: reply.kind, text });
+      void this.notify(seq, { kind: reply.kind, text, key });
       for (const listener of this.replyListeners) {
         try { listener({ ...reply, text }); } catch (err) { log.warn({ err }, "reply listener failed"); }
       }
@@ -378,7 +378,11 @@ export class WebWorkspaceAdapter implements SurfaceAdapter<WebInbound, WebHandle
       }
       // One key per outcome, so a turn marked interrupted after a restart can still be marked done by its reply.
       const { seq, created } = this.deps.log.appendResult("turn_final", { turnId, outcome: final.outcome, summary: final.summary, activityText: capText(final.activityText ?? turn?.text ?? "", TURN_TEXT_MAX), lines: [...(final.lines ?? turn?.lines ?? [])].map((line) => ({ ...line, name: capText(line.name, ID_MAX), summary: capText(line.summary, TOOL_SUMMARY_MAX) })) }, key);
-      if (created && final.outcome === "interrupted") void this.notify(seq, { kind: "interrupted" });
+      if (created && final.outcome === "interrupted") {
+        const reply = this.deps.log.latestReplyOf(turnId);
+        const message = reply === null ? undefined : this.deps.log.positioned(reply, ["reply", "proactive"])?.key ?? undefined;
+        void this.notify(seq, { kind: "interrupted", ...(message ? { message } : {}) });
+      }
     } finally {
       // The last open turn ended: this is when a message queued behind it is delivered, in order.
       if (this.turns.size === 0) this.onTurnsIdle?.();

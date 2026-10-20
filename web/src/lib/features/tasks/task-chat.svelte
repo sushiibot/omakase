@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { untrack, type Snippet } from 'svelte';
 	import { getWorkspace } from '$lib/ui/workspace/context';
-	import { ChatScreen, chatStore, createHttpChatApi, liveBlocksStore } from '$lib/features/chat';
+	import {
+		ChatScreen,
+		chatStore,
+		createHttpChatApi,
+		linkProps,
+		liveBlocksStore,
+		type LinkTarget
+	} from '$lib/features/chat';
 	import { AgentCards, type AgentRecord } from '$lib/features/agents';
 	import { createHub } from '$lib/core/realtime/hub.svelte';
 	import { fetchSse } from '$lib/core/realtime/transport';
@@ -11,17 +18,17 @@
 		task,
 		viewing = true,
 		headerActions,
-		focusTurn,
-		focusAsk,
-		focusApproval,
+		link = null,
+		onleavelink,
 		onopenagent
 	}: {
 		task: TaskRecord;
 		viewing?: boolean;
 		headerActions?: Snippet;
-		focusTurn?: string;
-		focusAsk?: string;
-		focusApproval?: string;
+		/** The conversation link in the URL (docs/message-links.md). */
+		link?: LinkTarget | null;
+		/** Drops the link from the URL after "Jump to latest". */
+		onleavelink?: () => void;
 		/** Opens a coding agent this conversation started. */
 		onopenagent?: (agent: AgentRecord, event: MouseEvent) => void;
 	} = $props();
@@ -56,9 +63,7 @@
 	title={task.title}
 	agentActivity={agents}
 	{headerActions}
-	{focusTurn}
-	{focusAsk}
-	{focusApproval}
+	{...linkProps(store, link, onleavelink)}
 	messages={store.messages}
 	history={store.history}
 	hasOlder={store.hasOlder}

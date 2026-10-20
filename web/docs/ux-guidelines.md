@@ -163,7 +163,7 @@ Apply these rules to Runs, History, Memory, connections, and future data screens
 
 ### Streaming and scroll
 
-- **The chat opens at the newest message, with no visible scroll animation.** Why: the newest message is why you opened it. Check: `pw`: after load, the distance from the bottom (`scrollHeight - clientHeight - |scrollTop|`, which holds for both normal and `flex-col-reverse` containers) is ≤ 1px.
+- **The chat opens at the newest message, with no visible scroll animation.** Why: the newest message is why you opened it. The one exception is an explicit message link (`?m=`, `?turn=`, `?ask=`, `?approve=`), which opens at its message ([Message links](#message-links)). Check: `pw`: after load, the distance from the bottom (`scrollHeight - clientHeight - |scrollTop|`, which holds for both normal and `flex-col-reverse` containers) is ≤ 1px.
 - **Stick to the bottom only when the reader is already within 48px of it.** Why: auto-scrolling while someone reads older messages yanks the text away. Check: `pw` (below).
 - **When the reader is scrolled up and new content arrives, show a "New messages" pill above the composer; tapping it scrolls to the newest message.** Why: the reader learns something arrived without losing their place. Check: `pw` (below), `shot`.
 - **Streaming never shifts the text the reader is looking at.** Why: layout shift while reading is the main jank complaint in chat UIs. Use `overflow-anchor` or the column-reverse container, and reserve height for a message before its content lands. Check: `pw` (below).
@@ -193,6 +193,16 @@ const after = await anchor.evaluate((e) => e.getBoundingClientRect().top);
 expect(Math.abs(after - before.top)).toBeLessThanOrEqual(1);
 await expect(page.getByRole('button', { name: /new messages/i })).toBeVisible();
 ```
+
+### Message links
+
+A link to a message is `<conversation path>?m=<message id>`; [docs/message-links.md](message-links.md) defines the ids and the history API. Build links with `conversationHref` and give agent replies and owner messages a "Copy link" action.
+
+- **A link lands on its message: centred without animation, focused, and announced politely ("Showing a message from …").** Why: the reader followed the link for that message; scrolling to it would make them hunt. Check: `pw` (`e2e/message-links.test.ts`).
+- **The landed message takes a brand tint (`bg-brand/10`) that fades after about 2s. Under reduced motion it gets a static outline that clears on the next pointer, key or scroll input.** Why: the eye needs to find the row, but a lasting highlight competes with reading. Check: `pw` with `reducedMotion: 'reduce'`.
+- **Away from the newest messages, a bar above the composer says "Earlier messages · <day>" with "Jump to latest".** Live messages go to the newest messages, not into the earlier window; scrolling down loads newer pages until the window joins them, without moving the rows on screen. Sending a message jumps to the latest. Check: `pw`.
+- **Opening a link is its own history entry; Back returns to where it was opened. "Jump to latest" drops the link from the URL in place.** Why: Back must undo the jump, not step through scroll positions. Check: `pw`, `phone`.
+- **A message that no longer exists opens at the nearest surviving one, or at the newest messages, with the inline notice "That message is no longer available."** Why: a dead link should explain itself and still leave the conversation usable. Check: `pw`.
 
 ### Live voice
 

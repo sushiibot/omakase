@@ -28,7 +28,8 @@ async function get<T>(request: APIRequestContext, path: string, status = 200): P
 }
 
 test("GET /api/runs and /api/runs/:id return the seeded job run, its child and its evidence", async ({ request }) => {
-  const list = await get<{ runs: Run[]; truncated: boolean }>(request, "/api/runs?limit=50");
+  // Only the seeded kinds: chat flows (message-links) add many chat runs.
+  const list = await get<{ runs: Run[]; truncated: boolean }>(request, "/api/runs?limit=50&kind=job,subagent");
   const job = list.runs.find((r) => r.runId === SEED.jobRunId);
   const child = list.runs.find((r) => r.runId === SEED.childRunId);
   expect(job).toMatchObject({ kind: "job", status: "done", jobName: SEED.jobName, title: "Run the nightly check" });

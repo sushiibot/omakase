@@ -1,4 +1,5 @@
 // Service-worker logic kept free of worker globals so the page, the worker and tests can share it.
+import { MESSAGE_REF_RE } from '../nav/conversation';
 
 export type PushPayload = {
 	title?: unknown;
@@ -38,8 +39,18 @@ type Route = {
 	path: (p: string) => boolean;
 	/** Allowed query keys and their check; a route takes at most one of them. */
 	query?: Record<string, (v: string) => boolean>;
+	/** A key that may come alongside one other, as a task conversation's `view`. */
+	alongside?: string;
 };
 const at = (exact: string) => (p: string) => p === exact;
+/** Where a conversation link lands (docs/message-links.md): a message, a turn, a card or an agent. */
+const conversationQuery: Record<string, (v: string) => boolean> = {
+	m: (v) => MESSAGE_REF_RE.test(v),
+	turn: (v) => ASK_ID.test(v),
+	ask: (v) => ASK_ID.test(v),
+	approve: (v) => NONCE.test(v),
+	agent: (v) => SEGMENT.test(v)
+};
 
 /** App routes a notification may open; anything else, including /api/ and /f/, opens the chat. */
 const ROUTES: Route[] = [
@@ -54,7 +65,13 @@ const ROUTES: Route[] = [
 	// Links in notifications from before the inbox moved.
 	{ path: at('/'), query: { approve: (v) => NONCE.test(v), ask: (v) => ASK_ID.test(v) } },
 	{ path: at('/home'), query: { item: (v) => HOME_ITEM.test(v) } },
-	{ path: at('/chat') },
+	{ path: at('/chat'), query: conversationQuery },
+	{ path: (p) => oneSegment(p, '/chats/'), query: conversationQuery },
+	{
+		path: (p) => oneSegment(p, '/tasks/'),
+		query: { ...conversationQuery, view: (v) => v === 'conversation' },
+		alongside: 'view'
+	},
 	{ path: at('/more') },
 	{ path: at('/settings') },
 	{ path: at('/runs') },
@@ -94,7 +111,7 @@ export function safeTarget(raw: unknown, origin: string): string {
 	const route = ROUTES.find((r) => r.path(url.pathname));
 	if (!route) return '/';
 	const keys = [...url.searchParams.keys()];
-	if (keys.length > 1) return '/';
+	if (keys.length > (route.alongside && keys.includes(route.alongside) ? 2 : 1)) return '/';
 	for (const key of keys) {
 		const check = route.query?.[key];
 		const value = url.searchParams.get(key) ?? '';

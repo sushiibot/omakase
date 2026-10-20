@@ -7,11 +7,12 @@
 	import { followAgentLink, openAgentFrom, openAgentPage } from '$lib/core/nav/agent-link';
 	import { PanelButton } from '$lib/features/tasks';
 	import { BrowserPreview, BrowserPreviewPanel } from '$lib/features/browser';
-	import { tick, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { leaveSheet, routedSheet } from '$lib/core/nav/sheet';
+	import { leaveMessageLink } from '$lib/core/nav/message-link';
 	import { offlineBrowsing } from '$lib/core/storage/offline.svelte';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import { hub } from '$lib/core/realtime/hub.svelte';
@@ -29,6 +30,8 @@
 		type ChatSheet,
 		type ChatMessage,
 		type FileRef,
+		linkProps,
+		linkTarget,
 		liveBlocksStore
 	} from '$lib/features/chat';
 	import { BranchSheet, threadsStore } from '$lib/features/threads';
@@ -85,7 +88,6 @@
 		expanded: () => browserSheet.open
 	});
 	const sheet = $derived((Object.keys(sheets) as ChatSheet[]).find((s) => sheets[s].open));
-	const focusAsk = $derived(page.url.searchParams.get('ask') ?? undefined);
 	conversationContext({ store: () => store, models: () => models, sheet: () => sheet });
 
 	const connection = $derived.by((): ConnectionState | 'forbidden' | undefined => {
@@ -116,25 +118,6 @@
 		const visible = workspaceLayout?.contentVisible ?? true;
 		untrack(() => store.setViewing(visible));
 		return () => store.setViewing(false);
-	});
-
-	// A push for a question opens /?ask=<id>; its card scrolls into view once history has it.
-	$effect(() => {
-		const askId = untrack(() => focusAsk);
-		if (!askId) return;
-		let done = false;
-		return $effect.root(() => {
-			$effect(() => {
-				const item = store.items.find((i) => i.kind === 'ask' && i.askId === askId);
-				if (!item || done) return;
-				done = true;
-				void tick().then(() =>
-					document
-						.querySelector(`[data-message-id="${CSS.escape(item.id)}"]`)
-						?.scrollIntoView({ block: 'center' })
-				);
-			});
-		});
 	});
 
 	function openSheet(next: ChatSheet, arg?: string) {
@@ -334,9 +317,7 @@
 			toast={s.toast}
 			canInstall={pwa.canInstall}
 			announce={s.announce}
-			{focusAsk}
-			focusTurn={page.url.searchParams.get('turn') ?? undefined}
-			focusApproval={page.url.searchParams.get('approve') ?? undefined}
+			{...linkProps(s, linkTarget(page.url.searchParams), leaveMessageLink)}
 			{sheet}
 			{viewer}
 			onbranch={openBranch}

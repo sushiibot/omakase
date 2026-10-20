@@ -9,12 +9,14 @@ export type PushEvent =
   | { kind: "approval"; nonce: string; tool: string }
   | { kind: "ask"; askId: string; question: string }
   | { kind: "auth" }
-  | { kind: "reply" | "proactive"; text: string }
+  /** `key` is the message's outbox id, which its link lands on. */
+  | { kind: "reply" | "proactive"; text: string; key?: string }
   | { kind: "inbox"; key: string; text: string }
   | { kind: "alert"; alert: Pick<JobAlert, "job" | "error"> & { kind: "failed" | "stuck" } }
   /** Replaces the job's failure notification in the tray, silently. */
   | { kind: "alertRecovered"; job: string }
-  | { kind: "interrupted" }
+  /** `message` is the key of the turn's reply, when it has one. */
+  | { kind: "interrupted"; message?: string }
   /** A coding agent waits on the owner; one notification per provider request. */
   | { kind: "agentNeedsYou"; agentId: string; requestId: string; conversationId: string; label: string; description: string }
   /** Replaces that request's notification, silently, once it is answered or gone. */
@@ -25,22 +27,23 @@ export type PushEvent =
   | { kind: "agentsPaused"; conversationId: string; cycles: number }
   | { kind: "quota"; usedBytes: number; capBytes: number };
 
-// Approval, ask and alert links keep their older addresses, which the app redirects to the inbox: a service
-// worker from before the inbox moved opens only those.
-export function pushFor(event: PushEvent): PushPayload {
+/** Conversation events link into `conversationId` (web/docs/message-links.md): a reply to its message, an ask
+ *  or approval to its card. Alert, inbox and quota links keep their own screens. */
+export function pushFor(event: PushEvent, conversationId = "main"): PushPayload {
+  const chat = conversationUrl(conversationId);
   switch (event.kind) {
     case "approval":
-      return { title: "Approval needed", body: `sushii-agent needs your approval to run ${event.tool}`, url: `/?approve=${encodeURIComponent(event.nonce)}`, tag: `approval:${event.nonce}`, requireInteraction: true };
+      return { title: "Approval needed", body: `sushii-agent needs your approval to run ${event.tool}`, url: withParam(chat, "approve", event.nonce), tag: `approval:${event.nonce}`, requireInteraction: true };
     case "ask":
       return event.askId
-        ? { title: "The agent asks", body: plainPushBody(event.question), url: `/?ask=${encodeURIComponent(event.askId)}`, tag: `ask:${event.askId}` }
-        : { title: "The agent asks", body: plainPushBody(event.question), url: "/chat", tag: "chat" };
+        ? { title: "The agent asks", body: plainPushBody(event.question), url: withParam(chat, "ask", event.askId), tag: `ask:${event.askId}` }
+        : { title: "The agent asks", body: plainPushBody(event.question), url: chat, tag: "chat" };
     case "auth":
-      return { title: TITLE, body: "Sign-in link ready", url: "/chat", tag: "auth" };
+      return { title: TITLE, body: "Sign-in link ready", url: chat, tag: "auth" };
     case "reply":
-      return { title: TITLE, body: plainPushBody(event.text) || "Sent a file", url: "/chat", tag: "chat", renotify: false };
+      return { title: TITLE, body: plainPushBody(event.text) || "Sent a file", url: messageUrl(conversationId, event.key), tag: "chat", renotify: false };
     case "proactive":
-      return { title: TITLE, body: plainPushBody(event.text) || "Sent a file", url: "/chat", tag: "chat" };
+      return { title: TITLE, body: plainPushBody(event.text) || "Sent a file", url: messageUrl(conversationId, event.key), tag: "chat" };
     case "inbox":
       return { title: TITLE, body: plainPushBody(event.text), url: `/inbox?item=${encodeURIComponent(`msg:${event.key}`)}`, tag: `msg:${event.key}` };
     case "alert": {
@@ -53,7 +56,7 @@ export function pushFor(event: PushEvent): PushPayload {
     case "alertRecovered":
       return { title: "Scheduled job working again", body: event.job, url: "/home", tag: `job:${event.job}`, silent: true };
     case "interrupted":
-      return { title: TITLE, body: "Turn interrupted", url: "/chat", tag: "chat" };
+      return { title: TITLE, body: "Turn interrupted", url: messageUrl(conversationId, event.message), tag: "chat" };
     case "agentNeedsYou":
       return { title: `${event.label} needs approval`, body: literalPushBody(event.description), url: agentUrl(event.conversationId, event.agentId), tag: agentTag(event.agentId, event.requestId), requireInteraction: true };
     case "agentResolved":
@@ -76,11 +79,13 @@ export const conversationUrl = (id: string, target: { message?: string; turn?: s
   const params = [...(target.message ? [`m=${encodeURIComponent(target.message)}`] : []), ...(target.turn ? [`turn=${encodeURIComponent(target.turn)}`] : [])];
   return params.length ? `${path}${path.includes("?") ? "&" : "?"}${params.join("&")}` : path;
 };
+/** A message id a link may carry; the same as the app's MESSAGE_REF_RE. */
+export const MESSAGE_REF_RE = /^(?:[0-9A-Za-z_-]{8,64}|s-?\d{1,15})$/;
+/** The message's own link, or the conversation's when the key can't be one. */
+const messageUrl = (conversationId: string, key: string | undefined) => conversationUrl(conversationId, key && MESSAGE_REF_RE.test(key) ? { message: key } : {});
+const withParam = (url: string, key: string, value: string) => `${url}${url.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(value)}`;
 /** Opens that agent from its conversation: in the side panel on desktop, as its own page on phones. */
-const agentUrl = (conversationId: string, agentId: string) => {
-  const url = conversationUrl(conversationId);
-  return `${url}${url.includes("?") ? "&" : "?"}agent=${encodeURIComponent(agentId)}`;
-};
+const agentUrl = (conversationId: string, agentId: string) => withParam(conversationUrl(conversationId), "agent", agentId);
 const agentTag = (agentId: string, requestId: string) => `agent:${agentId}:${requestId}`;
 
 /** Text shown as written, such as a command to approve: whitespace collapsed and cut, never markdown-stripped. */

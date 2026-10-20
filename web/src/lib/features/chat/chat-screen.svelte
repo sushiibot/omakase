@@ -2,7 +2,9 @@
 	import { Spinner } from '$lib/ui/spinner';
 	import { onDestroy, tick, untrack, type ComponentProps, type Snippet } from 'svelte';
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
+	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import Download from '@lucide/svelte/icons/download';
 	import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';
 	import FoldVertical from '@lucide/svelte/icons/fold-vertical';
@@ -20,6 +22,7 @@
 	import { Button } from '$lib/ui/button';
 	import * as Empty from '$lib/ui/empty';
 	import { measureClass } from '$lib/ui/page';
+	import { clock, dayLabel } from '$lib/ui/format/time';
 	import { cn } from '$lib/utils';
 	import type { LocationReply } from './location';
 	import type { PendingApproval } from './types';
@@ -32,6 +35,7 @@
 	import { modelName } from './render/usage';
 	import type { ChatUsage, MessageRef, ModelsResponse } from '$lib/core/realtime/events';
 	import type { ChatMessage, ChatSheet, FileRef, PhotoDraft } from './types';
+	import { linkRef, type Landing, type LinkTarget } from './links';
 
 	let {
 		messages,
@@ -86,9 +90,20 @@
 		updateReady = false,
 		canInstall = false,
 		announce = '',
+		focusMessage,
 		focusTurn,
 		focusAsk,
 		focusApproval,
+		messageHref,
+		landing = null,
+		detached = false,
+		hasNewer = false,
+		newerLoading = false,
+		newerError = false,
+		onopenlink,
+		onleavelink,
+		onloadnewer,
+		onjumplatest,
 		sheet,
 		contextBoundaryId,
 		viewer,
@@ -191,9 +206,27 @@
 		canInstall?: boolean;
 		/** Screen-reader text, set once per completed reply. */
 		announce?: string;
+		/** A message link's id (`?m=`, docs/message-links.md). */
+		focusMessage?: string;
 		focusTurn?: string;
 		focusAsk?: string;
 		focusApproval?: string;
+		/** A message's own link, from its stable key; without it messages have no Copy link. */
+		messageHref?: (key: string) => string;
+		/** Where the link landed. */
+		landing?: Landing | null;
+		/** Showing a window of earlier messages around a linked one, not the newest. */
+		detached?: boolean;
+		hasNewer?: boolean;
+		newerLoading?: boolean;
+		newerError?: boolean;
+		/** Opens the conversation at a link; `retry` after a failed load. */
+		onopenlink?: (target: LinkTarget, retry?: boolean) => void;
+		/** Back to the newest messages: no link in the URL, or "Jump to latest". */
+		onleavelink?: () => void;
+		onloadnewer?: () => Promise<void>;
+		/** After "Jump to latest": drops the link from the URL. */
+		onjumplatest?: () => void;
 		sheet?: ChatSheet;
 		contextBoundaryId?: string;
 		viewer?: FileRef;
@@ -262,109 +295,134 @@
 	function reviewRequest() {
 		if (activity?.request) focusRequest(activity.request);
 	}
-	let focusedRequest = $state<string | null>(null);
-	const requestedFocus = $derived(
-		focusAsk
-			? { kind: 'ask' as const, id: focusAsk }
-			: focusApproval
-				? { kind: 'approval' as const, id: focusApproval }
-				: focusTurn
-					? { kind: 'turn' as const, id: focusTurn }
-					: null
+	// ── Message links (docs/message-links.md) ──
+	const link = $derived<LinkTarget | null>(
+		focusMessage
+			? { message: focusMessage }
+			: focusTurn
+				? { turn: focusTurn }
+				: focusAsk
+					? { ask: focusAsk }
+					: focusApproval
+						? { approve: focusApproval }
+						: null
 	);
-	const linkedItem = $derived(requestedFocus?.kind === 'turn' ? 'reply' : 'request');
-	let requestSearchKey = $state<string | null>(null);
-	let requestSearch = $state<'idle' | 'loading' | 'missing' | 'error' | 'limited'>('idle');
-	let mounted = true;
-	onDestroy(() => (mounted = false));
-	const MAX_REQUEST_PAGES = 8;
-	const requestKey = (request: FocusTarget) => `${request.kind}:${request.id}`;
-	async function findRequest(request: FocusTarget, retry = false) {
-		const key = requestKey(request);
-		const current = () => mounted && requestedFocus && requestKey(requestedFocus) === key;
-		requestSearchKey = key;
-		requestSearch = 'loading';
-		for (let page = 0; current(); page++) {
-			await tick();
-			if (!current()) return;
-			if (focusRequest(request)) {
-				focusedRequest = key;
-				requestSearch = 'idle';
-				return;
-			}
-			if (olderError && !(retry && page === 0)) {
-				requestSearch = 'error';
-				return;
-			}
-			if (!hasOlder || !onloadolder) {
-				requestSearch = 'missing';
-				return;
-			}
-			if (page >= MAX_REQUEST_PAGES) {
-				requestSearch = 'limited';
-				return;
-			}
-			const oldestId = messages[0]?.id;
-			try {
-				await onloadolder();
-			} catch {
-				if (current()) requestSearch = 'error';
-				return;
-			}
-			await tick();
-			if (!current()) return;
-			if (olderError) {
-				requestSearch = 'error';
-				return;
-			}
-			// The requested card may have arrived within the same projected turn.
-			if (focusRequest(request)) {
-				focusedRequest = key;
-				requestSearch = 'idle';
-				return;
-			}
-			// Repeated history can prepend duplicates. Compare the stable oldest boundary, not array size.
-			if (messages[0]?.id === oldestId) {
-				requestSearch = hasOlder ? 'limited' : 'missing';
-				return;
-			}
-		}
-	}
+	const linkKey = $derived(link ? linkRef(link) : null);
 	$effect(() => {
-		const request = requestedFocus;
-		if (!request) {
-			focusedRequest = null;
-			requestSearchKey = null;
-			requestSearch = 'idle';
-			return;
-		}
-		const key = requestKey(request);
-		// A request can arrive after the initial history seek through hello/pending or the live stream.
-		// Observe hydration without restarting pagination or moving a request already focused once.
-		void messages;
-		void approvals;
-		if (history !== 'ready' || !scroller || olderLoading || key === focusedRequest) return;
-		if (key === requestSearchKey) {
-			if (requestSearch !== 'loading')
-				void tick().then(() => {
-					if (
-						mounted &&
-						requestedFocus &&
-						requestKey(requestedFocus) === key &&
-						focusedRequest !== key &&
-						focusRequest(request)
-					) {
-						focusedRequest = key;
-						requestSearch = 'idle';
-					}
-				});
-			return;
-		}
-		untrack(() => void findRequest(request));
+		void linkKey;
+		untrack(() => {
+			if (link) onopenlink?.(link);
+			else onleavelink?.();
+		});
 	});
-	function retryRequestSearch() {
-		if (requestedFocus && !olderLoading) void findRequest(requestedFocus, true);
+
+	/** The landing the screen already moved to. */
+	let movedTo = 0;
+	let linkNote = $state('');
+	let landed = $state<{ id: string; mode: 'tint' | 'fade' | 'outline' } | null>(null);
+	let unland: () => void = () => {};
+	const landedAt = $derived(landing?.at ? Date.parse(landing.at) : NaN);
+
+	$effect(() => {
+		const l = landing;
+		// The row can render a frame after the landing, so look again when the messages change.
+		void displayedMessages;
+		if (!l || l.n === movedTo || !scroller || (l.state !== 'found' && l.state !== 'missing'))
+			return;
+		untrack(() => void tick().then(() => moveTo(l)));
+	});
+
+	function moveTo(l: Landing) {
+		if (!mounted || l.n === movedTo || !scroller || landing?.n !== l.n) return;
+		if (!l.messageId) {
+			// Gone, with nothing nearer than the newest messages.
+			movedTo = l.n;
+			toBottom();
+			return;
+		}
+		const row = scroller.querySelector<HTMLElement>(
+			`[data-message-id="${CSS.escape(l.messageId)}"]`
+		);
+		const card = l.askId
+			? scroller.querySelector<HTMLElement>(`[data-ask-id="${CSS.escape(l.askId)}"]`)
+			: l.nonce
+				? scroller.querySelector<HTMLElement>(`[data-approval-id="${CSS.escape(l.nonce)}"]`)
+				: null;
+		const target = card ?? row;
+		if (!target) return;
+		movedTo = l.n;
+		target.scrollIntoView({ block: 'center', behavior: 'instant' });
+		// The message or the card itself, never a choice: Enter activates on keydown, so a held Enter would decide.
+		target.focus({ preventScroll: true });
+		if (l.state !== 'found') return;
+		highlight(row?.dataset.messageId ?? l.messageId);
+		const t = l.at ? Date.parse(l.at) : NaN;
+		linkNote = '';
+		queueMicrotask(
+			() =>
+				(linkNote = Number.isNaN(t)
+					? 'Showing the linked message'
+					: `Showing a message from ${dayLabel(t, Date.now())}, ${clock(t)}`)
+		);
 	}
+
+	/** A tint that fades after about 2s; under reduced motion an outline until the next interaction. */
+	function highlight(id: string) {
+		unland();
+		if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+			landed = { id, mode: 'outline' };
+			const events = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+			const el = scroller;
+			let frame = 0;
+			const clear = () => {
+				cancelAnimationFrame(frame);
+				for (const e of events) removeEventListener(e, clear, true);
+				el?.removeEventListener('scroll', clear);
+				if (landed?.id === id) landed = null;
+			};
+			// Listen from the frame after the landing's own scroll.
+			frame = requestAnimationFrame(() => {
+				frame = requestAnimationFrame(() => {
+					for (const e of events) addEventListener(e, clear, { capture: true, passive: true });
+					el?.addEventListener('scroll', clear, { passive: true });
+				});
+			});
+			unland = clear;
+			return;
+		}
+		landed = { id, mode: 'tint' };
+		const fade = setTimeout(() => (landed = { id, mode: 'fade' }), 1600);
+		const end = setTimeout(() => (landed = null), 2000);
+		unland = () => {
+			clearTimeout(fade);
+			clearTimeout(end);
+			landed = null;
+		};
+	}
+
+	function jumpToLatest() {
+		unland();
+		linkNote = '';
+		onleavelink?.();
+		onjumplatest?.();
+		void tick().then(toBottom);
+	}
+
+	let mounted = true;
+	onDestroy(() => {
+		mounted = false;
+		unland();
+	});
+
+	let linkSlow = $state(false);
+	$effect(() => {
+		if (landing?.state !== 'loading') {
+			linkSlow = false;
+			return;
+		}
+		const t = setTimeout(() => (linkSlow = true), 300);
+		return () => clearTimeout(t);
+	});
 
 	// svelte-ignore state_referenced_locally
 	let newMessages = $state(initialNewMessages);
@@ -417,8 +475,13 @@
 		if (sig === lastTail) return;
 		const first = !lastTail;
 		lastTail = sig;
+		// A window's tail moves as newer pages load, and again as it joins the live chat.
+		const wasDetached = tailDetached;
+		tailDetached = detached;
+		if (detached || wasDetached) return;
 		if (!first && scroller && fromBottom(scroller) > NEAR_BOTTOM_PX) newMessages = true;
 	});
+	let tailDetached = false;
 
 	function onScroll() {
 		if (scroller && fromBottom(scroller) <= NEAR_BOTTOM_PX) newMessages = false;
@@ -449,7 +512,7 @@
 	// The observer fires only when visibility changes, so keep loading while a short page leaves the
 	// sentinel on screen.
 	async function fillOlder() {
-		if (filling || (requestedFocus && focusedRequest !== requestKey(requestedFocus))) return;
+		if (filling || landing?.state === 'loading') return;
 		filling = true;
 		try {
 			// Bounded, in case a server hands back a cursor that never moves.
@@ -475,6 +538,83 @@
 		io.observe(el);
 		return () => io.disconnect();
 	});
+
+	const NEWER_MARGIN_PX = 200;
+	let newer = $state<HTMLElement | null>(null);
+	let fillingNewer = false;
+
+	/** The first row at the top of the view, to hold in place while rows go in below it. */
+	function topRow() {
+		if (!scroller) return null;
+		const top = scroller.getBoundingClientRect().top;
+		for (const row of scroller.querySelectorAll<HTMLElement>('[data-message-id]')) {
+			const box = row.getBoundingClientRect();
+			if (box.bottom > top)
+				return { id: row.dataset.messageId!, key: row.dataset.messageKey, top: box.top };
+		}
+		return null;
+	}
+
+	/** The list is column-reverse, so rows added below would push the view up; hold the top row still. */
+	async function loadNewer() {
+		if (!onloadnewer || !scroller) return;
+		const anchor = topRow();
+		await onloadnewer();
+		await tick();
+		if (!anchor || !scroller) return;
+		const row =
+			scroller.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(anchor.id)}"]`) ??
+			(anchor.key
+				? scroller.querySelector<HTMLElement>(`[data-message-key="${CSS.escape(anchor.key)}"]`)
+				: null);
+		if (row) scroller.scrollTop += row.getBoundingClientRect().top - anchor.top;
+	}
+
+	function newerInView() {
+		if (!newer || !scroller) return false;
+		const root = scroller.getBoundingClientRect();
+		const r = newer.getBoundingClientRect();
+		return r.top <= root.bottom + NEWER_MARGIN_PX && r.bottom >= root.top;
+	}
+
+	async function fillNewer() {
+		if (fillingNewer || landing?.state === 'loading') return;
+		fillingNewer = true;
+		try {
+			for (let n = 0; n < 20; n++) {
+				if (!detached || !hasNewer || newerError || newerLoading || !newerInView()) break;
+				await loadNewer();
+			}
+		} finally {
+			fillingNewer = false;
+		}
+	}
+
+	$effect(() => {
+		const el = newer;
+		if (!el || !scroller) return;
+		const io = new IntersectionObserver(
+			(entries) => {
+				if (entries.some((e) => e.isIntersecting)) void fillNewer();
+			},
+			{ root: scroller, rootMargin: `0px 0px ${NEWER_MARGIN_PX}px 0px` }
+		);
+		io.observe(el);
+		return () => io.disconnect();
+	});
+
+	async function copyLink(message: ChatMessage) {
+		if (!message.key || !messageHref) return;
+		copyNote = '';
+		try {
+			if (!navigator.clipboard) throw new Error('no clipboard');
+			await navigator.clipboard.writeText(location.origin + messageHref(message.key));
+			copyNote = 'Link copied';
+			copied = `link:${message.id}`;
+		} catch {
+			copyNote = "Couldn't copy";
+		}
+	}
 
 	async function copyMessage(message: ChatMessage) {
 		const text = messagePlainText(message, location.origin);
@@ -507,7 +647,9 @@
 
 	function send() {
 		onsend?.();
-		toBottom();
+		// The message goes to the newest messages, so a window of earlier ones gives way to them.
+		if (detached) jumpToLatest();
+		else toBottom();
 	}
 
 	let compacting = $state(false);
@@ -683,26 +825,22 @@
 {/snippet}
 
 {#snippet banner()}
-	{#if requestSearch !== 'idle'}
+	{#if (landing?.state === 'loading' && linkSlow) || landing?.state === 'error' || landing?.state === 'missing'}
 		<div
 			class="flex shrink-0 items-center gap-2 border-b px-4 py-2 text-sm"
 			role="status"
-			data-request-search
+			data-link-status={landing.state}
 		>
 			<p class="min-w-0 flex-1">
-				{requestSearch === 'loading'
-					? `Finding the linked ${linkedItem} in earlier messages…`
-					: requestSearch === 'error'
-						? `Couldn't load the linked ${linkedItem}. Try again.`
-						: requestSearch === 'limited'
-							? `The linked ${linkedItem} is farther back, or is no longer available.`
-							: `The linked ${linkedItem} is no longer in this conversation.`}
+				{landing.state === 'loading'
+					? 'Loading the linked message…'
+					: landing.state === 'error'
+						? "Couldn't load the linked message. Try again."
+						: 'That message is no longer available.'}
 			</p>
-			{#if requestSearch === 'error' || requestSearch === 'limited'}<Button
+			{#if landing.state === 'error'}<Button
 					variant="outline"
-					disabled={olderLoading}
-					onclick={retryRequestSearch}
-					>{requestSearch === 'error' ? 'Retry' : 'Keep looking'}</Button
+					onclick={() => link && onopenlink?.(link, true)}><RotateCcw />Retry</Button
 				>{/if}
 		</div>
 	{/if}
@@ -716,7 +854,22 @@
 
 {#snippet footer()}
 	{#if !readOnly && !voiceActive}<ActivityLine {activity} onreview={reviewRequest} />{/if}
-	{#if newMessages}
+	{#if detached}
+		<div class="pointer-events-none absolute inset-x-0 bottom-full flex justify-center pb-3">
+			<div
+				class="pointer-events-auto flex items-center gap-1 rounded-full border bg-background py-1 pr-1 pl-4 text-sm shadow-md dark:bg-card"
+				data-detached-bar
+			>
+				<span class="text-muted-foreground"
+					>Earlier messages{#if !Number.isNaN(landedAt)}
+						· {dayLabel(landedAt, now)}{/if}</span
+				>
+				<Button variant="ghost" class="rounded-full px-3" onclick={jumpToLatest}
+					><ArrowDown />Jump to latest</Button
+				>
+			</div>
+		</div>
+	{:else if newMessages}
 		<div class="pointer-events-none absolute inset-x-0 bottom-full flex justify-center pb-3">
 			<Button
 				variant="outline"
@@ -842,6 +995,8 @@
 				{readingState}
 				{readingError}
 				oncopy={copyMessage}
+				oncopylink={messageHref ? copyLink : undefined}
+				{landed}
 				{onbranch}
 				{onstartthread}
 				{onkeephere}
@@ -854,11 +1009,27 @@
 				{onapprove}
 				{ondeny}
 			/>
+			{#if detached && (hasNewer || newerError)}
+				<div bind:this={newer} class="flex justify-center px-4 pb-4">
+					{#if newerError}
+						<p class="flex items-center gap-3 text-sm text-muted-foreground">
+							Couldn't load newer messages.
+							<Button variant="outline" onclick={loadNewer}><RotateCcw />Retry</Button>
+						</p>
+					{:else}
+						<Button variant="ghost" disabled={newerLoading} onclick={loadNewer}>
+							{#if newerLoading}<Spinner decorative />Loading newer messages…{:else}<ChevronDown
+								/>Show newer messages{/if}
+						</Button>
+					{/if}
+				</div>
+			{/if}
 		</div>
 		{@render voiceCaptions?.()}
 	{/if}
 	<p role="status" class="sr-only">{announce}</p>
 	<p role="status" class="sr-only">{copyNote}</p>
+	<p role="status" class="sr-only">{linkNote}</p>
 </Screen>
 
 <RoutedSheet

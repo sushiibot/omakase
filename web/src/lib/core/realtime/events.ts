@@ -585,6 +585,13 @@ export interface HistoryResponse {
 	items: WebHistoryItem[];
 	/** Cursor for the next older page; null at the start of the chat. */
 	before: string | null;
+	/** `around` and `after` pages: cursor for the next newer page; null once the page reaches the newest
+	 *  message. Absent on the newest-first pages, which always reach it. */
+	after?: string | null;
+	/** `around` pages: the id of the item the message id resolved to, or null. */
+	target?: string | null;
+	/** `around` pages: the message is gone or never existed; the page is the nearest one instead. */
+	missing?: boolean;
 }
 
 export interface PostMessageBody {

@@ -12,6 +12,7 @@
 	import { page } from '$app/state';
 	import { backTo } from '$lib/core/nav/back';
 	import { leaveSheet, routedSheet } from '$lib/core/nav/sheet';
+	import { leaveMessageLink } from '$lib/core/nav/message-link';
 	import { offlineBrowsing } from '$lib/core/storage/offline.svelte';
 	import { pwa } from '$lib/core/pwa/pwa.svelte';
 	import {
@@ -24,6 +25,8 @@
 		channelActivity,
 		type ChatSheet,
 		type FileRef,
+		linkProps,
+		linkTarget,
 		liveBlocksStore
 	} from '$lib/features/chat';
 	import {
@@ -236,9 +239,7 @@
 			chat={store
 				? {
 						headerActions: taskActions,
-						focusTurn: page.url.searchParams.get('turn') ?? undefined,
-						focusAsk: page.url.searchParams.get('ask') ?? undefined,
-						focusApproval: page.url.searchParams.get('approve') ?? undefined,
+						...linkProps(store, linkTarget(page.url.searchParams), leaveMessageLink),
 						approvals: store.approvals,
 						messages: voice.project(threadMessages(detail!, store.messages)),
 						dictationTranscript:

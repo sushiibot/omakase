@@ -60,6 +60,8 @@ export interface ChatMessage {
 	turnId?: string;
 	/** Stable server key used when branching from a reply. */
 	sourceId?: string;
+	/** The id a link to this message lands on (docs/message-links.md); none for live-only rows. */
+	key?: string;
 	id: string;
 	role: 'user' | 'assistant';
 	parts: MessagePart[];

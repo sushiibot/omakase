@@ -17,7 +17,7 @@ import {
   type PostAskResponse,
   type PostMessageResponse,
 } from "./events.ts";
-import { historyPage, parseCursor as parseHistoryCursor } from "./history.ts";
+import { AROUND_SIDE, HISTORY_REF_RE, historyAfter, historyAround, historyPage, parseCursor as parseHistoryCursor } from "./history.ts";
 import { forbidden, isJson, json, readJson } from "./http.ts";
 import type { WebInboundStore } from "./inbound.ts";
 import type { Presence } from "./presence.ts";
@@ -232,13 +232,28 @@ export function createChatRoutes(deps: ChatRouteDeps): ChatRoutes {
   function getHistory(req: Request): Response {
     const params = new URL(req.url).searchParams;
     const rawBefore = params.get("before");
+    const rawAfter = params.get("after");
+    const around = params.get("around");
     const rawLimit = params.get("limit");
-    const limit = rawLimit === null ? HISTORY_DEFAULT_LIMIT : Number(rawLimit);
+    if ([rawBefore, rawAfter, around].filter((p) => p !== null).length > 1) return json({ error: "use one of before, after and around" }, 400);
+    // An around page takes `limit` as its total: the message and half of the rest on each side.
+    const limit = rawLimit === null ? (around === null ? HISTORY_DEFAULT_LIMIT : AROUND_SIDE * 2) : Number(rawLimit);
     if (!Number.isInteger(limit) || limit < 1 || limit > HISTORY_LIMIT_MAX) return json({ error: "invalid limit" }, 400);
-    // Imported rows have seqs at or below zero.
-    const before = rawBefore === null ? undefined : parseHistoryCursor(rawBefore);
-    if (before === null) return json({ error: "invalid cursor" }, 400);
-    const page = historyPage(chatLog, { limit, ...(before ? { before } : {}) }, { maxBytes: historyMax, ...(deps.uploads ? { uploads: deps.uploads } : {}) });
+    const render = { maxBytes: historyMax, ...(deps.uploads ? { uploads: deps.uploads } : {}) };
+    let page;
+    if (around !== null) {
+      if (!HISTORY_REF_RE.test(around)) return json({ error: "invalid message id" }, 400);
+      page = historyAround(chatLog, { id: around, side: Math.max(1, Math.floor(limit / 2)) }, render);
+    } else if (rawAfter !== null) {
+      const after = parseHistoryCursor(rawAfter);
+      if (after === null) return json({ error: "invalid cursor" }, 400);
+      page = historyAfter(chatLog, { after, limit }, render);
+    } else {
+      // Imported rows have seqs at or below zero.
+      const before = rawBefore === null ? undefined : parseHistoryCursor(rawBefore);
+      if (before === null) return json({ error: "invalid cursor" }, 400);
+      page = historyPage(chatLog, { limit, ...(before ? { before } : {}) }, render);
+    }
     return new Response(JSON.stringify(page), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
   }
 

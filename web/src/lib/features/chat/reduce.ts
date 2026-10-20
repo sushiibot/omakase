@@ -109,14 +109,17 @@ export type ChatItem =
 				| 'approved-elsewhere'
 				| 'denied-elsewhere';
 	  }
-	| ({ kind: 'divider'; id: string; divider: SessionBoundary['kind'] } & Omit<
-			SessionBoundary,
-			'kind'
-	  >)
+	| ({
+			kind: 'divider';
+			id: string;
+			divider: SessionBoundary['kind'];
+			/** `s<seq>` for a live boundary; history ones carry theirs in `id`. */
+			key?: string;
+	  } & Omit<SessionBoundary, 'kind'>)
 	| { kind: 'line'; id: string; text: string }
 	| { kind: 'auth'; id: string; url: string; instructions: string }
-	/** A scheduled job's alert, shown as a system line. */
-	| { kind: 'alert'; id: string; alert: JobAlert; at: string };
+	/** A scheduled job's alert, shown as a system line. `key` is its outbox id. */
+	| { kind: 'alert'; id: string; alert: JobAlert; at: string; key?: string };
 
 export interface TrayItem {
 	nonce: string;
@@ -704,6 +707,7 @@ export function applyEvent(s: ChatState, ev: ChatEnvelope, now = Date.now()): Ef
 			s.items.push({
 				kind: 'divider',
 				id: uid(s, 'divider'),
+				...(ev.seq !== undefined ? { key: `s${ev.seq}` } : {}),
 				divider: ev.data.kind,
 				summary: ev.data.summary,
 				summaryTruncated: ev.data.summaryTruncated,
@@ -724,6 +728,7 @@ export function applyEvent(s: ChatState, ev: ChatEnvelope, now = Date.now()): Ef
 			s.items.push({
 				kind: 'alert',
 				id: uid(s, 'alert'),
+				key: ev.data.key,
 				alert: ev.data.alert,
 				at: new Date(now).toISOString()
 			});
@@ -805,7 +810,7 @@ function fromHistory(s: ChatState, h: WebHistoryItem): ChatItem | null {
 		case 'alert':
 			if (s.keys.has(`l:${h.outboxId}`)) return null;
 			s.keys.add(`l:${h.outboxId}`);
-			return { kind: 'alert', id: `h:${h.id}`, alert: h.alert, at: h.at };
+			return { kind: 'alert', id: `h:${h.id}`, key: h.outboxId, alert: h.alert, at: h.at };
 		case 'approval':
 			if (s.keys.has(`p:${h.nonce}`)) return null;
 			s.keys.add(`p:${h.nonce}`);
@@ -882,6 +887,68 @@ export function mergeHistory(s: ChatState, items: WebHistoryItem[]): Effect[] {
 	}
 	s.items = [...mapped, ...s.items.filter((i) => !moved.has(i))];
 	return fx;
+}
+
+/**
+ * The id a link to this item carries (docs/message-links.md): a reply's outbox id, an owner message's
+ * client id, an ask's id, or `s<seq>` for a stored item with no key. Undefined for live-only rows.
+ */
+export function messageKey(item: ChatItem): string | undefined {
+	const stored = /^h:(-?\d{1,15})$/.exec(item.id);
+	const bySeq = stored ? `s${stored[1]}` : undefined;
+	switch (item.kind) {
+		case 'user':
+			return item.clientId ?? bySeq;
+		case 'assistant':
+		case 'divider':
+		case 'alert':
+			return item.key ?? bySeq;
+		case 'ask':
+			return item.askId;
+		default:
+			return undefined;
+	}
+}
+
+/** The dedupe keys an item holds in `ChatState.keys`. */
+function dedupeKeys(item: ChatItem): string[] {
+	if (item.kind === 'user') return item.clientId ? [`u:${item.clientId}`] : [];
+	if (item.kind === 'assistant') return item.key ? [`r:${item.key}`] : [];
+	if (item.kind === 'ask') return [`a:${item.askId}`];
+	if (item.kind === 'approval') return [`p:${item.nonce}`];
+	if (item.kind === 'alert') return item.key ? [`l:${item.key}`] : [];
+	return [];
+}
+
+/** One oldest-first page of newer history after the items held, as a detached window loads forward. */
+export function appendHistory(s: ChatState, items: WebHistoryItem[]) {
+	for (const h of items) {
+		const item = fromHistory(s, h);
+		if (item) s.items.push(item);
+	}
+}
+
+/** The same message, though one copy may be live and the other from history. */
+export const isSameItem = (a: ChatItem, b: ChatItem) => {
+	if (a.id === b.id) return true;
+	if (a.kind === 'approval' && b.kind === 'approval') return a.nonce === b.nonce;
+	const key = messageKey(a);
+	return !!key && a.kind === b.kind && key === messageKey(b);
+};
+
+/**
+ * Joins a detached window that has reached the newest page onto the live state: the window's items
+ * older than anything live holds go in front, so the reader's place survives the switch. Live items
+ * stay as they are, with their streaming state, local sends and anchors. Without any overlap the
+ * window can't be placed, so it goes in front only when nothing is live yet.
+ */
+export function joinWindow(live: ChatState, window: ChatState): number {
+	const overlap = window.items.findIndex((w) => live.items.some((l) => isSameItem(l, w)));
+	const older =
+		overlap >= 0 ? window.items.slice(0, overlap) : live.items.length ? [] : window.items;
+	for (const item of older) for (const key of dedupeKeys(item)) live.keys.add(key);
+	live.items = [...older, ...live.items];
+	return older.length;
 }
 
 /** Takes an approval off the tray without an event, when the bot says it is no longer pending. */

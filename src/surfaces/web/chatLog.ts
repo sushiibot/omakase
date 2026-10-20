@@ -269,6 +269,31 @@ export class SqliteChatLog implements ChatLog {
     return (this.db.query(sql).all(...params) as (Row & { ord: number })[]).map((r) => ({ ...(toStored(r) as StoredEvent<T>), order: r.ord }));
   }
 
+  /** The oldest `limit` events of `types` in history order above the `after` position, oldest first. */
+  pageAfter<T extends DurableEventType>(types: readonly T[], opts: { after: HistoryPosition; limit: number }): (StoredEvent<T> & { order: number })[] {
+    const sql =
+      `SELECT seq, type, key, data, created_at, coalesce(sort_seq, seq) AS ord FROM web_events INDEXED BY idx_web_events_conversation_order WHERE ${this.scope} AND type IN (${types.map(() => "?").join(",")})` +
+      " AND coalesce(sort_seq, seq) >= ? AND (coalesce(sort_seq, seq), seq) > (?, ?) ORDER BY coalesce(sort_seq, seq) ASC, seq ASC LIMIT ?";
+    const rows = this.db.query(sql).all(...types, opts.after.order, opts.after.order, opts.after.seq, opts.limit) as (Row & { ord: number })[];
+    return rows.map((r) => ({ ...(toStored(r) as StoredEvent<T>), order: r.ord }));
+  }
+
+  /** The row at `seq` with its history position, when it is one of `types`. */
+  positioned<T extends DurableEventType>(seq: number, types: readonly T[]): (StoredEvent<T> & { order: number }) | null {
+    const row = this.db
+      .query(`SELECT seq, type, key, data, created_at, coalesce(sort_seq, seq) AS ord FROM web_events WHERE ${this.scope} AND seq = ? AND type IN (${types.map(() => "?").join(",")})`)
+      .get(seq, ...types) as (Row & { ord: number }) | null;
+    return row ? { ...(toStored(row) as StoredEvent<T>), order: row.ord } : null;
+  }
+
+  /** The seq of the newest reply or proactive message of `turnId`, or null. */
+  latestReplyOf(turnId: string): number | null {
+    const row = this.db
+      .query(`SELECT seq FROM web_events WHERE ${this.scope} AND type IN ('reply','proactive') AND json_extract(data, '$.turnId') = ? ORDER BY seq DESC LIMIT 1`)
+      .get(turnId) as { seq: number } | null;
+    return row?.seq ?? null;
+  }
+
   list<T extends DurableEventType>(types: readonly T[], opts: { keys?: readonly string[]; since?: number } = {}): StoredEvent<T>[] {
     if (!types.length || (opts.keys && !opts.keys.length)) return [];
     const params: (string | number)[] = [...types];

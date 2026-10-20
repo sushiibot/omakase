@@ -44,7 +44,8 @@
 		onrateitem?: (item: HomeItem, key: string, rating: HomeItemRating | null) => void;
 		ratings?: Readonly<Record<string, HomeItemRating | null>>;
 		onopenrun?: (runId: string) => void;
-		onopenchat?: () => void;
+		/** Opens the chat, at a running turn when `item` is one. */
+		onopenchat?: (item?: HomeItem) => void;
 		onaskagent?: (item: HomeItem) => void;
 	} = $props();
 

@@ -24,13 +24,18 @@ import {
 } from '$lib/core/storage/outbox';
 import { photoName, PhotoError, preparePhoto } from './photo';
 import { toMessages } from './project';
+import { linkRef, type Landing, type LinkTarget } from './links';
 import {
 	addLocalSend,
 	addPlaceholder,
+	appendHistory,
 	applyEvent,
 	createState,
 	dropApproval,
+	isSameItem,
+	joinWindow,
 	markAsk,
+	messageKey,
 	mergeHistory,
 	previewHistory,
 	openTurns,
@@ -45,6 +50,8 @@ import type { TransportState } from '$lib/core/realtime/transport';
 import { ulid } from '$lib/core/storage/ulid';
 
 const HISTORY_PAGE = 40;
+/** An around page: the linked message and about 25 items either side. */
+const AROUND_PAGE = 50;
 const TOAST_MS = 4000;
 const TIMEOUT_COLLAPSE_MS = 4000;
 const SEEN_DEBOUNCE_MS = 1000;
@@ -124,11 +131,28 @@ export class ChatStore {
 	draftRef = $state.raw<DraftRef | null>(null);
 	/** Main is on screen. `seen` suppresses pushes, so it must only go out while the reader can see the chat. */
 	viewing = $state(false);
+	/** Showing a window of history opened around a linked message, not the live newest messages. */
+	detached = $state(false);
+	/** The detached window ends before the newest message. */
+	hasNewer = $state(false);
+	newerLoading = $state(false);
+	newerError = $state(false);
+	/** The last conversation link and where it landed. */
+	landing = $state.raw<Landing | null>(null);
 
 	openTurns = $derived(new Map(this.#openTurnList().map((t) => [t.turnId ?? t.id, t] as const)));
 	running = $derived(this.openTurns.size > 0);
 
 	#before: string | null = null;
+	/** A window opened around a linked message. Live events keep folding into `#s`; the window
+	 *  shows instead of it until it pages up to the newest message and joins it, or the reader leaves. */
+	#w: ChatState | null = null;
+	#wBefore: string | null = null;
+	#wAfter: string | null = null;
+	#link: LinkTarget | null = null;
+	#landings = 0;
+	#liveLoaded: Promise<void>;
+	#liveDone: () => void = () => {};
 	#buffer: ChatEnvelope[] | null = [];
 	#pending = new Map<string, OutboxEntry>();
 	/** Each send in flight, so a delete can wait for it to finish before deciding what to withdraw. */
@@ -164,6 +188,7 @@ export class ChatStore {
 		this.#outbox = deps.outbox ?? outbox;
 		this.#drafts = deps.drafts ?? drafts;
 		this.#greeted = new Promise((r) => (this.#greet = r));
+		this.#liveLoaded = new Promise((r) => (this.#liveDone = r));
 		this.#initialHistory = deps.initialHistory;
 		if (this.#initialHistory) {
 			this.history = 'ready';
@@ -303,6 +328,12 @@ export class ChatStore {
 	#applyAll(queue: readonly ChatEnvelope[]) {
 		const fx: Effect[] = [];
 		for (const ev of queue) fx.push(...applyEvent(this.#s, ev));
+		// A window shows its own copies of asks and approvals; answers settle them there too.
+		const w = this.#w;
+		if (w)
+			for (const ev of queue)
+				if (ev.type === 'ask_resolved' || ev.type === 'approval_resolved')
+					applyEvent(w, { type: ev.type, data: ev.data } as ChatEnvelope);
 		this.#commit();
 		for (const e of fx) this.#effect(e);
 		this.#scheduleSeen();
@@ -310,14 +341,19 @@ export class ChatStore {
 
 	#commit() {
 		const s = this.#s;
+		const w = this.#w;
 		this.items = [...s.items];
 		this.messages = toMessages(
-			this.#initialHistory ? previewHistory(s, this.#initialHistory) : s.items,
+			w ? w.items : this.#initialHistory ? previewHistory(s, this.#initialHistory) : s.items,
 			{
 				stopping: s.stopping,
-				historyGap: this.history === 'error' || this.olderError
+				historyGap: w ? this.olderError : this.history === 'error' || this.olderError
 			}
 		);
+		this.detached = !!w;
+		this.hasOlder = (w ? this.#wBefore : this.#before) !== null;
+		this.hasNewer = !!w && this.#wAfter !== null;
+		this.#relocate();
 		this.approvals = s.approvals.map((a) => ({ nonce: a.nonce, view: a.view }));
 		this.timedOut = s.timedOut;
 		this.cursor = s.cursor;
@@ -366,6 +402,8 @@ export class ChatStore {
 			case 'reload':
 				this.reset = true;
 				setTimeout(() => (this.reset = false), 10_000);
+				// History changed under the window (a rewind, a reset): show the reloaded chat instead.
+				this.#w = null;
 				this.#buffer = [];
 				void clearResponses().then(() => this.#loadHistory());
 				break;
@@ -409,7 +447,6 @@ export class ChatStore {
 			this.#offlineHistory = !!r.cached;
 			fx.push(...mergeHistory(this.#s, r.page.items));
 			this.#before = r.page.before;
-			this.hasOlder = r.page.before !== null;
 			this.history = 'ready';
 		} else {
 			this.history = 'error';
@@ -418,25 +455,168 @@ export class ChatStore {
 		const buffered = this.#buffer ?? [];
 		this.#buffer = null;
 		this.#applyAll(buffered);
+		this.#liveDone();
 		this.#flushOutbox(this.workspace === 'online');
 	}
 
+	/** One older page, of the window while one shows, else of the live chat. */
 	async loadOlder() {
-		if (this.olderLoading || !this.#before) return;
+		const w = this.#w;
+		const before = w ? this.#wBefore : this.#before;
+		if (this.olderLoading || !before) return;
 		this.olderLoading = true;
 		this.olderError = false;
-		const r = await this.#api.history({ before: this.#before, limit: HISTORY_PAGE });
+		const r = await this.#api.history({ before, limit: HISTORY_PAGE });
 		this.olderLoading = false;
+		// The reader left or joined the window meanwhile: this page belongs to neither.
+		if (w !== this.#w) return this.#commit();
 		if (!r.ok) {
 			this.olderError = true;
 			this.#commit();
 			return;
 		}
+		if (w) {
+			mergeHistory(w, r.page.items);
+			this.#wBefore = r.page.before;
+			this.#commit();
+			return;
+		}
 		const fx = mergeHistory(this.#s, r.page.items);
 		this.#before = r.page.before;
-		this.hasOlder = r.page.before !== null;
 		this.#commit();
 		for (const e of fx) this.#effect(e);
+	}
+
+	/** One newer page of the window; reaching the newest message joins it to the live chat. */
+	async loadNewer() {
+		const w = this.#w;
+		const after = this.#wAfter;
+		if (!w || !after || this.newerLoading) return;
+		this.newerLoading = true;
+		this.newerError = false;
+		const r = await this.#api.history({ after, limit: HISTORY_PAGE });
+		this.newerLoading = false;
+		if (w !== this.#w) return this.#commit();
+		if (!r.ok) {
+			this.newerError = true;
+			this.#commit();
+			return;
+		}
+		appendHistory(w, r.page.items);
+		this.#wAfter = r.page.after ?? null;
+		if (this.#wAfter === null) await this.#join(w);
+		this.#commit();
+	}
+
+	/** The window reached the newest message: it joins the live chat, which takes over from here. */
+	async #join(w: ChatState) {
+		await this.#liveLoaded;
+		if (this.#w !== w) return;
+		if (joinWindow(this.#s, w) > 0) this.#before = this.#wBefore;
+		this.#w = null;
+	}
+
+	/** Back to the live newest messages, as after "Jump to latest" or a visit with no link. */
+	leaveLink() {
+		this.#link = null;
+		this.#landings++;
+		this.landing = null;
+		this.newerError = false;
+		if (!this.#w) return;
+		this.#w = null;
+		this.olderError = false;
+		this.#commit();
+	}
+
+	/**
+	 * Opens the conversation at a linked message: in place when the chat on screen already holds it,
+	 * else in a window loaded around it. Opening the link it already landed on does nothing, so a
+	 * screen that mounts again keeps its place.
+	 */
+	async openLink(target: LinkTarget, retry = false) {
+		const ref = linkRef(target);
+		if (!retry && this.landing?.ref === ref && this.landing.state !== 'error') return;
+		const n = ++this.#landings;
+		this.#link = target;
+		this.landing = { ref, n, state: 'loading' };
+		const held = this.#find(this.#w ?? this.#s, target);
+		if (held) {
+			this.landing = this.#landed(n, ref, held, 'found');
+			return;
+		}
+		const id = target.message ?? target.turn ?? target.ask ?? target.approve ?? '';
+		const r = await this.#api.history({ around: id, limit: AROUND_PAGE });
+		if (n !== this.#landings) return;
+		if (!r.ok) {
+			this.landing = { ref, n, state: 'error' };
+			return;
+		}
+		const page = r.page;
+		const w = createState();
+		w.mine = this.#s.mine;
+		mergeHistory(w, page.items);
+		const wanted =
+			page.target != null ? w.items.find((i) => i.id === `h:${page.target}`) : undefined;
+		// A missing message lands on the nearest one: the first stored after where it was.
+		const pivot = /^s(-?\d{1,15})$/.exec(id);
+		const nearest =
+			!wanted && pivot && page.after !== null
+				? (w.items.find((i) => Number(/^h:(-?\d+)$/.exec(i.id)?.[1] ?? NaN) > Number(pivot[1])) ??
+					w.items.at(-1))
+				: undefined;
+		const shownAt = (item: ChatItem | undefined) =>
+			item && page.items.find((h) => `h:${h.id}` === item.id)?.at;
+		this.#w = w;
+		this.#wBefore = page.before;
+		this.#wAfter = page.after ?? null;
+		this.olderError = false;
+		this.newerError = false;
+		if (this.#wAfter === null) await this.#join(w);
+		if (n !== this.#landings) return;
+		const shown = this.#w ?? this.#s;
+		const pick = (item: ChatItem | undefined) =>
+			item && shown.items.find((i) => i === item || isSameItem(i, item));
+		// Live-only rows, such as a running turn or a message just sent, aren't stored yet.
+		const item = pick(wanted) ?? this.#find(shown, target);
+		if (item) this.landing = this.#landed(n, ref, item, 'found', shownAt(wanted));
+		else {
+			const near = pick(nearest);
+			this.landing = {
+				...(near ? this.#landed(n, ref, near, 'missing', shownAt(nearest)) : { ref, n }),
+				state: 'missing'
+			};
+		}
+		this.#commit();
+	}
+
+	/** A missing card may still arrive live, as an ask the stream hasn't delivered yet. */
+	#relocate() {
+		const link = this.#link;
+		const landing = this.landing;
+		if (!link || landing?.state !== 'missing' || this.#w || !(link.ask || link.approve)) return;
+		const item = this.#find(this.#s, link);
+		if (item) this.landing = this.#landed(++this.#landings, landing.ref, item, 'found');
+	}
+
+	#find(state: ChatState, t: LinkTarget): ChatItem | undefined {
+		if (t.message) return state.items.find((i) => messageKey(i) === t.message);
+		if (t.turn) return state.items.findLast((i) => i.kind === 'assistant' && i.turnId === t.turn);
+		if (t.ask) return state.items.find((i) => i.kind === 'ask' && i.askId === t.ask);
+		return state.items.find((i) => i.kind === 'approval' && i.nonce === t.approve);
+	}
+
+	#landed(n: number, ref: string, item: ChatItem, state: Landing['state'], at?: string): Landing {
+		return {
+			ref,
+			n,
+			state,
+			messageId: item.id,
+			...(item.kind === 'ask' ? { askId: item.askId } : {}),
+			...(item.kind === 'approval' ? { nonce: item.nonce } : {}),
+			...((at ?? ('at' in item ? item.at : undefined))
+				? { at: at ?? ('at' in item ? item.at : undefined) }
+				: {})
+		};
 	}
 
 	/** Retries the newest page if it failed, otherwise the last older page. */
@@ -857,7 +1037,9 @@ export class ChatStore {
 	}
 
 	#clientIdOf(messageId: string) {
-		const item = this.#s.items.find((i) => i.id === messageId);
+		const item =
+			this.#s.items.find((i) => i.id === messageId) ??
+			this.#w?.items.find((i) => i.id === messageId);
 		return item?.kind === 'user' ? item.clientId : undefined;
 	}
 
@@ -978,10 +1160,13 @@ export class ChatStore {
 	}
 
 	async answer(askId: string, answer: string) {
-		const ask = this.#s.items.find((i) => i.kind === 'ask' && i.askId === askId);
+		const ask =
+			this.#s.items.find((i) => i.kind === 'ask' && i.askId === askId) ??
+			this.#w?.items.find((i) => i.kind === 'ask' && i.askId === askId);
 		if (ask?.kind !== 'ask') return;
 		const index = ask.choices.indexOf(answer);
 		markAsk(this.#s, askId, answer);
+		if (this.#w) markAsk(this.#w, askId, answer);
 		this.#commit();
 		try {
 			const r = await this.#api.answerAsk(
@@ -993,6 +1178,7 @@ export class ChatStore {
 				this.showToast('That question is no longer waiting for an answer.');
 			} else if (r.status === 'failed') {
 				markAsk(this.#s, askId, null);
+				if (this.#w) markAsk(this.#w, askId, null);
 				this.showToast("Your answer didn't reach the agent. Try again.");
 			}
 		} catch (err) {
@@ -1002,6 +1188,7 @@ export class ChatStore {
 				this.showToast('That question is no longer waiting for an answer.');
 			} else {
 				markAsk(this.#s, askId, null);
+				if (this.#w) markAsk(this.#w, askId, null);
 				this.showToast(
 					status === 403
 						? NOT_OWNER

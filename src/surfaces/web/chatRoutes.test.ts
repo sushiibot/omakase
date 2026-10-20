@@ -582,6 +582,170 @@ describe("GET /api/chat/history", () => {
   });
 });
 
+describe("GET /api/chat/history around a message, and newer pages", () => {
+  const ledger = { isSent: () => false, markSent: () => {} };
+  const get = async (h: ReturnType<typeof setup>, q: string) => {
+    const res = await call(h.handler, `/api/chat/history${q}`);
+    expect(res.status).toBe(200);
+    return (await res.json()) as HistoryResponse;
+  };
+  const label = (i: HistoryResponse["items"][number]) => (i.type === "user" ? i.text : i.type === "assistant" ? i.text : i.type === "ask" ? i.askId : i.type);
+  const replies = async (h: ReturnType<typeof setup>, n: number, from = 0) => {
+    for (let i = from; i < from + n; i++) await h.adapter.sendReply(null, { kind: "reply", text: `r${i}`, toolCount: null }, { ledger, plain: false, outboxId: `out-${i}` });
+  };
+  /** Every page from an around page outwards in both directions, oldest first. */
+  const walkOut = async (h: ReturnType<typeof setup>, first: HistoryResponse, limit: number) => {
+    const items = first.items.map(label);
+    for (let before = first.before, n = 0; before !== null && n < 50; n++) {
+      const page: HistoryResponse = await get(h, `?limit=${limit}&before=${before}`);
+      items.unshift(...page.items.map(label));
+      before = page.before;
+    }
+    for (let after = first.after ?? null, n = 0; after !== null && n < 50; n++) {
+      const page: HistoryResponse = await get(h, `?limit=${limit}&after=${after}`);
+      items.push(...page.items.map(label));
+      after = page.after ?? null;
+    }
+    return items;
+  };
+
+  test("an around page centres the message by its key, with cursors both ways", async () => {
+    const h = setup();
+    await replies(h, 30);
+    const page = await get(h, "?around=out-10&limit=6");
+    expect(page.items.map(label)).toEqual(["r7", "r8", "r9", "r10", "r11", "r12", "r13"]);
+    expect(page.target).toBe(String(h.log.find("reply", "out-10")!.seq));
+    expect(page.missing).toBeUndefined();
+    expect(page.before).not.toBeNull();
+    expect(page.after).not.toBeNull();
+    const older = await get(h, `?limit=3&before=${page.before}`);
+    expect(older.items.map(label)).toEqual(["r4", "r5", "r6"]);
+    const newer = await get(h, `?limit=3&after=${page.after}`);
+    expect(newer.items.map(label)).toEqual(["r14", "r15", "r16"]);
+    expect(newer.before).toBe(newer.items[0]!.id);
+    // Walking out from the message covers the whole chat once, in order.
+    expect(await walkOut(h, page, 4)).toEqual(Array.from({ length: 30 }, (_, i) => `r${i}`));
+  });
+
+  test("the default around page holds 25 items a side; the newest side ends with a null after", async () => {
+    const h = setup();
+    await replies(h, 60);
+    const page = await get(h, "?around=out-30");
+    expect(page.items).toHaveLength(51);
+    expect(label(page.items[25]!)).toBe("r30");
+    const end = await get(h, "?around=out-55");
+    expect(end.items.map(label).slice(-1)).toEqual(["r59"]);
+    expect(end.after).toBeNull();
+    const start = await get(h, "?around=out-1");
+    expect(start.items.map(label)[0]).toBe("r0");
+    expect(start.before).toBeNull();
+    // Exactly the rest of the chat: still the newest page.
+    const last = await get(h, `?limit=4&after=${String(h.log.find("reply", "out-55")!.seq)}`);
+    expect(last.items.map(label)).toEqual(["r56", "r57", "r58", "r59"]);
+    expect(last.after).toBeNull();
+  });
+
+  test("an owner message by its client id, an ask by its ask id, and a row by s<seq>", async () => {
+    const h = setup();
+    await post(h.handler, "/api/chat/messages", { clientId: CLIENT, text: "hi" });
+    await h.routes.idle();
+    await replies(h, 3);
+    await h.adapter.askPrompt(null, { askId: "pick-one-please", question: "Which?", choices: ["A"] }, { ledger, plain: false, outboxId: "ask-outbox" });
+    await replies(h, 3, 3);
+    const user = await get(h, `?around=${CLIENT}&limit=2`);
+    expect(user.items.map(label)).toEqual(["hi", "r0"]);
+    expect(user.target).toBe(user.items[0]!.id);
+    const ask = await get(h, "?around=pick-one-please&limit=2");
+    expect(ask.items.map(label)).toEqual(["r2", "pick-one-please", "r3"]);
+    const seq = h.log.find("reply", "out-4")!.seq;
+    const bySeq = await get(h, `?around=s${seq}&limit=2`);
+    expect(bySeq.items.map(label)).toEqual(["r3", "r4", "r5"]);
+    expect(bySeq.target).toBe(String(seq));
+    // Alerts and boundaries carry outbox keys too.
+    h.log.append("alert", { key: "alert-outbox-1", alert: { job: "nightly", kind: "failed" } as never, text: "failed" }, "alert-outbox-1");
+    h.log.append("session", { kind: "new" }, "session-outbox-1");
+    expect((await get(h, "?around=alert-outbox-1&limit=2")).items.map(label)).toEqual(["r5", "alert", "divider"]);
+    expect((await get(h, "?around=session-outbox-1&limit=2")).items.map(label)).toEqual(["alert", "divider"]);
+  });
+
+  test("a turn id lands on that turn's latest reply, so ?turn= links keep working", async () => {
+    const h = setup();
+    await replies(h, 3);
+    await h.adapter.sendReply(null, { kind: "reply", text: "first", turnId: "turn-abc-1", toolCount: null }, { ledger, plain: false, outboxId: "turn-reply-1" });
+    await h.adapter.sendReply(null, { kind: "reply", text: "second", turnId: "turn-abc-1", toolCount: null }, { ledger, plain: false, outboxId: "turn-reply-2" });
+    await replies(h, 3, 3);
+    const page = await get(h, "?around=turn-abc-1&limit=2");
+    expect(page.items.map(label)).toEqual(["first", "second", "r3"]);
+    expect(page.target).toBe(String(h.log.find("reply", "turn-reply-2")!.seq));
+  });
+
+  test("a missing id gives the nearest page for a seq and the newest page otherwise, never a target", async () => {
+    const h = setup();
+    await replies(h, 12);
+    const gone = h.log.find("reply", "out-5")!.seq;
+    // Erase it as a rewind would, around the retention trigger.
+    const trigger = h.db.query<{ sql: string }, []>("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'web_events_keep_chat'").get();
+    if (trigger) h.db.run("DROP TRIGGER web_events_keep_chat");
+    h.db.run("DELETE FROM web_events WHERE seq = ?", [gone]);
+    if (trigger) h.db.run(trigger.sql);
+    const near = await get(h, `?around=s${gone}&limit=4`);
+    expect(near.items.map(label)).toEqual(["r3", "r4", "r6", "r7"]);
+    expect(near).toMatchObject({ target: null, missing: true });
+    expect(await walkOut(h, near, 3)).toEqual(Array.from({ length: 12 }, (_, i) => `r${i}`).filter((r) => r !== "r5"));
+    const unknown = await get(h, "?around=never-existed-id&limit=4");
+    expect(unknown).toMatchObject({ target: null, missing: true, after: null });
+    expect(unknown.items.map(label)).toEqual(["r7", "r8", "r9", "r10", "r11"]);
+  });
+
+  test("anchored replies and imported rows page correctly around and after", async () => {
+    const h = setup();
+    h.log.prepend([
+      { type: "reply", key: "pi:s:2", data: { key: "pi:s:2", text: "old answer", files: [] }, createdAt: 2_000 },
+      { type: "user", key: "pi:s:1", data: { key: "pi:s:1", text: "old question", uploadIds: [], at: new Date(1_000).toISOString() }, createdAt: 1_000 },
+    ]);
+    const user = (key: string) => h.log.append("user", { key, text: key, uploadIds: [], at: "2026-09-30T00:00:00.000Z" }, key);
+    user("U1");
+    h.log.append("status", { clientId: "U1", state: "accepted" });
+    await h.adapter.progressCreate(null, { turnId: "t1", startedAt: 0, lines: [], toolCount: 0, text: "" });
+    user("U2");
+    await h.adapter.progressFinalize(null, { id: "t1" }, { outcome: "done", summary: null });
+    await h.adapter.sendReply(null, { kind: "reply", text: "R1", turnId: "t1", toolCount: null }, { ledger, plain: false, outboxId: "R1-outbox" });
+    user("U3");
+    const all = ["old question", "old answer", "U1", "R1", "U2", "U3"];
+    for (const id of ["pi:s:1", "pi:s:2", "U1", "R1-outbox", "U2", "U3"]) {
+      for (let limit = 2; limit <= 6; limit++) {
+        const page = await get(h, `?around=${encodeURIComponent(id)}&limit=${limit}`);
+        expect(page.target).not.toBeNull();
+        expect(await walkOut(h, page, limit)).toEqual(all);
+      }
+    }
+    const imported = await get(h, `?around=s${h.log.find("reply", "pi:s:2")!.seq}&limit=2`);
+    expect(imported.items.map(label)).toEqual(["old question", "old answer", "U1"]);
+    // The anchored reply sits before U2 though its seq is after it.
+    const r1 = await get(h, "?around=R1-outbox&limit=2");
+    expect(r1.items.map(label)).toEqual(["U1", "R1", "U2"]);
+  });
+
+  test("an around page keeps the message and fills both sides within the byte cap", async () => {
+    const h = setup({ historyMaxBytes: 12 * 1024 });
+    for (let i = 0; i < 9; i++) await h.adapter.sendReply(null, { kind: "reply", text: `${i}`.repeat(2_000), toolCount: null }, { ledger, plain: false, outboxId: `out-${i}` });
+    const page = await get(h, "?around=out-4");
+    expect(page.items.map((i) => (i.type === "assistant" ? i.outboxId : ""))).toEqual(["out-2", "out-3", "out-4", "out-5", "out-6"]);
+    expect(page.before).toBe(page.items[0]!.id);
+    expect(page.after).toBe(page.items[4]!.id);
+  });
+
+  test("before, after and around exclude each other; ids and cursors are checked", async () => {
+    const h = setup();
+    expect((await call(h.handler, "/api/chat/history?around=out-1&before=3")).status).toBe(400);
+    expect((await call(h.handler, "/api/chat/history?after=1&before=3")).status).toBe(400);
+    expect((await call(h.handler, "/api/chat/history?after=x")).status).toBe(400);
+    expect((await call(h.handler, `/api/chat/history?around=${encodeURIComponent("bad id")}`)).status).toBe(400);
+    expect((await call(h.handler, "/api/chat/history?around=out-1&limit=101")).status).toBe(400);
+    expect((await call(h.handler, "/api/chat/history?after=-3:-2")).status).toBe(200);
+  });
+});
+
 describe("stop and commands", () => {
   test("stop without a turn aborts; commands answer on the log", async () => {
     const h = setup();

@@ -41,3 +41,5 @@ export { default as VoiceCallBar } from './components/voice-call-bar.svelte';
 export { default as VoiceCaptions } from './components/voice-captions.svelte';
 
 export { conversationMedia, conversationContext } from './conversation-lifecycle.svelte';
+export { linkProps } from './link-props';
+export { linkTarget, type Landing, type LinkTarget } from './links';

@@ -8,7 +8,7 @@ import {
 	type ToolLine,
 	type UploadRef
 } from '$lib/core/realtime/events';
-import type { Attachment, ChatItem, TurnState } from './reduce';
+import { messageKey, type Attachment, type ChatItem, type TurnState } from './reduce';
 
 export function formatBytes(n: number): string {
 	if (n <= 0) return '';
@@ -203,6 +203,7 @@ export function toMessages(
 				if (item.text) parts.push({ type: 'text', text: item.text });
 				out.push({
 					id: item.id,
+					key: messageKey(item),
 					role: 'user',
 					clientId: item.clientId,
 					parts,
@@ -295,6 +296,7 @@ export function toMessages(
 				if (!parts.length) continue;
 				out.push({
 					id: item.id,
+					key: messageKey(item),
 					role: 'assistant',
 					sourceId: item.key ?? item.id.replace(/^h:/, ''),
 					turnId: item.turnId,
@@ -307,11 +309,17 @@ export function toMessages(
 			case 'ask':
 			case 'approval':
 				if (matched.has(item.id)) break;
-				out.push({ id: item.id, role: 'assistant', parts: [interactionPart(item)] });
+				out.push({
+					id: item.id,
+					key: messageKey(item),
+					role: 'assistant',
+					parts: [interactionPart(item)]
+				});
 				break;
 			case 'divider':
 				out.push({
 					id: item.id,
+					key: messageKey(item),
 					role: 'assistant',
 					parts: [
 						{
@@ -340,6 +348,7 @@ export function toMessages(
 				const open = a.kind !== 'recovered' && JOB_NAME_RE.test(a.job);
 				out.push({
 					id: item.id,
+					key: messageKey(item),
 					role: 'assistant',
 					parts: [
 						{
