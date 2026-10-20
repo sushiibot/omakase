@@ -2,6 +2,9 @@ import { z } from "zod";
 import type { WorkspaceConfig } from "./config.ts";
 import { MEMORY_REVIEW_RULES } from "./memoryUpdates.ts";
 import type { RunRecorder } from "./runLog.ts";
+import { getLogger } from "../logger.ts";
+
+const log = getLogger("workspace.memoryDecisions");
 
 export const DEFAULT_MEMORY_REVIEW_MODEL = "perplexity/pplx-decider-v1.1-27b";
 // Provisional tolerance for semantic review, not a calibrated accuracy guarantee.
@@ -47,19 +50,27 @@ export async function reviewMemoryDecisions(
   }]));
   const runId = runs.startRun({ agentName: "job:memory-review", task: `Review ${ids.length} memory changes with ${model}`, sessionFile: "" });
   try {
-    const response = await request(endpoint, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, state, questions }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      redirect: "error",
-    });
-    if (!response.ok) throw new Error(`memory Decisions API returned HTTP ${response.status}`);
-    const result = responseSchema.parse(await response.json());
-    const keys = Object.keys(result.answers);
-    if (keys.length !== ids.length || keys.some(key => !Object.hasOwn(questions, key))) {
-      throw new Error("memory Decisions API returned missing or unknown answers");
+    let response: Response;
+    try {
+      response = await request(endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, state, questions }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+        redirect: "error",
+      });
+    } catch (error) {
+      throw new MemoryReviewError(abortClass(error) ?? "network", error);
     }
+    if (!response.ok) throw new MemoryReviewError(`http_${response.status}`);
+    let body: unknown;
+    try { body = await response.json(); }
+    catch (error) { throw new MemoryReviewError(abortClass(error) ?? "invalid_json", error); }
+    const parsed = responseSchema.safeParse(body);
+    if (!parsed.success) throw new MemoryReviewError("schema_mismatch");
+    const result = parsed.data;
+    const keys = Object.keys(result.answers);
+    if (keys.length !== ids.length || keys.some(key => !Object.hasOwn(questions, key))) throw new MemoryReviewError("missing_answers");
     const decisions = ids.map((id, index) => {
       const probability = result.answers[`item_${index}`]!.noul;
       return {
@@ -75,8 +86,28 @@ export async function reviewMemoryDecisions(
     });
     return { text: JSON.stringify({ decisions }), model: result.model };
   } catch (error) {
-    // Do not persist a provider body or schema error that might echo private source text.
-    runs.endRun(runId, { status: "failed", resultSummary: "Memory decision review unavailable or invalid; no approval returned." });
-    throw new Error("memory decision review unavailable or invalid; no approval returned", { cause: error });
+    // Only the host-assigned class is recorded: a provider body or schema issue might echo private source text.
+    const failure = error instanceof MemoryReviewError ? error : new MemoryReviewError("internal", error);
+    runs.endRun(runId, { status: "failed", resultSummary: `Memory decision review unavailable or invalid (${failure.errorClass}, ${model}); no approval returned.` });
+    log.warn({ errorClass: failure.errorClass, model }, "memory decision review failed");
+    throw failure;
   }
+}
+
+/**
+ * Why a review returned no approval, safe to log and store: an HTTP status, `timeout`, `aborted`, `network`,
+ * `invalid_json`, `schema_mismatch`, `missing_answers`, or `internal`. Never a provider body or private text.
+ */
+export type MemoryReviewErrorClass = `http_${number}` | "timeout" | "aborted" | "network" | "invalid_json" | "schema_mismatch" | "missing_answers" | "internal";
+
+export class MemoryReviewError extends Error {
+  constructor(readonly errorClass: MemoryReviewErrorClass, cause?: unknown) {
+    super(`memory decision review unavailable or invalid (${errorClass}); no approval returned`, cause === undefined ? undefined : { cause });
+    this.name = "MemoryReviewError";
+  }
+}
+
+function abortClass(error: unknown): "timeout" | "aborted" | undefined {
+  const name = error instanceof Error || error instanceof DOMException ? error.name : "";
+  return name === "TimeoutError" ? "timeout" : name === "AbortError" ? "aborted" : undefined;
 }

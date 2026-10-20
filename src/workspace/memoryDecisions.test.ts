@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { reviewMemoryDecisions, DEFAULT_MEMORY_REVIEW_MODEL } from "./memoryDecisions.ts";
+import { reviewMemoryDecisions, DEFAULT_MEMORY_REVIEW_MODEL, MemoryReviewError } from "./memoryDecisions.ts";
 import { loadWorkspaceConfig } from "./config.ts";
 import type { EndRunInput, RunRecorder } from "./runLog.ts";
 
@@ -74,4 +74,24 @@ test("model selection is independent of the chat provider and preserves a gatewa
     return Response.json(response({ item_0: { type: "noul", noul: 1 }, item_1: { type: "noul", noul: 1 } }));
   }) as import("./memoryDecisions.ts").DecisionRequest;
   await reviewMemoryDecisions({ ...loaded, baseUrl: "https://gateway.example/router/v1/" }, prompt, runs, request);
+});
+
+test.each([
+  ["http_404", mockFetch({ error: { message: "No endpoints found for private-source-text" } }, 404)],
+  ["http_429", mockFetch({ error: "private-source-text" }, 429)],
+  ["timeout", (async () => { throw new DOMException("private-source-text", "TimeoutError"); })],
+  ["aborted", (async () => { throw new DOMException("private-source-text", "AbortError"); })],
+  ["network", (async () => { throw new TypeError("fetch failed: private-source-text"); })],
+  ["invalid_json", (async () => new Response("{private-source-text"))],
+  ["schema_mismatch", mockFetch({ answers: { item_0: "private-source-text" } })],
+  ["missing_answers", mockFetch(response({ item_0: { type: "noul", noul: 1 } }))],
+] as [string, import("./memoryDecisions.ts").DecisionRequest][])("a failed review records only its safe class: %s", async (errorClass, request) => {
+  const { runs, ends } = recorder();
+  const error = await reviewMemoryDecisions(config, prompt, runs, request).catch((e: unknown) => e);
+  expect(error).toBeInstanceOf(MemoryReviewError);
+  expect<string>((error as MemoryReviewError).errorClass).toBe(errorClass);
+  expect((error as Error).message).toContain(`(${errorClass})`);
+  expect(ends[0]).toMatchObject({ status: "failed" });
+  expect(ends[0]!.resultSummary).toContain(`(${errorClass}, ${DEFAULT_MEMORY_REVIEW_MODEL})`);
+  expect(JSON.stringify(ends) + (error as Error).message).not.toContain("private-source-text");
 });
