@@ -87,7 +87,9 @@ export const ROUTE_ROOT_ALLOWED = new Set([
 	// Renders nothing; it clears shown notifications while the chat is visible.
 	'ClearNotifications',
 	// Renders AgentDetail, which also docks in the side panel, where a Screen's drawer header does not belong.
-	'AgentPage'
+	'AgentPage',
+	// Loads a saved item and renders SavedItemScreen; /saved/<kind>/<id> and /artifacts/<id> share it.
+	'SavedItemPage'
 ]);
 
 /** Sheets and dialogs portal out of the layout, so they may sit beside the screen root. */

@@ -7,11 +7,12 @@
 	import { agentList } from '$lib/features/agents';
 	import TaskPanel from './task-panel.svelte';
 	import { tasksStore } from './tasks.svelte';
+	import type { PanelTab } from './types';
 	let {
 		conversationId = 'main',
 		initialSelectedId,
 		open,
-		tab = $bindable<'tasks' | 'agents'>('tasks'),
+		tab = $bindable<PanelTab>('tasks'),
 		agentId = $bindable<string | undefined>(),
 		onopen,
 		onclose,
@@ -22,7 +23,7 @@
 		initialSelectedId?: string;
 		open: boolean;
 		/** The panel's tab and the agent open in it, so a notification link can open both. */
-		tab?: 'tasks' | 'agents';
+		tab?: PanelTab;
 		agentId?: string;
 		onopen: () => void;
 		onclose: () => void;

@@ -3,6 +3,7 @@ import PanelsTopLeft from '@lucide/svelte/icons/panels-top-left';
 import ListChecks from '@lucide/svelte/icons/list-checks';
 import Activity from '@lucide/svelte/icons/activity';
 import BookMarked from '@lucide/svelte/icons/book-marked';
+import Bookmark from '@lucide/svelte/icons/bookmark';
 import CalendarClock from '@lucide/svelte/icons/calendar-clock';
 import Globe from '@lucide/svelte/icons/globe';
 import History from '@lucide/svelte/icons/history';
@@ -37,11 +38,11 @@ const chats: NavEntry = {
 /** The More screen, top to bottom. */
 const moreEntries: NavEntry[] = [
 	{
-		id: 'artifacts',
-		href: '/artifacts',
-		label: 'Artifacts',
-		icon: BookMarked,
-		description: 'Saved reports and documents'
+		id: 'saved',
+		href: '/saved',
+		label: 'Saved',
+		icon: Bookmark,
+		description: 'Documents, lists, recipes and timers from your conversations'
 	},
 	{
 		id: 'tasks',
@@ -136,13 +137,13 @@ const workspace: NavEntry = {
 	href: '/workspace',
 	label: 'Workspace',
 	icon: PanelsTopLeft,
-	description: 'Memory, history, artifacts and workspace tools'
+	description: 'Saved items, memory, history and workspace tools'
 };
 
 /** Information and capabilities, rather than frequently used work destinations. */
 export function workspaceFor(on: FeatureCheck): NavEntry[] {
 	const entries = moreFor(on);
-	return ['artifacts', 'memory', 'history', 'briefing', 'skills', 'schedules', 'browser'].flatMap(
+	return ['saved', 'memory', 'history', 'briefing', 'skills', 'schedules', 'browser'].flatMap(
 		(id) => entries.filter((entry) => entry.id === id)
 	);
 }

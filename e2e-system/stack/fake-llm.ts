@@ -117,6 +117,23 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
     return stream([`offering choices\n\n\`\`\`actions\nprompt: Pick one\nitems:\n  - "E2E-ECHO picked-${tag} #${tag}"\n  - Something else\n\`\`\``], 10, tag);
   }
   if (userText.includes("E2E-RICH")) return stream(richReply("```bars\ntitle: Spend\nitems:\n  - { label: Food, value: 412 dollars }\n```"), 150, tag);
+  // Saved items: the agent saves a document, then replies with its link and a checklist. Later it
+  // finds that list with list_saved_items and pins it with update_saved_item.
+  if (last?.role === "tool" && userText.includes("E2E-SAVED-PIN")) {
+    const result = JSON.parse(textOf(last.content));
+    if (Array.isArray(result.items)) {
+      const target = /target=([a-z0-9]{4,16})/.exec(userText)?.[1];
+      const list = result.items.find((i: { kind: string; title: string }) => i.kind === "checklist" && i.title === `Saved list ${target}`);
+      return list ? toolCall("update_saved_item", { id: list.id, action: "pin" }) : stream(["No saved list found."], 10, tag);
+    }
+    return stream([`Pinned: ${result.title}`], 10, tag);
+  }
+  if (userText.includes("E2E-SAVED-PIN")) return toolCall("list_saved_items", { kind: "checklist" });
+  if (last?.role === "tool" && userText.includes("E2E-SAVED")) {
+    const result = JSON.parse(textOf(last.content));
+    return stream([`saved ${result.link}\n\n\`\`\`checklist\ntitle: Saved list ${tag}\nitems:\n  - tent\n  - stove\n\`\`\``], 10, tag);
+  }
+  if (userText.includes("E2E-SAVED")) return toolCall("save_artifact", { title: `Saved doc ${tag}`, content: `# Notes ${tag}\n\nSaved evidence ${tag}.` });
   // Live blocks: the agent finds the owner's checklist, then adds to it and ticks an item.
   if (last?.role === "tool" && userText.includes("E2E-LIVE-AGENT")) {
     const result = JSON.parse(textOf(last.content));

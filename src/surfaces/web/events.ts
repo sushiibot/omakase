@@ -461,6 +461,9 @@ export interface ChatEventMap {
 		parentRunId?: string;
 		jobName?: string;
 	};
+	/** A saved item's pin, archive or source changed, or a document was saved; refetch saved lists.
+	 *  Block changes arrive as `block`. */
+	saved: { kind: 'document' | 'checklist' | 'recipe' | 'timer'; id: string };
 }
 export type ChatEventType = keyof ChatEventMap;
 
@@ -493,7 +496,8 @@ export const EPHEMERAL_EVENTS = [
 	'run',
 	'inbox',
 	'threads',
-	'block'
+	'block',
+	'saved'
 ] as const;
 
 export type FirstFrameEventType = (typeof FIRST_FRAME_EVENTS)[number];

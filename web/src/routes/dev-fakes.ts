@@ -28,6 +28,8 @@ import { configureMemory } from '$lib/features/memory';
 import { createFixtureMemoryApi } from '$lib/features/memory/fake';
 import { configureRuns } from '$lib/features/runs';
 import { fixtureRunsApi } from '$lib/features/runs/fake';
+import { configureSaved } from '$lib/features/saved';
+import { createFixtureSavedApi } from '$lib/features/saved/fake';
 import { configureSchedules } from '$lib/features/schedules';
 import { configureSettings } from '$lib/features/settings';
 import { createFixtureSettingsApi } from '$lib/features/settings/fake';
@@ -66,6 +68,7 @@ export function installFakes() {
 	});
 	configureAgents(createFixtureAgentsApi());
 	configureRuns(fixtureRunsApi);
+	configureSaved(createFixtureSavedApi());
 	configureHistory(fixtureHistoryApi);
 	configureMemory(createFixtureMemoryApi());
 	configureSkills(createFixtureSkillsApi());

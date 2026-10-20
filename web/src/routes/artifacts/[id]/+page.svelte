@@ -1,18 +1,9 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { page } from '$app/state';
-	import { Remote } from '$lib/core/remote.svelte';
-	import { artifactsApi, ArtifactScreen } from '$lib/features/artifacts';
-	const remote = $derived.by(() => {
-		const id = page.params.id ?? '';
-		return new Remote(() => artifactsApi.get(id), { refetchOnFocus: true });
-	});
-	$effect(() => {
-		const current = remote;
-		untrack(() => void current.ensure());
-		return current.watch();
-	});
+	import { SavedItemPage } from '$lib/features/saved';
+	// Chat links documents here; the page is the saved item's, so both URLs show the same thing.
+	const id = $derived(page.params.id ?? '');
 </script>
 
 <svelte:head><title>Document · sushii</title></svelte:head>
-<ArtifactScreen {remote} document={remote.data} onretry={() => void remote.refetch()} />
+<SavedItemPage kind="document" {id} />

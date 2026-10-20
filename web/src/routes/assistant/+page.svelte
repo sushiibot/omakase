@@ -9,6 +9,7 @@
 	import { tasksStore } from '$lib/features/tasks';
 	import { threadsStore } from '$lib/features/threads';
 	import { UndoToast } from '$lib/features/home';
+	import { conversationTitle, inUse, SavedInUse, savedStore } from '$lib/features/saved';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
 	import { createInbox } from '../chats/inbox.svelte';
 	import InboxSheet from '../chats/inbox-sheet.svelte';
@@ -24,6 +25,8 @@
 	const tasks = tasksStore();
 	const threads = threadsStore();
 	const recent = $derived(continueItems(channels.list.data?.channels ?? [], channels.recentIds));
+	const saved = savedStore();
+	const using = $derived(inUse(saved.items, inbox.now));
 	const notices = $derived.by(() => {
 		const result: { label: string; retry: () => void }[] = [];
 		if (maintenance.remote.error)
@@ -48,7 +51,9 @@
 	onMount(() => {
 		void maintenance.remote.refetch();
 		void threads.list.ensure();
+		void saved.all.ensure();
 		const stops = [
+			saved.all.watch(),
 			maintenance.remote.watch(),
 			channels.watch(),
 			tasks.watch(),
@@ -89,6 +94,8 @@
 		{maintenanceAttention}
 		{maintenanceUpdates}
 		{maintenanceWatching}
+		inUse={inUseSection}
+		inUseCount={using.length}
 		groups={inbox.home.groups}
 		tasks={tasks.tasks}
 		{recent}
@@ -111,6 +118,11 @@
 		/>{/snippet}
 </SplitScreen>
 
+{#snippet inUseSection()}<SavedInUse
+		items={using}
+		now={inbox.now}
+		titleOf={(id) => conversationTitle(id, channels.list.data?.channels ?? [])}
+	/>{/snippet}
 {#snippet maintenanceAttention()}<MaintenanceSummary
 		mode="needs"
 		view={maintenance.remote.data?.view}

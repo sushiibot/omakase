@@ -4,7 +4,7 @@
 	import { followAgentLink, openAgentFrom, openAgentPage } from '$lib/core/nav/agent-link';
 	import { getWorkspace } from '$lib/ui/workspace/context';
 	const workspaceLayout = getWorkspace();
-	import { PanelButton, TaskWorkspace } from '$lib/features/tasks';
+	import { PanelButton, TaskWorkspace, type PanelTab } from '$lib/features/tasks';
 	import { BrowserPreview, BrowserPreviewPanel } from '$lib/features/browser';
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
@@ -41,7 +41,7 @@
 	const store = $derived(detail ? threads.chat(detail) : null);
 	const browserSheet = routedSheet('browser-preview');
 	const taskPane = routedSheet('tasks');
-	let panelTab = $state<'tasks' | 'agents'>('tasks');
+	let panelTab = $state<PanelTab>('tasks');
 	let panelAgent = $state<string | undefined>();
 	$effect(() => {
 		if (!page.url.searchParams.has('agent')) return;

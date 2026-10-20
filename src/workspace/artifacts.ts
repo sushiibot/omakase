@@ -10,7 +10,8 @@ import { SAFE_OPEN } from "./runReader.ts";
 /** Owner documents live outside chat sessions, and survive session rotation. */
 export class ArtifactStore {
   private readonly directory: string;
-  constructor(stateDir: string) { this.directory = join(stateDir, "artifacts"); }
+  /** `onSave` hears every saved document, so saved items can announce it. */
+  constructor(stateDir: string, private readonly onSave?: (document: { id: string }) => void) { this.directory = join(stateDir, "artifacts"); }
   private root(): string {
     mkdirSync(this.directory, { recursive: true });
     if (lstatSync(this.directory).isSymbolicLink()) throw new Error("Artifact directory cannot be a symlink");
@@ -32,15 +33,20 @@ export class ArtifactStore {
       return document;
     } finally { closeSync(fd); }
   }
-  list(query = "") {
+  /** Full documents whose title or content matches, newest first. */
+  documents(query = "") {
     const files = readdirSync(this.root()).filter(name => name.endsWith(".json") && artifactId.safeParse(name.slice(0, -5)).success);
     const documents = files.slice(0, 2000).map(name => this.get(name.slice(0, -5))).filter(doc => doc !== null);
     const needle = query.toLocaleLowerCase();
     return {
-      artifacts: documents.filter(doc => `${doc.title}\n${doc.content}`.toLocaleLowerCase().includes(needle))
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(({ content: _, ...summary }) => summary),
+      documents: documents.filter(doc => `${doc.title}\n${doc.content}`.toLocaleLowerCase().includes(needle))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
       truncated: files.length > 2000,
     };
+  }
+  list(query = "") {
+    const { documents, truncated } = this.documents(query);
+    return { artifacts: documents.map(({ content: _, ...summary }) => summary), truncated };
   }
   save(input: { id?: string; title: string; content: string }, conversationId: string) {
     if (Buffer.byteLength(input.content, "utf8") > 256 * 1024) throw new Error("Document exceeds 256 KiB");
@@ -50,13 +56,14 @@ export class ArtifactStore {
     const document = artifactDocument.parse({ ...input, title: input.title.replace(/[\r\n]/g, " ").trim(), id: previous?.id ?? randomUUID(),
       createdAt: previous?.createdAt ?? now, updatedAt: now, conversationId: previous?.conversationId ?? conversationId, version: (previous?.version ?? 0) + 1 });
     writeFileAtomic(join(this.root(), `${document.id}.json`), JSON.stringify(document));
+    try { this.onSave?.(document); } catch { /* announcing is best effort */ }
     return document;
   }
   extension(conversationId: string): ExtensionFactory {
     return pi => {
       pi.registerTool({
         name: "save_artifact", label: "Save document",
-        description: "Create a persisted Markdown document for reports, research, plans and other substantial deliverables. Supply an existing id to update it at the same link. Return the provided Markdown link in your reply so the owner can open the document card. Documents are searchable in the Artifacts library and survive new chat sessions.",
+        description: "Create a persisted Markdown document for reports, research, plans and other substantial deliverables. Supply an existing id to update it at the same link. Return the provided Markdown link in your reply so the owner can open the document card. Documents appear under Saved, are searchable, and survive new chat sessions.",
         parameters: Type.Object({ id: Type.Optional(Type.String()), title: Type.String({ minLength: 1, maxLength: 200 }), content: Type.String({ maxLength: 256 * 1024 }) }),
         execute: async (_id, input) => {
           const doc = this.save(input, conversationId);
