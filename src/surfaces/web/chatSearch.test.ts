@@ -8,7 +8,7 @@ import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { applySchema } from "../../db/index.ts";
 import * as schema from "../../db/schema.ts";
 import { SqliteChatLog } from "./chatLog.ts";
-import { ChatIndex, QUERY_TOKENS_MAX, RANGES_MAX, SNIPPET_MAX, ftsQuery, queryTokens, searchChat, snippet } from "./chatSearch.ts";
+import { ChatIndex, QUERY_TOKENS_MAX, RANGES_MAX, SNIPPET_MAX, conversationTitle, ftsQuery, messageId, queryTokens, searchChat, snippet } from "./chatSearch.ts";
 import { historyPage } from "./history.ts";
 
 const T0 = Date.parse("2026-09-30T10:00:00.000Z");
@@ -46,7 +46,7 @@ describe("chat index sync", () => {
     const alert = { source: "job" as const, job: "nightly", kind: "failed" as const, trigger: "daily" as const, startedAt: "2026-09-30T03:00:00Z", schedule: "daily 03:00" };
     const seq = log.append("alert", { key: "o1", alert, text: "Scheduled job nightly failed: disk full" }, "o1");
     expect(searchChat(db, "nightly disk", 20).hits).toEqual([
-      { source: "chat", id: String(seq), at: new Date(T0 + 1000).toISOString(), role: "agent", snippet: "Scheduled job nightly failed: disk full", ranges: [[14, 21], [30, 34]] },
+      { source: "chat", id: String(seq), at: new Date(T0 + 1000).toISOString(), role: "agent", conversationId: "main", message: `s${seq}`, conversationTitle: "Main", snippet: "Scheduled job nightly failed: disk full", ranges: [[14, 21], [30, 34]] },
     ]);
     db.run("DELETE FROM web_chat_fts");
     drain(index);
@@ -291,5 +291,57 @@ describe("snippet", () => {
 
   test("text with no match starts at the beginning with no ranges", () => {
     expect(snippet("au lait", ["cafe"])).toEqual({ snippet: "au lait", ranges: [] });
+  });
+});
+
+describe("search across conversations", () => {
+  const CLIENT = "01JGK3WEM0E2E0000000000001";
+  const OUTBOX = "outbox-0001";
+
+  test("topic and task messages are indexed live and hits say where each message is", () => {
+    const { db, log, index } = setup();
+    db.run("INSERT INTO web_threads (id, title, brief, created_at) VALUES ('trip', 'Trip to Kyoto', '{}', 0), ('task-t-7', 'Fix the build', '{}', 0)");
+    const topic = new SqliteChatLog(db, { conversationId: "trip", index, now: () => T0 });
+    const task = new SqliteChatLog(db, { conversationId: "task-t-7", index, now: () => T0 });
+    const m = log.append("user", user(CLIENT, "pelican in main"), CLIENT);
+    const t = topic.append("reply", reply(OUTBOX, "pelican in the topic"), OUTBOX);
+    const k = task.append("user", user("pi:9", "pelican in the task"), "pi:9");
+    const hits = searchChat(db, "pelican", 20).hits;
+    expect(hits.map((h) => [h.id, h.conversationId, h.conversationTitle, h.message, h.role])).toEqual([
+      [String(k), "task-t-7", "Fix the build", `s${k}`, "user"],
+      [String(t), "trip", "Trip to Kyoto", OUTBOX, "agent"],
+      [String(m), "main", "Main", CLIENT, "user"],
+    ]);
+    db.run("INSERT INTO kv (key, value) VALUES ('web:main-title', 'Home base')");
+    expect(searchChat(db, "pelican main", 20).hits.map((h) => h.conversationTitle)).toEqual(["Home base"]);
+  });
+
+  test("catch-up backfills topic rows an older Main-only index skipped, once", () => {
+    const { db, log, index } = setup();
+    const topic = new SqliteChatLog(db, { conversationId: "trip", now: () => T0 });
+    const before = topic.append("user", user("t1", "old heron"), "t1");
+    const main = log.append("user", user("m1", "main heron"), "m1");
+    // What a Main-only index left behind: Main indexed through the head, the topic row not at all.
+    drain(index);
+    db.run("DELETE FROM web_chat_fts WHERE rowid = ?", [before]);
+    db.run("DELETE FROM kv WHERE key = 'web_chat_fts:others_below'");
+    const after = topic.append("user", user("t2", "new heron"), "t2");
+    expect(ids(db, "heron")).toEqual([String(main)]);
+    drain(index);
+    expect(ids(db, "heron")).toEqual([String(after), String(main), String(before)]);
+    expect(db.query("SELECT value FROM kv WHERE key = 'web_chat_fts:others_below'").get()).toEqual({ value: String(Number.MIN_SAFE_INTEGER) });
+    expect(index.catchUp()).toBe(false);
+    integrity(db);
+  });
+
+  test("message ids are the stable key when it can travel in a link, else s<seq>", () => {
+    expect(messageId({ seq: 4, type: "user", key: CLIENT })).toBe(CLIENT);
+    expect(messageId({ seq: 4, type: "user", key: "pi:1" })).toBe("s4");
+    expect(messageId({ seq: -3, type: "reply", key: "pi:2" })).toBe("s-3");
+    expect(messageId({ seq: 5, type: "reply", key: OUTBOX })).toBe(OUTBOX);
+    expect(messageId({ seq: 6, type: "alert", key: null })).toBe("s6");
+    expect(conversationTitle("main", null)).toBe("Main");
+    expect(conversationTitle("task-t-1", null)).toBe("Task");
+    expect(conversationTitle("abc", "  ")).toBe("Conversation");
   });
 });

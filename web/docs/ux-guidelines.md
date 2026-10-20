@@ -643,4 +643,11 @@ See [Tasks](tasks.md) for lifecycle and storage behavior.
 
 Activity rows represent execution attempts. Use Assignments for agent and scheduled runs, Replies for conversation turns, and All for the complete log. Saved assignments remain in Tasks. Keep rows to a title and a metadata line; the full brief belongs in Details.
 
-Use “Jump to conversation” for links from execution records or task inspectors to chat. The shared conversation URL helper handles Main, topic, and task conversations and preserves the originating turn. Parent and delegated execution links belong in Details. Keep one conversation jump in the execution header; avoid competing parent-navigation actions there.
+Every run links both ways, as CI and agent run pages do: to what it produced and to what started it. All links into a conversation use the [message link](message-links.md) shape, built with `conversationHref(id, { message })`, which handles Main, topic, and task conversations.
+
+- **Result.** When the bot has the reply the run's turn delivered, the execution header and the run row offer “Open result”, linking to that reply's message. Without one (still running, stopped, delegated work), they fall back to “Jump to conversation” at the run's turn. Keep one conversation link in the header; the row's link keeps the width of the longer label, so a list's chevrons line up.
+- **Trigger.** The header shows one “Triggered by” line under the status: “Your message” linking to the owner message that started the turn, the schedule name as plain text (Schedules has no page per job yet), or the delegating run's title linking to that run. A turn the agent started on its own has no trigger line. Full parent and delegated lists stay in Details.
+
+Use “Jump to conversation” for links from task inspectors and agent views to chat; they know a conversation but not a message.
+
+Search covers Main, topic, and task conversations. Each chat hit names its conversation and the speaker on the metadata line (“Trip to Kyoto · you”), with the date, and links to the matching message. The snippet marks the matched words from the API's code-point ranges as text, never as markup.

@@ -120,10 +120,16 @@ test('search finds chat and notes, labels each source and highlights the match',
 	await field(page).fill('eastside');
 	await expect(page).toHaveURL(/\/history\/search\?q=eastside$/);
 	await expect(rows(page)).toHaveCount(6);
-	await expect(rows(page).filter({ hasText: 'Chat · you' }).first()).toBeVisible();
+	await expect(rows(page).filter({ hasText: 'Main · you' }).first()).toBeVisible();
 	await expect(rows(page).filter({ hasText: 'Day notes' }).first()).toBeVisible();
 	const emoji = rows(page).filter({ hasText: '🚗' });
 	await expect(emoji.locator('mark')).toHaveText('Eastside');
+	// A chat hit names its conversation and links to the message in it.
+	await expect(emoji).toContainText('Car service · you');
+	await expect(emoji.getByRole('link')).toHaveAttribute('href', '/chats/car-service?m=msg-m3-0000');
+	await expect(
+		rows(page).filter({ hasText: 'Invoice #1042 from Eastside Auto is' }).getByRole('link')
+	).toHaveAttribute('href', '/chat?m=msg-m2-0000');
 	await rows(page).filter({ hasText: 'brake job' }).getByRole('link').click();
 	await expect(page).toHaveURL(/\/history\/\d{4}-\d{2}-\d{2}$/);
 	await page.goBack();
@@ -209,7 +215,7 @@ test('a source that could not be searched is named', async ({ page, context }) =
 	await page.goto('/history/search?q=eastside');
 	await expect(page.getByText("Run notes couldn't be searched just now")).toBeVisible();
 	await expect(rows(page).filter({ hasText: 'Day notes' })).toHaveCount(0);
-	await expect(rows(page).filter({ hasText: 'Chat' }).first()).toBeVisible();
+	await expect(rows(page).filter({ hasText: 'Main · ' }).first()).toBeVisible();
 });
 
 test('a search that fails offers Retry', async ({ page, context }) => {

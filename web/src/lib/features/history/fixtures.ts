@@ -143,11 +143,22 @@ interface Line {
 
 /** What search runs over: chat the bot stores, and lines of the agent's notes. */
 function corpus(now: number): ((ChatHit | NotesHit) & Line)[] {
-	const chat = (id: string, minsAgo: number, role: 'user' | 'agent', text: string) => ({
+	const chat = (
+		id: string,
+		minsAgo: number,
+		role: 'user' | 'agent',
+		text: string,
+		where: Pick<ChatHit, 'conversationId' | 'conversationTitle'> = {
+			conversationId: 'main',
+			conversationTitle: 'Main'
+		}
+	) => ({
 		source: 'chat' as const,
 		id,
 		at: iso(now, minsAgo),
 		role,
+		...where,
+		message: `msg-${id}-0000`,
 		snippet: text,
 		ranges: [],
 		text
@@ -176,7 +187,10 @@ function corpus(now: number): ((ChatHit | NotesHit) & Line)[] {
 			'agent',
 			'Invoice #1042 from Eastside Auto is $412.60, due on the 14th. It matches the quote.'
 		),
-		chat('m3', 60 * 27, 'user', '🚗 Book the car service at Eastside Auto for Friday morning'),
+		chat('m3', 60 * 27, 'user', '🚗 Book the car service at Eastside Auto for Friday morning', {
+			conversationId: 'car-service',
+			conversationTitle: 'Car service'
+		}),
 		chat('m4', 60 * 50, 'agent', 'The HOA dues go up $15 in January; the pool closes on Oct 15.'),
 		note(
 			`${dateAgo(now, 0)}.md:12`,

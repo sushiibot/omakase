@@ -1,7 +1,7 @@
 export { default as RunListScreen } from './run-list-screen.svelte';
 export { default as RunDetailScreen } from './run-detail-screen.svelte';
 export { default as RunRow } from './components/run-row.svelte';
-export { kindLabel, activityTitle, runConversationHref } from './format';
+export { kindLabel, activityTitle, runConversationHref, runResultHref, runTrigger } from './format';
 export { configureRuns, runsStore, type RunsStore, type RunView } from './runs.svelte';
 export type { RunsApi } from './api';
 export type {

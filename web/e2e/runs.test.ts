@@ -12,6 +12,7 @@ import {
 
 const RUN = {
 	triage: '01K6B4D2F4H6K8M0P2R4T6V8X0',
+	invoice: '01K6B4A0C2E4G6J8M0P2R4T6V8',
 	nightlySync: '01K6B2N8W3J5Q7R9T1V3X5Z7A9',
 	expenses: '01K6B3A1C3E5G7J9M1P3R5T7V9',
 	refactor: '01K6AZT2V4X6Z8B0D2F4H6K8M0',
@@ -445,12 +446,49 @@ test('Work defaults to tasks while reply cycles and maintenance stay in Activity
 	await expect(rows(page)).toHaveCount(3);
 	await rows(page).first().getByRole('link').first().click();
 	await expect(page.getByRole('heading', { name: 'Reply activity', level: 1 })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Open result' })).toHaveAttribute(
+		'href',
+		'/chat?m=outbox-turn-41'
+	);
+	await page.getByRole('tab', { name: 'Details', exact: true }).click();
+	await expect(page.getByRole('heading', { name: 'Request', exact: true })).toBeVisible();
+});
+
+test('a run links the reply it delivered and what triggered it', async ({ page, context }) => {
+	await server(context);
+	await page.goto('/runs');
+	await page.getByRole('tab', { name: 'Replies', exact: true }).click();
+	// A reply row opens its result; one without a recorded reply jumps to its conversation.
+	const invoice = rows(page).filter({ hasText: 'invoice from Eastside' });
+	await expect(invoice.getByRole('link', { name: 'Open result' })).toHaveAttribute(
+		'href',
+		'/chat?m=outbox-turn-41'
+	);
+	await invoice.getByRole('link').first().click();
+	await expect(page.getByRole('link', { name: 'Open result' })).toHaveAttribute(
+		'href',
+		'/chat?m=outbox-turn-41'
+	);
+	await expect(page.getByText('Triggered by', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Your message' })).toHaveAttribute(
+		'href',
+		'/chat?m=01K6B4A0C2E4G6J8M0P2R4T6V1'
+	);
+
+	await page.goto(`/runs/${RUN.nightlySync}`);
+	await expect(page.getByText('Schedule · nightly-sync', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Open result' })).toHaveCount(0);
+
+	await page.goto(`/runs/${RUN.expenses}`);
+	const parent = page.getByRole('link', { name: 'Reply activity', exact: true });
+	await expect(parent).toHaveAttribute('href', `/runs/${RUN.invoice}`);
 	await expect(page.getByRole('link', { name: 'Jump to conversation' })).toHaveAttribute(
 		'href',
 		'/chat?turn=turn-41'
 	);
-	await page.getByRole('tab', { name: 'Details', exact: true }).click();
-	await expect(page.getByRole('heading', { name: 'Request', exact: true })).toBeVisible();
+	await parent.click();
+	await expect(page).toHaveURL(new RegExp(`/runs/${RUN.invoice}$`));
+	await expect(page.getByRole('link', { name: 'Your message' })).toBeVisible();
 });
 
 test('completion preserves chronological activity and the selected section', async ({

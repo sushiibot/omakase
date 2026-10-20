@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { z } from "zod";
 import type { SurfaceActor } from "../../orchestration/workspace/surface.ts";
 import type { WorkspaceLink } from "../../orchestration/workspace/link.ts";
-import { SqliteChatLog } from "./chatLog.ts";
+import { SqliteChatLog, type ChatTextIndex } from "./chatLog.ts";
 import { WebInboundStore } from "./inbound.ts";
 import { createPresence } from "./presence.ts";
 import {
@@ -88,6 +88,8 @@ export class WebThreads {
       link: Pick<WorkspaceLink, "topicManage" | "sendMessage">;
       chat: Omit<ChatRouteDeps, "log" | "inbound" | "adapter" | "presence">;
       adapter: Omit<WebAdapterDeps, "log" | "inbound" | "presence">;
+      /** The chat search index; every conversation writes its text to it. */
+      index?: ChatTextIndex;
     },
   ) {
     for (const row of this.rows())
@@ -122,7 +124,7 @@ export class WebThreads {
     const known = this.channels.get(id);
     if (known) return known;
     if (!this.row(id)) throw new Error("unknown thread");
-    const log = new SqliteChatLog(this.deps.db, { conversationId: id });
+    const log = new SqliteChatLog(this.deps.db, { conversationId: id, ...(this.deps.index ? { index: this.deps.index } : {}) });
     const inbound = new WebInboundStore(this.deps.db, id);
     const presence = createPresence({ head: () => log.head() });
     const adapter = new WebWorkspaceAdapter({

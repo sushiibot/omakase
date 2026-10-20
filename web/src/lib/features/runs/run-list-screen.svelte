@@ -11,7 +11,7 @@
 	import type { RemoteLike } from '$lib/ui/screen/screen-state.svelte';
 	import { Skeleton } from '$lib/ui/skeleton';
 	import RunRow from './components/run-row.svelte';
-	import { RUN_FILTERS, runConversationHref, runTime, type RunFilter } from './format';
+	import { RUN_FILTERS, runResultHref, runTime, type RunFilter } from './format';
 	import type { RunSummary } from './types';
 
 	let {
@@ -145,7 +145,7 @@
 	{#snippet children(value)}
 		{@const shown = RUN_FILTERS.find((f) => f.value === value) ?? RUN_FILTERS[0]}
 		{@const sections = byDay(panelRuns(value), runTime, now)}
-		{@const reserveJump = panelRuns(value).some((r) => !!runConversationHref(r))}
+		{@const reserveJump = panelRuns(value).some((r) => !!runResultHref(r))}
 		<div class="flex flex-col gap-4 md:gap-6">
 			<p class="text-sm text-muted-foreground">{shown.description}</p>
 			{#if value === filter && remote.status === 'loading' && snapshots[value]}<p

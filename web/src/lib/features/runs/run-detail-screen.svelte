@@ -1,6 +1,6 @@
 <script lang="ts">
 	import CornerUpRight from '@lucide/svelte/icons/corner-up-right';
-	import { runConversationHref } from './format';
+	import { runResultHref, runTrigger } from './format';
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import FileText from '@lucide/svelte/icons/file-text';
@@ -53,7 +53,10 @@
 		openSteps?: string[];
 		runHref?: (runId: string) => string;
 		historyHref?: (date: string) => string;
-		conversationHref?: (conversationId: string, turnId?: string) => string | undefined;
+		conversationHref?: (
+			conversationId: string,
+			target?: string | { message?: string; turn?: string }
+		) => string | undefined;
 		onretry?: () => void;
 		onloadmore?: () => void;
 	} = $props();
@@ -76,13 +79,17 @@
 			detail?.parent?.conversationId ??
 			(run?.kind === 'chat' || detail?.parent?.kind === 'chat' ? 'main' : undefined)
 	);
+	// The reply the run delivered; without one, its turn in the conversation.
 	const chatHref = $derived(
 		run
-			? conversationHref && conversationId
-				? conversationHref(conversationId, run.turnId ?? detail?.parent?.turnId)
-				: runConversationHref(run, detail?.parent)
+			? conversationHref && run.result
+				? conversationHref(run.result.conversationId, { message: run.result.message })
+				: conversationHref && conversationId
+					? conversationHref(conversationId, run.turnId ?? detail?.parent?.turnId)
+					: runResultHref(run, detail?.parent)
 			: undefined
 	);
+	const trigger = $derived(run ? runTrigger(run, { runHref, parent: detail?.parent }) : undefined);
 	const outcome = $derived.by(() => {
 		if (!run) return '';
 		switch (run.status) {
@@ -216,9 +223,22 @@
 						{activeChildren} delegated {activeChildren === 1 ? 'task is' : 'tasks are'} still running.
 					</p>
 				{/if}
-				{#if chatHref}<Button variant="link" href={chatHref} class="self-start px-0"
-						><CornerUpRight />Jump to conversation</Button
-					>{/if}
+				{#if chatHref || trigger}
+					<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+						{#if chatHref}<Button variant="link" href={chatHref} class="px-0"
+								><CornerUpRight />{run.result ? 'Open result' : 'Jump to conversation'}</Button
+							>{/if}
+						{#if trigger}
+							<p class="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
+								<span>Triggered by</span>
+								{#if trigger.href}<Button variant="link" href={trigger.href} class="min-w-0 px-0"
+										><span class="truncate">{trigger.label}</span></Button
+									>
+								{:else}<span class="truncate text-foreground">{trigger.label}</span>{/if}
+							</p>
+						{/if}
+					</div>
+				{/if}
 			</div>
 		{/if}
 	{/snippet}

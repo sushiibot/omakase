@@ -143,3 +143,29 @@ test("a chat run records the turn its reply belongs to", async ({ page, request 
     })
     .toBe(reply!.turnId);
 });
+
+test("a chat run links to the reply it delivered and the message that triggered it", async ({ page, request, watch }) => {
+  await openChat(page);
+  const tag = nonce();
+  expect((await send(page, `E2E-ECHO linked #${tag}`)).status).toBe(202);
+  await expect(bubble(page, `re-${tag}`)).toContainText("Echo linked.");
+  const [reply] = await stack.query<{ key: string }>("select key from web_events where type = 'reply' and data like ?", `%re-${tag}%`);
+  const [user] = await stack.query<{ key: string }>("select key from web_events where type = 'user' and data like ?", `%#${tag}%`);
+  expect(reply?.key).toBeTruthy();
+  expect(user?.key).toBeTruthy();
+  let run: (Run & { result?: unknown; trigger?: unknown }) | undefined;
+  await expect
+    .poll(async () => {
+      run = (await get<{ runs: (Run & { result?: unknown })[] }>(request, "/api/runs?kind=chat&limit=10")).runs.find((r) => r.title.includes(`#${tag}`) && r.status === "done");
+      return run?.result ?? null;
+    })
+    .toEqual({ conversationId: "main", message: reply!.key });
+  expect(run!.trigger).toEqual({ type: "message", conversationId: "main", message: user!.key });
+  const detail = await get<{ run: Run & { result?: unknown } }>(request, `/api/runs/${run!.runId}`);
+  expect(detail.run.result).toEqual({ conversationId: "main", message: reply!.key });
+
+  await page.goto(`/runs/${run!.runId}`);
+  await expect(page.getByRole("link", { name: "Open result" })).toHaveAttribute("href", `/chat?m=${encodeURIComponent(reply!.key)}`);
+  await expect(page.getByRole("link", { name: "Your message" })).toHaveAttribute("href", `/chat?m=${encodeURIComponent(user!.key)}`);
+  expect(await watch.violations()).toEqual([]);
+});

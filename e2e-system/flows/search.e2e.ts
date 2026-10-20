@@ -1,7 +1,12 @@
-import { bubble, openChat, send } from "../lib/chat.ts";
-import { expect, nonce, test, type Page } from "../lib/harness.ts";
+import { bubble, openChat, send, textbox } from "../lib/chat.ts";
+import { expect, nonce, stack, test, type Page } from "../lib/harness.ts";
 
-type Search = { query: string; hits: { source: string; id: string; role?: string; snippet: string; ranges: [number, number][] }[]; truncated: boolean; unavailable: string[] };
+type Search = {
+  query: string;
+  hits: { source: string; id: string; role?: string; conversationId?: string; message?: string; conversationTitle?: string; snippet: string; ranges: [number, number][] }[];
+  truncated: boolean;
+  unavailable: string[];
+};
 
 async function search(page: Page, q: string): Promise<{ status: number; body: Search }> {
   return page.evaluate(async (query) => {
@@ -38,5 +43,33 @@ test("search finds live and imported chat through the app API", async ({ page, w
   expect((await search(page, "x")).status).toBe(400);
   const runs = await page.evaluate(async () => (await fetch("/api/runs")).status);
   expect(runs).toBe(200);
+  expect(await watch.violations()).toEqual([]);
+});
+
+test("search finds a topic message and links to it in its conversation", async ({ page, watch }) => {
+  await openChat(page);
+  const title = `Search topic ${nonce()}`;
+  const created = await page.evaluate(async (t) => {
+    const res = await fetch("/api/threads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageId: "", title: t }) });
+    return { status: res.status, body: (await res.json()) as { id: string } };
+  }, title);
+  expect(created.status).toBe(201);
+  const topic = created.body.id;
+  await page.goto(`/chats/${topic}`);
+  const tag = nonce();
+  await textbox(page).fill(`Topic searchable #${tag}`);
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(bubble(page, `re-${tag}`)).toBeVisible();
+  const [user] = await stack.query<{ key: string }>("select key from web_events where conversation_id = ? and type = 'user' and data like ?", topic, `%#${tag}%`);
+  expect(user?.key).toBeTruthy();
+
+  await expect
+    .poll(async () => (await search(page, tag)).body.hits.find((h) => h.source === "chat" && h.role === "user") ?? null, { timeout: 15_000 })
+    .toMatchObject({ conversationId: topic, message: user!.key, conversationTitle: title });
+
+  await page.goto(`/history/search?q=${tag}`);
+  const row = page.getByRole("main").getByRole("listitem").filter({ hasText: `${title} · you` });
+  await expect(row.getByRole("link")).toHaveAttribute("href", `/chats/${topic}?m=${encodeURIComponent(user!.key)}`);
+  await expect(row.locator("mark")).toHaveText(tag);
   expect(await watch.violations()).toEqual([]);
 });
