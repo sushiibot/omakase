@@ -4,6 +4,7 @@ import ListChecks from '@lucide/svelte/icons/list-checks';
 import Activity from '@lucide/svelte/icons/activity';
 import BookMarked from '@lucide/svelte/icons/book-marked';
 import Bookmark from '@lucide/svelte/icons/bookmark';
+import CalendarCheck from '@lucide/svelte/icons/calendar-check';
 import CalendarClock from '@lucide/svelte/icons/calendar-clock';
 import Globe from '@lucide/svelte/icons/globe';
 import History from '@lucide/svelte/icons/history';
@@ -97,6 +98,13 @@ const moreEntries: NavEntry[] = [
 		description: 'Jobs that run on their own, and how each run went'
 	},
 	{
+		id: 'calendar-upkeep',
+		href: '/assistant/watching',
+		label: 'Calendar upkeep',
+		icon: CalendarCheck,
+		description: 'What the agent keeps an eye on in your calendar, and its last review'
+	},
+	{
 		id: 'connectors',
 		href: '/connectors',
 		label: 'Connectors',
@@ -143,9 +151,16 @@ const workspace: NavEntry = {
 /** Information and capabilities, rather than frequently used work destinations. */
 export function workspaceFor(on: FeatureCheck): NavEntry[] {
 	const entries = moreFor(on);
-	return ['saved', 'memory', 'history', 'briefing', 'skills', 'schedules', 'browser'].flatMap(
-		(id) => entries.filter((entry) => entry.id === id)
-	);
+	return [
+		'saved',
+		'memory',
+		'history',
+		'briefing',
+		'skills',
+		'schedules',
+		'calendar-upkeep',
+		'browser'
+	].flatMap((id) => entries.filter((entry) => entry.id === id));
 }
 
 /** Stable primary destinations. Optional previews live inside Workspace. */

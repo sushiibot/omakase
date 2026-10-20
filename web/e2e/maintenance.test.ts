@@ -83,8 +83,14 @@ for (const width of [320, 1440]) {
 		await page.getByRole('button', { name: 'Undo update' }).click();
 		await expect(page.getByText('Update undone.', { exact: true })).toBeVisible();
 		await page.goBack();
-		// Watching is a Home section, shown while a responsibility exists.
-		const watching = page.locator('[data-assistant-home]');
+		// A healthy responsibility stays off Home; its page holds the details and Pause.
+		await expect(
+			page
+				.locator('[data-assistant-home]')
+				.getByRole('heading', { name: 'Keep upcoming plans accurate' })
+		).toHaveCount(0);
+		await page.goto('/assistant/watching');
+		const watching = page.getByRole('main');
 		await expect(
 			watching.getByRole('heading', { name: 'Keep upcoming plans accurate' })
 		).toBeVisible();
@@ -95,6 +101,25 @@ for (const width of [320, 1440]) {
 		expect(await horizontalOverflow(page)).toEqual([]);
 	});
 }
+
+test('a failed calendar review is one row on Home that opens the responsibility', async ({
+	page,
+	context
+}) => {
+	await fixtureApp(context);
+	const view = fixture();
+	view.proposals = [];
+	view.responsibility.lastError = 'Fastmail calendar could not be read.';
+	await context.route('**/api/maintenance', (route) => route.fulfill({ json: { view } }));
+	await page.goto('/assistant');
+	const home = page.locator('[data-assistant-home]');
+	const row = home.getByRole('link', { name: /Keep upcoming plans accurate/ });
+	await expect(row).toContainText('Last review failed: Fastmail calendar could not be read.');
+	await expect(home.getByRole('button', { name: 'Pause', exact: true })).toHaveCount(0);
+	await row.click();
+	await expect(page).toHaveURL(/\/assistant\/watching$/);
+	await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+});
 
 test('stale approval shows the server explanation and uncertain writes offer a read-only result check', async ({
 	page,

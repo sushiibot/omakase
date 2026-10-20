@@ -15,7 +15,8 @@ describe('workspace navigation', () => {
 		expect(workspaceFor(liveOnly).map((entry) => entry.href)).toEqual([
 			'/saved',
 			'/memory',
-			'/history'
+			'/history',
+			'/assistant/watching'
 		]);
 		expect(
 			workspaceFor(allOn)
@@ -38,6 +39,7 @@ describe('workspace navigation', () => {
 		])
 			expect(activeNav(route)).toBe('workspace');
 		expect(activeNav('/assistant')).toBe('assistant');
+		expect(activeNav('/assistant/watching')).toBe('assistant');
 		expect(activeNav('/tasks/[id]')).toBe('tasks');
 		expect(activeNav('/runs/[id]')).toBe('runs');
 		for (const route of [

@@ -150,9 +150,7 @@
 		onpause={() => {}}
 	/>{/snippet}
 {#snippet maintenanceWatching()}<MaintenanceSummary
-		mode="watching"
+		mode="alert"
 		view={maintenance.remote.data?.view}
-		busy={maintenance.busy}
-		error={maintenance.error}
-		onpause={(paused) => void maintenance.act({ action: 'pause', paused })}
+		onpause={() => {}}
 	/>{/snippet}

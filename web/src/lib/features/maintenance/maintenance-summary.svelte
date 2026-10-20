@@ -10,7 +10,8 @@
 		onpause
 	}: {
 		view?: MaintenanceView;
-		mode: 'needs' | 'updates' | 'watching';
+		/** `alert` is Home's one row when the last review failed; `watching` is the full responsibility. */
+		mode: 'needs' | 'updates' | 'alert' | 'watching';
 		busy?: boolean;
 		error?: string | null;
 		onpause: (paused: boolean) => void;
@@ -25,6 +26,8 @@
 			.filter((p) => ['completed', 'undone', 'conflict'].includes(p.status))
 			.slice(0, 4) ?? []
 	);
+	const when = (at: string) =>
+		new Date(at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 	// Home shows the pending and latest outcomes above, so Watching lists only the rest.
 	const older = $derived(
 		view?.proposals.filter((p) => !pending.includes(p) && !receipts.includes(p)).slice(0, 30) ?? []
@@ -80,6 +83,22 @@
 			</Button>
 		{/each}
 	</Section>
+{:else if mode === 'alert' && view?.responsibility.lastError}
+	<Section title="Calendar upkeep">
+		<Button
+			href="/assistant/watching"
+			variant="ghost"
+			class="h-auto w-full justify-between gap-3 py-3 text-left whitespace-normal"
+		>
+			<span class="min-w-0"
+				><span class="block font-medium [overflow-wrap:anywhere]">{view.responsibility.title}</span
+				><span class="block text-xs font-normal [overflow-wrap:anywhere] text-destructive"
+					>Last review failed: {view.responsibility.lastError}</span
+				></span
+			>
+			<span class="shrink-0 text-sm">Details</span>
+		</Button>
+	</Section>
 {:else if mode === 'watching' && view}
 	<Section
 		title={view.responsibility.title}
@@ -90,7 +109,7 @@
 				{view.responsibility.enabled
 					? 'Active during heartbeat reviews'
 					: 'Paused'}{#if view.responsibility.lastReviewAt}
-					· Last review ran {new Date(view.responsibility.lastReviewAt).toLocaleString()}{/if}
+					· Last review {when(view.responsibility.lastReviewAt)}{/if}
 			</p>
 			<Button
 				variant="outline"
@@ -100,9 +119,7 @@
 			>
 		</div>
 		{#if view.responsibility.lastReadAt}<p class="text-sm text-muted-foreground">
-				Last event and source email verified {new Date(
-					view.responsibility.lastReadAt
-				).toLocaleString()}.
+				Last event and source email verified {when(view.responsibility.lastReadAt)}.
 			</p>{:else}<p class="text-sm text-muted-foreground">
 				No event and source email verified yet.
 			</p>{/if}
