@@ -7,8 +7,9 @@ test("calendar responsibility crosses the gateway link, persists pause, and enfo
   expect(await response.json()).toMatchObject({ view: { responsibility: { title: "Keep upcoming plans accurate", enabled: true }, proposals: [] } });
   const foreign = await request.post("/api/maintenance", { headers: { Origin: "https://other.example", "Sec-Fetch-Site": "cross-site" }, data: { action: "pause", paused: true } });
   expect(foreign.status()).toBe(403);
-  await page.goto("/assistant?view=watching");
-  const watching = page.getByRole("tabpanel", { name: "Watching" });
+  await page.goto("/assistant");
+  // Watching is a Home section, shown while a responsibility exists.
+  const watching = page.locator("[data-assistant-home]");
   await watching.getByRole("button", { name: "Pause", exact: true }).click();
   await expect(watching.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
   await page.reload();
