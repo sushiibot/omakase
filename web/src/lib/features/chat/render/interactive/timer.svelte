@@ -14,8 +14,16 @@
 		label,
 		seconds,
 		storeKey,
-		compact = false
-	}: { label: string; seconds: number; storeKey: string; compact?: boolean } = $props();
+		compact = false,
+		disabled = false
+	}: {
+		label: string;
+		seconds: number;
+		storeKey: string;
+		compact?: boolean;
+		/** Shown but not startable yet: the block is still streaming and its key isn't final. */
+		disabled?: boolean;
+	} = $props();
 
 	type Saved = { endsAt: number | null; left: number };
 	// A block's key and duration come from its text, which doesn't change once rendered.
@@ -96,6 +104,7 @@
 			variant="ghost"
 			size="icon-sm"
 			aria-label="Start {label}"
+			{disabled}
 			onclick={start}><Play /></Button
 		>
 	{/if}

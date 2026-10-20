@@ -4,7 +4,8 @@
 
 	// Values against a target. Past 100% the bar stays full and the percentage says by how much.
 	let { data }: { data: RichData<'progress'> } = $props();
-	const pct = (v: number, max: number) => Math.round((v / max) * 100);
+	// `max` > 0 is checked once the block is finished; a streaming one may not have been yet.
+	const pct = (v: number, max: number) => (max > 0 ? Math.round((v / max) * 100) : 0);
 </script>
 
 <Frame title={data.title}>

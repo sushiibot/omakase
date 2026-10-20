@@ -7,7 +7,16 @@
 
 	// A few details the agent needs. Send posts one "Label: value" line per filled field as the
 	// owner's message, so what is sent is exactly what was typed.
-	let { data, reply }: { data: RichData<'form'>; reply?: (text: string) => void } = $props();
+	let {
+		data,
+		reply,
+		partial = false
+	}: {
+		data: RichData<'form'>;
+		reply?: (text: string) => void;
+		/** Still streaming: shown, never live (no `reply` either). */
+		partial?: boolean;
+	} = $props();
 	const uid = $props.id();
 	// A number input binds a number (or null when cleared), so values are read through `entry`.
 	let values = $state<(string | number | null | undefined)[]>([]);
@@ -31,7 +40,7 @@
 	}
 </script>
 
-<ReplyPanel title={data.title} live={!!reply} {sent}>
+<ReplyPanel title={data.title} live={!!reply} {partial} {sent}>
 	<form data-rich-control class="flex flex-col gap-3" onsubmit={submit} novalidate>
 		{#each data.fields as field, i (i)}
 			<div class="flex flex-col gap-1.5">

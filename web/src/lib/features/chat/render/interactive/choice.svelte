@@ -6,7 +6,16 @@
 
 	// A question with options. One pick sends at once; with `multiple`, picks toggle and Send sends
 	// them joined, exactly as shown.
-	let { data, reply }: { data: RichData<'choice'>; reply?: (text: string) => void } = $props();
+	let {
+		data,
+		reply,
+		partial = false
+	}: {
+		data: RichData<'choice'>;
+		reply?: (text: string) => void;
+		/** Still streaming: shown, never live (no `reply` either). */
+		partial?: boolean;
+	} = $props();
 	let picked = $state<string[]>([]);
 	let sent = $state<string | null>(null);
 	const disabled = $derived(!reply || sent !== null);
@@ -21,7 +30,7 @@
 	}
 </script>
 
-<ReplyPanel live={!!reply} {sent}>
+<ReplyPanel live={!!reply} {partial} {sent}>
 	<p class="text-sm font-medium">{data.question}</p>
 	<div class="flex flex-wrap gap-2" role="group" aria-label={data.question}>
 		{#each data.options as option, i (i)}

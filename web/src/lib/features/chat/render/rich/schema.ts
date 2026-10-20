@@ -9,8 +9,10 @@ export interface Issue {
 }
 
 export interface Schema<T> {
-	/** Returns the cleaned value, or undefined after pushing at least one issue. */
-	parse(value: unknown, path: string, issues: Issue[]): T | undefined;
+	/** Returns the cleaned value, or undefined after pushing at least one issue. `partial` reads a
+	 *  block still being written (see `parsePartial`); scalars ignore it, so their verdict is the
+	 *  same either way. */
+	parse(value: unknown, path: string, issues: Issue[], partial?: boolean): T | undefined;
 	/** A compact type sketch for the prompt, `string ≤80`. */
 	doc(): string;
 	readonly optional: boolean;
@@ -134,7 +136,22 @@ export function markOrText(opts: { max?: number } = {}): Schema<string | boolean
 export function arr<T>(item: Schema<T>, opts: { min?: number; max: number }): Schema<T[]> {
 	const min = opts.min ?? 1;
 	return schema(
-		(value, path, issues) => {
+		(value, path, issues, partial) => {
+			if (partial) {
+				// A list still arriving: the longest valid prefix, since its last item is usually cut off.
+				// A missing list is an empty one, and `min` waits for the finished block.
+				if (value === undefined || value === null) return [];
+				if (!Array.isArray(value))
+					return fail(issues, path, `expected a list, got ${describe(value)}`);
+				const out: T[] = [];
+				for (let i = 0; i < Math.min(value.length, opts.max); i++) {
+					const scratch: Issue[] = [];
+					const parsed = item.parse(value[i], join(path, i), scratch, true);
+					if (parsed === undefined || scratch.length) break;
+					out.push(parsed);
+				}
+				return out;
+			}
 			if (!Array.isArray(value))
 				return fail(issues, path, `expected a list, got ${describe(value)}`);
 			if (value.length < min)
@@ -151,8 +168,8 @@ export function arr<T>(item: Schema<T>, opts: { min?: number; max: number }): Sc
 
 export function opt<T>(inner: Schema<T>): Schema<T | undefined> {
 	return schema(
-		(value, path, issues) =>
-			value === undefined || value === null ? undefined : inner.parse(value, path, issues),
+		(value, path, issues, partial) =>
+			value === undefined || value === null ? undefined : inner.parse(value, path, issues, partial),
 		() => inner.doc(),
 		true
 	);
@@ -162,7 +179,7 @@ export function opt<T>(inner: Schema<T>): Schema<T | undefined> {
 export function lazy<T>(make: () => Schema<T>, doc: string): Schema<T> {
 	let inner: Schema<T> | undefined;
 	return schema(
-		(value, path, issues) => (inner ??= make()).parse(value, path, issues),
+		(value, path, issues, partial) => (inner ??= make()).parse(value, path, issues, partial),
 		() => doc
 	);
 }
@@ -182,10 +199,13 @@ export function obj<S extends Shape>(
 	check?: (value: ObjOf<S>, report: (path: string, message: string) => void) => void
 ): Schema<ObjOf<S>> {
 	return schema(
-		(value, path, issues) => {
+		(value, path, issues, partial) => {
 			if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 				return fail(issues, path, `expected a mapping, got ${describe(value)}`);
 			}
+			if (partial)
+				return partialObj(shape, value as Record<string, unknown>, path, issues) as
+					ObjOf<S> | undefined;
 			const before = issues.length;
 			const record = value as Record<string, unknown>;
 			const allowed = Object.keys(shape);
@@ -218,6 +238,30 @@ export function obj<S extends Shape>(
 	);
 }
 
+/** `obj` for a block still being written: unknown keys are skipped, an optional field that fails is
+ *  left out, a missing list is empty (see `arr`), and `check` waits for the finished block. A
+ *  required field that is missing or fails still fails the mapping. */
+function partialObj(
+	shape: Shape,
+	record: Record<string, unknown>,
+	path: string,
+	issues: Issue[]
+): Record<string, unknown> | undefined {
+	const out: Record<string, unknown> = {};
+	for (const key of Object.keys(shape)) {
+		const field = shape[key];
+		const raw = Object.hasOwn(record, key) ? record[key] : undefined;
+		const scratch: Issue[] = [];
+		const parsed = field.parse(raw, join(path, key), scratch, true);
+		if (parsed !== undefined && !scratch.length) out[key] = parsed;
+		else if (!field.optional) {
+			issues.push(...(scratch.length ? scratch : [{ path: join(path, key), message: 'required' }]));
+			return undefined;
+		}
+	}
+	return out;
+}
+
 /** Runs `schema` on `value`: the cleaned value, or every issue found. */
 export function validate<T>(
 	s: Schema<T>,
@@ -226,4 +270,13 @@ export function validate<T>(
 	const issues: Issue[] = [];
 	const out = s.parse(value, '', issues);
 	return out === undefined || issues.length ? { ok: false, issues } : { ok: true, value: out };
+}
+
+/** Runs `schema` leniently on a block that is still being written, for a progressive preview: the
+ *  value so far, or undefined while a required field is missing. Never decides whether the finished
+ *  block is valid; `validate` alone does that. */
+export function parsePartial<T>(s: Schema<T>, value: unknown): T | undefined {
+	const issues: Issue[] = [];
+	const out = s.parse(value, '', issues, true);
+	return issues.length ? undefined : out;
 }

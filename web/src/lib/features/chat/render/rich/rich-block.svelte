@@ -26,34 +26,70 @@
 	// visible text as the owner's message through `reply`.
 	let {
 		block,
-		reply
+		reply,
+		partial = false
 	}: {
 		block: RichBlock;
 		/** Sends text as the owner's message; only the latest reply in chat passes it. */
 		reply?: (text: string) => void;
+		/** The fence is still streaming and `block` is what it holds so far: lists grow, controls are
+		 *  off, and a caret shows it is still being written. */
+		partial?: boolean;
 	} = $props();
 </script>
 
-{#if block.type === 'breakdown'}<Breakdown data={block.data} />
-{:else if block.type === 'flow'}<Flow data={block.data} />
-{:else if block.type === 'stats'}<Stats data={block.data} />
-{:else if block.type === 'bars'}<Bars data={block.data} />
-{:else if block.type === 'line'}<Line data={block.data} />
-{:else if block.type === 'progress'}<Progress data={block.data} />
-{:else if block.type === 'compare'}<Compare data={block.data} />
-{:else if block.type === 'timeline'}<Timeline data={block.data} />
-{:else if block.type === 'matrix'}<Matrix data={block.data} />
-{:else if block.type === 'tree'}<Tree data={block.data} />
-{:else if block.type === 'cards'}<Cards data={block.data} />
-{:else if block.type === 'recipe'}<Recipe data={block.data} />
-{:else if block.type === 'event'}<Event data={block.data} />
-{:else if block.type === 'place'}<Place data={block.data} />
-{:else if block.type === 'timer'}<Timer
-		label={block.data.label}
-		seconds={block.data.duration}
-		storeKey={hashText(JSON.stringify(block.data))}
-	/>
-{:else if block.type === 'actions'}<Actions data={block.data} {reply} />
-{:else if block.type === 'choice'}<Choice data={block.data} {reply} />
-{:else if block.type === 'form'}<Form data={block.data} {reply} />
+<!-- A partial block sits in its own wrapper, so the closed fence mounts the block afresh: recipe and
+     timer read their device-local state once, keyed by the block's text, and must do it from the
+     finished data. Finished blocks keep their plain markup. -->
+{#if partial}
+	<div class="relative min-w-0" aria-busy="true">
+		{@render body()}
+		<!-- Out of the flow, inside the block's bottom padding, so it never moves the layout. -->
+		<span
+			data-caret
+			aria-hidden="true"
+			class="absolute right-2.5 bottom-2 h-3 w-0.5 animate-pulse bg-foreground motion-reduce:animate-none"
+		></span>
+	</div>
+{:else}
+	{@render body()}
 {/if}
+
+{#snippet body()}
+	{#if block.type === 'breakdown'}<Breakdown data={block.data} />
+	{:else if block.type === 'flow'}<Flow data={block.data} />
+	{:else if block.type === 'stats'}<Stats data={block.data} />
+	{:else if block.type === 'bars'}<Bars data={block.data} />
+	{:else if block.type === 'line'}<Line data={block.data} />
+	{:else if block.type === 'progress'}<Progress data={block.data} />
+	{:else if block.type === 'compare'}<Compare data={block.data} />
+	{:else if block.type === 'timeline'}<Timeline data={block.data} />
+	{:else if block.type === 'matrix'}<Matrix data={block.data} />
+	{:else if block.type === 'tree'}<Tree data={block.data} />
+	{:else if block.type === 'cards'}<Cards data={block.data} />
+	{:else if block.type === 'recipe'}<Recipe data={block.data} {partial} />
+	{:else if block.type === 'event'}<Event data={block.data} />
+	{:else if block.type === 'place'}<Place data={block.data} />
+	{:else if block.type === 'timer'}<Timer
+			label={block.data.label}
+			seconds={block.data.duration}
+			storeKey={hashText(JSON.stringify(block.data))}
+			disabled={partial}
+		/>
+	{:else if block.type === 'actions'}<Actions
+			data={block.data}
+			reply={partial ? undefined : reply}
+			{partial}
+		/>
+	{:else if block.type === 'choice'}<Choice
+			data={block.data}
+			reply={partial ? undefined : reply}
+			{partial}
+		/>
+	{:else if block.type === 'form'}<Form
+			data={block.data}
+			reply={partial ? undefined : reply}
+			{partial}
+		/>
+	{/if}
+{/snippet}

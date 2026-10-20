@@ -179,13 +179,22 @@ describe('rendering', () => {
 		expect(tree[0]).toMatchObject({ kind: 'code', invalid: ['the code fence is not closed'] });
 	});
 
-	test('while streaming, an open rich fence is a placeholder, never raw YAML', () => {
+	test('while streaming, an open rich fence shows what it holds so far, never raw YAML', () => {
 		const stream = new MarkdownStream(
 			(t) => t,
 			() => 0
 		);
+		expect(stream.update('Here:\n\n```recipe\nserves: 2\n', {}).at(-1)).toEqual({
+			kind: 'rich-pending',
+			type: 'recipe'
+		});
 		const tree = stream.update('Here:\n\n```breakdown\nsegments:\n  - { label: A', {});
-		expect(tree.map((n) => n.kind)).toEqual(['paragraph', 'rich-pending']);
+		expect(tree.map((n) => n.kind)).toEqual(['paragraph', 'rich']);
+		expect(tree[1] as unknown).toEqual({
+			kind: 'rich',
+			block: { type: 'breakdown', data: { segments: [] } },
+			partial: true
+		});
 		const done = stream.finish(
 			'Here:\n\n' + fence('breakdown', 'segments:\n  - { label: A, value: 1 }'),
 			{}

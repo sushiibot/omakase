@@ -16,6 +16,7 @@ import {
 	isContainerName,
 	isRichType,
 	parseContainerAttrs,
+	parsePartialRichBlock,
 	parseRichBlock,
 	type RichBlock,
 	type RichType,
@@ -58,9 +59,11 @@ export type MdBlockNode =
 	| { kind: 'rule' }
 	/** Unparsed text, shown with its line breaks. */
 	| { kind: 'plain'; text: string }
-	/** A validated rich block (`breakdown`, `flow`, ...): data only, laid out by its component. */
-	| { kind: 'rich'; block: RichBlock }
-	/** A rich block whose fence is still streaming: a placeholder until it closes. */
+	/** A validated rich block (`breakdown`, `flow`, ...): data only, laid out by its component.
+	 *  `partial`: its fence is still streaming and this is what it holds so far (lists may be short
+	 *  or empty, cross-field rules not yet checked); the closed fence replaces it. */
+	| { kind: 'rich'; block: RichBlock; partial?: true }
+	/** A rich block whose fence is still streaming, before anything in it can show: a placeholder. */
 	| { kind: 'rich-pending'; type: RichType }
 	| { kind: 'callout'; tone: Tone; title: string | null; children: MdBlockNode[] }
 	| { kind: 'details'; summary: string; children: MdBlockNode[] }
@@ -237,9 +240,14 @@ class Renderer {
 		const code: MdBlockNode = { kind: 'code', lang, text: node.value };
 		if (!isRichType(lang)) return code;
 		if (!fenceClosed(node, this.source)) {
-			return this.pending
-				? { kind: 'rich-pending', type: lang }
-				: { ...code, invalid: ['the code fence is not closed'] };
+			if (!this.pending) return { ...code, invalid: ['the code fence is not closed'] };
+			// The parser drops the body's last line break, which says whether its last line is whole.
+			const end = node.position?.end.offset ?? 0;
+			const body = this.source[end - 1] === '\n' ? node.value + '\n' : node.value;
+			const block = parsePartialRichBlock(lang, body);
+			return block
+				? { kind: 'rich', block: this.linked(block), partial: true }
+				: { kind: 'rich-pending', type: lang };
 		}
 		const result = parseRichBlock(lang, node.value);
 		if (!result.ok) return { ...code, invalid: formatIssues(result.issues) };

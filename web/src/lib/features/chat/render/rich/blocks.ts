@@ -7,6 +7,7 @@ import {
 	obj,
 	oneOf,
 	opt,
+	parsePartial,
 	str,
 	textOrNum,
 	validate,
@@ -389,6 +390,29 @@ export function parseRichBlock(
 	if (!yaml.ok) return yaml;
 	const result = validate(schemas[type] as Schema<unknown>, yaml.value);
 	return result.ok ? { ok: true, block: { type, data: result.value } as RichBlock } : result;
+}
+
+/** Lines dropped from the end, after the unfinished one, before a streaming body is given up on. */
+const PARTIAL_RETRIES = 4;
+
+/**
+ * What a block whose fence is still streaming can show so far, or null while it can show nothing
+ * (a required field such as a recipe's title hasn't arrived). Reads only whole lines, drops a few
+ * more from the end while the YAML is mid-item (an open `{ label: A,`), and keeps each list's valid
+ * prefix (`parsePartial`). A preview only: the closed fence goes through `parseRichBlock`, whose
+ * verdict this never changes. Bounded to a few YAML parses; never throws.
+ */
+export function parsePartialRichBlock(type: RichType, body: string): RichBlock | null {
+	let text = body.slice(0, body.lastIndexOf('\n') + 1);
+	for (let attempt = 0; attempt <= PARTIAL_RETRIES && text.trim(); attempt++) {
+		const yaml = parseRichYaml(text);
+		if (yaml.ok) {
+			const data = parsePartial(schemas[type] as Schema<unknown>, yaml.value);
+			return data === undefined ? null : ({ type, data } as RichBlock);
+		}
+		text = text.slice(0, text.lastIndexOf('\n', text.length - 2) + 1);
+	}
+	return null;
 }
 
 // --- Containers -------------------------------------------------------------------------------

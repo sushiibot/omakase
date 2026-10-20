@@ -11,7 +11,11 @@
 </script>
 
 <Frame title={data.title} note={data.note} label={richPlainText({ type: 'breakdown', data })}>
-	<p class="text-2xl font-semibold tabular-nums" aria-hidden="true">
+	<!-- Kept while a streaming block has no segment yet, so the box doesn't grow when one lands. -->
+	<p
+		class={['text-2xl font-semibold tabular-nums', !data.segments.length && 'invisible']}
+		aria-hidden="true"
+	>
 		{formatNumber(total)}{#if data.unit}<span
 				class="ml-1 text-base font-medium text-muted-foreground">{data.unit}</span
 			>{/if}

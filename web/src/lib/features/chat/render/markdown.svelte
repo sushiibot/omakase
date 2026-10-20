@@ -265,7 +265,7 @@
 		{:else if node.kind === 'rule'}
 			<hr class="border-border" />
 		{:else if node.kind === 'rich'}
-			<RichBlock block={node.block} {reply} />
+			<RichBlock block={node.block} {reply} partial={node.partial} />
 		{:else if node.kind === 'rich-pending'}
 			<RichPending type={node.type} />
 		{:else if node.kind === 'callout'}

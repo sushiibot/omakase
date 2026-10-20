@@ -4,11 +4,20 @@
 	import ReplyPanel from './reply-panel.svelte';
 
 	// Suggested next replies. A tap sends the label exactly as shown, as the owner's message.
-	let { data, reply }: { data: RichData<'actions'>; reply?: (text: string) => void } = $props();
+	let {
+		data,
+		reply,
+		partial = false
+	}: {
+		data: RichData<'actions'>;
+		reply?: (text: string) => void;
+		/** Still streaming: shown, never live (no `reply` either). */
+		partial?: boolean;
+	} = $props();
 	let sent = $state<string | null>(null);
 </script>
 
-<ReplyPanel title={data.prompt} live={!!reply} {sent}>
+<ReplyPanel title={data.prompt} live={!!reply} {partial} {sent}>
 	<div class="flex flex-wrap gap-2">
 		{#each data.items as item, i (i)}
 			<Button

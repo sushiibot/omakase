@@ -15,7 +15,15 @@
 
 	// A recipe: servings rescale the amounts, ingredients tick off, and a step that names a time
 	// gets a timer. All of it stays on this device.
-	let { data }: { data: RichData<'recipe'> } = $props();
+	let {
+		data,
+		partial = false
+	}: {
+		data: RichData<'recipe'>;
+		/** Still streaming: lists grow and the controls wait for the finished block, whose key the
+		 *  saved state belongs to. rich-block.svelte mounts the finished block afresh. */
+		partial?: boolean;
+	} = $props();
 	const uid = $props.id();
 	const key = $derived(hashText(JSON.stringify(data)));
 	// A finished block's data doesn't change, so its saved state is read once.
@@ -24,7 +32,9 @@
 	);
 	let serves = $state(saved.serves ?? untrack(() => data.serves) ?? 0);
 	let got = $state<Record<number, boolean>>(saved.got ?? {});
-	const factor = $derived(data.serves && serves ? serves / data.serves : 1);
+	// While partial, `serves` (read once, above) may predate the line that sets it.
+	const shownServes = $derived(partial ? (data.serves ?? 0) : serves);
+	const factor = $derived(data.serves && shownServes ? shownServes / data.serves : 1);
 	const times = $derived(
 		data.time
 			? (['prep', 'cook', 'total'] as const).flatMap((k) =>
@@ -55,16 +65,16 @@
 							variant="ghost"
 							size="icon-xs"
 							aria-label="Fewer servings"
-							disabled={serves <= 1}
+							disabled={partial || serves <= 1}
 							onclick={() => setServes(serves - 1)}><Minus /></Button
 						>
-						<span class="tabular-nums" aria-live="polite">Serves {serves}</span>
+						<span class="tabular-nums" aria-live="polite">Serves {shownServes}</span>
 						<Button
 							data-rich-control
 							variant="ghost"
 							size="icon-xs"
 							aria-label="More servings"
-							disabled={serves >= 100}
+							disabled={partial || serves >= 100}
 							onclick={() => setServes(serves + 1)}><Plus /></Button
 						>
 					</span>
@@ -85,6 +95,7 @@
 							data-rich-control
 							class="mt-1"
 							aria-labelledby="{uid}-ing-{i}"
+							disabled={partial}
 							checked={got[i] ?? false}
 							onCheckedChange={(v) => {
 								got = { ...got, [i]: v === true };
@@ -126,6 +137,7 @@
 									label="Step {i + 1}"
 									{seconds}
 									storeKey="{key}:{i}"
+									disabled={partial}
 								/>{/if}
 						</div>
 					</li>

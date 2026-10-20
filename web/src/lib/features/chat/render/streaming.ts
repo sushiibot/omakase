@@ -240,6 +240,13 @@ export function streamingView(raw: string): string {
 		const last = text.slice(nl + 1).trim();
 		return last && [...last].every((c) => c === fence) ? text.slice(0, nl + 1) : text;
 	}
+	// So does one typed in full but without its line break yet: the edits below would read its
+	// opening fence as an unclosed code span. The block closes with the line break.
+	const nl = text.lastIndexOf('\n');
+	const last = text.slice(nl + 1).trim();
+	if (/^(?:`{3,}|~{3,})$/.test(last) && openFence(text.slice(0, nl + 1)) === last[0]) {
+		return text.slice(0, nl + 1);
+	}
 	const start = lastBlankLineEnd(text);
 	let seg = holdBackDefinition(text.slice(start));
 	seg = holdBackLines(seg);

@@ -9,6 +9,7 @@
 		title,
 		live,
 		sent,
+		partial = false,
 		children
 	}: {
 		title?: string;
@@ -16,6 +17,8 @@
 		live: boolean;
 		/** What this panel already sent, shown in place of the hint. */
 		sent?: string | null;
+		/** The block is still streaming; it goes live (or not) once it's finished. */
+		partial?: boolean;
 		children: Snippet;
 	} = $props();
 </script>
@@ -30,7 +33,7 @@
 	{@render children()}
 	{#if sent}
 		<p class="text-xs text-muted-foreground" role="status">Sent “{sent}”</p>
-	{:else if !live}
+	{:else if !live && !partial}
 		<p class="text-xs text-muted-foreground">Reply options work in the latest reply.</p>
 	{/if}
 </section>

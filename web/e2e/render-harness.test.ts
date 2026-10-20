@@ -569,6 +569,82 @@ test.describe('interactive reply blocks', () => {
 		expect(violations).toEqual([]);
 	});
 
+	test('a streaming recipe fills in before its fence closes, then works once finished', async ({
+		page
+	}) => {
+		const violations = await open(page);
+		await page.evaluate(() => localStorage.clear());
+		const text =
+			'Here it is:\n\n```recipe\ntitle: Rice\nserves: 2\ningredients:\n' +
+			'  - { qty: 1/2, unit: cup, item: rice }\n  - { qty: 1, unit: cup, item: water }\n' +
+			'steps:\n  - Simmer for 12 minutes.\n```\n\nEnjoy.';
+		const streamed = page.locator('#streamed');
+		const busy = streamed.locator('[aria-busy="true"]');
+		// One delta, then two frames so the throttled stream renders it.
+		const feed = (upTo: string) =>
+			page.evaluate(
+				async (t) => {
+					const { h } = window as unknown as Win;
+					h.api.stream.text = t;
+					await new Promise(requestAnimationFrame);
+					await new Promise(requestAnimationFrame);
+				},
+				text.slice(0, text.indexOf(upTo))
+			);
+		await page.evaluate(() => {
+			(window as unknown as Win).h.api.stream = { text: '', streaming: true };
+		});
+
+		await feed('title');
+		await expect(streamed.getByRole('status', { name: 'Loading recipe' })).toBeVisible();
+		await feed('serves');
+		await expect(streamed.getByText('Rice', { exact: true })).toBeVisible();
+		await expect(busy).toHaveCount(1);
+		// The first ingredient is whole; the second is still being written.
+		await feed('water');
+		await expect(streamed.getByText('rice', { exact: true })).toBeVisible();
+		await expect(streamed.getByText('water')).toHaveCount(0);
+		await feed('steps:');
+		await expect(streamed.getByText('water', { exact: true })).toBeVisible();
+		await expect(streamed.getByText('Serves 2')).toBeVisible();
+		await expect(streamed.getByRole('button', { name: 'More servings' })).toBeDisabled();
+		await expect(streamed.getByRole('checkbox', { name: /rice/ })).toBeDisabled();
+		await feed('```\n\nEnjoy');
+		await expect(streamed.getByText('Simmer for 12 minutes.')).toBeVisible();
+		await expect(streamed.getByRole('button', { name: 'Start Step 1' })).toBeDisabled();
+		await expect(streamed.locator('pre')).toHaveCount(0);
+
+		await page.evaluate((t) => {
+			const { h } = window as unknown as Win;
+			h.api.stream.text = t;
+			h.api.stream.streaming = false;
+			h.flushSync();
+		}, text);
+		await expect(busy).toHaveCount(0);
+		await streamed.getByRole('button', { name: 'More servings' }).click();
+		await expect(streamed.getByText('Serves 3')).toBeVisible();
+		await expect(streamed.getByText('¾ cup')).toBeVisible();
+		await expect(streamed.getByRole('button', { name: 'Start Step 1' })).toBeEnabled();
+		expect(await page.evaluate(() => (window as unknown as Win).h.errors)).toEqual([]);
+		expect(violations).toEqual([]);
+	});
+
+	test('every block streams a few characters a frame without an error', async ({ page }) => {
+		const { RICH_EXAMPLES, RICH_TYPES } =
+			await import('../src/lib/features/chat/render/rich/blocks');
+		const violations = await open(page);
+		const text = RICH_TYPES.map((t) => '```' + t + '\n' + RICH_EXAMPLES[t].example + '\n```').join(
+			'\n\nNext:\n\n'
+		);
+		await page.evaluate((t) => (window as unknown as Win).h.streamInto(t, 7), text);
+		const streamed = page.locator('#streamed');
+		await expect(streamed.locator('[aria-busy="true"]')).toHaveCount(0);
+		await expect(streamed.locator('[data-reply-panel]')).toHaveCount(3);
+		await expect(streamed.getByText("Couldn't show")).toHaveCount(0);
+		expect(await page.evaluate(() => (window as unknown as Win).h.errors)).toEqual([]);
+		expect(violations).toEqual([]);
+	});
+
 	test('reply blocks send exactly what they show, once, and only when live', async ({ page }) => {
 		await open(page);
 		const solo = page.locator('#solo');
