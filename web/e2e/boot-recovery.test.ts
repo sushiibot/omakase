@@ -23,7 +23,7 @@ test('a stale root chunk reloads once and then boots', async ({ page, context })
 	const loads = await breakRootLayout(context, 1);
 	await page.goto('/');
 	await expect.poll(loads.documents).toBe(2);
-	await expect(page).toHaveURL(/\/assistant$/);
+	await expect(page).toHaveURL(/\/chat$/);
 	await expect(page.getByRole('button', { name: /^Menu/ })).toBeVisible();
 	await expect(page.getByRole('heading', { name: "sushii-agent couldn't start" })).toHaveCount(0);
 	await page.waitForTimeout(500);

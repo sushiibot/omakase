@@ -1,14 +1,10 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { channelFixture } from '../src/lib/features/channels/fixtures';
 import { axe, horizontalOverflow, smallTargets, stubStream, fixtureApp } from './helpers';
 
 const LIVE_NAV = ['Channels', 'Tasks', 'Activity', 'Workspace', 'Settings'];
 
 /** Live navigation never depends on /api/me; overrides enable only fixture previews. */
-async function server(
-	context: BrowserContext,
-	opts: { override?: string; me?: 'hang'; main?: 'running' | 'idle' } = {}
-) {
+async function server(context: BrowserContext, opts: { override?: string; me?: 'hang' } = {}) {
 	await stubStream(context);
 	await context.addInitScript((override) => {
 		if (override) localStorage.setItem('features:override', override);
@@ -20,13 +16,6 @@ async function server(
 			return route.fulfill({ json: { login: 'drk@example.com' } });
 		}
 		if (path === '/api/chat/history') return route.fulfill({ json: { items: [], before: null } });
-		if (path === '/api/channels' && opts.main)
-			return route.fulfill({
-				json: {
-					channels: [channelFixture('main', 'Main', { state: opts.main })],
-					archiveAfterDays: 7
-				}
-			});
 		return route.fulfill({ status: 404, body: 'Not found' });
 	});
 }
@@ -39,14 +28,13 @@ async function drawer(page: Page) {
 	return menu;
 }
 
-test('the app opens on Home and all live screens appear in the drawer by default', async ({
+test('the app opens on chat and all live screens appear in the drawer by default', async ({
 	page,
 	context
 }) => {
-	await server(context, { main: 'idle' });
+	await server(context);
 	await page.goto('/');
-	await expect(page).toHaveURL(/\/assistant$/);
-	await page.goto('/chat');
+	await expect(page).toHaveURL(/\/chat$/);
 	const menu = await drawer(page);
 	for (const label of LIVE_NAV)
 		await expect(menu.getByRole('link', { name: label, exact: true })).toBeVisible();
@@ -56,12 +44,6 @@ test('the app opens on Home and all live screens appear in the drawer by default
 		'aria-current',
 		'page'
 	);
-});
-
-test('the app opens on the chat while it is working', async ({ page, context }) => {
-	await server(context, { main: 'running' });
-	await page.goto('/');
-	await expect(page).toHaveURL(/\/chat$/);
 });
 
 test('Workspace groups secondary destinations and keeps fixture previews gated', async ({
