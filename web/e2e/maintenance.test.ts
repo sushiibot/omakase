@@ -60,9 +60,8 @@ for (const width of [320, 1440]) {
 		});
 		await page.goto('/assistant');
 		await expect(page.getByRole('link', { name: 'Ask', exact: true })).toHaveCount(0);
-		await expect(page.getByRole('tab', { name: 'Tasks', exact: true })).toBeVisible();
 		await page
-			.getByRole('tabpanel', { name: 'Overview' })
+			.locator('[data-assistant-home]')
 			.getByRole('link', { name: /Friday show at the Civic/ })
 			.click();
 		await expect(page).toHaveURL(new RegExp(`/assistant/updates/${id}$`));
@@ -84,8 +83,8 @@ for (const width of [320, 1440]) {
 		await page.getByRole('button', { name: 'Undo update' }).click();
 		await expect(page.getByText('Update undone.', { exact: true })).toBeVisible();
 		await page.goBack();
-		await page.getByRole('tab', { name: 'Watching' }).click();
-		const watching = page.getByRole('tabpanel', { name: 'Watching' });
+		// Watching is a Home section, shown while a responsibility exists.
+		const watching = page.locator('[data-assistant-home]');
 		await expect(
 			watching.getByRole('heading', { name: 'Keep upcoming plans accurate' })
 		).toBeVisible();

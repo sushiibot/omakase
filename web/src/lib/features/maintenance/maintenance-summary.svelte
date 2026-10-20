@@ -25,6 +25,10 @@
 			.filter((p) => ['completed', 'undone', 'conflict'].includes(p.status))
 			.slice(0, 4) ?? []
 	);
+	// Home shows the pending and latest outcomes above, so Watching lists only the rest.
+	const older = $derived(
+		view?.proposals.filter((p) => !pending.includes(p) && !receipts.includes(p)).slice(0, 30) ?? []
+	);
 </script>
 
 {#if mode === 'needs' && pending.length}
@@ -108,9 +112,9 @@
 		{#if error}<p role="alert" class="text-sm text-destructive">{error}</p>{/if}
 		<Button href="/connectors" variant="link">Manage connected sources</Button>
 	</Section>
-	{#if view.proposals.length}
-		<Section title="Recent proposals">
-			{#each view.proposals.slice(0, 30) as proposal (proposal.id)}
+	{#if older.length}
+		<Section title="Earlier proposals">
+			{#each older as proposal (proposal.id)}
 				<Button
 					href={`/assistant/updates/${proposal.id}`}
 					variant="ghost"

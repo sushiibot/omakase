@@ -11,14 +11,29 @@ The clickable prototype (`src/proto-routes/proto`) renders feature screens from 
 ## Conversations, work and activity
 
 Home is a separate overview of decisions, recent visits, completed outcomes, and ongoing work.
-Keep Continue based on explicit visits. Group execution attempts only by persisted task/run links.
-Hide unavailable agenda sections until their APIs exist. Home does not duplicate the Activity log.
+It has no tabs. It opens on a status line: a time-of-day greeting and the counts that are not zero ("2 need you · 1 failed · 3 running · 4 ready", or "All clear").
+The sections follow in this order. Each one shows only when it has content:
+
+1. **Needs you**: one bordered list (`divide-y rounded-xl border`) in the `HomeRow` anatomy. It holds Home's approvals, questions and sign-in, named by their conversation ("Approve send_email · October trip"). Next come requests Home has no record of, one row per conversation linking to the oldest request (`?ask=` / `?approve=`), then waiting tasks without a request, then failed work. The row opens the review. There is no separate Review button and no decision control on a row: approval needs the exact action in front of it.
+2. **Working now**: Main's live turns with their current step, conversations with `activity.running`, running tasks and runs. Each row has a spinner and its step text. Past three rows the list collapses behind "Show N more". Its aside links to Tasks.
+3. **In use**: pinned saved items, running timers and open checklists (see Saved below).
+4. **Recent conversations**: up to four explicit visits on this device, with the latest message, its time and a new-messages dot. Incoming activity never adds a row.
+5. **Ready for you**: the newest five inbox outcomes, each with what it says (the run's result or the message's first item), then "All updates (N)" linking to the full inbox. Done and Dismiss stay in the review.
+6. **Recently finished** (quiet state only): the last three finished tasks, with an aside to Activity.
+7. **Watching**: maintenance responsibilities, while one exists.
+
+**One needs-you count.** "N need you" counts each pending request id once: approvals and questions from every conversation (Home's stream records and the channel catalog's `attention`, deduplicated), sign-in, and each task waiting for you with no request open in its conversation. Failed work is a separate count. The status line and the sidebar Home badge (and so the menu button's total) use the same function, `needsYouCount`.
+
+**Quick ask.** A composer sends to Main as the owner's message and then opens Main, where the bubble is already shown. Its draft is separate from Main's and lasts for the tab (`sessionStorage`). It sits under the status line on desktop. On phones it is pinned in the screen footer, inside the safe area, within thumb reach.
+
+Group execution attempts only by persisted task/run links.
+Hide unavailable agenda sections, such as Coming up, until their APIs exist. Home does not duplicate the Activity log or the Tasks list; it links to them.
 At wide desktop widths, review uses a side region. On smaller screens, use full-screen review with a Back button.
 Keep bottom sheets for short, self-contained choices; evidence and approval review need room to read.
 Review and its discussion picker use URL entries. Linked pages push above them. Back returns one step at a time.
 Refresh retains the selected item. A cold review link falls back to the list. Escape closes desktop review.
-Restore the list tab, list scroll, and review scroll when returning.
-Check: `pw` (`e2e/assistant.test.ts`).
+Restore the list scroll and review scroll when returning.
+Check: `pw` (`e2e/assistant.test.ts`), `bun test` (`src/lib/features/assistant/model.test.ts`).
 
 A conversation contains messages and reply cycles. Main and topic conversations keep their identity across context refreshes.
 A task represents a delegated assignment, separate agent assignment or scheduled objective. An agent performs the task.
@@ -105,7 +120,7 @@ A standalone PWA has no browser toolbar. App back controls and the Android back 
 - **Back closes the drawer first; back from a drawer destination returns to the chat; back from the chat exits.** Why: the Android convention for drawer apps, and the chat is where the app opens. Picking a destination from the drawer replaces the entry unless it is left from the chat. Check: `pw` (`e2e/nav.test.ts`), `phone`.
 - **A dirty composer or edit survives back and return.** Why: a mis-swipe must not cost a typed message. Keep the draft per chat in memory, and in `sessionStorage` for reloads. Check: `phone`: type, swipe back, reopen the chat; the text is there.
 - **No `target="_blank"` for in-app routes.** Why: it opens a Custom Tab and breaks back. Check: `review`.
-- **The app opens on Home, or on the chat while Main is working or waiting on you. Channels, Tasks, Activity, Workspace, and Settings use persistent desktop navigation and mobile navigation. Nested detail and creation screens show a back chevron to their parent.** Why: the chat keeps the full height (no tab bar under the composer), and one navigation system per screen. The drawer is a native modal `<dialog>`, so Android back and Escape close it. The menu button carries a dot when the inbox has something waiting or unread. Home sits full size above the channel list, with the count of requests waiting on you; the other destinations stay in the footer. Check: `shot`, `pw` (`e2e/nav.test.ts`).
+- **The app opens on Home, or on the chat while Main is working or waiting on you. Channels, Tasks, Activity, Workspace, and Settings use persistent desktop navigation and mobile navigation. Nested detail and creation screens show a back chevron to their parent.** Why: the chat keeps the full height (no tab bar under the composer), and one navigation system per screen. The drawer is a native modal `<dialog>`, so Android back and Escape close it. The menu button carries a dot when the inbox has something waiting or unread. Home sits full size above the channel list, with Home's needs-you count ([one needs-you count](#conversations-work-and-activity)); the other destinations stay in the footer. Check: `shot`, `pw` (`e2e/nav.test.ts`).
 
 Settings has one entry point. Keep preferences, website accounts, mail, API integrations, MCP servers, file stores, and permissions at the same navigation level. On desktop, show settings sections in the sidebar. On mobile, show a searchable directory with direct links. Avoid intermediate category menus.
 
@@ -228,7 +243,7 @@ A link to a message is `<conversation path>?m=<message id>`; [docs/message-links
 - **Once answered, replace the approval prompt with a quiet decision status in the tool's expandable details.** Retain the decision for inspection, but remove the attention card and controls. Denied, expired, and cancelled requests also cease to appear actionable. Why: an answered request should not look pending. Check: `pw` after answering and reload.
 - **Approval status is separate from execution status.** Approved does not imply Running, Completed, or successful execution. Check: `pw` for approval followed by execution failure.
 - **Durable allow rules are separate, off-by-default controls that explain exactly which future actions they cover.** Tainted runs explain why approval was requested despite an allow rule. Check: `review`.
-- **Every pending approval appears in Inbox and in the tab badge, with a link to its originating conversation.** Badges count pending request ids, never agents or failures. Why: the user can find a buried request without making Inbox the only place it is visible, and one decision counts once. Check: `pw`.
+- **Every pending approval appears in Inbox and in the tab badge, with a link to its originating conversation.** Badges count pending request ids, never agents or failures; the Home badge adds sign-in and waiting tasks without a request, as Home's status line does. Why: the user can find a buried request without making Inbox the only place it is visible, and one decision counts once. Check: `pw`.
 
 ### Outcomes: finished is not succeeded
 
@@ -270,7 +285,7 @@ Things the agent made that the owner comes back to are saved items: documents (`
 - **No folders.** Folders don't help people find their own things again (Whittaker et al., "Am I wasting my time organizing email?", CHI 2011). An item is found by where it came from, whether it is still in use, and one manual signal, pin. Check: `review`.
 - **Provenance is automatic.** Each item keeps its conversation and source reply. A block's source is its reply; a document's is the first delivered reply that links `/artifacts/<id>`, and later replies don't move it. "From <conversation>" links use `conversationHref(id, { message })` ([message links](message-links.md)). Check: `bun test saved`, `e2e-system/flows/saved-items.e2e.ts`.
 - **Status follows fixed rules, never a guess.** A checklist is done when every item is ticked and it has been left for 24h; a timer when it has finished or sat unstarted for 7 days; a recipe or document after 30 days without an update or opening. Pinned is always active. Archive forces done and restore brings an item back; both the owner and the agent (`list_saved_items`, `update_saved_item`) can do either. Done items stay reachable under Done and at their page. Check: `bun test saved`.
-- **Surfaces.** Workspace › Saved is the library: Active by default, Pinned first, then grouped by conversation, with kind chips (All, Docs, Lists, Recipes, Timers), an Active/Done toggle and search over titles and document text. Each item has a page, `/saved/<kind>/<id>`, with its provenance, Pin and Archive, and the item itself: a document reads as before, and a block is the same interactive component as in chat, live-synced. `/artifacts/<id>` shows the same page. The side panel's Saved tab lists the conversation's items, active then done. Home's "In use", after Needs you, shows up to four pinned items, running timers and open checklists. A stored block in chat carries quiet Pin and Open controls under it. Check: `pw` (`e2e/saved.test.ts`).
+- **Surfaces.** Workspace › Saved is the library: Active by default, Pinned first, then grouped by conversation, with kind chips (All, Docs, Lists, Recipes, Timers), an Active/Done toggle and search over titles and document text. Each item has a page, `/saved/<kind>/<id>`, with its provenance, Pin and Archive, and the item itself: a document reads as before, and a block is the same interactive component as in chat, live-synced. `/artifacts/<id>` shows the same page. The side panel's Saved tab lists the conversation's items, active then done. Home's "In use", after Working now, shows up to four pinned items, running timers and open checklists. A stored block in chat carries quiet Pin and Open controls under it. Check: `pw` (`e2e/saved.test.ts`).
 
 ### Never-silent states
 

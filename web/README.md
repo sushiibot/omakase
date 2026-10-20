@@ -119,14 +119,18 @@ for layout rules, loading patterns, research sources, and regression checks.
 
 ## Assistant Home
 
-Home (`/assistant`) brings existing requests, documents, and work into a separate overview.
-Needs you shows live approvals, questions, failed work, and channel requests.
+Home (`/assistant`) brings existing requests, documents, and work into a separate overview without tabs.
+A status line greets you and counts what needs you, what failed, what is running and what is ready; the sidebar Home badge shows the same needs-you count.
+A quick-ask composer sends to Main and opens it: under the status line on desktop, pinned at the bottom on phones.
+Needs you lists live approvals, questions, sign-in, requests in other conversations, waiting tasks and failed work in one list.
 Review opens beside the feed on wide desktops and as a full-screen view with a Back button on smaller screens.
 Approval still uses the existing exact request and its normal confirmation controls.
 
-Continue uses explicit visits to conversations and documents on this device.
-Ready for you shows recent documents and inbox outcomes. In progress groups runs under their
-linked active task. Following shows ongoing tasks; History shows finished tasks and links to Activity.
+Working now shows Main's live turn with its step, running conversations, running tasks and runs.
+Recent conversations uses explicit visits on this device. Ready for you shows the newest inbox outcomes with
+what they say and links to the full inbox. A quiet Home says All clear and lists recently finished tasks.
+Watching shows maintenance responsibilities. Tasks and Activity are linked from section asides.
+See [Conversations, work and activity](docs/ux-guidelines.md#conversations-work-and-activity) for the rules.
 Review links retain their item across refresh. Linked pages push above review; Back returns one step at a time.
 A review opened directly falls back to its parent list. Each source can fail and retry independently. Home keeps available content visible.
 Existing chat, inbox, document, and task links remain valid. The launch route still opens chat.
@@ -222,7 +226,7 @@ A run with nothing useful to report returns `NO_REPLY` and sends no message.
 
 ## Calendar maintenance
 
-Home includes exact calendar-note proposals and their outcomes. Watching shows the pausable responsibility.
+Home includes exact calendar-note proposals and their outcomes. Its Watching section shows the pausable responsibility.
 The full-page reader at `/assistant/updates/[id]` shows the source, original notes, and proposed notes.
 Approve, Dismiss, Check result, and conditional Undo use the owner-only `/api/maintenance` endpoint.
 See [Calendar maintenance](../docs/calendar-maintenance.md) for provider scope, persistence, execution, and recovery limits.

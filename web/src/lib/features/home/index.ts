@@ -15,5 +15,6 @@ export type {
 export { inboxConversation, UNASSIGNED_CONVERSATION } from './conversation-inbox';
 export { default as DiscussionPicker } from './components/discussion-picker.svelte';
 export { default as HomeRow } from './components/home-row.svelte';
+export { default as HomeLinkRow, type RowTone } from './components/home-link-row.svelte';
 export { default as MutedScreen } from './muted-screen.svelte';
 export { MutedStore } from './muted.svelte';

@@ -29,6 +29,8 @@
 	import { goto } from '$app/navigation';
 	import { needsYou } from '$lib/features/home';
 	import { savedStore } from '$lib/features/saved';
+	import { needsYouCount } from '$lib/features/assistant';
+	import { tasksStore } from '$lib/features/tasks';
 	import AppUpdates from '$lib/ui/pwa/app-updates.svelte';
 	import { androidUpdates } from '$lib/core/native/updates.svelte';
 	import Shell from '$lib/ui/shell/shell.svelte';
@@ -124,12 +126,15 @@
 	}
 	const home = needsYou();
 	home.start();
+	// Waiting tasks count toward the badge too; Home and Tasks keep them fresh while open.
+	const tasks = tasksStore();
 
 	onMount(() => {
 		markBooted();
 		void deviceFs.start();
 		pwa.start();
 		void threadsStore().list.ensure();
+		void tasks.refresh();
 		if (page.url.pathname !== '/chat') {
 			void send('GET', '/chat/history?limit=40').catch(() => {});
 		}
@@ -164,9 +169,8 @@
 		navigation={settingsMode ? settingsNavigation : channelNavigation}
 		{settingsMode}
 		badges={{
-			assistant:
-				catalog.list.data?.channels.reduce((total, channel) => total + channel.pending.total, 0) ??
-				home.waitingCount
+			// The same count as Home's status line: pending request ids, sign-in and waiting tasks.
+			assistant: needsYouCount(home.groups, catalog.list.data?.channels ?? [], tasks.tasks)
 		}}
 		onhome={(e) => {
 			// Back to the conversations entry already under this one, rather than stacking a second.

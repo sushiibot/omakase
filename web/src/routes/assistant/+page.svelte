@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { MaintenanceSummary, maintenanceStore } from '$lib/features/maintenance';
 	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 	import SplitScreen from '$lib/ui/screen/split-screen.svelte';
 	import { onMount } from 'svelte';
-	import { AssistantScreen, continueItems } from '$lib/features/assistant';
+	import { AssistantScreen, recentConversations } from '$lib/features/assistant';
+	import { chatStore } from '$lib/features/chat';
 	import { channelsStore } from '$lib/features/channels';
 	import { tasksStore } from '$lib/features/tasks';
 	import { threadsStore } from '$lib/features/threads';
@@ -14,17 +15,39 @@
 	import { createInbox } from '../chats/inbox.svelte';
 	import InboxSheet from '../chats/inbox-sheet.svelte';
 
-	const tab = $derived(
-		['following', 'watching', 'history'].includes(page.url.searchParams.get('view') ?? '')
-			? page.url.searchParams.get('view')!
-			: 'overview'
-	);
+	// The quick ask keeps its own draft for this tab, so Main's draft, photos and reference stay put.
+	const ASK_KEY = 'home:ask:v1';
+	let ask = $state(readAsk());
+	function readAsk() {
+		try {
+			return sessionStorage.getItem(ASK_KEY) ?? '';
+		} catch {
+			return '';
+		}
+	}
+	$effect(() => {
+		try {
+			if (ask) sessionStorage.setItem(ASK_KEY, ask);
+			else sessionStorage.removeItem(ASK_KEY);
+		} catch {
+			/* The draft lasts for this visit only. */
+		}
+	});
+	/** Sends to Main as the owner's message, then opens Main, where the bubble already shows. */
+	function sendAsk() {
+		const text = ask.trim();
+		if (!text) return;
+		const main = chatStore();
+		void main.send(text, [], { preserveComposer: true });
+		ask = '';
+		void goto(resolve('/chat'));
+	}
 	const maintenance = maintenanceStore();
 	const inbox = createInbox('/assistant');
 	const channels = channelsStore();
 	const tasks = tasksStore();
 	const threads = threadsStore();
-	const recent = $derived(continueItems(channels.list.data?.channels ?? [], channels.recentIds));
+	const recent = $derived(recentConversations(channels.visible('all'), channels.recentIds));
 	const saved = savedStore();
 	const using = $derived(inUse(saved.items, inbox.now));
 	const notices = $derived.by(() => {
@@ -79,15 +102,8 @@
 	/>{/snippet}
 <SplitScreen>
 	<AssistantScreen
-		bind:tab={
-			() => tab,
-			(view) => {
-				const url = new URL(page.url);
-				if (view === 'overview') url.searchParams.delete('view');
-				else url.searchParams.set('view', view);
-				void goto(url, { replaceState: true, noScroll: true, keepFocus: true, state: page.state });
-			}
-		}
+		bind:ask
+		onask={sendAsk}
 		maintenanceCount={maintenance.remote.data?.view.proposals.filter((p) =>
 			['pending', 'uncertain', 'executing', 'undoing'].includes(p.status)
 		).length ?? 0}

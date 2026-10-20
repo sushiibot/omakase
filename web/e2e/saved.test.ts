@@ -172,11 +172,14 @@ for (const width of [412, 1440]) {
 }
 
 for (const width of [320, 1440]) {
-	test(`Home shows saved items in use after Needs you at ${width}px`, async ({ page, context }) => {
+	test(`Home shows saved items in use after Working now at ${width}px`, async ({
+		page,
+		context
+	}) => {
 		await fixtureApp(context);
 		await page.setViewportSize({ width, height: 1000 });
 		await page.goto('/assistant');
-		const overview = page.getByRole('tabpanel', { name: 'Overview', exact: true });
+		const overview = page.locator('[data-assistant-home]');
 		const section = overview.locator('[data-saved-in-use]');
 		await expect(overview.getByRole('heading', { name: /In use/ })).toBeVisible();
 		// Pinned, then the running timer, then open checklists; a recipe isn't "in use".

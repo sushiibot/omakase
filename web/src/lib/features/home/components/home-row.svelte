@@ -14,7 +14,7 @@
 	import { ago } from '$lib/ui/format/time';
 	import { Button } from '$lib/ui/button';
 	import { cn } from '$lib/utils';
-	import { messageTitle } from '../format';
+	import { messagePreview, messageTitle } from '../format';
 	import type { HomeItem } from '../types';
 
 	let {
@@ -22,6 +22,8 @@
 		now,
 		selected = false,
 		dialog = true,
+		context,
+		preview = false,
 		onopen,
 		ondone
 	}: {
@@ -29,6 +31,10 @@
 		now: number;
 		selected?: boolean;
 		dialog?: boolean;
+		/** The conversation the item came from, after the title: "Approve send_email · October trip". */
+		context?: string;
+		/** Show what it says, the run's result or the message's first item, under the title. */
+		preview?: boolean;
 		onopen?: (id: string) => void;
 		/** Set for inbox rows: a sideways swipe marks the item done. The peek's Done button does the same. */
 		ondone?: (id: string) => void;
@@ -96,6 +102,15 @@
 		onopen?.(item.id);
 	}
 
+	const detail = $derived.by(() => {
+		if (!preview) return undefined;
+		if (item.kind === 'run') return item.run.resultSummary;
+		if (item.kind === 'message') {
+			const first = item.message.items?.[0];
+			return first?.body ? messagePreview(first.body) : undefined;
+		}
+		return undefined;
+	});
 	const view = $derived.by(() => {
 		switch (item.kind) {
 			case 'approval':
@@ -216,12 +231,19 @@
 						'line-clamp-2 text-ui [overflow-wrap:anywhere]',
 						read ? 'text-muted-foreground' : 'font-medium'
 					)}
-					>{#if read}<span class="sr-only">Read: </span>{/if}{view.title}</span
+					>{#if read}<span class="sr-only">Read: </span>{/if}{view.title}{#if context}
+						· {context}{/if}</span
 				>
 				<span class="shrink-0 text-meta text-muted-foreground tabular-nums">{view.when}</span>
 			</span>
-			<span class="line-clamp-1 text-sm [overflow-wrap:anywhere] text-muted-foreground"
-				>{view.sub}</span
+			{#if detail}<span class="line-clamp-2 text-sm [overflow-wrap:anywhere] text-muted-foreground"
+					>{detail}</span
+				>{/if}
+			<span
+				class={cn(
+					'line-clamp-1 [overflow-wrap:anywhere] text-muted-foreground',
+					detail ? 'text-meta' : 'text-sm'
+				)}>{view.sub}</span
 			>
 		</span>
 		<ChevronRight class="mt-2 shrink-0 text-muted-foreground" aria-hidden="true" />
