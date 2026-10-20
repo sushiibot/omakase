@@ -5,6 +5,7 @@ import {
 	needsYouCount,
 	needsYouList,
 	recentConversations,
+	recentlyFinished,
 	summaryLine,
 	workingNow
 } from './model';
@@ -181,4 +182,17 @@ test('The status line greets by local time and leaves out what is zero', () => {
 		'Nothing needs you · 2 running · 1 ready'
 	);
 	expect(summaryLine({ need: 0, failed: 0, running: 0, ready: 0 })).toBe('All clear');
+});
+
+test('Recently finished keeps the last week of closed tasks, newest first, up to the limit', () => {
+	const now = Date.parse('2026-10-20T15:00:00.000Z');
+	const at = (days: number) => new Date(now - days * 86_400_000).toISOString();
+	const closed = [0.1, 1, 3, 6.9, 7.1, 30].map((days, i) => ({
+		...taskFixtures[0]!,
+		id: `t-${i}`,
+		status: 'done' as const,
+		updatedAt: at(days)
+	}));
+	expect(recentlyFinished(closed, now, 3).map((t) => t.id)).toEqual(['t-0', 't-1', 't-2']);
+	expect(recentlyFinished(closed, now, 10).map((t) => t.id)).toEqual(['t-0', 't-1', 't-2', 't-3']);
 });

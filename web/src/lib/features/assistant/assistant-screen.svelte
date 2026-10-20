@@ -23,6 +23,7 @@
 		homeWork,
 		mainTitle,
 		needsYouList,
+		recentlyFinished,
 		summaryLine,
 		workingNow,
 		type RecentConversation
@@ -92,7 +93,7 @@
 	const quiet = $derived(
 		!hasNeeds && !working.length && !inUseCount && !maintenanceCount && !loading && !notices.length
 	);
-	const finished = $derived(work.history.slice(0, FINISHED_SHOWN));
+	const finished = $derived(recentlyFinished(work.history, now, FINISHED_SHOWN));
 	const summary = $derived(
 		summaryLine({
 			need: needs.count,

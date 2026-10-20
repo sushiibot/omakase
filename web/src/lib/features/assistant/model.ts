@@ -22,6 +22,14 @@ export function homeWork(tasks: TaskRecord[], groups: HomeGroups) {
 	};
 }
 
+/** How long a finished or cancelled task stays in Home's Recently finished. */
+export const FINISHED_WINDOW_MS = 7 * 86_400_000;
+
+/** Closed tasks from the last week, newest first; older ones live in Tasks. */
+export function recentlyFinished(history: TaskRecord[], now: number, max: number): TaskRecord[] {
+	return history.filter((t) => now - Date.parse(t.updatedAt) < FINISHED_WINDOW_MS).slice(0, max);
+}
+
 /** A conversation that holds requests Home has no record of, such as a topic's question. */
 export interface ChannelRequests {
 	channel: Channel;

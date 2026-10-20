@@ -321,6 +321,8 @@ test('a quiet Home says all clear, lists recent finished work and keeps the quic
 		id: 't-done',
 		title: 'Renew the parking permit',
 		status: 'done' as const,
+		// Recently finished only shows the last week.
+		updatedAt: new Date(Date.now() - 3_600_000).toISOString(),
 		workConversationId: undefined
 	};
 	await context.route('**/api/tasks', (route) =>
