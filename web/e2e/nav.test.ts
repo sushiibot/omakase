@@ -48,6 +48,9 @@ test('the app opens on Home and all live screens appear in the drawer by default
 	await expect(page).toHaveURL(/\/assistant$/);
 	await page.goto('/chat');
 	const menu = await drawer(page);
+	await expect(
+		menu.getByRole('navigation', { name: 'Home' }).getByRole('link', { name: 'Home' })
+	).toBeVisible();
 	for (const label of LIVE_NAV)
 		await expect(menu.getByRole('link', { name: label, exact: true })).toBeVisible();
 	for (const label of ['Memory', 'History'])

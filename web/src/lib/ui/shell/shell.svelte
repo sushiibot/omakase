@@ -27,6 +27,7 @@
 		active,
 		navigationKey,
 		home = 'chat',
+		pinned,
 		badges = {},
 		onhome,
 		navigation,
@@ -43,6 +44,8 @@
 		active?: string;
 		navigationKey?: string;
 		home?: string;
+		/** A nav entry shown full size above the channel list instead of in the footer. */
+		pinned?: string;
 		badges?: Record<string, number | boolean | undefined>;
 		onhome?: (e: MouseEvent) => void;
 		navigation?: Snippet;
@@ -91,7 +94,10 @@
 	);
 	const navigationShown = $derived(pane === 'navigation' || dragSide === 'navigation');
 	const inspectorShown = $derived(pane === 'inspector' || dragSide === 'inspector');
-	const footerNav = $derived(nav.filter((item) => item.id !== home && item.id !== 'settings'));
+	const footerNav = $derived(
+		nav.filter((item) => item.id !== home && item.id !== pinned && item.id !== 'settings')
+	);
+	const pinnedNav = $derived(nav.find((item) => item.id === pinned));
 	const badgeTotal = $derived(
 		Object.values(badges).reduce<number>(
 			(n, value) => n + (typeof value === 'number' ? value : value ? 1 : 0),
@@ -482,6 +488,30 @@
 				onclick={closePane}><X /></Button
 			>{/if}
 	</Sidebar.Header>
+	{#if navigation && pinnedNav && !settingsMode}<nav
+			aria-label="Home"
+			class="shrink-0 border-b border-sidebar-border p-2"
+		>
+			<Sidebar.Menu>
+				<Sidebar.MenuItem>
+					<Sidebar.MenuButton
+						isActive={active === pinnedNav.id}
+						class="font-medium any-pointer-coarse:h-11"
+					>
+						{#snippet child({ props })}
+							<a
+								{...props}
+								href={pinnedNav.href}
+								data-sveltekit-replacestate={navOpen ? '' : undefined}
+								aria-current={active === pinnedNav.id ? 'page' : undefined}
+								><pinnedNav.icon aria-hidden="true" /><span>{pinnedNav.label}</span></a
+							>
+						{/snippet}
+					</Sidebar.MenuButton>
+					{@render badge(pinnedNav.id, 'default')}
+				</Sidebar.MenuItem>
+			</Sidebar.Menu>
+		</nav>{/if}
 	{#if navigation}{@render navigation()}
 	{:else}<Sidebar.Content>
 			<Sidebar.Group>

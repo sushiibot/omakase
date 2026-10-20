@@ -150,6 +150,7 @@
 		active={activeNav(page.route.id)}
 		navigationKey={page.url.pathname + page.url.search}
 		home="chats"
+		pinned="assistant"
 		conversation={channelRoute}
 		navigationOpen={navigation.open || pendingNavigation !== null}
 		onopenNavigation={() => navigation.openWith()}
@@ -160,7 +161,7 @@
 		navigation={settingsMode ? settingsNavigation : channelNavigation}
 		{settingsMode}
 		badges={{
-			chats:
+			assistant:
 				catalog.list.data?.channels.reduce((total, channel) => total + channel.pending.total, 0) ??
 				home.waitingCount
 		}}
