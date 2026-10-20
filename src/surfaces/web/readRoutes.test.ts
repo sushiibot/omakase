@@ -310,6 +310,9 @@ describe("runs", () => {
       { nonce: "pending", at: new Date(T0 + 2000).toISOString(), tool: "file_linear_issue", decision: null },
     ]);
     expect(body.files.map((f) => f.id)).toEqual(["A".repeat(22), "B".repeat(22)]);
+    // The run links to the last message its turn delivered (a key too short for a link: by seq); the child to its parent.
+    expect(body.run.result).toEqual({ conversationId: "main", message: `s${log.find("proactive", "o2")!.seq}` });
+    expect(body.children[0]!.trigger).toEqual({ type: "parent", runId: RUN });
     expect(body.after).toBe("s1");
     expect(link.calls).toEqual([{ method: "runs/get", q: { runId: RUN, after: "s0", limit: 50 } }]);
 
@@ -402,7 +405,7 @@ describe("search", () => {
     expect(body.unavailable).toEqual([]);
     expect(body.truncated).toBe(false);
     expect(body.hits.map((h) => `${h.source}:${h.id}`)).toEqual(["notes:2026-09-30.md:4", `chat:${recent}`, "notes:2026-09-29.md:1", `chat:${old}`]);
-    expect(body.hits[1]).toEqual({ source: "chat", id: String(recent), at: "2026-09-30T08:00:00.000Z", role: "user", snippet: "otter today", ranges: [[0, 5]] });
+    expect(body.hits[1]).toEqual({ source: "chat", id: String(recent), at: "2026-09-30T08:00:00.000Z", role: "user", conversationId: "main", message: `s${recent}`, conversationTitle: "Main", snippet: "otter today", ranges: [[0, 5]] });
     expect(link.calls).toEqual([{ method: "history/search", q: { query: "otter", limit: 20 } }]);
   });
 

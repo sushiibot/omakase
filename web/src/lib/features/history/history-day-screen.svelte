@@ -2,7 +2,7 @@
 	// A day's recaps are the agent's own notes: rendered through the safe markdown renderer, with no
 	// files, so a planted image or link to an upload stays text.
 	import { Markdown } from '$lib/features/chat';
-	import { RunRow, runConversationHref } from '$lib/features/runs';
+	import { RunRow, runResultHref } from '$lib/features/runs';
 	import * as Breadcrumb from '$lib/ui/breadcrumb';
 	import * as Card from '$lib/ui/card';
 	import ConnectionBanner from '$lib/ui/connection-banner.svelte';
@@ -166,7 +166,7 @@
 					description="Each record is one chat response or task attempt. Open it to see the steps, result and evidence."
 				>
 					{#if day.runs.length}
-						{@const reserveJump = day.runs.some((r) => !!runConversationHref(r))}
+						{@const reserveJump = day.runs.some((r) => !!runResultHref(r))}
 						<ul class="flex flex-col">
 							{#each day.runs as run (run.runId)}
 								<li><RunRow {run} {now} {reserveJump} href={runHref(run.runId)} /></li>

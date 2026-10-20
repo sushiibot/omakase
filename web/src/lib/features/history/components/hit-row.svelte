@@ -15,13 +15,16 @@
 	}: {
 		hit: SearchHit;
 		now: number;
-		/** Where the hit opens; chat hits have no page of their own yet. */
+		/** Where the hit opens: a chat hit's message in its conversation, a notes hit's run or day. */
 		href?: string;
 	} = $props();
 
 	const source = $derived(
 		hit.source === 'chat'
-			? { label: hit.role === 'user' ? 'Chat · you' : 'Chat · the agent', icon: MessageSquare }
+			? {
+					label: `${hit.conversationTitle} · ${hit.role === 'user' ? 'you' : 'the agent'}`,
+					icon: MessageSquare
+				}
 			: hit.kind === 'run'
 				? { label: 'Run notes', icon: FileText }
 				: { label: 'Day notes', icon: NotebookText }
@@ -33,11 +36,11 @@
 
 {#snippet body()}
 	<Item.Content class="min-w-0">
-		<p class="flex items-center gap-1.5 text-xs text-muted-foreground">
+		<p class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
 			<source.icon class="size-3.5 shrink-0" aria-hidden="true" />
-			<span class="font-medium">{source.label}</span>
+			<span class="truncate font-medium">{source.label}</span>
 			<span aria-hidden="true">·</span>
-			<span class="tabular-nums">{when}</span>
+			<span class="shrink-0 tabular-nums">{when}</span>
 		</p>
 		{#if hit.source === 'notes' && hit.heading}
 			<Item.Title class="line-clamp-none [overflow-wrap:anywhere]">{hit.heading}</Item.Title>

@@ -5,6 +5,7 @@
 	import { Skeleton } from '$lib/ui/skeleton';
 	import { Spinner } from '$lib/ui/spinner';
 	import HitRow from './components/hit-row.svelte';
+	import { chatHitHref } from './links';
 	import { QUERY_MIN, type SearchHit, type SearchResult } from './types';
 
 	let {
@@ -45,7 +46,7 @@
 	const hits = $derived(short ? [] : (result?.hits ?? []));
 	const href = (hit: SearchHit) =>
 		hit.source === 'chat'
-			? undefined
+			? chatHitHref(hit)
 			: hit.kind === 'run' && hit.runId
 				? runHref(hit.runId)
 				: dayHref(hit.date);

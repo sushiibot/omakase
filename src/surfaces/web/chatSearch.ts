@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { getLogger } from "../../logger.ts";
-import type { ChatEventMap, ChatHit, SearchRange } from "./events.ts";
+import { CLIENT_ID_RE, type ChatEventMap, type ChatHit, type SearchRange } from "./events.ts";
 
 const log = getLogger("web/chatSearch");
 
@@ -18,6 +18,13 @@ export const CHAT_INDEX_TYPES = ["user", "reply", "proactive", "alert"] as const
 const CHAT_TYPES_SQL = CHAT_INDEX_TYPES.map((t) => `'${t}'`).join(",");
 const HIGH_KEY = "web_chat_fts:indexed_through";
 const LOW_KEY = "web_chat_fts:indexed_below";
+/** The index covered only Main before; this walks topic and task rows below the high-water seq once. */
+const OTHERS_KEY = "web_chat_fts:others_below";
+const OTHERS_DONE = Number.MIN_SAFE_INTEGER;
+/** A stored key that can travel in a message link (MESSAGE_REF_RE in the app). */
+const MESSAGE_KEY_RE = /^[0-9A-Za-z_-]{8,64}$/;
+/** Main's name after a rename (threadRoutes). */
+const MAIN_TITLE_KEY = "web:main-title";
 
 // Marks stay in a word: FTS tokenizes inside the quoted phrase itself, so a word it splits becomes a phrase.
 const WORD = /[\p{L}\p{N}\p{M}]+/gu;
@@ -37,24 +44,35 @@ export class ChatIndex {
     }
   }
 
-  /** Indexes up to `batch` chat rows the index hasn't seen: live rows above the stored high-water seq,
-   *  then imported rows below the stored low-water seq. Returns true while more remain. */
+  /** Indexes up to `batch` chat rows the index hasn't seen, in every conversation: live rows above the
+   *  stored high-water seq, imported rows below the stored low-water seq, and (once) topic and task rows
+   *  an older Main-only index skipped. Returns true while more remain. */
   catchUp(batch = 1000): boolean {
     try {
       return this.db.transaction(() => {
         const high = this.kv(HIGH_KEY) ?? 0;
+        // Rows above the high-water seq are the up pass's; the backfill starts below it.
+        const others = this.kv(OTHERS_KEY) ?? high + 1;
         const up = this.db
-          .query(`SELECT seq, data FROM web_events WHERE conversation_id = 'main' AND seq > ? AND type IN (${CHAT_TYPES_SQL}) ORDER BY seq LIMIT ?`)
+          .query(`SELECT seq, data FROM web_events WHERE seq > ? AND type IN (${CHAT_TYPES_SQL}) ORDER BY seq LIMIT ?`)
           .all(high, batch) as { seq: number; data: string }[];
         this.index(up);
         if (up.length) this.setKv(HIGH_KEY, up[up.length - 1]!.seq);
         const low = this.kv(LOW_KEY) ?? 1;
         const down = this.db
-          .query(`SELECT seq, data FROM web_events WHERE conversation_id = 'main' AND seq < ? AND seq <= 0 AND type IN (${CHAT_TYPES_SQL}) ORDER BY seq DESC LIMIT ?`)
+          .query(`SELECT seq, data FROM web_events WHERE seq < ? AND seq <= 0 AND type IN (${CHAT_TYPES_SQL}) ORDER BY seq DESC LIMIT ?`)
           .all(low, batch) as { seq: number; data: string }[];
         this.index(down);
         if (down.length) this.setKv(LOW_KEY, down[down.length - 1]!.seq);
-        return up.length === batch || down.length === batch;
+        let back: { seq: number; data: string }[] = [];
+        if (others !== OTHERS_DONE) {
+          back = this.db
+            .query(`SELECT seq, data FROM web_events WHERE seq < ? AND conversation_id != 'main' AND type IN (${CHAT_TYPES_SQL}) ORDER BY seq DESC LIMIT ?`)
+            .all(others, batch) as { seq: number; data: string }[];
+          this.index(back);
+          this.setKv(OTHERS_KEY, back.length === batch ? back[back.length - 1]!.seq : OTHERS_DONE);
+        }
+        return up.length === batch || down.length === batch || back.length === batch;
       })();
     } catch (err) {
       log.warn({ err }, "chat index catch-up failed");
@@ -98,10 +116,23 @@ export function ftsQuery(tokens: readonly string[]): string | null {
   return tokens.map((t) => `"${t.replaceAll('"', '""')}"${[...t].length > 1 ? "*" : ""}`).join(" ");
 }
 
-type Row = { seq: number; type: (typeof CHAT_INDEX_TYPES)[number]; data: string; created_at: number };
+type Row = { seq: number; type: (typeof CHAT_INDEX_TYPES)[number]; key: string | null; data: string; created_at: number; conversation_id: string; title: string | null };
+
+/** A chat row's message id for links (web/docs/message-links.md): an owner message's client id, an agent
+ *  message's outbox key, or `s<seq>` when the row has no such key (imported history). */
+export function messageId(row: { seq: number; type: string; key: string | null }): string {
+  const key = row.key ?? "";
+  const stable = row.type === "user" ? CLIENT_ID_RE.test(key) : MESSAGE_KEY_RE.test(key);
+  return stable ? key : `s${row.seq}`;
+}
+
+/** What the app calls the conversation: its stored title (Main's from its rename), else a generic name. */
+export function conversationTitle(id: string, title: string | null): string {
+  return title?.trim() || (id === "main" ? "Main" : id.startsWith("task-t-") ? "Task" : "Conversation");
+}
 
 /**
- * The newest chat messages matching every word of `query`, newest first (by seq, which follows time for
+ * The newest chat messages in any conversation matching every word of `query`, newest first (by seq, which follows time for
  * live and imported rows alike), at most `limit`. `more` is true when older matches were left out.
  * Throws when the index is missing or broken.
  */
@@ -121,7 +152,12 @@ export function searchChat(db: Database, query: string, limit: number): { hits: 
     if (!ids.length) break;
     below = ids[ids.length - 1]!.id;
     const found = db
-      .query(`SELECT seq, type, data, created_at FROM web_events WHERE conversation_id = 'main' AND seq IN (${ids.map(() => "?").join(",")}) AND type IN (${CHAT_TYPES_SQL}) ORDER BY seq DESC`)
+      .query(
+        `SELECT e.seq, e.type, e.key, e.data, e.created_at, e.conversation_id,
+           CASE WHEN e.conversation_id = 'main' THEN (SELECT value FROM kv WHERE key = '${MAIN_TITLE_KEY}') ELSE t.title END AS title
+         FROM web_events e LEFT JOIN web_threads t ON t.id = e.conversation_id
+         WHERE e.seq IN (${ids.map(() => "?").join(",")}) AND e.type IN (${CHAT_TYPES_SQL}) ORDER BY e.seq DESC`,
+      )
       .all(...ids.map((r) => r.id)) as Row[];
     rows.push(...found);
     if (ids.length < want) break;
@@ -131,13 +167,13 @@ export function searchChat(db: Database, query: string, limit: number): { hits: 
 }
 
 function toHit(r: Row, tokens: readonly string[]): ChatHit {
-  const at = new Date(r.created_at).toISOString();
+  const where = { conversationId: r.conversation_id, message: messageId(r), conversationTitle: conversationTitle(r.conversation_id, r.title) };
   if (r.type === "user") {
     const d = JSON.parse(r.data) as ChatEventMap["user"];
-    return { source: "chat", id: String(r.seq), at: d.at, role: "user", ...snippet(d.text, tokens) };
+    return { source: "chat", id: String(r.seq), at: d.at, role: "user", ...where, ...snippet(d.text, tokens) };
   }
   const d = JSON.parse(r.data) as ChatEventMap["reply" | "alert"];
-  return { source: "chat", id: String(r.seq), at, role: "agent", ...snippet(d.text, tokens) };
+  return { source: "chat", id: String(r.seq), at: new Date(r.created_at).toISOString(), role: "agent", ...where, ...snippet(d.text, tokens) };
 }
 
 function escapeRegExp(s: string): string {

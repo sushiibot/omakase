@@ -109,3 +109,40 @@ export function runConversationHref(run: RunSummary, parent?: RunSummary): strin
 		(run.kind === 'chat' || parent?.kind === 'chat' ? 'main' : undefined);
 	return id ? conversationHref(id, run.turnId ?? parent?.turnId) : undefined;
 }
+
+/** The reply the run delivered (docs/message-links.md); without one, the run's place in its conversation. */
+export function runResultHref(run: RunSummary, parent?: RunSummary): string | undefined {
+	return run.result
+		? conversationHref(run.result.conversationId, { message: run.result.message })
+		: runConversationHref(run, parent);
+}
+
+/** What started a run, for its "Triggered by" line; no href when there is nowhere to go. */
+export interface RunTriggerView {
+	label: string;
+	href?: string;
+}
+
+export function runTrigger(
+	run: RunSummary,
+	opts: { runHref?: (runId: string) => string; parent?: RunSummary } = {}
+): RunTriggerView | undefined {
+	const t = run.trigger;
+	if (!t) return undefined;
+	switch (t.type) {
+		case 'message':
+			return {
+				label: 'Your message',
+				href: conversationHref(t.conversationId, { message: t.message })
+			};
+		case 'schedule':
+			return { label: `Schedule · ${t.jobName}` };
+		case 'parent': {
+			const parent = opts.parent?.runId === t.runId ? opts.parent : undefined;
+			return {
+				label: parent ? activityTitle(parent) : 'Parent activity',
+				href: (opts.runHref ?? ((id) => `/runs/${id}`))(t.runId)
+			};
+		}
+	}
+}

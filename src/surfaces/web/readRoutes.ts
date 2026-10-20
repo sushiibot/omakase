@@ -26,7 +26,7 @@ import {
 } from "./events.ts";
 import { HISTORY_RESPONSE_MAX } from "./chatRoutes.ts";
 import { NO_STORE, isJson, json, readJson } from "./http.ts";
-import { runApprovals, runFiles } from "./runJoins.ts";
+import { runApprovals, runFiles, withRunLinks } from "./runJoins.ts";
 
 const log = getLogger("web/readRoutes");
 
@@ -154,7 +154,7 @@ export function createReadRoutes(deps: ReadRouteDeps): ReadRoutes {
           ...(statuses ? { statuses } : {}),
         }),
       );
-      return cappedJson({ runs: res.runs, before: res.before, truncated: res.truncated } satisfies RunsPage);
+      return cappedJson({ runs: withRunLinks(db, res.runs), before: res.before, truncated: res.truncated } satisfies RunsPage);
     });
   }
 
@@ -168,10 +168,11 @@ export function createReadRoutes(deps: ReadRouteDeps): ReadRoutes {
       if (!res.found) return notFound();
       // The workspace answers for the id asked; any other id is outside the contract.
       if (res.run.runId !== runId) throw new WorkspaceBadResponseError("runs/get", undefined);
+      const [run, ...family] = withRunLinks(db, [res.run, ...(res.parent ? [res.parent] : []), ...res.children]);
       const body: RunDetailResponse = {
-        run: res.run,
-        ...(res.parent ? { parent: res.parent } : {}),
-        children: res.children,
+        run: run!,
+        ...(res.parent ? { parent: family[0]! } : {}),
+        children: res.parent ? family.slice(1) : family,
         session: res.session,
         steps: res.steps,
         after: res.after,
@@ -201,7 +202,7 @@ export function createReadRoutes(deps: ReadRouteDeps): ReadRoutes {
       const res = await fromWorkspace(() => link.historyDay({ date }));
       if (!res.found) return json({ found: false } satisfies HistoryDayResponse);
       if (res.date !== date) throw new WorkspaceBadResponseError("history/day", undefined);
-      return cappedJson({ found: true, date: res.date, sessions: res.sessions, runs: res.runs, ...(res.cost ? { cost: res.cost } : {}), truncated: res.truncated } satisfies HistoryDayResponse);
+      return cappedJson({ found: true, date: res.date, sessions: res.sessions, runs: withRunLinks(db, res.runs), ...(res.cost ? { cost: res.cost } : {}), truncated: res.truncated } satisfies HistoryDayResponse);
     });
   }
 

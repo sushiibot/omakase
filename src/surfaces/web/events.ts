@@ -205,7 +205,25 @@ export interface RunSummary {
 	usage?: RunUsage;
 	/** One line, redacted. */
 	resultSummary?: string;
+	/** Joined by the bot from its chat log: the reply the run's turn delivered. Absent without one. */
+	result?: MessageLocation;
+	/** Joined by the bot: what started the run. Absent when it isn't known. */
+	trigger?: RunTrigger;
 }
+
+/** A message in a conversation; link to it with `conversationHref(conversationId, { message })`
+ *  (web/docs/message-links.md). */
+export interface MessageLocation {
+	conversationId: string;
+	/** The message's stable key (reply/proactive outbox id, owner client id), or `s<seq>`. */
+	message: string;
+}
+
+/** What started a run: the owner's message, a schedule, or the run that delegated it. */
+export type RunTrigger =
+	| ({ type: 'message' } & MessageLocation)
+	| { type: 'schedule'; jobName: string }
+	| { type: 'parent'; runId: string };
 
 export type RunStep =
 	| { type: 'user'; id: string; at: string; text: string }
@@ -942,13 +960,19 @@ export interface NotesHit {
 	ranges: SearchRange[];
 }
 
-/** A match in the chat the bot stores. */
+/** A match in the chat the bot stores, in any conversation. */
 export interface ChatHit {
 	source: 'chat';
-	/** The matching message's WebHistoryItem id. */
+	/** The matching message's WebHistoryItem id (its seq). */
 	id: string;
 	at: string;
 	role: 'user' | 'agent';
+	/** Where the message is: link to it with `conversationHref(conversationId, { message })`. */
+	conversationId: string;
+	/** The message's stable key (outbox id, owner client id), or `s<seq>` without one. */
+	message: string;
+	/** The conversation's name: "Main", or the topic or task conversation's title. */
+	conversationTitle: string;
 	snippet: string;
 	ranges: SearchRange[];
 }

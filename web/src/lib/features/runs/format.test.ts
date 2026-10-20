@@ -1,6 +1,13 @@
 /// <reference types="bun" />
 import { expect, test } from 'bun:test';
-import { activityTitle, filterKinds, kindLabel, runConversationHref } from './format';
+import {
+	activityTitle,
+	filterKinds,
+	kindLabel,
+	runConversationHref,
+	runResultHref,
+	runTrigger
+} from './format';
 
 test('Work separates assignments from conversation replies and maintenance', () => {
 	expect(filterKinds('work')).toEqual(['job', 'subagent', 'agent']);
@@ -45,4 +52,46 @@ test('conversation jumps preserve topic and task destinations and inherit a pare
 	expect(runConversationHref({ ...base, conversationId: 'task-t-login', turnId: 'turn-2' })).toBe(
 		'/tasks/t-login?view=conversation&turn=turn-2'
 	);
+});
+
+test('a run opens the reply it delivered, else its turn, and names what triggered it', () => {
+	const chat = {
+		runId: 'run',
+		title: 'Hi',
+		status: 'done' as const,
+		startedAt: '2026-10-01',
+		agentName: 'main',
+		kind: 'chat' as const,
+		turnId: 'turn-1'
+	};
+	expect(runResultHref(chat)).toBe('/chat?turn=turn-1');
+	expect(
+		runResultHref({ ...chat, result: { conversationId: 'task-t-login', message: 'outbox-12345' } })
+	).toBe('/tasks/t-login?view=conversation&m=outbox-12345');
+	expect(runResultHref({ ...chat, result: { conversationId: 'trip', message: 's-4' } })).toBe(
+		'/chats/trip?m=s-4'
+	);
+
+	expect(runTrigger(chat)).toBeUndefined();
+	expect(
+		runTrigger({
+			...chat,
+			trigger: { type: 'message', conversationId: 'trip', message: '01K6B4A0C2E4G6J8M0P2R4T6V1' }
+		})
+	).toEqual({ label: 'Your message', href: '/chats/trip?m=01K6B4A0C2E4G6J8M0P2R4T6V1' });
+	expect(
+		runTrigger({ ...chat, kind: 'job', trigger: { type: 'schedule', jobName: 'nightly' } })
+	).toEqual({ label: 'Schedule · nightly' });
+	const sub = {
+		...chat,
+		kind: 'subagent' as const,
+		trigger: { type: 'parent' as const, runId: 'P1' }
+	};
+	expect(runTrigger(sub)).toEqual({ label: 'Parent activity', href: '/runs/P1' });
+	expect(
+		runTrigger(sub, {
+			runHref: (id) => `/x/${id}`,
+			parent: { ...chat, runId: 'P1', kind: 'agent', title: 'Fix it' }
+		})
+	).toEqual({ label: 'Fix it', href: '/x/P1' });
 });

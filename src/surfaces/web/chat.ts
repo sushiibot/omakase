@@ -80,7 +80,7 @@ export function createWebChat(deps: WebChatDeps): WebChat {
   });
 
   const threads = new WebThreads({
-    db: deps.db, main: { log: chatLog, adapter, routes }, link: deps.link,
+    db: deps.db, main: { log: chatLog, adapter, routes }, link: deps.link, index: chatIndex,
     chat: { link: deps.link, tools: deps.tools, workspaceEnabled: deps.workspaceEnabled, location, refs: homeStore, ...(deps.uploads ? { uploads: deps.uploads } : {}) },
     adapter: { push: { send: sendPush }, ...(deps.breakGlass ? { breakGlass: deps.breakGlass } : {}), ...(deps.uploads ? { uploads: deps.uploads } : {}) },
   });

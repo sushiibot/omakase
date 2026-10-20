@@ -5,7 +5,7 @@
 	import { ago } from '$lib/ui/format/time';
 	import * as Item from '$lib/ui/item';
 	import StatePill from '$lib/ui/status/state-pill.svelte';
-	import { kindLabel, activityTitle, runConversationHref } from '../format';
+	import { kindLabel, activityTitle, runResultHref } from '../format';
 	import type { RunSummary } from '../types';
 	import { cn } from '$lib/utils';
 
@@ -23,7 +23,9 @@
 		/** Keep the jump slot on a row without a conversation, so a list's chevrons line up. */
 		reserveJump?: boolean;
 	} = $props();
-	const chatHref = $derived(jump ? runConversationHref(run) : undefined);
+	// The reply the run delivered when there is one, else its place in the conversation.
+	const chatHref = $derived(jump ? runResultHref(run) : undefined);
+	const jumpLabel = $derived(run.result ? 'Open result' : 'Jump to conversation');
 </script>
 
 <div class="flex min-w-0 items-center gap-2">
@@ -53,13 +55,21 @@
 			href={chatHref}
 			variant="ghost"
 			size="sm"
-			aria-label="Jump to conversation"
-			title="Jump to conversation"
+			aria-label={jumpLabel}
+			title={jumpLabel}
 			aria-hidden={chatHref ? undefined : 'true'}
 			tabindex={chatHref ? undefined : -1}
 			class={cn('text-muted-foreground', !chatHref && 'invisible')}
 		>
-			<CornerUpRight aria-hidden="true" /><span class="hidden sm:inline">Jump to conversation</span>
+			<CornerUpRight
+				aria-hidden="true"
+			/><!-- Sized to the longer label, so a list's chevrons line up. --><span
+				class="hidden justify-items-start sm:inline-grid"
+				><span class="col-start-1 row-start-1">{jumpLabel}</span><span
+					class="invisible col-start-1 row-start-1"
+					aria-hidden="true">Jump to conversation</span
+				></span
+			>
 		</Button>
 	{/if}
 </div>

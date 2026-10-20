@@ -47,7 +47,8 @@ const typeChecks: true[] = [
   true satisfies Assignable<Wire.PostCommandBody["command"], "new" | contracts.ChatCommand>,
   true satisfies Same<contracts.RunKind, Wire.RunKind>,
   true satisfies Same<contracts.RunStatus, Wire.RunStatus>,
-  true satisfies Exact<contracts.RunSummary, Wire.RunSummary>,
+  // The bot joins `result` and `trigger` from its chat log; the rest is the workspace record as sent.
+  true satisfies Exact<contracts.RunSummary, Omit<Wire.RunSummary, "result" | "trigger">>,
   true satisfies StepsExact<contracts.RunStep, Wire.RunStep>,
   true satisfies Exact<contracts.RunEvidence, Wire.RunEvidence>,
   true satisfies Exact<contracts.RunsListResult, Wire.RunsPage>,
