@@ -2,10 +2,10 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { memoryEntries, memorySources, parseMemoryUpdate, renderMemoryUpdate, reviewProblems, MEMORY_REVIEW_SYSTEM, type MemoryFiles, type MemoryUpdate } from "./memoryUpdates.ts";
-import { runConsolidation, type ConsolidationDeps, type NoteChunk } from "./consolidation.ts";
+import { coreBudget, memoryEntries, memorySources, parseMemoryUpdate, renderMemoryUpdate, reviewProblems, MEMORY_REVIEW_SYSTEM, MEMORY_UPDATE_RULES, type MemoryFiles, type MemoryUpdate } from "./memoryUpdates.ts";
+import { MAX_CAP_ROUNDS, retryDelayMs, runConsolidation, type ConsolidationDeps, type NoteChunk } from "./consolidation.ts";
 import type { Evidence } from "./memoryEvidence.ts";
-import { reviewMemoryDecisions } from "./memoryDecisions.ts";
+import { MemoryReviewError, reviewMemoryDecisions } from "./memoryDecisions.ts";
 import { RunLog } from "./runLog.ts";
 
 const before: MemoryFiles = {
@@ -279,4 +279,179 @@ test("unknown and ambiguous target hashes cannot delete entries or silently add 
 
 test("empty edit target IDs are rejected instead of silently ignoring removals", () => {
   expect(() => parseMemoryUpdate(JSON.stringify({ operations: [{ op: "remove", id: "", reason: "obsolete", sources: [] }] }))).toThrow();
+});
+
+// ---------- backoff, reviewer outages and core memory pressure ----------
+
+const approveAll: NonNullable<ConsolidationDeps["review"]> = async (_system, prompt) => ({
+  text: JSON.stringify({ decisions: JSON.parse(prompt).items.map((i: { id: string }) => ({ id: i.id, verdict: "supported", reason: "faithful" })) }),
+  model: "judge",
+});
+const state = () => JSON.parse(read("state/consolidation.json"));
+
+test("the same rejected inputs back off exponentially up to a day; force overrides and an apply resets", async () => {
+  expect([1, 2, 3, 4, 5, 6, 7, 40].map(retryDelayMs)).toEqual([30, 60, 120, 240, 480, 960, 1440, 1440].map(m => m * 60_000));
+  const d = deps(upsert());
+  let at = Date.parse("2026-10-14T12:00:00Z");
+  d.now = () => new Date(at);
+  let reviews = 0;
+  d.review = async () => { reviews++; return { text: verdict("unsupported"), model: "judge" }; };
+  expect((await runConsolidation(d, { capture: true })).status).toBe("rejected");
+  expect(state().lastRejected.count).toBe(1);
+  at += 29 * 60_000;
+  expect((await runConsolidation(d, { capture: true })).summary).toContain("next attempt after 2026-10-14T12:30:00.000Z");
+  at += 60_000;
+  expect((await runConsolidation(d, { capture: true })).status).toBe("rejected");
+  expect(state().lastRejected.count).toBe(2);
+  // The second rejection waits an hour, not 30 min.
+  at += 31 * 60_000;
+  expect((await runConsolidation(d, { capture: true })).status).toBe("skipped");
+  expect((await runConsolidation(d, { force: true, capture: true })).status).toBe("rejected");
+  expect(state().lastRejected.count).toBe(3);
+  // New inputs start a fresh count.
+  writeFileSync(join(root, "memory", note.file), `${note.text}\nMore.`);
+  expect((await runConsolidation(d, { capture: true })).status).toBe("rejected");
+  expect(state().lastRejected.count).toBe(1);
+  d.review = approveAll;
+  expect((await runConsolidation(d, { force: true, capture: true })).status).toBe("applied");
+  expect(state().lastRejected).toBeUndefined();
+  expect(reviews).toBe(8);
+});
+
+test("a reviewer outage alerts once, backs off whatever the inputs, keeps evidence pending, and recovers", async () => {
+  const d = deps(upsert());
+  let at = Date.parse("2026-10-14T12:00:00Z");
+  d.now = () => new Date(at);
+  let proposals = 0;
+  const propose = d.propose;
+  d.propose = async (...args) => { proposals++; return propose(...args); };
+  d.review = async () => { throw new MemoryReviewError("http_404"); };
+
+  const first = await runConsolidation(d, { capture: true });
+  expect(first).toMatchObject({ status: "rejected" });
+  expect(first.alert).toBeUndefined();
+  expect(first.reasons?.[0]).toContain("(http_404)");
+  expect(state().reviewOutage).toMatchObject({ failures: 1, error: "http_404", since: "2026-10-14T12:00:00.000Z" });
+
+  // New inputs do not bypass the outage backoff, and no proposal is spent.
+  writeFileSync(join(root, "memory", note.file), `${note.text}\nMore.`);
+  at += 10 * 60_000;
+  const waiting = await runConsolidation(d, { capture: true });
+  expect(waiting.status).toBe("skipped");
+  expect(waiting.summary).toContain("memory reviewer unavailable since 2026-10-14T12:00:00.000Z (http_404");
+  expect(proposals).toBe(1);
+
+  // Later failures of the same outage are silent: one ongoing problem, not a new failed job every run.
+  at += 25 * 60_000;
+  const second = await runConsolidation(d, { capture: true });
+  expect(second).toMatchObject({ status: "rejected", alert: "silent" });
+  expect(state().reviewOutage.failures).toBe(2);
+  expect(state().notes).toEqual({});
+
+  // An apply that needed no review doesn't prove recovery, so it doesn't close the alert streak.
+  at += 2 * 60 * 60_000;
+  const quiet = deps({ operations: [], documents: [], summary: "nothing durable" });
+  quiet.now = d.now;
+  quiet.review = d.review;
+  expect(await runConsolidation(quiet, { capture: true })).toMatchObject({ status: "applied", alert: "silent" });
+  expect(state().reviewOutage.failures).toBe(2);
+
+  // Still down a day after the first alert: alert again.
+  at = Date.parse("2026-10-15T12:00:00Z");
+  writeFileSync(join(root, "memory", note.file), `${note.text}\nEven more.`);
+  const later = await runConsolidation(d, { capture: true });
+  expect(later.status).toBe("rejected");
+  expect(later.alert).toBeUndefined();
+
+  // A successful review closes the outage; the apply is a visible success again.
+  d.review = approveAll;
+  const recovered = await runConsolidation(d, { force: true, capture: true });
+  expect(recovered.status).toBe("applied");
+  expect(recovered.alert).toBeUndefined();
+  expect(state().reviewOutage).toBeUndefined();
+});
+
+const longMemory = "# Memory\n" + Array.from({ length: 36 }, (_, i) => `- Observation: project detail ${i} ${"x".repeat(160)} (src: 2026-10-01)`).join("\n") + "\n";
+const bigFiles: MemoryFiles = { ...before, "MEMORY.md": longMemory };
+const addition = (): MemoryUpdate["operations"][number] => ({ op: "upsert", file: "MEMORY.md", text: `Bought tofu. ${"y".repeat(400)}`, kind: "observation", sources: [evidence.id] });
+
+test("the proposer sees each core file's size, cap and headroom, and demotion guidance past 85%", () => {
+  expect(longMemory.length).toBeGreaterThan(6800);
+  expect(longMemory.length).toBeLessThan(8000);
+  expect(coreBudget(before, { "USER.md": 4000, "MEMORY.md": 8000 })).not.toContain("To demote");
+  const budget = coreBudget(bigFiles, { "USER.md": 4000, "MEMORY.md": 8000 });
+  expect(budget).toContain(`MEMORY.md: ${longMemory.length}/8000 characters`);
+  expect(budget).toContain(`free at least ${longMemory.length - 6800} characters (target 6800)`);
+  expect(budget).toContain("demoted to memory/topics/<slug>.md");
+  expect(MEMORY_UPDATE_RULES).toContain('Every upsert requires "kind"');
+  expect(MEMORY_UPDATE_RULES).toContain("Never put citations in text");
+});
+
+test("a removal claiming demotion must leave the entry line in its topic", () => {
+  const entry = memoryEntries(bigFiles).find(e => e.file === "MEMORY.md")!;
+  const update: MemoryUpdate = { operations: [{ op: "remove", id: entry.id, reason: "demoted to memory/topics/archive.md", sources: [] }], documents: [
+    { path: "memory/topics/archive.md", content: "# Archive\nupdated: 2026-10-14\nverified: unverified\n- A paraphrase only.\n" },
+  ], summary: "" };
+  const srcs = memorySources(bigFiles, [], new Map());
+  expect(() => renderMemoryUpdate(update, bigFiles, srcs, {})).toThrow("does not contain the entry line");
+  update.documents[0]!.content += `${entry.line}\n`;
+  expect(renderMemoryUpdate(update, bigFiles, srcs, {}).memory).not.toContain(entry.line);
+});
+
+test("an over-cap proposal is handed back with the numbers, demoted into a topic, reviewed and applied", async () => {
+  writeFileSync(join(root, "MEMORY.md"), longMemory);
+  const entries = memoryEntries(bigFiles).filter(e => e.file === "MEMORY.md").slice(0, 4);
+  const demote: MemoryUpdate = { operations: [
+    ...entries.map(e => ({ op: "remove" as const, id: e.id, reason: "demoted to memory/topics/project-history.md", sources: [] })),
+    { op: "link", path: "memory/topics/project-history.md" },
+    addition(),
+  ], documents: [
+    { path: "memory/topics/project-history.md", content: `# Project history\nupdated: 2026-10-14\nverified: unverified\n${entries.map(e => e.line).join("\n")}\n` },
+    { path: "memory/catalog.md", content: "# Topics\n- [Project history](memory/topics/project-history.md) — Older project details. Read when: recalling past project work.\n" },
+  ], summary: "demoted older details" };
+  const prompts: string[] = [];
+  const d = deps(upsert());
+  d.propose = async (_system, prompt, supplied) => {
+    supplied!.set(evidence.id, evidence);
+    prompts.push(prompt);
+    return { text: JSON.stringify(prompts.length === 1 ? { operations: [addition()], documents: [], summary: "" } : demote), model: "fixture" };
+  };
+  let reviewed: string[] = [];
+  d.review = async (system, prompt) => { reviewed = JSON.parse(prompt).items.map((i: { id: string }) => i.id); return approveAll(system, prompt); };
+  const result = await runConsolidation(d, { capture: true });
+  expect(result.status).toBe("applied");
+  expect(prompts[0]).toContain("Core memory budget");
+  expect(prompts[0]).toContain("To demote an entry");
+  expect(prompts[1]).toContain("over its 8000-character cap by");
+  expect(prompts[1]).toContain(entries[0]!.id);
+  // The final update gets the full semantic review: every removal, the link, the addition and both documents.
+  expect(reviewed).toHaveLength(entries.length + 4);
+  const memory = read("MEMORY.md");
+  expect(memory.length).toBeLessThanOrEqual(8000);
+  expect(memory).toContain("](memory/topics/project-history.md)");
+  expect(memory).not.toContain(entries[0]!.line);
+  expect(read("memory/topics/project-history.md")).toContain(entries[0]!.line);
+});
+
+test("a proposer that never fits stops after the bounded revisions: skipped, silent, evidence pending", async () => {
+  writeFileSync(join(root, "MEMORY.md"), longMemory);
+  let proposals = 0;
+  const d = deps(upsert());
+  d.propose = async (_system, _prompt, supplied) => {
+    supplied!.set(evidence.id, evidence); proposals++;
+    return { text: JSON.stringify({ operations: [addition()], documents: [], summary: "" }), model: "fixture" };
+  };
+  d.review = async () => { throw new Error("an over-cap proposal must not be reviewed"); };
+  const result = await runConsolidation(d, { capture: true });
+  expect(result).toMatchObject({ status: "skipped", alert: "silent" });
+  expect(result.summary).toContain("still over its cap");
+  expect(proposals).toBe(1 + MAX_CAP_ROUNDS);
+  expect(read("MEMORY.md")).toBe(longMemory);
+  expect(state().notes).toEqual({});
+  expect(state().evidenceCursor).toBeUndefined();
+  expect(state().lastRejected).toMatchObject({ count: 1, outcome: "over_cap" });
+  expect(read("DREAMS.md")).toContain("deferred (core memory over its cap");
+  // Backed off like a rejection, but never reported as one.
+  expect((await runConsolidation(d, { capture: true })).summary).toContain("same inputs as the deferred run");
+  expect(proposals).toBe(1 + MAX_CAP_ROUNDS);
 });
