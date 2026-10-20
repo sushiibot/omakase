@@ -801,7 +801,9 @@ test('opening a pushed approval on Home closes its notification and leaves other
 	await push({ title: 'Other', body: 'x', url: '/', tag: 'other' });
 	await expect.poll(async () => (await shownNotifications(page)).length).toBe(2);
 	await page.goto('/?approve=n1');
-	await expect(page.getByRole('dialog', { name: 'Approval needed' })).toBeVisible();
+	await expect(
+		page.getByRole('dialog', { name: 'Review' }).getByRole('region', { name: 'Approval needed' })
+	).toBeVisible();
 	await expect
 		.poll(async () => (await shownNotifications(page)).map((n) => n.tag))
 		.toEqual(['other']);

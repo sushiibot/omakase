@@ -90,7 +90,7 @@ test("GET /api/history and /api/search read ~/history and never follow a planted
 test("the inbox, a run, a History day and search open in the app on the workspace's records", async ({ page, watch }) => {
   // The inbox's server part answers from the bot and the workspace; the seeds are older than its 72 h window.
   const home = page.waitForResponse((r) => new URL(r.url()).pathname === "/api/home");
-  await page.goto("/inbox");
+  await page.goto("/chats");
   expect((await home).status()).toBe(200);
   await expect(page.getByRole("heading", { name: "Channels", level: 1 })).toBeVisible();
   await expect(page.getByText(/Couldn't load|Can't reach the agent|couldn't be read/)).toHaveCount(0);

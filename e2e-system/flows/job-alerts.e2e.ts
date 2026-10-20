@@ -81,8 +81,8 @@ test("a failing scheduled job shows on Home and pushes; its recovery clears it a
       renotify: true,
     });
 
-    // The push's link, cold: the inbox loads, finds the job and opens it in its sheet.
-    await page.goto("/inbox");
+    // The Channels inbox lists the job; the push's link, cold, opens it in its sheet over Home.
+    await page.goto("/chats");
     const inbox = page.locator('[data-inbox="shared"]');
     const inboxTrigger = inbox.locator("[data-slot=collapsible-trigger]");
     if ((await inboxTrigger.getAttribute("aria-expanded")) !== "true") await inboxTrigger.click();
@@ -92,8 +92,8 @@ test("a failing scheduled job shows on Home and pushes; its recovery clears it a
     await page.goto(`/inbox?item=job:${JOB}`);
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByText("E2E-JOBFAIL").first()).toBeVisible();
-    await expect(page).toHaveURL(/\/chats\?item=job:e2e-alert$/);
-    // Review identity survives reload; native browser Back returns to the inbox.
+    await expect(page).toHaveURL(/\/assistant\?item=job:e2e-alert$/);
+    // Review identity survives reload; native browser Back returns to the Channels inbox it came from.
     await page.reload();
     await expect(sheet.getByText("E2E-JOBFAIL").first()).toBeVisible();
     await page.goBack();

@@ -289,7 +289,7 @@ test('View activity keeps review below the run, and the inbox item stays read', 
 	context
 }) => {
 	await server(context);
-	await page.goto('/inbox');
+	await page.goto('/chats');
 	await openSharedInbox(page);
 	await page.getByRole('button', { name: /Draft the quarterly expenses summary/ }).click();
 	await page.getByRole('dialog').getByRole('button', { name: 'View activity' }).click();
