@@ -189,6 +189,20 @@ Object.assign(window, {
 			}
 			return counts;
 		},
+		/** Ignores frame costs while `on`, so a test of what streaming shows doesn't depend on the
+		 *  runner's frame rate: three slow frames in a row drop a reply to plain text by design. */
+		steadyFrames(on: boolean) {
+			const proto = MarkdownStream.prototype as MarkdownStream & {
+				__rendered?: MarkdownStream['rendered'];
+			};
+			if (on && !proto.__rendered) {
+				proto.__rendered = proto.rendered;
+				proto.rendered = () => {};
+			} else if (!on && proto.__rendered) {
+				proto.rendered = proto.__rendered;
+				delete proto.__rendered;
+			}
+		},
 		/** Mounts one reply on its own and reports whether mounting threw. */
 		render(text: string, props: Record<string, unknown> = {}) {
 			const target = document.getElementById('solo')!;
