@@ -1,5 +1,6 @@
 import type { ChatMessage } from '../types';
 import { parseMarkdown, type MdBlockNode, type MdInlineNode } from './markdown';
+import { richPlainText } from './rich/blocks';
 
 function inline(nodes: readonly MdInlineNode[]): string {
 	return nodes
@@ -37,7 +38,18 @@ function block(node: MdBlockNode): string {
 		case 'table':
 			return [node.head, ...node.rows].map((row) => row.map(inline).join('\t')).join('\n');
 		case 'rule':
+		case 'rich-pending':
 			return '';
+		case 'rich':
+			return richPlainText(node.block);
+		case 'callout':
+			return [node.title, plainText(node.children)].filter(Boolean).join('\n');
+		case 'details':
+			return [node.summary, plainText(node.children)].join('\n');
+		case 'card':
+			return [node.title, node.subtitle, plainText(node.children)].filter(Boolean).join('\n');
+		case 'columns':
+			return node.columns.map(plainText).join('\n\n');
 	}
 }
 

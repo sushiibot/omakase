@@ -32,7 +32,11 @@ const UI = 'src/lib/ui/';
 
 export const LARGE_TEXT_FILES = new Set([
 	// Markdown headings keep their document scale.
-	'src/lib/features/chat/render/markdown.svelte'
+	'src/lib/features/chat/render/markdown.svelte',
+	// Rich reply blocks: the headline number is the block's point (docs/ux-guidelines.md#rich-reply-blocks).
+	'src/lib/features/chat/render/rich/breakdown.svelte',
+	'src/lib/features/chat/render/rich/stats.svelte',
+	'src/lib/features/chat/render/rich/event.svelte'
 ]);
 
 export const SPIN_ALLOWED = new Set([

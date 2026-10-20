@@ -93,7 +93,7 @@ export function explainsNoCheck(text: string): boolean {
   return CANT_RUN.test(text) || NO_CHECKS.test(text);
 }
 
-function lastAssistantText(context: AgentBeforeSettleEvent["context"]): string {
+export function lastAssistantText(context: AgentBeforeSettleEvent["context"]): string {
   const messages = context.contextMessages as Array<{ role?: string; content?: unknown }>;
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];

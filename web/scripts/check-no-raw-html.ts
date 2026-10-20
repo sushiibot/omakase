@@ -47,8 +47,17 @@ const MARKDOWN_IMPORTS = new Set([
 	'../types',
 	'./markdown',
 	'./streaming',
-	'./markdown-code.svelte'
+	'./markdown-code.svelte',
+	'./rich/rich-block.svelte',
+	'./rich/rich-pending.svelte',
+	'./rich/callout.svelte',
+	'./rich/disclosure.svelte',
+	'./rich/container-card.svelte'
 ]);
+// Rich reply blocks render agent-written data, so they get markdown's rules too: no controls, no
+// handlers, no spread attributes, no approval look.
+export const RICH_DIR = 'src/lib/features/chat/render/rich/';
+const isRich = (file: string) => file.startsWith(RICH_DIR);
 
 // Every feature shows agent- or server-supplied text somewhere, so none may borrow the approval
 // look, unless listed here as the approval surface itself or the code that hosts it. A new
@@ -131,7 +140,7 @@ function templateRules(file: string, source: string): Violation[] {
 	const out: Violation[] = [];
 	const at = (start: number, rule: string) => out.push({ file, line: lineOf(source, start), rule });
 	const markdown = file === MARKDOWN;
-	const lookalike = LOOKALIKE.has(file);
+	const lookalike = LOOKALIKE.has(file) || isRich(file);
 	const ast = parse(source, { filename: file, modern: true });
 	visit(ast.fragment, (n) => {
 		if (n.type === 'HtmlTag') at(n.start, '{@html}');
@@ -140,8 +149,9 @@ function templateRules(file: string, source: string): Violation[] {
 			else if (!fixedTag(n.tag)) at(n.start, 'render: dynamic svelte:element');
 		}
 		if (lookalike && n.type === 'SpreadAttribute') at(n.start, 'markdown: spread attributes');
-		if (markdown && n.type === 'OnDirective') at(n.start, 'markdown: event handler');
-		if (markdown && n.type === 'Attribute' && /^on/i.test(String(n.name))) {
+		if ((markdown || isRich(file)) && n.type === 'OnDirective')
+			at(n.start, 'markdown: event handler');
+		if ((markdown || isRich(file)) && n.type === 'Attribute' && /^on/i.test(String(n.name))) {
 			at(n.start, 'markdown: event handler');
 		}
 	});
@@ -155,7 +165,7 @@ function templateRules(file: string, source: string): Violation[] {
 
 export function checkSource(file: string, source: string): Violation[] {
 	const out: Violation[] = file.endsWith('.svelte') ? templateRules(file, source) : [];
-	const lookalike = LOOKALIKE.has(file);
+	const lookalike = LOOKALIKE.has(file) || isRich(file);
 	source.split('\n').forEach((text, i) => {
 		const add = (rule: string) => out.push({ file, line: i + 1, rule });
 		for (const [re, rule] of SINKS) if (re.test(text)) add(rule);
@@ -163,7 +173,8 @@ export function checkSource(file: string, source: string): Violation[] {
 			if (SINK_FRAGMENT.test(m[1])) add('computed sink access');
 		}
 		if (lookalike) for (const [re, rule] of APPROVAL_LOOKALIKE) if (re.test(text)) add(rule);
-		if (file === MARKDOWN) for (const [re, rule] of MARKDOWN_BANNED) if (re.test(text)) add(rule);
+		if (file === MARKDOWN || isRich(file))
+			for (const [re, rule] of MARKDOWN_BANNED) if (re.test(text)) add(rule);
 		if (isAgentRecord(file)) for (const [re, rule] of RECORD_BANNED) if (re.test(text)) add(rule);
 	});
 	return out;

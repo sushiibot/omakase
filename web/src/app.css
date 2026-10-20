@@ -59,6 +59,13 @@
 	--add: oklch(0.95 0.05 150);
 	--del: oklch(0.95 0.035 25);
 	/* Only the approval tray uses these; message rendering never does. */
+	/* Categorical fills for rich reply charts; text never uses them. */
+	--viz-1: oklch(0.6 0.13 250);
+	--viz-2: oklch(0.72 0.14 60);
+	--viz-3: oklch(0.64 0.11 175);
+	--viz-4: oklch(0.6 0.15 300);
+	--viz-5: oklch(0.65 0.16 15);
+	--viz-6: oklch(0.7 0.13 125);
 	--approval: oklch(0.45 0.1 200);
 	--approval-surface: oklch(0.965 0.025 200);
 	--scrim: oklch(0 0 0 / 40%);
@@ -110,6 +117,12 @@
 	--taint-soft: oklch(0.3 0.07 330);
 	--add: oklch(0.32 0.06 150);
 	--del: oklch(0.32 0.06 25);
+	--viz-1: oklch(0.68 0.12 250);
+	--viz-2: oklch(0.76 0.13 60);
+	--viz-3: oklch(0.72 0.1 175);
+	--viz-4: oklch(0.68 0.14 300);
+	--viz-5: oklch(0.7 0.15 15);
+	--viz-6: oklch(0.76 0.12 125);
 	--approval: oklch(0.82 0.1 200);
 	--approval-surface: oklch(0.24 0.035 200);
 	--scrim: oklch(0 0 0 / 40%);
@@ -131,6 +144,12 @@
 	--color-taint-soft: var(--taint-soft);
 	--color-add: var(--add);
 	--color-del: var(--del);
+	--color-viz-1: var(--viz-1);
+	--color-viz-2: var(--viz-2);
+	--color-viz-3: var(--viz-3);
+	--color-viz-4: var(--viz-4);
+	--color-viz-5: var(--viz-5);
+	--color-viz-6: var(--viz-6);
 	--color-approval: var(--approval);
 	--color-approval-surface: var(--approval-surface);
 	--color-scrim: var(--scrim);

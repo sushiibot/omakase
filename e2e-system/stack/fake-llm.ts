@@ -101,6 +101,18 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
       "=====BEGIN SUMMARY=====\nmerged: none\ndropped: none\npromoted: none\n=====END SUMMARY=====",
     ], 0, undefined);
   }
+  // The gateway's rich-output check asked for a repair: the whole reply again, with the block fixed.
+  const richTag = msgs.map((m) => /E2E-RICH #([a-z0-9]{4,16})\b/.exec(textOf(m.content))?.[1]).filter(Boolean).at(-1);
+  const richReply = (bars: string) => [
+    "rich reply:\n\n```breakdown\ntitle: Daily calories\nunit: kcal/day\nsegments:\n",
+    "  - { label: Morning, value: 117.5 }\n  - { label: Evening, value: 163.8 }\n```\n\n",
+    ':::callout{tone="warn" title="Heads up"}\nWeigh the food for a week first.\n:::\n\n',
+    bars,
+  ];
+  if (richTag && userText.includes("Some rich blocks in your last reply are invalid")) {
+    return stream(richReply(`\`\`\`bars\ntitle: Spend fixed ${richTag}\nunit: $\nitems:\n  - { label: Food, value: 412 }\n  - { label: Travel, value: 230 }\n\`\`\``), 10, richTag);
+  }
+  if (userText.includes("E2E-RICH")) return stream(richReply("```bars\ntitle: Spend\nitems:\n  - { label: Food, value: 412 dollars }\n```"), 150, tag);
   if (last?.role === "tool") {
     if (userText.includes("E2E-ACCOUNT")) return stream([textOf(last.content)], 10, tag);
     if (userText.includes("E2E-INTEGRATIONS")) return stream([textOf(last.content), "\n[Set up API keys](/connectors/keys)"], 10, tag);

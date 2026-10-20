@@ -1,7 +1,6 @@
-import { fromMarkdown } from 'mdast-util-from-markdown';
-import { gfmFromMarkdown } from 'mdast-util-gfm';
-import { gfm } from 'micromark-extension-gfm';
+import type { ContainerDirective } from 'mdast-util-directive';
 import type {
+	Code,
 	Definition,
 	Nodes,
 	PhrasingContent,
@@ -12,6 +11,17 @@ import type {
 } from 'mdast';
 import { fileUrl, UPLOAD_ID_RE } from '$lib/core/realtime/events';
 import type { MdBlock } from '../types';
+import {
+	formatIssues,
+	isContainerName,
+	isRichType,
+	parseContainerAttrs,
+	parseRichBlock,
+	type RichBlock,
+	type RichType,
+	type Tone
+} from './rich/blocks';
+import { fenceClosed, parseReplyTree } from './rich/syntax';
 
 // Every security decision about agent text happens here. markdown.svelte only switches on `kind`
 // and interpolates strings, so what is validated is exactly what reaches the DOM.
@@ -31,18 +41,36 @@ export type MdAlign = 'left' | 'right' | 'center' | null;
 export type MdBlockNode =
 	| { kind: 'paragraph'; children: MdInlineNode[] }
 	| { kind: 'heading'; level: 1 | 2 | 3 | 4 | 5 | 6; children: MdInlineNode[] }
-	| { kind: 'code'; lang: string | null; text: string }
+	/** `invalid` names why a rich block's fence fell back to code. */
+	| { kind: 'code'; lang: string | null; text: string; invalid?: string[] }
 	| { kind: 'quote'; children: MdBlockNode[] }
 	| {
 			kind: 'list';
 			ordered: boolean;
+			/** An ordered list inside `:::steps`, drawn as numbered steps. */
+			stepper?: boolean;
 			start: number | null;
 			items: { checked: boolean | null; children: MdBlockNode[] }[];
 	  }
 	| { kind: 'table'; align: MdAlign[]; head: MdInlineNode[][]; rows: MdInlineNode[][][] }
 	| { kind: 'rule' }
 	/** Unparsed text, shown with its line breaks. */
-	| { kind: 'plain'; text: string };
+	| { kind: 'plain'; text: string }
+	/** A validated rich block (`breakdown`, `flow`, ...): data only, laid out by its component. */
+	| { kind: 'rich'; block: RichBlock }
+	/** A rich block whose fence is still streaming: a placeholder until it closes. */
+	| { kind: 'rich-pending'; type: RichType }
+	| { kind: 'callout'; tone: Tone; title: string | null; children: MdBlockNode[] }
+	| { kind: 'details'; summary: string; children: MdBlockNode[] }
+	/** `href` passed `safeHref`. */
+	| {
+			kind: 'card';
+			title: string | null;
+			subtitle: string | null;
+			href: string | null;
+			children: MdBlockNode[];
+	  }
+	| { kind: 'columns'; columns: MdBlockNode[][] };
 
 export interface RenderContext {
 	/** Upload ids the bot attached to this same message with `inline: true`; only these render as images. */
@@ -107,7 +135,13 @@ class Renderer {
 	private readonly imageIds: ReadonlySet<string>;
 	private readonly origin: string | undefined;
 
-	constructor(root: Root, ctx: RenderContext) {
+	/** `source` is the text `root` was parsed from; `pending` means it is still streaming. */
+	constructor(
+		root: Root,
+		ctx: RenderContext,
+		private readonly source: string,
+		private readonly pending = false
+	) {
 		this.imageIds = new Set(ctx.imageIds ?? []);
 		this.origin = ctx.origin;
 		const stack: Nodes[] = [root];
@@ -122,13 +156,15 @@ class Renderer {
 		}
 	}
 
-	blocks(nodes: readonly RootContent[], depth: number): MdBlockNode[] {
-		return nodes.flatMap((node) => this.block(node, depth));
+	blocks(nodes: readonly RootContent[], depth: number, inContainer = false): MdBlockNode[] {
+		return nodes.flatMap((node) => this.block(node, depth, inContainer));
 	}
 
-	private block(node: RootContent, depth: number): MdBlockNode[] {
+	private block(node: RootContent, depth: number, inContainer: boolean): MdBlockNode[] {
 		if (depth > MAX_DEPTH) return [paragraphOf(plainText(node))];
 		switch (node.type) {
+			case 'containerDirective':
+				return this.container(node, depth, inContainer);
 			case 'paragraph':
 				return [{ kind: 'paragraph', children: this.inlines(node.children, depth + 1) }];
 			case 'heading':
@@ -136,9 +172,9 @@ class Renderer {
 					{ kind: 'heading', level: node.depth, children: this.inlines(node.children, depth + 1) }
 				];
 			case 'code':
-				return [{ kind: 'code', lang: node.lang ?? null, text: node.value }];
+				return [this.code(node)];
 			case 'blockquote':
-				return [{ kind: 'quote', children: this.blocks(node.children, depth + 1) }];
+				return [{ kind: 'quote', children: this.blocks(node.children, depth + 1, inContainer) }];
 			case 'list':
 				return [
 					{
@@ -147,7 +183,7 @@ class Renderer {
 						start: node.ordered && typeof node.start === 'number' ? node.start : null,
 						items: node.children.map((item) => ({
 							checked: typeof item.checked === 'boolean' ? item.checked : null,
-							children: this.blocks(item.children, depth + 1)
+							children: this.blocks(item.children, depth + 1, inContainer)
 						}))
 					}
 				];
@@ -173,11 +209,98 @@ class Renderer {
 			case 'footnoteDefinition':
 				return [
 					paragraphOf(`[^${node.label ?? node.identifier}]:`),
-					...this.blocks(node.children, depth + 1)
+					...this.blocks(node.children, depth + 1, inContainer)
 				];
 			default:
 				return [paragraphOf(plainText(node))];
 		}
+	}
+
+	/** A fence whose language is a rich block type renders as that block when its body validates,
+	 *  and as code naming the problem otherwise. The same verdict as the gateway's check. */
+	private code(node: Code): MdBlockNode {
+		const lang = node.lang ?? null;
+		const code: MdBlockNode = { kind: 'code', lang, text: node.value };
+		if (!isRichType(lang)) return code;
+		if (!fenceClosed(node, this.source)) {
+			return this.pending
+				? { kind: 'rich-pending', type: lang }
+				: { ...code, invalid: ['the code fence is not closed'] };
+		}
+		const result = parseRichBlock(lang, node.value);
+		if (!result.ok) return { ...code, invalid: formatIssues(result.issues) };
+		return { kind: 'rich', block: this.linked(result.block) };
+	}
+
+	/** Applies the markdown link rule to a block's links; one that fails it is dropped. */
+	private linked(block: RichBlock): RichBlock {
+		const href = (raw: string | undefined) =>
+			raw ? (safeHref(raw, this.origin) ?? undefined) : undefined;
+		if (block.type === 'cards') {
+			return {
+				...block,
+				data: { ...block.data, items: block.data.items.map((i) => ({ ...i, href: href(i.href) })) }
+			};
+		}
+		if (block.type === 'place')
+			return { ...block, data: { ...block.data, href: href(block.data.href) } };
+		return block;
+	}
+
+	/** `:::name{attrs}` around markdown. Unknown, nested or invalid containers keep only their content. */
+	private container(node: ContainerDirective, depth: number, inContainer: boolean): MdBlockNode[] {
+		const children = (nodes: readonly RootContent[]) => this.blocks(nodes, depth + 1, true);
+		const name = node.name;
+		const attrs =
+			isContainerName(name) && !inContainer
+				? parseContainerAttrs(name, node.attributes ?? {})
+				: null;
+		if (!attrs?.ok) return children(node.children);
+		const a = attrs.attrs as Record<string, string | undefined>;
+		switch (name) {
+			case 'callout':
+				return [
+					{
+						kind: 'callout',
+						tone: (a.tone as Tone | undefined) ?? 'info',
+						title: a.title ?? null,
+						children: children(node.children)
+					}
+				];
+			case 'details':
+				return [{ kind: 'details', summary: a.summary!, children: children(node.children) }];
+			case 'card':
+				return [
+					{
+						kind: 'card',
+						title: a.title ?? null,
+						subtitle: a.subtitle ?? null,
+						href: a.href ? safeHref(a.href, this.origin) : null,
+						children: children(node.children)
+					}
+				];
+			case 'columns': {
+				const columns: RootContent[][] = [[]];
+				for (const child of node.children) {
+					if (child.type === 'thematicBreak') columns.push([]);
+					else columns.at(-1)!.push(child);
+				}
+				return [
+					{
+						kind: 'columns',
+						columns: columns
+							.filter((c) => c.length)
+							.slice(0, 4)
+							.map(children)
+					}
+				];
+			}
+			case 'steps':
+				return children(node.children).map((b) =>
+					b.kind === 'list' && b.ordered ? { ...b, stepper: true } : b
+				);
+		}
+		return children(node.children);
 	}
 
 	inlines(nodes: readonly PhrasingContent[], depth: number): MdInlineNode[] {
@@ -347,8 +470,7 @@ export function exceedsParseLimits(text: string, maxLength = MARKDOWN_PARSE_MAX)
 	);
 }
 
-const parseRoot = (text: string) =>
-	fromMarkdown(text, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] });
+const parseRoot = parseReplyTree;
 
 /** Parses agent markdown (CommonMark + GFM) to a render tree. Raw HTML is kept as literal text.
  *  Never throws: input the parser can't handle safely comes back as one plain-text block. */
@@ -366,7 +488,7 @@ function parseWithinLimits(text: string, ctx: RenderContext, maxLength: number):
 	if (exceedsParseLimits(text, maxLength)) return plain;
 	try {
 		const root = parseRoot(text);
-		return new Renderer(root, ctx).blocks(root.children, 0);
+		return new Renderer(root, ctx, text).blocks(root.children, 0);
 	} catch {
 		return plain;
 	}
@@ -386,7 +508,8 @@ export interface TopLevelBlock {
 export function parseTopLevel(text: string, ctx: RenderContext = {}): TopLevelBlock[] | null {
 	try {
 		const root = parseRoot(text);
-		const renderer = new Renderer(root, ctx);
+		// Only the stream parses top-level nodes, so an open rich fence here is still being typed.
+		const renderer = new Renderer(root, ctx, text, true);
 		return root.children.map((node) => ({
 			start: node.position?.start.offset ?? 0,
 			end: node.position?.end.offset ?? text.length,

@@ -237,6 +237,18 @@ await expect(page.getByRole('button', { name: /new messages/i })).toBeVisible();
 - **Messages over about 40 lines collapse with "Show all (N lines)".** Why: one giant reply shouldn't push the conversation off-screen. Check: `shot`.
 - **Diffs use `--add`/`--del` backgrounds plus a `+`/`−` gutter, not color alone.** Why: WCAG 1.4.1 Use of Color. Check: `shot` in dark.
 
+### Rich reply blocks
+
+Agent replies can include data blocks (a fenced block with a YAML body, ` ```breakdown `) and containers (`:::callout` … `:::`). The catalog in `src/lib/features/chat/render/rich/blocks.ts` defines each block's schema, prompt example and plain-text form. The gateway imports the same file to teach the model (`src/workspace/richOutput.ts`) and to check each reply.
+
+- **Blocks carry data only; components own layout, color and arithmetic.** Totals, percentages and axis ranges are computed, never taken from the model. Why: the headline, bar and legend can't disagree. Check: `bun test rich`.
+- **One schema, two checks, same verdict.** The renderer and the gateway run the same parser and schema. A block that fails renders as code with a one-line reason, and the gateway asks the model once to write the reply again with them fixed (a run delivers only its last reply). Why: a typo costs formatting, never the message. Check: the "agrees with the renderer" test, `e2e-system/flows/rich-blocks.e2e.ts`.
+- **YAML is plain data.** Core schema only: no tags, anchors, aliases, merge keys or duplicate keys, and size and depth are capped. Check: `bun test rich`.
+- **No controls.** Rich blocks follow markdown's rules (`scripts/check-no-raw-html.ts`): no buttons, inputs, handlers or approval look. `:::details` uses native `<details>`. Links come from fields that pass `safeHref`, or the component builds them from a fixed https origin (calendar, maps). Check: `components.test.ts`.
+- **Charts are one image with a text alternative.** A visual-only body is `role="img"` with the block's plain text as its label; color comes from `--viz-*` fills and is never the only signal. Check: `axe`.
+- **While streaming, an open block shows a skeleton, never raw YAML.** Check: `bun test rich`.
+- **Headline numbers in `breakdown`, `stats` and `event` may use `text-2xl`/`text-lg`.** They are the block's point, like a markdown heading.
+
 ### Never-silent states
 
 Blocking waits and required actions need visible feedback. Cached background refreshes can remain quiet. A spinner alone does not explain a wait.

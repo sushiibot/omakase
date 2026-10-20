@@ -494,3 +494,31 @@ test.describe('approval tray hold', () => {
 		expect(violations).toEqual([]);
 	});
 });
+
+test.describe('rich reply blocks', () => {
+	test('every block renders under Trusted Types and reflows at 320px', async ({ page }) => {
+		const { RICH_EXAMPLES, RICH_TYPES } =
+			await import('../src/lib/features/chat/render/rich/blocks');
+		const violations = await open(page);
+		await page.setViewportSize({ width: 320, height: 800 });
+		const text = [
+			...RICH_TYPES.map((t) => '```' + t + '\n' + RICH_EXAMPLES[t].example + '\n```'),
+			':::callout{tone="warn" title="Heads up"}\nThe ferry fills up on Fridays.\n:::',
+			':::details{summary="Full log"}\n```\n' + 'x'.repeat(300) + '\n```\n:::',
+			':::columns\nLeft column\n\n---\n\nRight column\n:::',
+			':::steps\n1. Mix\n2. Bake\n:::'
+		].join('\n\n');
+		const mounted = await page.evaluate((t) => (window as unknown as Win).h.render(t), text);
+		expect(mounted.ok, mounted.err).toBe(true);
+		const solo = page.locator('#solo');
+		await expect(solo.locator('figure')).toHaveCount(RICH_TYPES.length - 1);
+		await expect(solo.getByText("Couldn't show")).toHaveCount(0);
+		const overflow = await page.evaluate(
+			() => document.documentElement.scrollWidth - document.documentElement.clientWidth
+		);
+		expect(overflow).toBe(0);
+		await solo.getByText('Full log').click();
+		await expect(solo.locator('details')).toHaveAttribute('open', '');
+		expect(violations).toEqual([]);
+	});
+});

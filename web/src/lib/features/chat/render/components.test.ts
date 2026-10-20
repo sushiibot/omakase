@@ -7,6 +7,7 @@ import FilesBlock from '../components/files-block.svelte';
 import AskCard from '../components/ask-card.svelte';
 import ApprovalTray from '../components/approval-tray.svelte';
 import WorkingRow from '../components/working-row.svelte';
+import { RICH_EXAMPLES, RICH_TYPES } from './rich/blocks';
 
 // Server-renders the real components and inspects the markup the browser would get.
 
@@ -86,6 +87,38 @@ function assertInert(els: El[], opts: { allowButtons?: boolean } = {}) {
 }
 
 describe('markdown', () => {
+	test.each(RICH_TYPES)('rich %s block renders inert, with every string escaped', async (type) => {
+		const evil = PAYLOADS[1];
+		// Every quoted value in the example becomes markup-shaped text.
+		const body = RICH_EXAMPLES[type].example.replace(
+			/(title|label|detail|name|item|note|when|subtitle|location): ([^,}\n]+)/g,
+			(_, k) => `${k}: ${JSON.stringify(evil)}`
+		);
+		const { els, html } = await dom(Markdown, { text: '```' + type + '\n' + body + '\n```' });
+		assertInert(els);
+		expect(els.some((e) => e.tag === 'img')).toBe(false);
+		expect(html).not.toContain('data-lang');
+	});
+
+	test('rich containers render inert', async () => {
+		const text = [
+			':::callout{tone="danger" title="<b>x</b>"}',
+			PAYLOADS[8],
+			':::',
+			'',
+			':::details{summary="<img src=x onerror=alert(1)>"}',
+			PAYLOADS[0],
+			':::',
+			'',
+			':::card{title="T" href="javascript:alert(1)"}',
+			'x',
+			':::'
+		].join('\n');
+		const { els } = await dom(Markdown, { text });
+		assertInert(els);
+		expect(els.filter((e) => e.tag === 'details')).toHaveLength(1);
+	});
+
 	test.each(PAYLOADS)('reply %s renders inert', async (payload) => {
 		const { els, text } = await dom(Markdown, { text: payload });
 		assertInert(els);

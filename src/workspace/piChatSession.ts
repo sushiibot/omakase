@@ -34,6 +34,7 @@ import { homeAgentsFilesOverride } from "./home.ts";
 import { createSecretGuardExtension } from "./secretGuard.ts";
 import { createMemoryGuardExtension } from "./memoryGuard.ts";
 import { createLoopGuardExtension, type LoopGuardState } from "./loopGuard.ts";
+import { createRichOutputGateExtension, RICH_OUTPUT_INSTRUCTIONS } from "./richOutput.ts";
 import { createVerifyGateExtension } from "./verifyGate.ts";
 import { createCompactionHandoffExtension } from "./memoryFlush.ts";
 import { RunLog, type RunRecorder } from "./runLog.ts";
@@ -290,7 +291,7 @@ export function createPiChatSessionFactory(
       // Read on every reload, so a name changed in the app reaches the next session.
       appendSystemPromptOverride: (base) => {
         const line = ownerNameLine(config.ownerName);
-        return [...base, ...(line ? [line] : []), "For substantial reports, research and documents, use save_artifact to persist the deliverable and include its returned Markdown link in your reply. Use find_artifacts to recover or read an existing document before updating it. Keep the reply concise; the full report belongs in the artifact.", RECALL_INSTRUCTIONS, ...(opts.maintenance ? [MAINTENANCE_INSTRUCTIONS] : [])];
+        return [...base, ...(line ? [line] : []), "For substantial reports, research and documents, use save_artifact to persist the deliverable and include its returned Markdown link in your reply. Use find_artifacts to recover or read an existing document before updating it. Keep the reply concise; the full report belongs in the artifact.", RICH_OUTPUT_INSTRUCTIONS, RECALL_INSTRUCTIONS, ...(opts.maintenance ? [MAINTENANCE_INSTRUCTIONS] : [])];
       },
       // Only the factories below: the agent can write ~/.pi and <cwd>/.pi, so discovered extensions would run its code in-process.
       noExtensions: true,
@@ -312,6 +313,7 @@ export function createPiChatSessionFactory(
         ...(stubs ? [{ name: "sushii-tool-stubs", factory: stubs.factory }] : []),
         { name: "sushii-memory-guard", factory: createMemoryGuardExtension({ home: config.home, cwd, log: memoryLog }) },
         { name: "sushii-verify-gate", factory: createVerifyGateExtension({ home: config.home, cwd, log, loopNudged: () => loopState.nudged }) },
+        { name: "sushii-rich-output", factory: createRichOutputGateExtension({ log }) },
         // After the deterministic guards, so their blocks cost no judge call or owner prompt.
         ...(openrouterJudge
           ? [

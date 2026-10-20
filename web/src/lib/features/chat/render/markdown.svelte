@@ -1,6 +1,11 @@
 <script lang="ts">
 	import type { MdBlock } from '../types';
 	import MarkdownCode from './markdown-code.svelte';
+	import RichBlock from './rich/rich-block.svelte';
+	import RichPending from './rich/rich-pending.svelte';
+	import Callout from './rich/callout.svelte';
+	import Disclosure from './rich/disclosure.svelte';
+	import ContainerCard from './rich/container-card.svelte';
 	import {
 		fromLegacyBlocks,
 		parseDocumentMarkdown,
@@ -166,6 +171,13 @@
 				</h6>
 			{/if}
 		{:else if node.kind === 'code'}
+			{#if node.invalid}
+				<p class="text-meta text-muted-foreground">
+					Couldn't show this {node.lang}: {node.invalid[0]}{node.invalid.length > 1
+						? ` (+${node.invalid.length - 1} more)`
+						: ''}
+				</p>
+			{/if}
 			<MarkdownCode
 				code={node.text}
 				lang={node.lang}
@@ -177,7 +189,22 @@
 				{@render blockList(node.children)}
 			</blockquote>
 		{:else if node.kind === 'list'}
-			{#if node.ordered}
+			{#if node.stepper}
+				<ol class="flex flex-col gap-3">
+					{#each node.items as item, j (j)}
+						<li class="flex gap-3">
+							<span
+								aria-hidden="true"
+								class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-meta font-medium tabular-nums"
+								>{(node.start ?? 1) + j}</span
+							>
+							<div class="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
+								{@render blockList(item.children)}
+							</div>
+						</li>
+					{/each}
+				</ol>
+			{:else if node.ordered}
 				<ol start={node.start ?? undefined} class="flex list-decimal flex-col gap-1 pl-5">
 					{@render listItems(node.items)}
 				</ol>
@@ -221,6 +248,31 @@
 			</div>
 		{:else if node.kind === 'rule'}
 			<hr class="border-border" />
+		{:else if node.kind === 'rich'}
+			<RichBlock block={node.block} />
+		{:else if node.kind === 'rich-pending'}
+			<RichPending type={node.type} />
+		{:else if node.kind === 'callout'}
+			<Callout tone={node.tone} title={node.title}>{@render blockList(node.children)}</Callout>
+		{:else if node.kind === 'details'}
+			<Disclosure summary={node.summary}>{@render blockList(node.children)}</Disclosure>
+		{:else if node.kind === 'card'}
+			<ContainerCard title={node.title} subtitle={node.subtitle} href={node.href}
+				>{@render blockList(node.children)}</ContainerCard
+			>
+		{:else if node.kind === 'columns'}
+			<div
+				class={[
+					'my-1 grid gap-4',
+					node.columns.length === 2 && 'sm:grid-cols-2',
+					node.columns.length === 3 && 'sm:grid-cols-3',
+					node.columns.length >= 4 && 'sm:grid-cols-2 lg:grid-cols-4'
+				]}
+			>
+				{#each node.columns as column, j (j)}
+					<div class="flex min-w-0 flex-col gap-2">{@render blockList(column)}</div>
+				{/each}
+			</div>
 		{/if}
 	{/each}
 {/snippet}
