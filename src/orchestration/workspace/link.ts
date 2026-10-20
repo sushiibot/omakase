@@ -4,7 +4,7 @@ import type { MaintenanceRequest } from "../maintenanceContracts.ts";
 import type { TaskRequest } from "../taskContracts.ts";
 import type { BrowserControlRequest, BrowserReadResult } from "../browserContracts.ts";
 import type { AgentResultParams } from "../machines/contracts.ts";
-import type { ConnectorRequest, ConnectorsResult } from "../contracts.ts";
+import type { AttentionRequest, AttentionResult, ConnectorRequest, ConnectorsResult } from "../contracts.ts";
 import type { z } from "zod";
 import {
   AUTH_METHODS,
@@ -405,6 +405,10 @@ export class WorkspaceLink {
    *  is skipped: it reads the name from the register result when it next connects. */
   async ownerUpdate(name: string | null): Promise<void> {
     return this.api.ownerUpdate(name);
+  }
+
+  async attention(request: AttentionRequest): Promise<AttentionResult> {
+    return this.api.attention(request);
   }
 
   /** Wakes a conversation with a coding agent's result. "unsupported" and "offline" mean the workspace

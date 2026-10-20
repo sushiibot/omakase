@@ -1,5 +1,10 @@
 import { HttpError, request, send } from '$lib/core/http';
-import type { HomeResponse } from '$lib/core/realtime/events';
+import type {
+	HomeItemRating,
+	HomeMute,
+	HomeMutedResponse,
+	HomeResponse
+} from '$lib/core/realtime/events';
 import type { HomeData } from './types';
 
 /** Home's own server calls; approvals and asks are answered through chat's API. */
@@ -12,6 +17,12 @@ export interface HomeApi {
 	restore(id: string): Promise<void>;
 	/** Marks an inbox run or message read on every device. */
 	opened(id: string): Promise<void>;
+	/** The owner's 👍/👎 on item `key` of message `id`; a 👎 mutes it or its topic. null clears it. */
+	rate(id: string, key: string, rating: HomeItemRating | null): Promise<void>;
+	/** What jobs no longer flag. */
+	muted(): Promise<HomeMute[]>;
+	/** Lifts a mute; answers the mutes left. */
+	unmute(id: string): Promise<HomeMute[]>;
 }
 
 /** The parts of GET /api/home the stream doesn't already keep live. */
@@ -48,5 +59,19 @@ export const httpHomeApi: HomeApi = {
 	},
 	async opened(id) {
 		await send('POST', '/home/opened', { id });
+	},
+	async rate(id, key, rating) {
+		await send('POST', '/home/rate', {
+			id,
+			item: key,
+			value: rating?.value ?? null,
+			...(rating?.scope ? { scope: rating.scope } : {})
+		});
+	},
+	async muted() {
+		return (await request<HomeMutedResponse>('GET', '/home/muted')).mutes;
+	},
+	async unmute(id) {
+		return (await request<HomeMutedResponse>('POST', '/home/unmute', { id })).mutes;
 	}
 };

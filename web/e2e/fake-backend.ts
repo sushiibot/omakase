@@ -1,7 +1,13 @@
 // The bot's M2/M3 routes for the e2e suite, served from the feature fixtures over context.route.
 // The app build never contains fixtures, so this is the only way the screens see them here.
 import type { BrowserContext, Route } from '@playwright/test';
-import type { HomeResponse, RunStatus } from '../src/lib/core/realtime/events';
+import type {
+	HomeItemRating,
+	HomeMute,
+	HomeRateBody,
+	HomeResponse,
+	RunStatus
+} from '../src/lib/core/realtime/events';
 import { historyDay, historyDays, searchFixtures } from '../src/lib/features/history/fixtures';
 import { emptyHomeData, homeData } from '../src/lib/features/home/fixtures';
 import { runDetailPage, runSummaries } from '../src/lib/features/runs/fixtures';
@@ -57,7 +63,15 @@ function failure(route: Route, scenario: Scenario) {
 }
 
 /** `hidden`: dismissed or done item ids; `read`: opened ones. */
-function homeResponse(scenario: Scenario, hidden: Set<string>, read: Set<string>): HomeResponse {
+/** 👍/👎 by `<message id>:<item key>`. */
+type Ratings = Map<string, HomeItemRating>;
+
+function homeResponse(
+	scenario: Scenario,
+	hidden: Set<string>,
+	read: Set<string>,
+	ratings: Ratings
+): HomeResponse {
 	const now = Date.now();
 	const data = scenario === 'empty' ? emptyHomeData(now) : homeData(now);
 	const shown = <T extends { runId: string }>(runs: T[]) =>
@@ -84,7 +98,18 @@ function homeResponse(scenario: Scenario, hidden: Set<string>, read: Set<string>
 		failed: data.failed.filter((a) => !hidden.has(a.id)),
 		inbox: data.inbox
 			.filter((m) => !hidden.has(`msg:${m.key}`))
-			.map((m) => ({ ...m, read: m.read || read.has(`msg:${m.key}`) })),
+			.map((m) => ({
+				...m,
+				read: m.read || read.has(`msg:${m.key}`),
+				...(m.items
+					? {
+							items: m.items.map((i) => {
+								const rating = ratings.get(`msg:${m.key}:${i.key}`);
+								return rating ? { ...i, rating } : i;
+							})
+						}
+					: {})
+			})),
 		workspace
 	};
 }
@@ -116,6 +141,8 @@ export async function fakeBackend(
 	/** Dismissed and opened Home items, as the bot keeps them. */
 	const hidden = new Set<string>();
 	const read = new Set<string>();
+	const ratings: Ratings = new Map();
+	let mutes: HomeMute[] = [];
 
 	await context.route('**/api/**', async (route) => {
 		const req = route.request();
@@ -148,6 +175,20 @@ export async function fakeBackend(
 		const now = opts.now ?? Date.now();
 
 		if (area === 'home') {
+			if (path === '/api/home/muted') return json(route, { mutes });
+			if (path === '/api/home/unmute') {
+				const { id } = JSON.parse(raw ?? '{}') as { id: string };
+				mutes = mutes.filter((m) => m.id !== id);
+				return json(route, { mutes });
+			}
+			if (path === '/api/home/rate') {
+				const body = JSON.parse(raw ?? '{}') as HomeRateBody;
+				const key = `${body.id}:${body.item}`;
+				if (body.value)
+					ratings.set(key, { value: body.value, ...(body.scope ? { scope: body.scope } : {}) });
+				else ratings.delete(key);
+				return route.fulfill({ status: 204 });
+			}
 			if (req.method() === 'POST') {
 				const { id } = JSON.parse(raw ?? '{}') as { id: string };
 				if (path === '/api/home/opened') read.add(id);
@@ -156,7 +197,7 @@ export async function fakeBackend(
 				return route.fulfill({ status: 204 });
 			}
 			if (scenario === 'error') return failure(route, scenario);
-			return json(route, homeResponse(scenario, hidden, read));
+			return json(route, homeResponse(scenario, hidden, read, ratings));
 		}
 
 		if (area === 'search') {

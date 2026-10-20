@@ -107,13 +107,15 @@ export function heartbeatItemsMessage(now: number): HomeMessage {
 			title: 'lucid mutation tests failing',
 			body: 'All jobs failed on `main` at 12:48 UTC, with 12 annotations on the cargo-mutants job.',
 			url: 'https://github.com/drklee3/lucid/actions',
-			choices: ['Look into the failure', 'Ignore mutation tests', 'Remind me tomorrow']
+			topic: 'CI failures',
+			choices: ['Look into the failure', 'Remind me tomorrow']
 		},
 		{
 			key: 'sushii:deploy-reviews',
 			title: '6 deployment reviews pending',
 			body: 'Five more arrived since 01:01 UTC, all unread.',
-			choices: ['Approve the latest', 'Stop counting these', 'Snooze 1 day']
+			topic: 'Deployment reviews',
+			choices: ['Approve the latest', 'Snooze 1 day']
 		}
 	];
 	return {

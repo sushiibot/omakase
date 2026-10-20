@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import type { WebConfig } from "./config.ts";
 import { applySchema } from "../../db/index.ts";
-import type { RunSummary, RunsListResult } from "../../orchestration/contracts.ts";
+import type { AttentionRequest, RunSummary, RunsListResult } from "../../orchestration/contracts.ts";
 import { RpcErrorReply, RpcTimeoutError } from "../../orchestration/transport/server.ts";
 import { WorkspaceBadResponseError } from "../../orchestration/workspace/link.ts";
 import { SqliteChatLog } from "./chatLog.ts";
@@ -30,10 +30,12 @@ function setup(opts: { connected?: boolean; enabled?: boolean; loginPending?: bo
   const log = new SqliteChatLog(db, { now: () => NOW });
   const store = new WebHomeStore(db, { now: () => NOW });
   const calls: Array<Parameters<HomeLink["runsList"]>[0]> = [];
+  const attention: AttentionRequest[] = [];
   const link: HomeLink = {
     isConnected: () => opts.connected ?? true,
     isLoginPending: () => opts.loginPending ?? false,
     runsList: async (q) => (calls.push(q), opts.runs ? opts.runs(q) : { runs: [], before: null, truncated: false }),
+    attention: async (r) => (attention.push(r), { mutes: [] }),
   };
   const routes = createHomeRoutes({ log, adapter: { openTurns: () => [] }, store, link, workspaceEnabled: opts.enabled ?? true, now: () => NOW });
   const get = async () => {
@@ -43,7 +45,7 @@ function setup(opts: { connected?: boolean; enabled?: boolean; loginPending?: bo
   };
   const post = (path: string, body: unknown, type = "application/json") =>
     routes.handle(new Request(`http://x${path}`, { method: "POST", body: JSON.stringify(body), headers: { "Content-Type": type } }), path);
-  return { db, log, store, routes, calls, get, post };
+  return { db, log, store, routes, calls, attention, get, post };
 }
 
 /** Answers the running call from `running` and each finished call with the runs of its statuses. */
@@ -156,7 +158,7 @@ describe("GET /api/home", () => {
     expect(offline.calls).toEqual([]);
     expect((await setup({ enabled: false }).get()).workspace).toEqual({ state: "offline" });
     const hung = setup({ runs: () => new Promise(() => {}) });
-    const slow = createHomeRoutes({ log: hung.log, adapter: { openTurns: () => [] }, store: hung.store, link: { isConnected: () => true, isLoginPending: () => false, runsList: () => new Promise(() => {}) }, workspaceEnabled: true, now: () => NOW, workspaceTimeoutMs: 20 });
+    const slow = createHomeRoutes({ log: hung.log, adapter: { openTurns: () => [] }, store: hung.store, link: { isConnected: () => true, isLoginPending: () => false, runsList: () => new Promise(() => {}), attention: async () => ({ mutes: [] }) }, workspaceEnabled: true, now: () => NOW, workspaceTimeoutMs: 20 });
     const res = await slow.handle(new Request("http://x/api/home"), "/api/home");
     expect(((await res!.json()) as HomeResponse).workspace).toEqual({ state: "timeout" });
   });
@@ -204,6 +206,46 @@ describe("POST /api/home/dismiss and /api/home/opened", () => {
     expect((await h.routes.handle(new Request("http://x/api/home/opened"), "/api/home/opened"))!.status).toBe(405);
     expect((await h.routes.handle(new Request("http://x/api/home", { method: "POST" }), "/api/home"))!.status).toBe(405);
     expect(await h.routes.handle(new Request("http://x/api/homes"), "/api/homes")).toBeNull();
+  });
+});
+
+describe("rating job items", () => {
+  const item = { key: "omakase:ci:main", title: "Omakase CI broken", body: "e2e-system failed.", choices: [], topic: "CI failures" };
+
+  test("a 👎 mutes the item's topic by default, and Home shows the rating", async () => {
+    const h = setup();
+    h.store.addMessage({ key: "hb-1", job: "heartbeat", text: "x", items: [item, { ...item, key: "other", topic: undefined }] });
+    expect((await h.post("/api/home/rate", { id: "msg:hb-1", item: item.key, value: "down" }))!.status).toBe(204);
+    expect((await h.post("/api/home/rate", { id: "msg:hb-1", item: "other", value: "down", scope: "topic" }))!.status).toBe(204);
+    expect(h.attention).toEqual([
+      { action: "rate", job: "heartbeat", item: { key: item.key, title: item.title, topic: "CI failures" }, rating: "down" },
+      { action: "rate", job: "heartbeat", item: { key: "other", title: item.title }, rating: "down", scope: "topic" },
+    ]);
+    const [msg] = (await h.get()).inbox;
+    // An item without a topic can only be muted on its own.
+    expect(msg!.items!.map((i) => i.rating)).toEqual([{ value: "down", scope: "topic" }, { value: "down", scope: "item" }]);
+    expect(msg!.read).toBe(true);
+    expect((await h.post("/api/home/rate", { id: "msg:hb-1", item: item.key, value: null }))!.status).toBe(204);
+    expect((await h.get()).inbox[0]!.items![0]!.rating).toBeUndefined();
+  });
+
+  test("an unknown item is 404, and an offline workspace 503 that leaves Home unchanged", async () => {
+    const h = setup();
+    h.store.addMessage({ key: "hb-1", job: "heartbeat", text: "x", items: [item] });
+    expect((await h.post("/api/home/rate", { id: "msg:hb-1", item: "nope", value: "up" }))!.status).toBe(404);
+    expect((await h.post("/api/home/rate", { id: "msg:hb-2", item: item.key, value: "up" }))!.status).toBe(404);
+    const offline = setup({ connected: false });
+    offline.store.addMessage({ key: "hb-1", job: "heartbeat", text: "x", items: [item] });
+    expect((await offline.post("/api/home/rate", { id: "msg:hb-1", item: item.key, value: "up" }))!.status).toBe(503);
+    expect((await offline.get()).inbox[0]!.items![0]!.rating).toBeUndefined();
+  });
+
+  test("lists and lifts mutes through the workspace", async () => {
+    const h = setup();
+    const muted = await h.routes.handle(new Request("http://x/api/home/muted"), "/api/home/muted");
+    expect(await muted!.json()).toEqual({ mutes: [] });
+    expect((await h.post("/api/home/unmute", { id: "topic:ci failures" }))!.status).toBe(200);
+    expect(h.attention).toEqual([{ action: "list" }, { action: "unmute", id: "topic:ci failures" }]);
   });
 });
 

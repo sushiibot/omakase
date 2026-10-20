@@ -584,26 +584,27 @@ test("tapping a heartbeat item's reply sends it to Main with the item attached",
 	await page.getByRole('button', { name: /lucid mutation tests failing/ }).click();
 	await expect(sheet(page).getByRole('heading', { name: 'From heartbeat' })).toBeVisible();
 	const item = sheet(page).getByRole('region', { name: 'lucid mutation tests failing' });
-	await expect(item.getByRole('link', { name: 'Open link' })).toHaveAttribute(
+	await expect(item.getByRole('link', { name: 'Open' })).toHaveAttribute(
 		'href',
 		'https://github.com/drklee3/lucid/actions'
 	);
-	await item.getByRole('button', { name: 'Ignore mutation tests' }).click();
+	await item.getByRole('button', { name: 'Remind me tomorrow' }).click();
 	await expect
 		.poll(() => posts('/api/chat/messages').map((c) => c.body))
 		.toEqual([
 			expect.objectContaining({
-				text: 'Ignore mutation tests',
+				text: 'Remind me tomorrow',
 				ref: { id: `msg:${HEARTBEAT_ITEMS_KEY}`, item: 'lucid:mutants:main', choice: 1 }
 			})
 		]);
-	await expect(item).toContainText('You replied: Ignore mutation tests');
+	await expect(item).toContainText('You replied: Remind me tomorrow');
 	await expect(
 		sheet(page).getByRole('status').filter({ hasText: 'Sent to Main chat' })
 	).toBeVisible();
 
 	// A typed reply to the other item goes the same way, without a choice.
 	const other = sheet(page).getByRole('region', { name: '6 deployment reviews pending' });
+	await other.getByRole('button', { name: 'Reply' }).click();
 	await other.getByRole('textbox', { name: /Your own reply/ }).fill('Approve the two oldest');
 	await other.getByRole('button', { name: 'Send reply' }).click();
 	await expect
@@ -614,6 +615,48 @@ test("tapping a heartbeat item's reply sends it to Main with the item attached",
 	await expect(
 		page.getByRole('region', { name: 'Replying to heartbeat: lucid mutation tests failing' })
 	).toBeVisible();
+});
+
+test("Not useful mutes the item's topic at once, narrows to the item, and undoes in place", async ({
+	page,
+	context
+}) => {
+	const { posts } = await homeServer(context);
+	await page.goto('/inbox');
+	await page.getByRole('button', { name: /lucid mutation tests failing/ }).click();
+	const item = sheet(page).getByRole('region', { name: 'lucid mutation tests failing' });
+	await expect(item).toContainText('CI failures');
+	await item.getByRole('button', { name: 'Useful', exact: true }).click();
+	await expect(item.getByRole('button', { name: 'Useful', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await item.getByRole('button', { name: 'Not useful' }).click();
+	await expect(item.getByRole('status')).toHaveText(/You won't see “CI failures” again/);
+	await item.getByRole('button', { name: 'Only this item' }).click();
+	await expect(item.getByRole('status')).toHaveText(/You won't see this again/);
+	await item.getByRole('button', { name: 'Undo' }).click();
+	await expect(item.getByRole('button', { name: 'Not useful' })).toBeVisible();
+	await expect
+		.poll(() => posts('/api/home/rate').map((c) => c.body))
+		.toEqual([
+			{ id: `msg:${HEARTBEAT_ITEMS_KEY}`, item: 'lucid:mutants:main', value: 'up' },
+			{
+				id: `msg:${HEARTBEAT_ITEMS_KEY}`,
+				item: 'lucid:mutants:main',
+				value: 'down',
+				scope: 'topic'
+			},
+			{
+				id: `msg:${HEARTBEAT_ITEMS_KEY}`,
+				item: 'lucid:mutants:main',
+				value: 'down',
+				scope: 'item'
+			},
+			{ id: `msg:${HEARTBEAT_ITEMS_KEY}`, item: 'lucid:mutants:main', value: null }
+		]);
+	// The message itself stays on Home.
+	await expect(item).toBeVisible();
 });
 
 test('Done takes an item off Home on every device, and Undo brings it back', async ({

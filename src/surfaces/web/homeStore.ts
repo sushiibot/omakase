@@ -1,6 +1,6 @@
 import type { Database, Statement } from "bun:sqlite";
 import { MESSAGE_REF_EXCERPT_MAX, type JobItem } from "../../orchestration/contracts.ts";
-import type { HomeAlert, HomeMessage, HomeMessageItem, JobAlert, MessageRef, MessageRefInput } from "./events.ts";
+import type { HomeAlert, HomeItemRating, HomeMessage, HomeMessageItem, JobAlert, MessageRef, MessageRefInput } from "./events.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Longer than HOME_RECENT_HOURS, so a run stays opened for as long as Home could list it. */
@@ -11,7 +11,7 @@ export const DONE_MESSAGES_RETENTION_MS = 30 * DAY_MS;
 /** Undone messages Home lists; older ones wait behind them. */
 export const HOME_MESSAGES_MAX = 50;
 
-type MessageRow = { key: string; job: string; run_id: string | null; text: string; at: number; read_at: number | null; items: string | null; answers: string | null };
+type MessageRow = { key: string; job: string; run_id: string | null; text: string; at: number; read_at: number | null; items: string | null; answers: string | null; ratings: string | null };
 /** The answers key for a reply to the message as a whole. */
 const WHOLE = "";
 const ANSWER_MAX = 200;
@@ -147,6 +147,23 @@ export class WebHomeStore {
     this.db.run("UPDATE web_inbox SET answers = ?, read_at = COALESCE(read_at, ?) WHERE key = ?", [JSON.stringify(answers), this.now(), key]);
   }
 
+  /** One item of a stored message and its job; null when either is unknown. */
+  messageItem(key: string, itemKey: string): { job: string; item: JobItem } | null {
+    const row = this.db.query("SELECT job, items FROM web_inbox WHERE key = ?").get(key) as Pick<MessageRow, "job" | "items"> | null;
+    const item = row ? parseItems(row.items).find((i) => i.key === itemKey) : undefined;
+    return row && item ? { job: row.job, item } : null;
+  }
+
+  /** Records the owner's 👍/👎 on an item, which also reads the message; null clears it. */
+  rateItem(key: string, itemKey: string, rating: HomeItemRating | null): void {
+    const row = this.db.query("SELECT ratings FROM web_inbox WHERE key = ?").get(key) as Pick<MessageRow, "ratings"> | null;
+    if (!row) return;
+    const ratings = parseRatings(row.ratings);
+    if (rating) ratings[itemKey] = rating;
+    else delete ratings[itemKey];
+    this.db.run("UPDATE web_inbox SET ratings = ?, read_at = COALESCE(read_at, ?) WHERE key = ?", [JSON.stringify(ratings), this.now(), key]);
+  }
+
   hasMessage(key: string): boolean {
     return this.db.query("SELECT 1 FROM web_inbox WHERE key = ?").get(key) !== null;
   }
@@ -154,11 +171,16 @@ export class WebHomeStore {
   /** Messages not marked done, newest first. */
   messages(): HomeMessage[] {
     const rows = this.db
-      .query("SELECT key, job, run_id, text, at, read_at, items, answers FROM web_inbox WHERE done_at IS NULL ORDER BY at DESC, rowid DESC LIMIT ?")
+      .query("SELECT key, job, run_id, text, at, read_at, items, answers, ratings FROM web_inbox WHERE done_at IS NULL ORDER BY at DESC, rowid DESC LIMIT ?")
       .all(HOME_MESSAGES_MAX) as MessageRow[];
     return rows.map((r) => {
       const answers = parseAnswers(r.answers);
-      const items: HomeMessageItem[] = parseItems(r.items).map((i) => ({ ...i, ...(answers[i.key] !== undefined ? { answer: answers[i.key] } : {}) }));
+      const ratings = parseRatings(r.ratings);
+      const items: HomeMessageItem[] = parseItems(r.items).map((i) => ({
+        ...i,
+        ...(answers[i.key] !== undefined ? { answer: answers[i.key] } : {}),
+        ...(ratings[i.key] ? { rating: ratings[i.key] } : {}),
+      }));
       return {
         key: r.key,
         job: r.job,
@@ -244,6 +266,16 @@ function parseAnswers(raw: string | null): Record<string, string> {
   } catch {
     return {};
   }
+}
+
+function parseRatings(raw: string | null): Record<string, HomeItemRating> {
+  const ratings: Record<string, HomeItemRating> = {};
+  for (const [key, r] of Object.entries(parseAnswers(raw) as Record<string, unknown>)) {
+    const v = r as Partial<HomeItemRating> | null;
+    if (v?.value !== "up" && v?.value !== "down") continue;
+    ratings[key] = { value: v.value, ...(v.scope === "item" || v.scope === "topic" ? { scope: v.scope } : {}) };
+  }
+  return ratings;
 }
 
 function clip(s: string, max: number): string {

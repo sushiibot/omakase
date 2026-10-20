@@ -675,8 +675,18 @@ export interface HomeMessageItem {
 	body: string;
 	url?: string;
 	choices: string[];
+	/** The kind of thing it is, like "CI failures": what a 👎 can mute beyond this one item. */
+	topic?: string;
 	/** The owner's reply once sent: the choice tapped, or the start of what they wrote. */
 	answer?: string;
+	/** The owner's 👍/👎; a 👎 muted the item, or its whole topic. */
+	rating?: HomeItemRating;
+}
+
+export interface HomeItemRating {
+	value: 'up' | 'down';
+	/** What a 👎 muted. */
+	scope?: 'item' | 'topic';
 }
 
 export type ReviewRun = RunSummary & { read: boolean };
@@ -687,6 +697,33 @@ export type ReviewRun = RunSummary & { read: boolean };
  */
 export interface HomeDismissBody {
 	id: string;
+}
+
+/**
+ * POST /api/home/rate → 204: the owner's 👍/👎 on one item of a `msg:` message. A 👎 mutes the item, or by
+ * default its whole topic, so jobs stop flagging that kind of thing; `value: null` clears the rating and its
+ * mute. 404 for an unknown message or item; 503 while the workspace is offline.
+ */
+export interface HomeRateBody {
+	id: string;
+	item: string;
+	value: 'up' | 'down' | null;
+	scope?: 'item' | 'topic';
+}
+
+/** What jobs no longer flag: one item, or a whole topic from any job. */
+export interface HomeMute {
+	id: string;
+	scope: 'item' | 'topic';
+	/** The item's title, or the topic. */
+	label: string;
+	job: string;
+	at: string;
+}
+
+/** GET /api/home/muted, and POST /api/home/unmute `{ id }`, which answers the mutes left. */
+export interface HomeMutedResponse {
+	mutes: HomeMute[];
 }
 
 /** POST /api/home/restore → 204. Undoes a dismiss of a `run:` or `msg:` id. */

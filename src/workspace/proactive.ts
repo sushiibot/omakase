@@ -3,7 +3,7 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getLogger } from "../logger.ts";
-import { isHttpsUrl, JOB_ITEM_CHOICE_MAX, JOB_ITEM_CHOICES_MAX, JOB_ITEM_KEY_RE, JOB_ITEM_TITLE_MAX, JOB_ITEM_BODY_MAX, JOB_ITEMS_MAX, jobItem, type DeliverJob, type JobItem } from "../orchestration/contracts.ts";
+import { isHttpsUrl, JOB_ITEM_CHOICE_MAX, JOB_ITEM_CHOICES_MAX, JOB_ITEM_KEY_RE, JOB_ITEM_TOPIC_MAX, JOB_ITEM_TITLE_MAX, JOB_ITEM_BODY_MAX, JOB_ITEMS_MAX, jobItem, type DeliverJob, type JobItem } from "../orchestration/contracts.ts";
 import type { WorkspaceConfig } from "./config.ts";
 import { isNoReply, NO_REPLY } from "./events.ts";
 import { ownerLabel, ownerNameLine, ownerPossessive } from "../orchestration/ownerLabel.ts";
@@ -32,11 +32,12 @@ export function heartbeatPrompt(ownerName?: string): string {
 /** How a job replies with items the owner can answer by tapping; parsed by parseJobItems. */
 export const JOB_ITEMS_FORMAT = [
   "When something needs attention, reply with only this JSON object and no prose around it:",
-  '{"items":[{"key":"…","title":"…","body":"…","url":"https://…","choices":["…","…"]}]}',
+  '{"items":[{"key":"…","title":"…","topic":"…","body":"…","url":"https://…","choices":["…","…"]}]}',
   `- One item per separate thing, most important first, at most ${JOB_ITEMS_MAX}.`,
   "- key: a stable id for the thing, lowercase, like `lucid:ci:main` or `email:landlord-lease`. Use the same key on every run while it is the same thing, so the owner's replies to it carry over.",
+  `- topic: the kind of thing, in a few words under ${JOB_ITEM_TOPIC_MAX} characters, broad enough to cover its siblings: "CI failures", "Package deliveries", "Calendar conflicts". The owner can mute a whole topic, so keep the same label for the same kind across runs and sources.`,
   "- title: a few words. body: one to three short markdown sentences: what changed and why it matters now. url (optional): the most useful https link.",
-  `- choices: 2 to ${JOB_ITEM_CHOICES_MAX} short replies the owner might tap, under 40 characters, specific to the item and worded as the owner speaking: "Look into the failure", "Remind me tomorrow", "Stop flagging this". The owner can always write their own reply instead.`,
+  `- choices: 0 to ${JOB_ITEM_CHOICES_MAX} short actions the owner might ask for, under 40 characters, specific to the item and worded as the owner speaking: "Look into the failure", "Draft a reply", "Remind me tomorrow". Leave out dismissals like "Ignore this" or "Stop flagging this": the owner has 👍/👎 and Done for those. The owner can always write their own reply instead.`,
   "- A tap reaches the main chat as the owner's reply to that item. It approves nothing by itself, so a choice may ask for work but never stands in for a confirmation.",
 ].join("\n");
 /** Names schedule.md can't use: the built-in jobs. */
@@ -164,6 +165,7 @@ export function parseJobItems(text: string): JobItem[] | null {
     let key = base;
     for (let n = 2; keys.has(key); n++) key = `${base.slice(0, 76)}-${n}`;
     const url = str(r.url).trim();
+    const topic = clip(oneLine(str(r.topic), JOB_ITEM_TOPIC_MAX), JOB_ITEM_TOPIC_MAX);
     const choices = [...new Set((Array.isArray(r.choices) ? r.choices : []).map((c) => oneLine(str(c), JOB_ITEM_CHOICE_MAX)).filter(Boolean))].slice(0, JOB_ITEM_CHOICES_MAX);
     const parsed = jobItem.safeParse({
       key,
@@ -171,6 +173,7 @@ export function parseJobItems(text: string): JobItem[] | null {
       body: clip(str(r.body).trim(), JOB_ITEM_BODY_MAX),
       ...(url && url.length <= 2048 && isHttpsUrl(url) ? { url } : {}),
       choices,
+      ...(topic ? { topic } : {}),
     });
     if (!parsed.success) continue;
     keys.add(key);
@@ -238,6 +241,8 @@ export interface PromptJobDeps {
   deliver: (text: string, job: DeliverJob, items?: JobItem[]) => void;
   /** The owner's recent replies to `job`'s messages, as a prompt section. */
   feedback?: (job: string, at: Date) => string;
+  /** The owner's 👍/👎 on items: a prompt section, and the filter that drops muted items. */
+  attention?: { promptSection(): string; allows(item: JobItem): boolean };
   /** Appends a one-line note to the main chat session. */
   note: (name: string, text: string) => Promise<void>;
   /** Test seam. */
@@ -270,7 +275,7 @@ export function createPromptJob(spec: PromptJobSpec, deps: PromptJobDeps): Sched
         catch { sources = "Connected-source discovery unavailable. Do not claim connected sources were checked."; }
       }
       const maintenance = spec.name === HEARTBEAT_JOB ? deps.maintenance : undefined;
-      const prompt = [spec.prompt, maintenance ? MAINTENANCE_INSTRUCTIONS : "", sources, deps.scheduledChecks?.(), deps.limiter.recentAlerts(now), deps.feedback?.(spec.name, now), notes].filter(Boolean).join("\n\n");
+      const prompt = [spec.prompt, maintenance ? MAINTENANCE_INSTRUCTIONS : "", sources, deps.scheduledChecks?.(), deps.limiter.recentAlerts(now), deps.feedback?.(spec.name, now), deps.attention?.promptSection(), notes].filter(Boolean).join("\n\n");
       const { text, runId } = await (deps.runner ?? runToolFreeJob)(deps.config, {
         agentName,
         systemPrompt: jobPreamble(spec.name, now, deps.config.tz, deps.config.ownerName),
@@ -285,7 +290,10 @@ export function createPromptJob(spec: PromptJobSpec, deps: PromptJobDeps): Sched
       maintenance?.noteReview();
       const ran = runId ? { runId } : {};
       if (isNoReply(text)) return { status: "no_reply", ...ran };
-      const items = parseJobItems(text);
+      const parsed = parseJobItems(text);
+      // Muted items are dropped here too, so one the model still flags never reaches the owner.
+      const items = parsed && deps.attention ? parsed.filter((i) => deps.attention!.allows(i)) : parsed;
+      if (items && items.length < parsed!.length) log.info({ job: spec.name, dropped: parsed!.length - items.length }, "dropped muted job items");
       if (items?.length === 0) return { status: "no_reply", ...ran };
       const shown = items ? renderJobItems(items) : text;
 
@@ -346,6 +354,7 @@ export interface ProactiveWiring {
   scheduledChecks?: () => string;
   deliver: PromptJobDeps["deliver"];
   feedback?: PromptJobDeps["feedback"];
+  attention?: PromptJobDeps["attention"];
   note: (name: string, text: string) => Promise<void>;
   /** After schedule.md is found changed, e.g. to commit it. */
   onScheduleChange?: () => void;
@@ -372,6 +381,7 @@ export function wireProactiveJobs(scheduler: Scheduler, w: ProactiveWiring): voi
     ...(w.scheduledChecks ? { scheduledChecks: w.scheduledChecks } : {}),
     deliver: w.deliver,
     ...(w.feedback ? { feedback: w.feedback } : {}),
+    ...(w.attention ? { attention: w.attention } : {}),
     note: w.note,
     ...(w.runner ? { runner: w.runner } : {}),
     ...(w.now ? { now: w.now } : {}),

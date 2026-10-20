@@ -8,6 +8,7 @@
 	import * as Sheet from '$lib/ui/sheet';
 	import { cn } from '$lib/utils';
 	import { peekTitle } from '../format';
+	import type { HomeItemRating } from '$lib/core/realtime/events';
 	import type { HomeItem, HomePeek } from '../types';
 	import RecordPeek from './record-peek.svelte';
 
@@ -23,6 +24,8 @@
 		onreply,
 		onreplyitem,
 		answers,
+		onrateitem,
+		ratings,
 		onopenrun,
 		onopenchat,
 		onaskagent
@@ -38,6 +41,8 @@
 		onreply?: (item: HomeItem) => void;
 		onreplyitem?: (item: HomeItem, key: string, text: string, index?: number) => void;
 		answers?: Readonly<Record<string, string>>;
+		onrateitem?: (item: HomeItem, key: string, rating: HomeItemRating | null) => void;
+		ratings?: Readonly<Record<string, HomeItemRating | null>>;
 		onopenrun?: (runId: string) => void;
 		onopenchat?: () => void;
 		onaskagent?: (item: HomeItem) => void;
@@ -88,6 +93,8 @@
 				{onreply}
 				{onreplyitem}
 				{answers}
+				{onrateitem}
+				{ratings}
 				{onaskagent}
 			/>
 		</div>

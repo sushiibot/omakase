@@ -11,7 +11,7 @@ import {
   type BrowserReadResult,
 } from "../browserContracts.ts";
 import { memoryParams, memoryOverview, memoryDetail } from "../memoryContracts.ts";
-import { ownerUpdateParams, runsStopParams, runsStopResult } from "../contracts.ts";
+import { attentionParams, attentionResult, ownerUpdateParams, runsStopParams, runsStopResult, type AttentionRequest, type AttentionResult } from "../contracts.ts";
 import { AGENT_RESULT, agentResultParams, agentResultReply, type AgentResultParams } from "../machines/contracts.ts";
 import { connectorsParams, connectorsResult, type ConnectorRequest, type ConnectorsResult } from "../contracts.ts";
 import type { z } from "zod";
@@ -173,6 +173,11 @@ export class WorkspaceApi {
       if (err instanceof RpcErrorReply && err.code === -32601) return "unsupported";
       throw err;
     }
+  }
+
+  /** Rates a job item, or lists or lifts the owner's mutes; returns the mutes after. */
+  async attention(request: AttentionRequest): Promise<AttentionResult> {
+    return this.read(RPC_METHODS.attentionManage, attentionParams, attentionResult, { request }, CONTROL_TIMEOUT_MS);
   }
 
   async modelsSearch(query: string): Promise<ModelsSearchResult> {

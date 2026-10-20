@@ -10,6 +10,7 @@
 	import { Button } from '$lib/ui/button';
 	import { ago, duration } from '$lib/ui/format/time';
 	import StatePill from '$lib/ui/status/state-pill.svelte';
+	import type { HomeItemRating } from '$lib/core/realtime/events';
 	import type { HomeItem } from '../types';
 	import JobItem from './job-item.svelte';
 
@@ -23,6 +24,8 @@
 		onreply,
 		onreplyitem,
 		answers = {},
+		onrateitem,
+		ratings = {},
 		onaskagent
 	}: {
 		item: Exclude<HomeItem, { kind: 'approval' | 'ask' }>;
@@ -36,6 +39,10 @@
 		onreplyitem?: (item: HomeItem, key: string, text: string, index?: number) => void;
 		/** Replies sent from this device, by `<item id>:<item key>`, before Home reloads. */
 		answers?: Readonly<Record<string, string>>;
+		/** The owner's 👍/👎 on one item of a job's message; null clears it. */
+		onrateitem?: (item: HomeItem, key: string, rating: HomeItemRating | null) => void;
+		/** Ratings set from this device, by `<item id>:<item key>`, before Home reloads; null for cleared. */
+		ratings?: Readonly<Record<string, HomeItemRating | null>>;
 		onaskagent?: (item: HomeItem) => void;
 	} = $props();
 
@@ -100,12 +107,15 @@
 		{@const m = item.message}
 		<p class="text-sm text-muted-foreground">Scheduled · {m.job} · {ago(m.at, now)}</p>
 		{#if m.items?.length}
-			<div class="flex flex-col gap-3">
+			<div class="flex flex-col divide-y">
 				{#each m.items as entry (entry.key)}
+					{@const id = `${item.id}:${entry.key}`}
 					<JobItem
 						item={entry}
-						answer={answers[`${item.id}:${entry.key}`] ?? entry.answer}
+						answer={answers[id] ?? entry.answer}
+						rating={id in ratings ? ratings[id] : entry.rating}
 						onreply={(text, index) => onreplyitem?.(item, entry.key, text, index)}
+						onrate={(rating) => onrateitem?.(item, entry.key, rating)}
 					/>
 				{/each}
 			</div>

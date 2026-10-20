@@ -16,6 +16,7 @@
 	import Peek from './components/peek.svelte';
 	import UndoToast from './components/undo-toast.svelte';
 	import { peekTitle } from './format';
+	import type { HomeItemRating } from '$lib/core/realtime/events';
 	import type { HomeData, HomeGroup, HomeGroups, HomeItem, HomePeek } from './types';
 
 	let {
@@ -46,6 +47,8 @@
 		onreply,
 		onreplyitem,
 		answers,
+		onrateitem,
+		ratings,
 		undo,
 		onundo,
 		onopenrun,
@@ -86,6 +89,8 @@
 		/** A reply to one item of a job's message; `index` for a tapped choice. */
 		onreplyitem?: (item: HomeItem, key: string, text: string, index?: number) => void;
 		answers?: Readonly<Record<string, string>>;
+		onrateitem?: (item: HomeItem, key: string, rating: HomeItemRating | null) => void;
+		ratings?: Readonly<Record<string, HomeItemRating | null>>;
 		/** What was last marked done, while Undo is offered. */
 		undo?: { label: string } | null;
 		onundo?: () => void;
@@ -235,6 +240,8 @@
 			{onreply}
 			{onreplyitem}
 			{answers}
+			{onrateitem}
+			{ratings}
 			{onopenrun}
 			{onopenchat}
 			{onaskagent}

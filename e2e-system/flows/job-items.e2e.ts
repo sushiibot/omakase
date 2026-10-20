@@ -6,7 +6,7 @@ import { expect, nonce, stack, test } from "../lib/harness.ts";
 const JOB = "e2e-items";
 const SAME_ORIGIN = { "Sec-Fetch-Site": "same-origin" };
 
-test("a job's items take a tapped reply to Main with the item attached, and the agent and the job's next run see it", async ({ page, request, watch }) => {
+test("a job's items take a tapped reply to Main with the item attached, the agent and the job's next run see it, and Not useful mutes the topic", async ({ page, request, watch }) => {
   test.setTimeout(180_000);
   const tag = nonce();
   // Disabled, so only this flow's request runs it.
@@ -15,7 +15,7 @@ test("a job's items take a tapped reply to Main with the item attached, and the 
   writeFileSync(join(stack.wsState, "requests", `${JOB}.request`), `${JSON.stringify({ requestedAt: new Date().toISOString() })}\n`);
   await stack.tickScheduler();
 
-  type Inbox = Array<{ key: string; job: string; runId?: string; items?: Array<{ key: string; choices: string[]; answer?: string }> }>;
+  type Inbox = Array<{ key: string; job: string; runId?: string; items?: Array<{ key: string; choices: string[]; answer?: string; rating?: unknown }> }>;
   const inbox = async () => ((await (await request.get("/api/home", { headers: SAME_ORIGIN })).json()) as { inbox: Inbox }).inbox.filter((m) => m.job === JOB);
   await expect.poll(async () => (await inbox()).length, { timeout: 90_000, intervals: [1000] }).toBe(1);
   const [message] = await inbox();
@@ -43,5 +43,13 @@ test("a job's items take a tapped reply to Main with the item attached, and the 
   await expect.poll(() => existsSync(feedback) && readFileSync(feedback, "utf8")).toContain(`e2e:ci:${tag}`);
   expect(JSON.parse(readFileSync(feedback, "utf8"))).toContainEqual(expect.objectContaining({ job: JOB, answer: "Ignore it", tapped: true }));
   expect((await inbox())[0]!.items![0]!.answer).toBe("Ignore it");
+
+  // Not useful mutes the item's topic in the workspace, so the job's later runs drop it.
+  await page.goto(`/inbox?item=msg:${encodeURIComponent(message!.key)}`);
+  await item.getByRole("button", { name: "Not useful" }).click();
+  await expect(item.getByRole("status").filter({ hasText: "won't see" })).toContainText("You won't see “E2E CI failures” again.");
+  await expect.poll(async () => (await inbox())[0]!.items![0]!.rating).toEqual({ value: "down", scope: "topic" });
+  const attention = JSON.parse(readFileSync(join(stack.wsState, "attention.json"), "utf8")) as { mutes: Array<{ id: string; sources: string[] }> };
+  expect(attention.mutes).toEqual([expect.objectContaining({ id: "topic:e2e ci failures", sources: [`e2e:ci:${tag}`] })]);
   expect(await watch.violations()).toEqual([]);
 });

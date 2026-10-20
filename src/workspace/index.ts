@@ -55,6 +55,7 @@ import { recordTaskRuns } from "./taskRuns.ts";
 import { applyRegisteredOwnerName, loadOwnerName, ownerHandlers } from "./owner.ts";
 import { AgentResults } from "./agentResults.ts";
 import { JobFeedback } from "./jobFeedback.ts";
+import { AttentionPrefs, attentionHandlers } from "./attention.ts";
 
 const log = getLogger("workspace");
 
@@ -179,6 +180,7 @@ async function main(): Promise<void> {
   await connectors.start();
   const maintenance = new MaintenanceService(config.stateDir, new FastmailCalendar(connectors));
   const jobFeedback = new JobFeedback(config.stateDir);
+  const attention = new AttentionPrefs(config.stateDir);
   const personalOptions = {
     jobFeedback,
     ownerName: () => config.ownerName,
@@ -317,6 +319,7 @@ async function main(): Promise<void> {
     toolStubs,
     deliver: (text, job, items) => personal.deliverOutOfBand({ kind: "proactive", text, job, ...(items ? { items } : {}) }),
     feedback: (job, at) => jobFeedback.promptFor(job, at),
+    attention,
     note: async (name, text) => {
       await personal.handleMessage({
         origin: { surface: "workspace", conversationId: "schedule" },
@@ -375,6 +378,7 @@ async function main(): Promise<void> {
       ...commands,
       ...topics.handlers(),
       ...ownerHandlers(config, ownerChanged),
+      ...attentionHandlers(attention, config.principalId),
       ...agentResults.handlers(),
       [RPC_METHODS.runsStop]: async (p: unknown) => {
         const q = runsStopParams.parse(p);

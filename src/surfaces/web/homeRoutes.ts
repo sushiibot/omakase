@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { ID_MAX, JOB_NAME_RE, RUN_ID_RE, isNoReply, type RunSummary, type RunsListResult, type runsListParams } from "../../orchestration/contracts.ts";
+import { ATTENTION_MUTE_ID_MAX, ATTENTION_RATINGS, ATTENTION_SCOPES, ID_MAX, JOB_ITEM_KEY_RE, JOB_NAME_RE, type AttentionRequest, type AttentionResult, RUN_ID_RE, isNoReply, type RunSummary, type RunsListResult, type runsListParams } from "../../orchestration/contracts.ts";
 import { LOGIN_PENDING_MS, WorkspaceBadResponseError } from "../../orchestration/workspace/link.ts";
 import { APPROVAL_TIMEOUT_MS } from "../../orchestration/workspace/tools.ts";
-import { RpcErrorReply, RpcTimeoutError } from "../../orchestration/transport/server.ts";
+import { RpcErrorReply, RpcTimeoutError, WorkspaceNotConnectedError } from "../../orchestration/transport/server.ts";
 import { getLogger } from "../../logger.ts";
 import type { SqliteChatLog } from "./chatLog.ts";
 import { PENDING_ASKS_MAX } from "./chatRoutes.ts";
-import { HOME_RECENT_HOURS, HOME_RUNS_MAX, type HomeResponse, type TurnView } from "./events.ts";
+import { HOME_RECENT_HOURS, HOME_RUNS_MAX, type HomeMutedResponse, type HomeResponse, type TurnView } from "./events.ts";
 import type { WebHomeStore } from "./homeStore.ts";
 import { isJson, json, readJson } from "./http.ts";
 
@@ -29,6 +29,7 @@ export interface HomeLink {
   isConnected(): boolean;
   isLoginPending(): boolean;
   runsList(q: Omit<z.input<typeof runsListParams>, "principalId">, timeoutMs?: number): Promise<RunsListResult>;
+  attention(request: AttentionRequest): Promise<AttentionResult>;
 }
 
 export interface HomeRouteDeps {
@@ -47,6 +48,10 @@ export interface HomeRoutes {
 }
 
 const idBody = z.object({ id: z.string().min(1).max(ID_MAX) }).strict();
+const rateBody = z
+  .object({ id: z.string().min(1).max(ID_MAX), item: z.string().regex(JOB_ITEM_KEY_RE), value: z.enum(ATTENTION_RATINGS).nullable(), scope: z.enum(ATTENTION_SCOPES).optional() })
+  .strict();
+const unmuteBody = z.object({ id: z.string().min(1).max(ATTENTION_MUTE_ID_MAX) }).strict();
 
 export function createHomeRoutes(deps: HomeRouteDeps): HomeRoutes {
   const { log: chatLog, store, link } = deps;
@@ -162,6 +167,50 @@ export function createHomeRoutes(deps: HomeRouteDeps): HomeRoutes {
     return new Response(null, { status: 204 });
   }
 
+  /** Sends an attention request to the workspace, which keeps the owner's mutes. */
+  async function attention(request: AttentionRequest): Promise<AttentionResult | Response> {
+    if (!deps.workspaceEnabled || !link.isConnected()) return json({ error: "The agent's workspace is offline." }, 503);
+    try {
+      return await link.attention(request);
+    } catch (err) {
+      if (err instanceof WorkspaceNotConnectedError || err instanceof RpcTimeoutError) return json({ error: "The agent's workspace is offline." }, 503);
+      if (err instanceof RpcErrorReply && err.code === JSON_RPC_METHOD_NOT_FOUND) return json({ error: "The agent's workspace is too old for this." }, 501);
+      log.warn({ err }, "the workspace could not take an attention request");
+      return json({ error: "The agent couldn't take that." }, 502);
+    }
+  }
+
+  /** The owner's 👍/👎 on an item: the workspace applies it to later runs, Home shows it. */
+  async function postRate(req: Request): Promise<Response> {
+    const body = await parseBody(req, rateBody);
+    if (body instanceof Response) return body;
+    const key = /^msg:(.+)$/.exec(body.id)?.[1];
+    const found = key === undefined ? null : store.messageItem(key, body.item);
+    if (!found || key === undefined) return json({ error: "not found" }, 404);
+    const { job, item } = found;
+    const res = await attention({
+      action: "rate",
+      job,
+      item: { key: item.key, title: item.title, ...(item.topic ? { topic: item.topic } : {}) },
+      rating: body.value,
+      ...(body.scope ? { scope: body.scope } : {}),
+    });
+    if (res instanceof Response) return res;
+    const scope = body.value === "down" ? (body.scope === "item" || !item.topic ? "item" : "topic") : undefined;
+    store.rateItem(key, item.key, body.value ? { value: body.value, ...(scope ? { scope } : {}) } : null);
+    return new Response(null, { status: 204 });
+  }
+
+  async function mutes(request: AttentionRequest): Promise<Response> {
+    const res = await attention(request);
+    return res instanceof Response ? res : json({ mutes: res.mutes } satisfies HomeMutedResponse);
+  }
+
+  async function postUnmute(req: Request): Promise<Response> {
+    const body = await parseBody(req, unmuteBody);
+    return body instanceof Response ? body : mutes({ action: "unmute", id: body.id });
+  }
+
   return {
     async handle(req, path) {
       if (path !== "/api/home" && !path.startsWith("/api/home/")) return null;
@@ -169,6 +218,9 @@ export function createHomeRoutes(deps: HomeRouteDeps): HomeRoutes {
       if (path === "/api/home/dismiss") return req.method === "POST" ? postDismiss(req) : methodNotAllowed();
       if (path === "/api/home/opened") return req.method === "POST" ? postOpened(req) : methodNotAllowed();
       if (path === "/api/home/restore") return req.method === "POST" ? postRestore(req) : methodNotAllowed();
+      if (path === "/api/home/rate") return req.method === "POST" ? postRate(req) : methodNotAllowed();
+      if (path === "/api/home/muted") return req.method === "GET" ? mutes({ action: "list" }) : methodNotAllowed();
+      if (path === "/api/home/unmute") return req.method === "POST" ? postUnmute(req) : methodNotAllowed();
       return json({ error: "not found" }, 404);
     },
   };
@@ -195,11 +247,11 @@ function runIdOf(id: string): string | null {
   return runId !== undefined && RUN_ID_RE.test(runId) ? runId : null;
 }
 
-async function parseBody(req: Request): Promise<z.infer<typeof idBody> | Response> {
+async function parseBody<S extends z.ZodTypeAny = typeof idBody>(req: Request, schema?: S): Promise<z.infer<S> | Response> {
   if (!isJson(req)) return json({ error: "content-type must be application/json" }, 415);
   const raw = await readJson(req);
   if (raw instanceof Response) return raw;
-  const parsed = idBody.safeParse(raw);
+  const parsed = (schema ?? idBody).safeParse(raw);
   return parsed.success ? parsed.data : json({ error: "invalid body" }, 400);
 }
 

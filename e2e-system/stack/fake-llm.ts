@@ -147,7 +147,7 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
   const items = /E2E-ITEMS key-([a-z0-9]{4,16})\b/.exec(userText);
   if (items) {
     const k = items[1]!;
-    const item = { key: `e2e:ci:${k}`, title: `E2E CI failing ${k}`, body: `All jobs failed. E2E-ECHO item-${k} #${k}`, url: "https://example.com/ci", choices: ["Look into it", "Ignore it"] };
+    const item = { key: `e2e:ci:${k}`, title: `E2E CI failing ${k}`, body: `All jobs failed. E2E-ECHO item-${k} #${k}`, url: "https://example.com/ci", topic: "E2E CI failures", choices: ["Look into it", "Ignore it"] };
     return stream([JSON.stringify({ items: [item] })], 10, undefined);
   }
   if (userText.includes("E2E-LIST-CHECKS")) return toolCall("list_scheduled_checks", { includeFinished: true });

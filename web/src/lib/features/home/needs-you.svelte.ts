@@ -1,6 +1,6 @@
 import { locationOutcome, httpChatApi, type LocationReply } from '$lib/features/chat';
 import { HttpError } from '$lib/core/http';
-import type { ChatEnvelope } from '$lib/core/realtime/events';
+import type { ChatEnvelope, HomeItemRating } from '$lib/core/realtime/events';
 import { hub as appHub, type Hub } from '$lib/core/realtime/hub.svelte';
 import { Remote } from '$lib/core/remote.svelte';
 import { chatApi, chatStore, type ChatApi } from '$lib/features/chat';
@@ -52,6 +52,8 @@ export class NeedsYouStore {
 	results = $state.raw<Readonly<Record<string, Result>>>({});
 	/** Replies to job items sent from this device, by `<item id>:<item key>`, until Home reloads with them. */
 	answers = $state.raw<Readonly<Record<string, string>>>({});
+	/** 👍/👎 set from this device, by `<item id>:<item key>`, until Home reloads with them; null for cleared. */
+	ratings = $state.raw<Readonly<Record<string, HomeItemRating | null>>>({});
 	/** The item last marked done, while Undo is offered. */
 	undoable = $state.raw<{ id: string; label: string } | null>(null);
 
@@ -287,6 +289,34 @@ export class NeedsYouStore {
 		this.#scheduleRefetch();
 	}
 
+	/** Rates one item of a job's message at once; a failure puts the last rating back and says so. */
+	async rate(item: HomeItem, key: string, rating: HomeItemRating | null) {
+		if (item.kind !== 'message') return;
+		const id = `${item.id}:${key}`;
+		const had = id in this.ratings;
+		const before = this.ratings[id];
+		this.ratings = { ...this.ratings, [id]: rating };
+		this.#result(item.id, null);
+		try {
+			await this.#api.rate(item.id, key, rating);
+		} catch (err) {
+			const ratings = { ...this.ratings };
+			if (had) ratings[id] = before ?? null;
+			else delete ratings[id];
+			this.ratings = ratings;
+			const status = err instanceof HttpError ? err.status : 0;
+			this.#result(item.id, {
+				ok: false,
+				text:
+					status === 503
+						? "The agent's workspace is offline, so it couldn't take your rating. Try again later."
+						: "Couldn't save your rating. Try again."
+			});
+			return;
+		}
+		this.#scheduleRefetch();
+	}
+
 	async dismiss(id: string) {
 		this.#acked.delete(id);
 		this.#hide(id, 'dismissed');
@@ -378,6 +408,11 @@ let configured: HomeDeps = {};
 /** Swaps in other dependencies, for tests; call before the first store. */
 export function configureHome(deps: HomeDeps) {
 	configured = deps;
+}
+
+/** Home's API as configured, for screens beside Home such as Muted topics. */
+export function homeApi(): HomeApi {
+	return configured.api ?? httpHomeApi;
 }
 
 export function needsYou(): NeedsYouStore {

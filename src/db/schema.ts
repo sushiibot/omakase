@@ -391,6 +391,8 @@ export const webInbox = sqliteTable(
     items: text("items"),
     // { [itemKey]: the owner's reply } JSON; "" is the key for the message as a whole.
     answers: text("answers"),
+    // { [itemKey]: { value: "up" | "down", scope?: "item" | "topic" } } JSON: the owner's 👍/👎 on its items.
+    ratings: text("ratings"),
   },
   (table) => [index("idx_web_inbox_done").on(table.doneAt, table.at)],
 );

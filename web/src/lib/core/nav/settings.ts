@@ -4,6 +4,7 @@ import Plug from '@lucide/svelte/icons/plug';
 import Mail from '@lucide/svelte/icons/mail';
 import FolderOpen from '@lucide/svelte/icons/folder-open';
 import ShieldCheck from '@lucide/svelte/icons/shield-check';
+import BellOff from '@lucide/svelte/icons/bell-off';
 import type { SettingsGroup } from '$lib/ui/shell/types';
 
 export const settingsGroups: SettingsGroup[] = [
@@ -16,6 +17,13 @@ export const settingsGroups: SettingsGroup[] = [
 				description: 'Your name, appearance, notifications and this device',
 				keywords: 'theme dark light push folders app version install',
 				icon: SlidersHorizontal
+			},
+			{
+				href: '/settings/muted',
+				label: 'Muted topics',
+				description: 'What scheduled jobs no longer flag on Home',
+				keywords: 'heartbeat notifications not useful thumbs mute unmute',
+				icon: BellOff
 			}
 		]
 	},

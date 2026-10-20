@@ -54,6 +54,8 @@
 	onreply={inbox.discuss}
 	onreplyitem={(item, key, text, index) => void home.reply(item, key, text, index)}
 	answers={home.answers}
+	onrateitem={(item, key, rating) => void home.rate(item, key, rating)}
+	ratings={home.ratings}
 	onopenrun={(id) => void inbox.leaveTo(resolve('/runs/[id]', { id }))}
 	onopenchat={inbox.openChat}
 	onaskagent={inbox.discuss}

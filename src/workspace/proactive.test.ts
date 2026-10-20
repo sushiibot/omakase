@@ -7,6 +7,7 @@ import { BackendSelector } from "./chatgptFallback.ts";
 import type { ToolFreeJobInput, ToolFreeJobResult } from "./jobSession.ts";
 import type { DeliverJob, JobItem } from "../orchestration/contracts.ts";
 import { JobFeedback } from "./jobFeedback.ts";
+import { AttentionPrefs } from "./attention.ts";
 import {
   DAILY_JOB_WINDOW_MS,
   heartbeatPrompt,
@@ -254,6 +255,19 @@ describe("job items", () => {
     expect(prompt).toContain('"tapped":"Ignore mutation tests"');
     expect(prompt).not.toContain("Shorter please");
     expect(feedback.promptFor("digest", new Date(clock.getTime() + 31 * 24 * 60 * 60_000))).toBe("");
+  });
+
+  test("a muted topic is dropped before delivery and named in the prompt", async () => {
+    const prefs = new AttentionPrefs(config().stateDir);
+    prefs.apply({ action: "rate", job: "heartbeat", item: { key: "omakase:ci:main", title: "Omakase CI broken", topic: "CI failures" }, rating: "down" }, clock);
+    reply = JSON.stringify({ items: [{ key: "lucid:ci:main", title: "lucid CI broken", topic: "ci  Failures", body: "" }, { key: "dentist", title: "Dentist at 3pm", topic: "Appointments", body: "" }] });
+    await createHeartbeatJob(HEARTBEAT, deps({ attention: prefs })).run(scheduled);
+    expect(deliveredItems[0]!.map((i) => i.key)).toEqual(["dentist"]);
+    expect(deliveredItems[0]![0]!.topic).toBe("Appointments");
+    expect(runnerCalls[0]!.prompt).toContain('Muted topics. Never flag anything of these kinds, from any source: "CI failures"');
+    // All items muted: a quiet run.
+    reply = JSON.stringify({ items: [{ key: "lucid:ci:main", title: "lucid CI broken", topic: "CI failures", body: "" }] });
+    expect((await createHeartbeatJob(HEARTBEAT, deps({ attention: prefs })).run({ ...scheduled, force: true })).status).toBe("no_reply");
   });
 });
 

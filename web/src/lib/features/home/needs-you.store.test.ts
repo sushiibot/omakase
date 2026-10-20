@@ -2,7 +2,8 @@
 import { afterAll, afterEach, beforeEach, expect, jest, test } from 'bun:test';
 import { createHub } from '$lib/core/realtime/hub.svelte';
 import { fakeTransport } from '$lib/core/realtime/fake-transport';
-import type { JobAlert } from '$lib/core/realtime/events';
+import type { HomeItemRating, JobAlert } from '$lib/core/realtime/events';
+import { HttpError } from '$lib/core/http';
 import type { ChatApi } from '$lib/features/chat';
 import type { HomeApi } from './api';
 import { HEARTBEAT_ITEMS_KEY, HEARTBEAT_KEY, homeData, nightlyAlert, RUN_IDS } from './fixtures';
@@ -42,6 +43,8 @@ interface Server {
 	dismissed: string[];
 	opened: string[];
 	restored: string[];
+	rated: [string, string, HomeItemRating | null][];
+	rateFails: boolean;
 	api: HomeApi;
 }
 
@@ -52,6 +55,8 @@ function server(first: HomeData | null = homeData(NOW)): Server {
 		dismissed: [] as string[],
 		opened: [] as string[],
 		restored: [] as string[],
+		rated: [],
+		rateFails: false,
 		api: {
 			load: async () => {
 				s.loads++;
@@ -59,7 +64,13 @@ function server(first: HomeData | null = homeData(NOW)): Server {
 			},
 			dismiss: async (id: string) => void s.dismissed.push(id),
 			opened: async (id: string) => void s.opened.push(id),
-			restore: async (id: string) => void s.restored.push(id)
+			restore: async (id: string) => void s.restored.push(id),
+			rate: async (id, key, rating) => {
+				if (s.rateFails) throw new HttpError(503, 'offline');
+				s.rated.push([id, key, rating]);
+			},
+			muted: async () => [],
+			unmute: async () => []
 		}
 	};
 	return s;
@@ -153,6 +164,21 @@ test('done hides an item at once and Undo brings it back after the done lands', 
 	expect(ids(home)).toContain(id);
 });
 
+test('a rating shows at once, reaches the server, and rolls back with a reason when it fails', async () => {
+	const { srv, home } = await setup();
+	const item = home.groups.review.find((i) => i.id === `msg:${HEARTBEAT_ITEMS_KEY}`)!;
+	const id = `msg:${HEARTBEAT_ITEMS_KEY}:lucid:mutants:main`;
+	await home.rate(item, 'lucid:mutants:main', { value: 'down', scope: 'topic' });
+	expect(srv.rated).toEqual([
+		[`msg:${HEARTBEAT_ITEMS_KEY}`, 'lucid:mutants:main', { value: 'down', scope: 'topic' }]
+	]);
+	expect(home.ratings[id]).toEqual({ value: 'down', scope: 'topic' });
+	srv.rateFails = true;
+	await home.rate(item, 'lucid:mutants:main', null);
+	expect(home.ratings[id]).toEqual({ value: 'down', scope: 'topic' });
+	expect(home.results[`msg:${HEARTBEAT_ITEMS_KEY}`]?.text).toContain('offline');
+});
+
 test("a reply to a job item goes to Main with the item's ref, shows at once, and rolls back if it can't be sent", async () => {
 	const stream = fakeTransport();
 	const hub = createHub({ transport: stream.transport });
@@ -174,24 +200,22 @@ test("a reply to a job item goes to Main with the item's ref, shows at once, and
 	home.open();
 	await advance(16);
 	const item = home.groups.review.find((i) => i.id === `msg:${HEARTBEAT_ITEMS_KEY}`)!;
-	await home.reply(item, 'lucid:mutants:main', 'Ignore mutation tests', 1);
+	await home.reply(item, 'lucid:mutants:main', 'Remind me tomorrow', 1);
 	expect(sent).toEqual([
 		{
-			text: 'Ignore mutation tests',
+			text: 'Remind me tomorrow',
 			ref: {
 				input: { id: `msg:${HEARTBEAT_ITEMS_KEY}`, item: 'lucid:mutants:main', choice: 1 },
 				view: expect.objectContaining({
 					job: 'heartbeat',
 					runId: RUN_IDS.weeklyDeps,
 					item: { key: 'lucid:mutants:main', title: 'lucid mutation tests failing' },
-					choice: 'Ignore mutation tests'
+					choice: 'Remind me tomorrow'
 				})
 			}
 		}
 	]);
-	expect(home.answers[`msg:${HEARTBEAT_ITEMS_KEY}:lucid:mutants:main`]).toBe(
-		'Ignore mutation tests'
-	);
+	expect(home.answers[`msg:${HEARTBEAT_ITEMS_KEY}:lucid:mutants:main`]).toBe('Remind me tomorrow');
 	expect(home.results[`msg:${HEARTBEAT_ITEMS_KEY}`]?.ok).toBe(true);
 
 	ok = false;

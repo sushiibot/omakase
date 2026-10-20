@@ -47,6 +47,8 @@ export const RPC_METHODS = {
   modelsSearch: "models/search",
   // Bot → workspace request: the owner's display name changed in the app's Settings → { ok }.
   ownerUpdate: "owner/update",
+  // Bot → workspace request: the owner rated a job item, or listed or lifted a mute → { mutes }.
+  attentionManage: "attention/manage",
 } as const;
 
 // ── Owner display name. It lands verbatim in agent prompts, so both ends validate it. ──
@@ -596,6 +598,7 @@ export const JOB_ITEM_CHOICES_MAX = 4;
 export const JOB_ITEM_TITLE_MAX = 120;
 export const JOB_ITEM_BODY_MAX = 2000;
 export const JOB_ITEM_CHOICE_MAX = 60;
+export const JOB_ITEM_TOPIC_MAX = 40;
 /** One thing a scheduled job flags, with the replies the owner can tap. Agent-written: render as untrusted text. */
 export const jobItem = z.object({
   key: z.string().regex(JOB_ITEM_KEY_RE),
@@ -603,8 +606,42 @@ export const jobItem = z.object({
   body: z.string().max(JOB_ITEM_BODY_MAX),
   url: z.string().max(2048).refine(isHttpsUrl, "must be an https: URL").optional(),
   choices: z.array(z.string().min(1).max(JOB_ITEM_CHOICE_MAX)).max(JOB_ITEM_CHOICES_MAX),
+  /** The kind of thing it is, like "CI failures", so the owner can mute the kind and not just this item. */
+  topic: z.string().min(1).max(JOB_ITEM_TOPIC_MAX).optional(),
 });
 export type JobItem = z.infer<typeof jobItem>;
+
+// ── Owner ratings of job items, and the mutes a 👎 sets. Owner-set, so they never expire. ──
+export const ATTENTION_RATINGS = ["up", "down"] as const;
+export const ATTENTION_SCOPES = ["item", "topic"] as const;
+export const ATTENTION_MUTE_ID_MAX = 120;
+export const attentionMute = z.object({
+  id: z.string().max(ATTENTION_MUTE_ID_MAX),
+  /** `item` mutes one item key; `topic` mutes every item of that topic, from any job. */
+  scope: z.enum(ATTENTION_SCOPES),
+  /** The item's title for an item mute, the topic for a topic mute. */
+  label: z.string().max(JOB_ITEM_TITLE_MAX),
+  job: z.string().max(JOB_NAME_MAX),
+  at: z.string().max(64),
+});
+export type AttentionMute = z.infer<typeof attentionMute>;
+export const attentionRequest = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("rate"),
+    job: z.string().min(1).max(JOB_NAME_MAX),
+    item: z.object({ key: z.string().regex(JOB_ITEM_KEY_RE), title: z.string().min(1).max(JOB_ITEM_TITLE_MAX), topic: z.string().min(1).max(JOB_ITEM_TOPIC_MAX).optional() }),
+    /** null clears the item's rating and any mute it set. */
+    rating: z.enum(ATTENTION_RATINGS).nullable(),
+    /** What a 👎 mutes; a topic needs the item to have one. */
+    scope: z.enum(ATTENTION_SCOPES).optional(),
+  }),
+  z.object({ action: z.literal("list") }),
+  z.object({ action: z.literal("unmute"), id: z.string().min(1).max(ATTENTION_MUTE_ID_MAX) }),
+]);
+export type AttentionRequest = z.infer<typeof attentionRequest>;
+export const attentionParams = z.object({ principalId: z.string(), request: attentionRequest });
+export const attentionResult = z.object({ mutes: z.array(attentionMute).max(500) });
+export type AttentionResult = z.infer<typeof attentionResult>;
 
 export const MESSAGE_REF_EXCERPT_MAX = 2000;
 /** What an owner message answers: a scheduled job's message, optionally one item of it and the choice tapped. */
