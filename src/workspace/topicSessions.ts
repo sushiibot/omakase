@@ -16,6 +16,7 @@ import {
 import { Outbox } from "./outbox.ts";
 import { readTopicCatalog, writeTopicCatalog, type TopicRecord } from "./topicCatalog.ts";
 import type { PersonalSession } from "./personalSession.ts";
+import { getLogger } from "../logger.ts";
 
 export type TopicSession = Pick<
   PersonalSession,
@@ -34,6 +35,8 @@ export type TopicSession = Pick<
   | "hasUnackedDeliveries"
   | "requestContextReload"
 > & { readonly currentSessionFile?: string; readonly chatSession?: PersonalSession["chatSession"] };
+
+const log = getLogger("workspace.topics");
 
 /** Main keeps its existing session; topics own separate state, dedupe and delivery outboxes. */
 export class TopicSessions {
@@ -175,12 +178,18 @@ export class TopicSessions {
       const s = await this.open(q.id);
       if (q.action === "close" && !s.isIdle())
         throw new Error("Stop the thread's work before archiving it.");
-      if (q.action === "close" && !existing.archived) {
-        // Keep the transcript and save memory before archiving.
-        await s.prepareArchive();
-      }
+      const saveMemory = q.action === "close" && !existing.archived;
       existing.archived = q.action === "close";
       this.save();
+      if (saveMemory) {
+        // Saving memory is a model turn that can run for minutes, so the archive answers first. The save
+        // queues on the session now (keeping it from retiring) and on the change chain, so a reopen waits.
+        const saving = s
+          .prepareArchive()
+          .catch((err) => log.warn({ err, id: q.id }, "saving an archived topic's memory failed"))
+          .then(() => this.retireArchived());
+        this.changing = this.changing.then(() => saving).catch(() => {});
+      }
     }
     await this.retireArchived();
     return { ok: true };

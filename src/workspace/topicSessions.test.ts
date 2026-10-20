@@ -18,6 +18,7 @@ class FakeSession implements TopicSession {
   idle = true;
   disposed = false;
   archives = 0;
+  archiving: Promise<void> = Promise.resolve();
   stops = 0;
   starts = 0;
   features: readonly string[] = [];
@@ -40,6 +41,9 @@ class FakeSession implements TopicSession {
   }
   async prepareArchive() {
     this.archives++;
+    this.idle = false;
+    await this.archiving;
+    this.idle = true;
   }
   async compactNow() {
     return { tokensBefore: 10, tokensAfter: 2 };
@@ -184,6 +188,29 @@ test("archive saves memory without replacing the conversation; active work canno
   expect(await h.manager.session(h.message("trip").origin)).toBe(
     h.created.get("trip")!,
   );
+});
+
+test("archive answers before the memory save ends; reopening waits for it", async () => {
+  const h = setup();
+  await h.create("trip");
+  const s = h.created.get("trip")!;
+  let finish!: () => void;
+  s.archiving = new Promise((r) => (finish = r));
+  await h.manager.manage({ principalId: "owner", id: "trip", action: "close" });
+  const catalog = JSON.parse(readFileSync(join(h.stateDir, "topics.json"), "utf8"));
+  expect(catalog.trip.archived).toBe(true);
+  expect(s.archives).toBe(1);
+  expect(s.disposed).toBe(false);
+  let reopened = false;
+  const reopen = h.manager.session(h.message("trip").origin).then((session) => {
+    reopened = true;
+    return session;
+  });
+  await Bun.sleep(10);
+  expect(reopened).toBe(false);
+  finish();
+  expect(await reopen).not.toBe(s);
+  expect(s.disposed).toBe(true);
 });
 
 test("a restart restores active topics, keeps archived ones lazy and restores an unsaved brief", async () => {
