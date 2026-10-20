@@ -562,6 +562,22 @@ submit: Plan it`
 	}
 };
 
+/** What must always be a block. Firm rules, because "use when clearer" alone is easy for a model
+ *  to skip, and the gateway backs the recipe rule with a check (`missedBlocks` in syntax.ts). */
+export const RICH_RULES: readonly [string, string][] = [
+	['a recipe (ingredients and steps)', '```recipe'],
+	[
+		'a question for the owner with a few possible answers',
+		'```choice (or ```actions for suggested next steps)'
+	],
+	['details you need from the owner before continuing', '```form'],
+	['a total split into parts or shares', '```breakdown'],
+	['2–4 options compared across the same attributes', '```compare'],
+	['one dated event or appointment', '```event'],
+	['a schedule or itinerary with times or dates', '```timeline'],
+	['a countdown the owner asked for', '```timer']
+];
+
 /** The prompt section: the two syntax rules, then each block with its fields and an example. */
 export function richOutputInstructions(): string {
 	const fence = '```';
@@ -573,7 +589,12 @@ export function richOutputInstructions(): string {
 		(name) => `\`${name}\` ${containerAttrs[name].doc()}`
 	).join('; ');
 	return [
-		'Rich output (the web chat renders these; elsewhere they read as plain text). Use them when they make an answer clearer than prose or a table, not for decoration. Keep prose around them short.',
+		'Rich output: the web chat renders these blocks; elsewhere they read as plain text. Keep prose around them short.',
+		[
+			'Required: when a reply contains one of these, write it as the block, never as markdown headings, lists or tables:',
+			...RICH_RULES.map(([what, block]) => `- ${what} → ${block}`),
+			'Other blocks are optional: use them when they make the answer clearer than prose, not for decoration.'
+		].join('\n'),
 		`1. Data blocks: a fenced code block whose language is the block type, with a YAML body. Only plain YAML: no anchors, aliases or tags. Unknown or misspelled fields are errors. Values the renderer computes (totals, percentages) are not fields.`,
 		blocks,
 		`2. Containers wrap ordinary markdown in \`:::name{key="value"}\` … \`:::\`, one level only (never nest them): ${containers}. tone is one of ${TONES.join('|')}. In \`columns\`, a line with \`---\` starts the next column; in \`steps\`, write an ordered list; in \`tabs\`, each \`##\` heading starts a tab.`,

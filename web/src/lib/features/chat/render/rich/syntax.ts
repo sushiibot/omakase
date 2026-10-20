@@ -4,9 +4,10 @@ import { directiveFromMarkdown } from 'mdast-util-directive';
 import { gfm } from 'micromark-extension-gfm';
 import { directive } from 'micromark-extension-directive';
 import type { Extension } from 'micromark-util-types';
-import type { Code, Nodes, Root } from 'mdast';
+import type { Code, Nodes, Root, RootContent } from 'mdast';
 import type { ContainerDirective } from 'mdast-util-directive';
 import {
+	RICH_SCHEMAS,
 	formatIssues,
 	isContainerName,
 	isRichType,
@@ -114,15 +115,66 @@ export function lintRichMarkdown(text: string): RichProblem[] {
 	return problems;
 }
 
-/** The repair message for a reply whose blocks failed, or null when every block renders. */
-export function richRepairMessage(problems: readonly RichProblem[]): string | null {
-	if (!problems.length) return null;
+const INGREDIENTS = /^\W*ingredients\b/i;
+const METHOD = /^\W*(?:instructions|directions|method|steps|preparation|how to make)\b/i;
+
+function toText(node: Nodes): string {
+	if ('value' in node && typeof node.value === 'string') return node.value;
+	return 'children' in node ? node.children.map((c) => toText(c as Nodes)).join('') : '';
+}
+
+/** A label line: a heading, or a short paragraph that is only bold text or ends with a colon. */
+function labelText(node: RootContent): string | null {
+	if (node.type === 'heading') return toText(node);
+	if (node.type !== 'paragraph') return null;
+	const text = toText(node).trim();
+	const onlyStrong = node.children.length === 1 && node.children[0].type === 'strong';
+	return onlyStrong || (text.endsWith(':') && text.length <= 40) ? text : null;
+}
+
+/** Required blocks a reply wrote as markdown instead. Only unambiguous shapes: a recipe is an
+ *  "Ingredients" label over a list plus a method label over a list. Deterministic. */
+export function missedBlocks(text: string): string[] {
+	let root: Root;
+	try {
+		root = parseReplyTree(text);
+	} catch {
+		return [];
+	}
+	let hasRecipe = false;
+	const visit = (n: Nodes) => {
+		if (n.type === 'code' && n.lang === 'recipe') hasRecipe = true;
+		if ('children' in n) for (const c of n.children) visit(c as Nodes);
+	};
+	visit(root);
+	if (hasRecipe) return [];
+	const listAfter = (re: RegExp) =>
+		root.children.some((node, i) => {
+			const label = labelText(node);
+			return label !== null && re.test(label) && root.children[i + 1]?.type === 'list';
+		});
+	return listAfter(INGREDIENTS) && listAfter(METHOD) ? ['recipe'] : [];
+}
+
+/** The repair message for a reply whose blocks failed or that wrote a required block as markdown,
+ *  or null when there is nothing to fix. */
+export function richRepairMessage(
+	problems: readonly RichProblem[],
+	missed: readonly string[] = []
+): string | null {
+	if (!problems.length && !missed.length) return null;
 	const lines = problems.flatMap((p) =>
 		p.messages.map((m) => `- ${p.block} (line ${p.line}): ${m}`)
 	);
 	return [
-		'Some rich blocks in your last reply are invalid and show as raw code:',
+		...missed.map(
+			(type) =>
+				`Your last reply wrote a ${type} as markdown. It must be a \`\`\`${type} block with a YAML body. Fields: ${RICH_SCHEMAS[type as keyof typeof RICH_SCHEMAS].doc()}`
+		),
+		...(lines.length
+			? ['Some rich blocks in your last reply are invalid and show as raw code:']
+			: []),
 		...lines.slice(0, 20),
-		'Your next reply replaces that one, so write the whole reply again with these blocks fixed. Do not mention the fix. If a block cannot be fixed, show that information as a markdown table or list instead.'
+		'Your next reply replaces that one, so write the whole reply again with this fixed. Do not mention the fix. If a block cannot be fixed, show that information as a markdown table or list instead.'
 	].join('\n');
 }

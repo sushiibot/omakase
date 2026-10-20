@@ -35,7 +35,7 @@ describe("rich output gate", () => {
     const repair = result!.entries[1]!;
     expect(repair).toMatchObject({ type: "custom_message", customType: RICH_OUTPUT_CUSTOM_TYPE, display: false });
     expect(repair.content).toContain('- breakdown (line 3): segments[0].value: expected a number, got "117.5 kcal"');
-    expect(repair.content).toContain("write the whole reply again with these blocks fixed");
+    expect(repair.content).toContain("write the whole reply again with this fixed");
     // Once per run: a second bad reply settles.
     expect(h.settle(bad)).toBeUndefined();
   });
@@ -48,6 +48,16 @@ describe("rich output gate", () => {
     expect(h.settle(bad, "error")).toBeUndefined();
     h.start(`${FLUSH_MARKER} flush`);
     expect(h.settle(bad)).toBeUndefined();
+  });
+
+  test("a recipe written as markdown is sent back to be rewritten as a block", () => {
+    const h = harness();
+    h.start();
+    const markdownRecipe = "## Miso salmon\n\n**Ingredients**\n\n- 2 salmon fillets\n- 1 tbsp miso\n\n### Instructions\n\n1. Mix.\n2. Bake 12 minutes.";
+    const result = h.settle(markdownRecipe);
+    expect(result?.continue).toBe(true);
+    expect(result!.entries[1]!.content).toContain("Your last reply wrote a recipe as markdown. It must be a ```recipe block");
+    expect(result!.entries[1]!.content).not.toContain("are invalid");
   });
 
   test("a new run can be repaired again", () => {

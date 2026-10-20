@@ -19,7 +19,7 @@ import {
 } from './blocks';
 import { formatQty, parseQty, scaleQty } from '../interactive/scale';
 import { arr, num, obj, opt, str, validate } from './schema';
-import { lintRichMarkdown, richRepairMessage } from './syntax';
+import { lintRichMarkdown, missedBlocks, richRepairMessage } from './syntax';
 import { parseRichYaml, RICH_BODY_MAX } from './yaml';
 import { calendarUrl, eventWhen, mapsUrl } from './links';
 
@@ -295,6 +295,39 @@ describe('gateway check', () => {
 			const fenceProblems = lintRichMarkdown(text).filter((p) => !p.block.startsWith(':::'));
 			expect(fenceProblems.length > 0).toBe(invalidInRender);
 		}
+	});
+});
+
+describe('missed blocks', () => {
+	test.each([
+		['headings', '## Ingredients\n\n- rice\n\n## Method\n\n1. Cook.'],
+		['bold labels', '**Ingredients:**\n- rice\n\n**Instructions:**\n1. Cook.'],
+		['colon labels', 'Ingredients:\n\n- rice\n\nSteps:\n\n1. Cook.']
+	])('a markdown recipe with %s is caught', (_, text) => {
+		expect(missedBlocks(text)).toEqual(['recipe']);
+	});
+
+	test.each([
+		[
+			'a recipe block',
+			fence('recipe', RICH_EXAMPLES.recipe.example) +
+				'\n\n## Ingredients\n\n- x\n\n## Steps\n\n1. y'
+		],
+		['only ingredients', '## Ingredients\n\n- rice'],
+		['prose mentioning them', 'The ingredients are rice. The steps are easy:\n\n1. Cook.'],
+		['steps without ingredients', '## Steps\n\n1. Install\n2. Run']
+	])('%s is left alone', (_, text) => {
+		expect(missedBlocks(text)).toEqual([]);
+	});
+
+	test('the repair message names the block and its fields', () => {
+		const message = richRepairMessage([], ['recipe'])!;
+		expect(message).toContain('```recipe block');
+		expect(message).toContain('ingredients:');
+	});
+
+	test('the prompt states the required blocks', () => {
+		expect(richOutputInstructions()).toContain('- a recipe (ingredients and steps) → ```recipe');
 	});
 });
 
