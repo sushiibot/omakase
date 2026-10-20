@@ -6,6 +6,8 @@
 	import Callout from './rich/callout.svelte';
 	import Disclosure from './rich/disclosure.svelte';
 	import ContainerCard from './rich/container-card.svelte';
+	import CheckItem from './interactive/check-item.svelte';
+	import TabsBlock from './interactive/tabs-block.svelte';
 	import {
 		fromLegacyBlocks,
 		parseDocumentMarkdown,
@@ -22,7 +24,8 @@
 		blocks,
 		files = [],
 		streaming = false,
-		document = false
+		document = false,
+		reply
 	}: {
 		/** Raw markdown from the agent. Takes precedence over `blocks`. */
 		text?: string;
@@ -35,6 +38,9 @@
 		streaming?: boolean;
 		/** Saved, non-streaming document: permit the artifact size limit. */
 		document?: boolean;
+		/** Sends text as the owner's message. Only the latest finished reply in chat gets it, so
+		 *  reply blocks (actions, choice, form) in older replies or documents can't send. */
+		reply?: (text: string) => void;
 	} = $props();
 
 	// A string, so a new but equal `files` array does not trigger a re-parse.
@@ -131,14 +137,22 @@
 	{/each}
 {/snippet}
 
-{#snippet listItems(items: Extract<MdBlockNode, { kind: 'list' }>['items'])}
+{#snippet listItems(items: Extract<MdBlockNode, { kind: 'list' }>['items'], listId?: string)}
 	{#each items as item, j (j)}
-		<li>
-			{#if item.checked !== null}<span class="font-mono" aria-hidden="true"
-					>{item.checked ? '[x] ' : '[ ] '}</span
-				><span class="sr-only">{item.checked ? 'Done: ' : 'Not done: '}</span>{/if}
-			<div class="flex flex-col gap-1">{@render blockList(item.children)}</div>
-		</li>
+		{#if listId && item.checked !== null}
+			<li class="list-none">
+				<CheckItem {listId} index={j} initial={item.checked}
+					>{@render blockList(item.children)}</CheckItem
+				>
+			</li>
+		{:else}
+			<li>
+				{#if item.checked !== null}<span class="font-mono" aria-hidden="true"
+						>{item.checked ? '[x] ' : '[ ] '}</span
+					><span class="sr-only">{item.checked ? 'Done: ' : 'Not done: '}</span>{/if}
+				<div class="flex flex-col gap-1">{@render blockList(item.children)}</div>
+			</li>
+		{/if}
 	{/each}
 {/snippet}
 
@@ -206,10 +220,12 @@
 				</ol>
 			{:else if node.ordered}
 				<ol start={node.start ?? undefined} class="flex list-decimal flex-col gap-1 pl-5">
-					{@render listItems(node.items)}
+					{@render listItems(node.items, node.id)}
 				</ol>
 			{:else}
-				<ul class="flex list-disc flex-col gap-1 pl-5">{@render listItems(node.items)}</ul>
+				<ul class={['flex flex-col gap-1', node.id ? 'pl-1' : 'list-disc pl-5']}>
+					{@render listItems(node.items, node.id)}
+				</ul>
 			{/if}
 		{:else if node.kind === 'table'}
 			<div class="max-w-full overflow-x-auto rounded-lg border">
@@ -249,7 +265,7 @@
 		{:else if node.kind === 'rule'}
 			<hr class="border-border" />
 		{:else if node.kind === 'rich'}
-			<RichBlock block={node.block} />
+			<RichBlock block={node.block} {reply} />
 		{:else if node.kind === 'rich-pending'}
 			<RichPending type={node.type} />
 		{:else if node.kind === 'callout'}
@@ -260,6 +276,12 @@
 			<ContainerCard title={node.title} subtitle={node.subtitle} href={node.href}
 				>{@render blockList(node.children)}</ContainerCard
 			>
+		{:else if node.kind === 'tabs'}
+			{@const tabs = node.tabs}
+			{@render blockList(node.intro)}
+			<TabsBlock labels={tabs.map((t) => t.label)}>
+				{#snippet panel(i: number)}{@render blockList(tabs[i].children)}{/snippet}
+			</TabsBlock>
 		{:else if node.kind === 'columns'}
 			<div
 				class={[

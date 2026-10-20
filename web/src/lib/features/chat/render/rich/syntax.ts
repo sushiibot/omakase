@@ -90,6 +90,13 @@ export function lintRichMarkdown(text: string): RichProblem[] {
 			} else {
 				const attrs = parseContainerAttrs(node.name, (node as ContainerDirective).attributes ?? {});
 				if (!attrs.ok) problems.push({ line, block, messages: formatIssues(attrs.issues) });
+				if (node.name === 'tabs' && node.children.filter((c) => c.type === 'heading').length < 2) {
+					problems.push({
+						line,
+						block,
+						messages: ['start each tab with a ## heading (at least 2 tabs)']
+					});
+				}
 				if (node.name === 'steps' && !node.children.some((c) => c.type === 'list' && c.ordered)) {
 					problems.push({
 						line,

@@ -53,6 +53,7 @@
 		ondeletesend,
 		onrewind,
 		onanswer,
+		onreply,
 		onretryhistory,
 		oncopy,
 		onspeak,
@@ -87,6 +88,8 @@
 		ondeletesend?: (messageId: string) => void;
 		onrewind?: (messageId: string, text?: string) => Promise<void>;
 		onanswer?: (askId: string, answer: string) => void;
+		/** Sends text as the owner's message, from a reply block in the latest finished reply. */
+		onreply?: (text: string) => void;
 		onretryhistory?: () => void;
 		/** Copy under each message; without it messages have no action row. */
 		oncopy?: (message: ChatMessage) => void;
@@ -112,6 +115,12 @@
 		delegatedActivity?: Snippet<[string]>;
 		agentActivity?: Snippet<[string[]]>;
 	} = $props();
+
+	// Reply blocks are live only in the newest message, once it has finished and is the agent's.
+	const replyTarget = $derived.by(() => {
+		const last = messages.at(-1);
+		return last && last.role !== 'user' && !last.streaming && !last.partial ? last.id : null;
+	});
 
 	let revision = $state<{ id: string; mode: 'edit' | 'delete'; text: string } | null>(null);
 	let revising = $state(false);
@@ -280,6 +289,7 @@
 							markdown={!owner}
 							streaming={message.streaming && (owner || i === lastText)}
 							files={message.uploads}
+							reply={message.id === replyTarget && i === lastText ? onreply : undefined}
 						/>
 					{:else if part.type === 'data-auth'}
 						<p class="text-body leading-relaxed [overflow-wrap:anywhere]">

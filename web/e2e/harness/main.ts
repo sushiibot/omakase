@@ -7,6 +7,8 @@ import Harness from './Harness.svelte';
 import { api } from './api.svelte';
 
 const errors: string[] = [];
+/** Text that reply blocks sent, for renders with `{ reply: true }`. */
+const replies: string[] = [];
 addEventListener('error', (e) => errors.push(String(e.message)));
 addEventListener('unhandledrejection', (e) => errors.push(String(e.reason)));
 
@@ -16,6 +18,7 @@ Object.assign(window, {
 	h: {
 		api,
 		errors,
+		replies,
 		flushSync,
 		/** The parser alone, so V8's stack limit applies to it directly. */
 		parse(text: string) {
@@ -192,7 +195,8 @@ Object.assign(window, {
 			if (solo) unmount(solo);
 			target.replaceChildren();
 			try {
-				solo = mount(Markdown, { target, props: { text, ...props } });
+				const reply = props.reply === true ? (t: string) => void replies.push(t) : undefined;
+				solo = mount(Markdown, { target, props: { text, ...props, reply } });
 				flushSync();
 				return { ok: true };
 			} catch (e) {

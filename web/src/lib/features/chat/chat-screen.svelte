@@ -115,6 +115,7 @@
 		ondeletesend,
 		onrewind,
 		onanswer,
+		onreply,
 		onapprove,
 		ondeny,
 		oninstall,
@@ -222,6 +223,8 @@
 		ondeletesend?: (messageId: string) => void;
 		onrewind?: (messageId: string, text?: string) => Promise<void>;
 		onanswer?: (askId: string, answer: string) => void;
+		/** Sends a reply block's text as the owner's message, keeping the composer's draft. */
+		onreply?: (text: string) => void;
 		onapprove?: (nonce: string, location?: LocationReply) => void;
 		ondeny?: (nonce: string) => void;
 		oninstall?: () => Promise<'accepted' | 'dismissed' | 'failed'>;
@@ -828,6 +831,7 @@
 				ondeletesend={(id) => ondeletesend?.(id)}
 				{onrewind}
 				onanswer={(askId, answer) => onanswer?.(askId, answer)}
+				{onreply}
 				onretryhistory={() => onretryhistory?.()}
 				{onspeak}
 				{readingId}

@@ -202,6 +202,9 @@ export function caretHost(tree: readonly MdBlockNode[]): CaretHost | null {
 			case 'columns':
 				node = node.columns.at(-1)?.at(-1);
 				break;
+			case 'tabs':
+				node = node.tabs.at(-1)?.children.at(-1);
+				break;
 			default:
 				return null;
 		}

@@ -112,6 +112,10 @@ function reply(msgs: Msg[], userText: string, lastUser: Msg | undefined): Respon
   if (richTag && userText.includes("Some rich blocks in your last reply are invalid")) {
     return stream(richReply(`\`\`\`bars\ntitle: Spend fixed ${richTag}\nunit: $\nitems:\n  - { label: Food, value: 412 }\n  - { label: Travel, value: 230 }\n\`\`\``), 10, richTag);
   }
+  // Reply buttons: a tap sends the label as the owner's message, which the echo script answers.
+  if (tag && userText.includes("E2E-RICH-ACTIONS")) {
+    return stream([`offering choices\n\n\`\`\`actions\nprompt: Pick one\nitems:\n  - "E2E-ECHO picked-${tag} #${tag}"\n  - Something else\n\`\`\``], 10, tag);
+  }
   if (userText.includes("E2E-RICH")) return stream(richReply("```bars\ntitle: Spend\nitems:\n  - { label: Food, value: 412 dollars }\n```"), 150, tag);
   if (last?.role === "tool") {
     if (userText.includes("E2E-ACCOUNT")) return stream([textOf(last.content)], 10, tag);

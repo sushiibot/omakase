@@ -71,6 +71,55 @@ function localDate(): Schema<string> {
 	};
 }
 
+const DURATION_PART =
+	/(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)(?![a-z])/gi;
+const DURATION_MAX_S = 24 * 3600;
+
+/** Seconds in `1h30m`, `12 min`, `90s`, `1 hour 20 minutes`; null when it isn't only a duration. */
+export function parseDuration(text: string): number | null {
+	const t = text.trim().toLowerCase();
+	if (!t) return null;
+	let total = 0;
+	let rest = t;
+	for (const m of t.matchAll(DURATION_PART)) {
+		const n = Number(m[1]);
+		const unit = m[2][0];
+		total += unit === 'h' ? n * 3600 : unit === 'm' ? n * 60 : n;
+		rest = rest.replace(m[0], '');
+	}
+	if (rest.replace(/[\s,]|and/g, '') !== '' || total <= 0) return null;
+	return Math.round(total);
+}
+
+/** The first duration a recipe step mentions (`bake for 12 minutes`), in seconds, or null. For a
+ *  range (`10–12 min`) the lower bound, so the check comes early rather than late. */
+export function stepDuration(text: string): number | null {
+	const m =
+		/(\d+(?:\.\d+)?)(?:\s*(?:-|–|to)\s*\d+(?:\.\d+)?)?\s*(hours?|hrs?|minutes?|mins?|seconds?|secs?)\b/i.exec(
+			text
+		);
+	if (!m) return null;
+	const seconds = parseDuration(`${m[1]} ${m[2]}`);
+	return seconds && seconds <= DURATION_MAX_S ? seconds : null;
+}
+
+function duration(): Schema<number> {
+	const text = str({ max: 24 });
+	return {
+		...text,
+		parse(value, path, issues) {
+			if (typeof value === 'number') value = `${value}m`;
+			const raw = text.parse(value, path, issues);
+			if (raw === undefined) return undefined;
+			const seconds = parseDuration(raw);
+			if (seconds && seconds <= DURATION_MAX_S) return seconds;
+			issues.push({ path, message: 'expected a duration up to 24h, like 12m, 90s or 1h30m' });
+			return undefined;
+		},
+		doc: () => 'duration like 12m, 90s, 1h30m'
+	};
+}
+
 const label = (max = 60) => str({ max });
 const tone = () => opt(oneOf(TONES));
 
@@ -271,8 +320,56 @@ const schemas = {
 		detail: opt(str({ max: 200 })),
 		rating: opt(num({ min: 0, max: 5 })),
 		href: opt(url())
-	})
+	}),
+	timer: obj({ label: label(60), duration: duration() }),
+	actions: obj({
+		prompt: opt(str({ max: 120 })),
+		items: arr(label(80), { min: 1, max: 4 })
+	}),
+	choice: obj(
+		{
+			question: label(120),
+			options: arr(label(60), { min: 2, max: 8 }),
+			multiple: opt(bool())
+		},
+		(v, report) => {
+			if (new Set(v.options).size !== v.options.length)
+				report('options', 'options must be different');
+		}
+	),
+	form: obj(
+		{
+			title: opt(label(80)),
+			fields: arr(
+				obj(
+					{
+						label: label(40),
+						type: opt(oneOf(['text', 'number', 'date', 'select'] as const)),
+						options: opt(arr(label(40), { min: 2, max: 8 })),
+						placeholder: opt(str({ max: 60 })),
+						optional: opt(bool())
+					},
+					(v, report) => {
+						if (v.type === 'select' && !v.options)
+							report('options', 'a select field needs options');
+						if (v.type !== 'select' && v.options)
+							report('options', 'only a select field has options');
+					}
+				),
+				{ min: 1, max: 6 }
+			),
+			submit: opt(label(30))
+		},
+		(v, report) => {
+			const labels = v.fields.map((f) => f.label);
+			if (new Set(labels).size !== labels.length)
+				report('fields', 'field labels must be different');
+		}
+	)
 } satisfies Record<string, Schema<unknown>>;
+
+/** Blocks whose controls send a message as the owner. They are live only in the latest reply. */
+export const REPLY_TYPES = new Set<string>(['actions', 'choice', 'form']);
 
 export type RichType = keyof typeof schemas;
 export type RichData<K extends RichType> = Infer<(typeof schemas)[K]>;
@@ -301,7 +398,8 @@ const containerAttrs = {
 	details: obj({ summary: label(80) }),
 	card: obj({ title: opt(label(80)), subtitle: opt(str({ max: 120 })), href: opt(url()) }),
 	columns: obj({}),
-	steps: obj({})
+	steps: obj({}),
+	tabs: obj({})
 } satisfies Record<string, Schema<unknown>>;
 
 export type ContainerName = keyof typeof containerAttrs;
@@ -435,6 +533,32 @@ location: Eastside Animal Clinic`
 		example: `name: Eastside Animal Clinic
 address: 123 Main St, Seattle, WA
 rating: 4.7`
+	},
+	timer: {
+		use: 'a countdown the owner can start (steeping, resting, a break).',
+		example: `label: Steep the tea
+duration: 4m`
+	},
+	actions: {
+		use: 'up to 4 likely next replies as buttons; a tap sends the label as the owner’s message. Last block of the reply only.',
+		example: `prompt: Want me to adjust it?
+items:
+  - Make it vegetarian
+  - Scale to 6 servings`
+	},
+	choice: {
+		use: 'a question with options to pick (multiple: true for several); the picks are sent as the owner’s message. Last block of the reply only.',
+		example: `question: Which day works for the vet?
+options: [Monday, Tuesday, Thursday]`
+	},
+	form: {
+		use: 'a few details you need before you can continue; the filled-in values are sent as the owner’s message. Last block of the reply only.',
+		example: `title: Trip details
+fields:
+  - { label: Dates, placeholder: e.g. Nov 7–9 }
+  - { label: People, type: number }
+  - { label: Budget, type: select, options: [Low, Medium, High], optional: true }
+submit: Plan it`
 	}
 };
 
@@ -452,8 +576,9 @@ export function richOutputInstructions(): string {
 		'Rich output (the web chat renders these; elsewhere they read as plain text). Use them when they make an answer clearer than prose or a table, not for decoration. Keep prose around them short.',
 		`1. Data blocks: a fenced code block whose language is the block type, with a YAML body. Only plain YAML: no anchors, aliases or tags. Unknown or misspelled fields are errors. Values the renderer computes (totals, percentages) are not fields.`,
 		blocks,
-		`2. Containers wrap ordinary markdown in \`:::name{key="value"}\` … \`:::\`, one level only (never nest them): ${containers}. tone is one of ${TONES.join('|')}. In \`columns\`, a line with \`---\` starts the next column; in \`steps\`, write an ordered list.`,
+		`2. Containers wrap ordinary markdown in \`:::name{key="value"}\` … \`:::\`, one level only (never nest them): ${containers}. tone is one of ${TONES.join('|')}. In \`columns\`, a line with \`---\` starts the next column; in \`steps\`, write an ordered list; in \`tabs\`, each \`##\` heading starts a tab.`,
 		':::callout{tone="warn" title="Heads up"}\nThe ferry fills up on Fridays.\n:::',
+		'Interactive: task lists (- [ ] item) can be ticked by the owner; recipe steps that mention a time get a timer. actions, choice and form send the owner’s answer as their next message, so ask with them instead of asking in prose, and put them last.',
 		'After your reply, each block is checked. If one is invalid you will get the exact errors and write the reply again with them fixed.'
 	].join('\n\n');
 }
@@ -616,8 +741,33 @@ export function richPlainText(block: RichBlock): string {
 				block.data.detail
 			);
 			break;
+		case 'timer':
+			push(`${block.data.label}: ${formatDuration(block.data.duration)}`);
+			break;
+		case 'actions':
+			push(block.data.prompt);
+			for (const item of block.data.items) push(`- ${item}`);
+			break;
+		case 'choice':
+			push(block.data.question);
+			for (const option of block.data.options) push(`- ${option}`);
+			break;
+		case 'form':
+			push(block.data.title);
+			for (const f of block.data.fields)
+				push(`- ${f.label}${f.options ? ` (${f.options.join(', ')})` : ''}`);
+			break;
 	}
 	return lines.join('\n');
+}
+
+/** `4:00`, `1:30:00`: seconds as a clock reading. */
+export function formatDuration(seconds: number): string {
+	const s = Math.max(0, Math.round(seconds));
+	const h = Math.floor(s / 3600);
+	const m = Math.floor((s % 3600) / 60);
+	const sec = String(s % 60).padStart(2, '0');
+	return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
 /** Issues as one line each, `segments[2].value: expected a number`. */

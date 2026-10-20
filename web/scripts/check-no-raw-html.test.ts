@@ -5,8 +5,10 @@ import {
 	checkSource,
 	FEATURES_DIR,
 	COPY_BUTTON,
+	INTERACTIVE_DIR,
 	MARKDOWN,
-	MESSAGE_ACTIONS
+	MESSAGE_ACTIONS,
+	RICH_DIR
 } from './check-no-raw-html';
 
 const rules = (file: string, source: string) => checkSource(file, source).map((v) => v.rule);
@@ -235,5 +237,38 @@ describe('check-no-raw-html', () => {
 				])
 			);
 		}
+	});
+
+	test('rich display blocks follow the markdown rules', () => {
+		const f = `${RICH_DIR}x.svelte`;
+		expect(rules(f, '<Button>Go</Button>')).toContain('markdown: button');
+		expect(rules(f, '<div onclick={go}></div>')).toContain('markdown: event handler');
+		expect(rules(f, '<div class="text-approval"></div>')).toContain(
+			'markdown: approval surface token'
+		);
+	});
+
+	test('interactive blocks may hold only quiet, marked controls', () => {
+		const f = `${INTERACTIVE_DIR}x.svelte`;
+		expect(rules(f, '<Button data-rich-control variant="outline" onclick={go}>A</Button>')).toEqual(
+			[]
+		);
+		expect(
+			rules(f, "<Button data-rich-control variant={on ? 'secondary' : 'outline'}>A</Button>")
+		).toEqual([]);
+		expect(rules(f, '<Button data-rich-control>A</Button>')).toEqual([
+			'interactive: Button variant must be outline, secondary or ghost'
+		]);
+		expect(rules(f, '<Button data-rich-control variant="destructive">A</Button>')).toEqual([
+			'interactive: Button variant must be outline, secondary or ghost'
+		]);
+		expect(
+			rules(f, "<Button data-rich-control variant={x ? 'default' : 'ghost'}>A</Button>")
+		).toEqual(['interactive: Button variant must be outline, secondary or ghost']);
+		expect(rules(f, '<Checkbox />')).toEqual(['interactive: control without data-rich-control']);
+		expect(rules(f, '<div class="bg-approval-surface"></div>')).toContain(
+			'markdown: approval surface token'
+		);
+		expect(rules(f, '<ShieldCheck />')).toContain('markdown: shield icon');
 	});
 });

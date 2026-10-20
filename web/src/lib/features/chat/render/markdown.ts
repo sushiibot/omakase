@@ -49,6 +49,8 @@ export type MdBlockNode =
 			ordered: boolean;
 			/** An ordered list inside `:::steps`, drawn as numbered steps. */
 			stepper?: boolean;
+			/** A task list's identity from its text, so ticks survive a reload. */
+			id?: string;
 			start: number | null;
 			items: { checked: boolean | null; children: MdBlockNode[] }[];
 	  }
@@ -70,7 +72,9 @@ export type MdBlockNode =
 			href: string | null;
 			children: MdBlockNode[];
 	  }
-	| { kind: 'columns'; columns: MdBlockNode[][] };
+	| { kind: 'columns'; columns: MdBlockNode[][] }
+	/** `:::tabs`: each heading starts a tab; anything before the first heading shows above them. */
+	| { kind: 'tabs'; intro: MdBlockNode[]; tabs: { label: string; children: MdBlockNode[] }[] };
 
 export interface RenderContext {
 	/** Upload ids the bot attached to this same message with `inline: true`; only these render as images. */
@@ -179,6 +183,16 @@ class Renderer {
 				return [
 					{
 						kind: 'list',
+						...(node.children.some((item) => typeof item.checked === 'boolean')
+							? {
+									id: hashText(
+										this.source.slice(
+											node.position?.start.offset ?? 0,
+											node.position?.end.offset ?? 0
+										)
+									)
+								}
+							: {}),
 						ordered: node.ordered === true,
 						start: node.ordered && typeof node.start === 'number' ? node.start : null,
 						items: node.children.map((item) => ({
@@ -295,6 +309,25 @@ class Renderer {
 					}
 				];
 			}
+			case 'tabs': {
+				const intro: RootContent[] = [];
+				const tabs: { label: string; nodes: RootContent[] }[] = [];
+				for (const child of node.children) {
+					if (child.type === 'heading')
+						tabs.push({ label: plainText(child).trim() || `Tab ${tabs.length + 1}`, nodes: [] });
+					else (tabs.at(-1)?.nodes ?? intro).push(child);
+				}
+				if (tabs.length < 2) return children(node.children);
+				return [
+					{
+						kind: 'tabs',
+						intro: children(intro),
+						tabs: tabs
+							.slice(0, 6)
+							.map((t) => ({ label: t.label.slice(0, 40), children: children(t.nodes) }))
+					}
+				];
+			}
 			case 'steps':
 				return children(node.children).map((b) =>
 					b.kind === 'list' && b.ordered ? { ...b, stepper: true } : b
@@ -371,6 +404,16 @@ class Renderer {
 		const label: PhrasingContent[] = [{ type: 'text', value: alt || url }];
 		return this.link(url, label, depth);
 	}
+}
+
+/** FNV-1a, as 8 hex digits: a stable id for a piece of text. */
+export function hashText(text: string): string {
+	let h = 0x811c9dc5;
+	for (let i = 0; i < text.length; i++) {
+		h ^= text.charCodeAt(i);
+		h = Math.imul(h, 0x01000193);
+	}
+	return (h >>> 0).toString(16).padStart(8, '0');
 }
 
 function containsDefinition(node: Nodes): boolean {

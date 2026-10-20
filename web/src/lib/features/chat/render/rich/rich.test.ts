@@ -11,10 +11,13 @@ import {
 	RICH_TYPES,
 	parseRichBlock,
 	richOutputInstructions,
+	parseDuration,
 	richPlainText,
 	shares,
+	stepDuration,
 	withUnit
 } from './blocks';
+import { formatQty, parseQty, scaleQty } from '../interactive/scale';
 import { arr, num, obj, opt, str, validate } from './schema';
 import { lintRichMarkdown, richRepairMessage } from './syntax';
 import { parseRichYaml, RICH_BODY_MAX } from './yaml';
@@ -324,5 +327,91 @@ describe('links', () => {
 			day: 3,
 			text: 'Tue, Nov 3, 2026 · 3:30 PM – 4:00 PM'
 		});
+	});
+});
+
+describe('interactive blocks', () => {
+	test('durations parse only when the whole value is a duration', () => {
+		expect(parseDuration('12m')).toBe(720);
+		expect(parseDuration('1h30m')).toBe(5400);
+		expect(parseDuration('1 hour 20 minutes')).toBe(4800);
+		expect(parseDuration('90s')).toBe(90);
+		expect(parseDuration('12 minutes or so')).toBeNull();
+		expect(parseDuration('')).toBeNull();
+		expect(parseRichBlock('timer', 'label: Tea\nduration: 4m')).toMatchObject({
+			ok: true,
+			block: { data: { duration: 240 } }
+		});
+		expect(parseRichBlock('timer', 'label: Tea\nduration: 25h').ok).toBe(false);
+	});
+
+	test('a recipe step gets the first time it names, the lower end of a range', () => {
+		expect(stepDuration('Bake at 220°C for 12 minutes.')).toBe(720);
+		expect(stepDuration('Simmer 10–12 min, stirring')).toBe(600);
+		expect(stepDuration('Rest for 1 hour')).toBe(3600);
+		expect(stepDuration('Use 2 eggs')).toBeNull();
+		expect(stepDuration('Heat to 180 C')).toBeNull();
+	});
+
+	test('quantities scale to kitchen fractions and leave text alone', () => {
+		expect(parseQty('1 1/2')).toBe(1.5);
+		expect(parseQty('½')).toBe(0.5);
+		expect(parseQty('1½')).toBe(1.5);
+		expect(parseQty('a pinch')).toBeNull();
+		expect(scaleQty(2, 1.5)).toBe('3');
+		expect(scaleQty('1/2', 1.5)).toBe('¾');
+		expect(scaleQty(1, 1 / 3)).toBe('⅓');
+		expect(scaleQty('a pinch', 2)).toBe('a pinch');
+		expect(scaleQty('1/2', 1)).toBe('1/2');
+		expect(formatQty(12.4)).toBe('12');
+		expect(formatQty(1.15)).toBe('1.2');
+	});
+
+	test('reply blocks reject what they cannot show', () => {
+		expect(parseRichBlock('choice', 'question: q\noptions: [a, a]').ok).toBe(false);
+		expect(parseRichBlock('actions', 'items: [a, b, c, d, e]').ok).toBe(false);
+		expect(parseRichBlock('form', 'fields: [{label: x, type: select}]').ok).toBe(false);
+		expect(parseRichBlock('form', 'fields: [{label: x, options: [a, b]}]').ok).toBe(false);
+		expect(parseRichBlock('form', 'fields: [{label: x}, {label: x}]').ok).toBe(false);
+	});
+
+	test('reply controls are live only with a reply callback', () => {
+		const text = fence('actions', RICH_EXAMPLES.actions.example);
+		const stale = render(Markdown, { props: { text } }).body;
+		expect(stale).toContain('Reply options work in the latest reply.');
+		expect(stale.match(/<button[^>]*>/g)!.every((b) => b.includes(' disabled=""'))).toBe(true);
+		const live = render(Markdown, { props: { text, reply: () => {} } }).body;
+		expect(live).toContain('sends as your message');
+		expect(live.match(/<button[^>]*>/g)!.some((b) => b.includes(' disabled=""'))).toBe(false);
+	});
+
+	test('tabs split at headings; fewer than two keep the content', () => {
+		const [tabs] = parseMarkdown(':::tabs\nIntro\n\n## Oven\nBake.\n\n## Air fryer\nFry.\n:::');
+		expect(tabs).toMatchObject({ kind: 'tabs', intro: [{ kind: 'paragraph' }] });
+		expect((tabs as Extract<MdBlockNode, { kind: 'tabs' }>).tabs.map((t) => t.label)).toEqual([
+			'Oven',
+			'Air fryer'
+		]);
+		expect(parseMarkdown(':::tabs\n## Only\nx\n:::').map((n) => n.kind)).toEqual([
+			'heading',
+			'paragraph'
+		]);
+		expect(lintRichMarkdown(':::tabs\n## Only\nx\n:::')[0].messages).toEqual([
+			'start each tab with a ## heading (at least 2 tabs)'
+		]);
+		expect(plainText(parseMarkdown(':::tabs\n## A\nx\n\n## B\ny\n:::'))).toBe('A\nx\n\nB\ny');
+	});
+
+	test('a task list keeps its id across renders, and only task lists get one', () => {
+		const list = '- [ ] milk\n- [x] eggs';
+		const a = parseMarkdown(`Shopping:\n\n${list}`)[1];
+		const b = parseMarkdown(`Other intro\n\n${list}`)[1];
+		const id = (a as { id?: string }).id;
+		expect(id).toMatch(/^[0-9a-f]{8}$/);
+		expect((b as { id?: string }).id).toBe(id!);
+		expect(parseMarkdown('- milk')[0]).not.toHaveProperty('id');
+		const out = html(list);
+		expect(out.match(/data-rich-control/g)).toHaveLength(2);
+		expect(out).toContain('line-through');
 	});
 });

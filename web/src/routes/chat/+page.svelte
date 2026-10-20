@@ -362,6 +362,7 @@
 			ondeletesend={(id) => void s.discard(id)}
 			onrewind={(id, text) => s.rewind(id, text)}
 			onanswer={(askId, answer) => s.answer(askId, answer)}
+			onreply={(text) => void s.send(text, [], { preserveComposer: true })}
 			onapprove={(nonce, location) => void s.decide(nonce, 'approve', location)}
 			ondeny={(nonce) => void s.decide(nonce, 'deny')}
 			oninstall={() => pwa.install()}

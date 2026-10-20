@@ -18,6 +18,7 @@ type Win = {
 			setTray(nonces: string[] | null): void;
 		};
 		errors: string[];
+		replies: string[];
 		flushSync(): void;
 		parse(text: string): { ok: boolean; kinds?: string[]; err?: string; ms: number };
 		render(text: string, props?: Record<string, unknown>): { ok: boolean; err?: string };
@@ -511,7 +512,9 @@ test.describe('rich reply blocks', () => {
 		const mounted = await page.evaluate((t) => (window as unknown as Win).h.render(t), text);
 		expect(mounted.ok, mounted.err).toBe(true);
 		const solo = page.locator('#solo');
-		await expect(solo.locator('figure')).toHaveCount(RICH_TYPES.length - 1);
+		// Every display block but cards is a figure; timer and reply blocks are not.
+		await expect(solo.locator('figure')).toHaveCount(RICH_TYPES.length - 5);
+		await expect(solo.locator('[data-reply-panel]')).toHaveCount(3);
 		await expect(solo.getByText("Couldn't show")).toHaveCount(0);
 		const overflow = await page.evaluate(
 			() => document.documentElement.scrollWidth - document.documentElement.clientWidth
@@ -520,5 +523,92 @@ test.describe('rich reply blocks', () => {
 		await solo.getByText('Full log').click();
 		await expect(solo.locator('details')).toHaveAttribute('open', '');
 		expect(violations).toEqual([]);
+	});
+});
+
+test.describe('interactive reply blocks', () => {
+	test('tabs switch, ticks survive a remount, servings rescale and a timer runs', async ({
+		page
+	}) => {
+		const violations = await open(page);
+		await page.evaluate(() => localStorage.clear());
+		const text = [
+			':::tabs\n## Oven\nBake at 220°C.\n\n## Air fryer\nFry at 200°C.\n:::',
+			'- [ ] milk\n- [x] eggs',
+			'```recipe\ntitle: Rice\nserves: 2\ningredients:\n  - { qty: 1/2, unit: cup, item: rice }\nsteps:\n  - Simmer for 12 minutes.\n```',
+			'```timer\nlabel: Steep\nduration: 2s\n```'
+		].join('\n\n');
+		const mount = () => page.evaluate((t) => (window as unknown as Win).h.render(t), text);
+		expect((await mount()).ok).toBe(true);
+		const solo = page.locator('#solo');
+
+		await expect(solo.getByText('Bake at 220°C.')).toBeVisible();
+		await solo.getByRole('tab', { name: 'Air fryer' }).click();
+		await expect(solo.getByText('Fry at 200°C.')).toBeVisible();
+		await expect(solo.getByText('Bake at 220°C.')).toBeHidden();
+
+		const milk = solo.getByRole('checkbox', { name: 'milk' });
+		await expect(milk).not.toBeChecked();
+		await expect(solo.getByRole('checkbox', { name: 'eggs' })).toBeChecked();
+		await milk.click();
+		await expect(milk).toBeChecked();
+
+		await expect(solo.getByText('1/2 cup')).toBeVisible();
+		await solo.getByRole('button', { name: 'More servings' }).click();
+		await expect(solo.getByText('Serves 3')).toBeVisible();
+		await expect(solo.getByText('¾ cup')).toBeVisible();
+		await expect(solo.getByRole('button', { name: 'Start Step 1' })).toBeVisible();
+
+		await solo.getByRole('button', { name: 'Start Steep' }).click();
+		await expect(solo.getByText('Done')).toBeVisible({ timeout: 5_000 });
+
+		// Device-local state comes back with the same text.
+		expect((await mount()).ok).toBe(true);
+		await expect(solo.getByRole('checkbox', { name: 'milk' })).toBeChecked();
+		await expect(solo.getByText('Serves 3')).toBeVisible();
+		expect(violations).toEqual([]);
+	});
+
+	test('reply blocks send exactly what they show, once, and only when live', async ({ page }) => {
+		await open(page);
+		const solo = page.locator('#solo');
+		const blocks = [
+			'```actions\nitems: [Make it vegetarian, Scale to 6]\n```',
+			'```choice\nquestion: Which day?\noptions: [Mon, Tue, Thu]\nmultiple: true\n```',
+			'```form\nfields:\n  - { label: People, type: number }\n  - { label: Budget, type: select, options: [Low, High], optional: true }\n```'
+		];
+		const h = async (t: string, props: Record<string, unknown>) => {
+			const mounted = await page.evaluate(
+				([text, p]) => (window as unknown as Win).h.render(text, p),
+				[t, props] as const
+			);
+			expect(mounted.ok, mounted.err).toBe(true);
+			await expect(solo.locator('[data-reply-panel]')).toBeVisible();
+		};
+		await h(blocks[0], {});
+		await expect(solo.getByRole('button', { name: 'Make it vegetarian' })).toBeDisabled();
+
+		await h(blocks[0], { reply: true });
+		await solo.getByRole('button', { name: 'Make it vegetarian' }).click();
+		await expect(solo.getByRole('status')).toHaveText('Sent “Make it vegetarian”');
+		await expect(solo.getByRole('button', { name: 'Scale to 6' })).toBeDisabled();
+
+		await h(blocks[1], { reply: true });
+		await solo.getByRole('button', { name: 'Thu' }).click();
+		await solo.getByRole('button', { name: 'Mon' }).click();
+		await solo.getByRole('button', { name: 'Send (2)' }).click();
+
+		await h(blocks[2], { reply: true });
+		await solo.getByRole('button', { name: 'Send' }).click();
+		await expect(solo.getByText('Needed')).toBeVisible();
+		await solo.getByLabel('People').fill('4');
+		await solo.getByRole('button', { name: 'Send' }).click();
+
+		await expect(solo.getByRole('status')).toHaveText('Sent “People: 4”');
+		expect(await page.evaluate(() => (window as unknown as Win).h.replies)).toEqual([
+			'Make it vegetarian',
+			'Mon, Thu',
+			'People: 4'
+		]);
 	});
 });

@@ -80,6 +80,7 @@
 	onstop={() => void store.stopTurn()}
 	onloadolder={() => store.loadOlder()}
 	onanswer={(id, answer) => store.answer(id, answer)}
+	onreply={(text) => void store.send(text, [], { preserveComposer: true })}
 	onapprove={(nonce) => store.decide(nonce, 'approve')}
 	ondeny={(nonce) => store.decide(nonce, 'deny')}
 	onretryhistory={() => void store.retryHistory()}

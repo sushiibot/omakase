@@ -27,3 +27,21 @@ test("rich blocks render from a streamed reply, and an invalid block is repaired
   await expect(reloaded.getByRole("img", { name: /Total: 281\.3 kcal\/day/ })).toBeVisible();
   await expect(reloaded.getByRole("figure").filter({ hasText: `Spend fixed ${tag}` })).toBeVisible();
 });
+
+test("a reply button sends its label as the owner's message, and only the latest reply's buttons are live", async ({ page }) => {
+  await openChat(page);
+  const tag = nonce();
+  expect((await send(page, `E2E-RICH-ACTIONS #${tag}`)).status).toBe(202);
+  const offer = bubble(page, `re-${tag} offering choices`);
+  const label = `E2E-ECHO picked-${tag} #${tag}`;
+  const button = offer.getByRole("button", { name: label });
+  await expect(button).toBeEnabled({ timeout: 20_000 });
+  await expect(offer.getByText("sends as your message")).toBeVisible();
+  await button.click();
+
+  // The owner's message is exactly the label, and the agent answers it.
+  await expect(page.locator("[data-message-id]").filter({ hasText: label }).last()).toBeVisible();
+  await expect(bubble(page, `Echo picked-${tag}.`)).toBeVisible({ timeout: 20_000 });
+  // The offer is no longer the latest reply, so its buttons can't send again.
+  await expect(offer.getByRole("button", { name: "Something else" })).toBeDisabled();
+});

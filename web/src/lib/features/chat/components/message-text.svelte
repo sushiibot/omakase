@@ -8,7 +8,8 @@
 		partial = false,
 		streaming = false,
 		markdown = false,
-		files
+		files,
+		reply
 	}: {
 		text: string;
 		owner?: boolean;
@@ -16,12 +17,13 @@
 		streaming?: boolean;
 		markdown?: boolean;
 		files?: ComponentProps<typeof Markdown>['files'];
+		reply?: ComponentProps<typeof Markdown>['reply'];
 	} = $props();
 </script>
 
 {#if markdown}
 	<div data-message-text class={cn(partial && 'text-muted-foreground italic')}>
-		<Markdown {text} {streaming} {files} />
+		<Markdown {text} {streaming} {files} {reply} />
 	</div>
 {:else}
 	<p

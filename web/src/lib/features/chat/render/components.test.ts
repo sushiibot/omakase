@@ -7,7 +7,7 @@ import FilesBlock from '../components/files-block.svelte';
 import AskCard from '../components/ask-card.svelte';
 import ApprovalTray from '../components/approval-tray.svelte';
 import WorkingRow from '../components/working-row.svelte';
-import { RICH_EXAMPLES, RICH_TYPES } from './rich/blocks';
+import { REPLY_TYPES, RICH_EXAMPLES, RICH_TYPES } from './rich/blocks';
 
 // Server-renders the real components and inspects the markup the browser would get.
 
@@ -67,14 +67,28 @@ const PAYLOADS = [
 ];
 
 /** No executable or interactive markup: every element and attribute is one the component wrote. */
-function assertInert(els: El[], opts: { allowButtons?: boolean } = {}) {
+function assertInert(els: El[], opts: { allowButtons?: boolean; richControls?: boolean } = {}) {
 	for (const el of els) {
-		expect(['script', 'iframe', 'object', 'embed', 'form', 'base', 'meta', 'style']).not.toContain(
-			el.tag
-		);
+		// A reply form posts nowhere: it has no action, and its submit handler sends chat text.
+		const replyForm =
+			opts.richControls && el.tag === 'form' && 'data-rich-control' in el.attrs && !el.attrs.action;
+		if (!replyForm) {
+			expect([
+				'script',
+				'iframe',
+				'object',
+				'embed',
+				'form',
+				'base',
+				'meta',
+				'style'
+			]).not.toContain(el.tag);
+		}
 		// Copy is the one control markdown may render; it only copies its own block's text.
 		const copy = el.tag === 'button' && el.attrs['aria-label'] === 'Copy code';
-		if (!opts.allowButtons && !copy) {
+		// Interactive blocks' controls are marked, and the lint keeps them quiet.
+		const rich = opts.richControls && 'data-rich-control' in el.attrs;
+		if (!opts.allowButtons && !copy && !rich) {
 			expect(['button', 'input', 'textarea', 'select']).not.toContain(el.tag);
 		}
 		for (const [name, value] of Object.entries(el.attrs)) {
@@ -89,13 +103,20 @@ function assertInert(els: El[], opts: { allowButtons?: boolean } = {}) {
 describe('markdown', () => {
 	test.each(RICH_TYPES)('rich %s block renders inert, with every string escaped', async (type) => {
 		const evil = PAYLOADS[1];
+		let n = 0;
 		// Every quoted value in the example becomes markup-shaped text.
 		const body = RICH_EXAMPLES[type].example.replace(
 			/(title|label|detail|name|item|note|when|subtitle|location): ([^,}\n]+)/g,
-			(_, k) => `${k}: ${JSON.stringify(evil)}`
+			(_, k) => `${k}: ${JSON.stringify(`${evil} ${++n}`)}`
 		);
 		const { els, html } = await dom(Markdown, { text: '```' + type + '\n' + body + '\n```' });
-		assertInert(els);
+		const interactive = ['recipe', 'timer', 'actions', 'choice', 'form'].includes(type);
+		assertInert(els, { richControls: interactive });
+		if (!interactive) expect(els.some((e) => 'data-rich-control' in e.attrs)).toBe(false);
+		// Without a reply callback (not the latest reply), nothing can send.
+		for (const el of els.filter((e) => e.tag === 'button' && REPLY_TYPES.has(type))) {
+			expect(el.attrs).toHaveProperty('disabled');
+		}
 		expect(els.some((e) => e.tag === 'img')).toBe(false);
 		expect(html).not.toContain('data-lang');
 	});

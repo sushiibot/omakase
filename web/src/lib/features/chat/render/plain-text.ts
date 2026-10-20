@@ -50,6 +50,13 @@ function block(node: MdBlockNode): string {
 			return [node.title, node.subtitle, plainText(node.children)].filter(Boolean).join('\n');
 		case 'columns':
 			return node.columns.map(plainText).join('\n\n');
+		case 'tabs':
+			return [
+				plainText(node.intro),
+				...node.tabs.map((t) => `${t.label}\n${plainText(t.children)}`)
+			]
+				.filter(Boolean)
+				.join('\n\n');
 	}
 }
 

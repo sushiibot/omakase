@@ -336,6 +336,7 @@
 						ondeletesend: (m) => void store.discard(m),
 						onrewind: (id, text) => store.rewind(id, text),
 						onanswer: (askId, answer) => store.answer(askId, answer),
+						onreply: (text) => void store.send(text, [], { preserveComposer: true }),
 						onapprove: (nonce, location) => void store.decide(nonce, 'approve', location),
 						ondeny: (nonce) => void store.decide(nonce, 'deny')
 					}

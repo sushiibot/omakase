@@ -52,12 +52,21 @@ const MARKDOWN_IMPORTS = new Set([
 	'./rich/rich-pending.svelte',
 	'./rich/callout.svelte',
 	'./rich/disclosure.svelte',
-	'./rich/container-card.svelte'
+	'./rich/container-card.svelte',
+	'./interactive/check-item.svelte',
+	'./interactive/tabs-block.svelte'
 ]);
 // Rich reply blocks render agent-written data, so they get markdown's rules too: no controls, no
 // handlers, no spread attributes, no approval look.
 export const RICH_DIR = 'src/lib/features/chat/render/rich/';
 const isRich = (file: string) => file.startsWith(RICH_DIR);
+// Interactive reply blocks may hold controls, but only quiet ones that can't pass for a decision:
+// each is marked data-rich-control, and a Button is outline, secondary or ghost, never the filled
+// primary or destructive look an approval uses. No approval tokens or shield (lookalike rules).
+export const INTERACTIVE_DIR = 'src/lib/features/chat/render/interactive/';
+const isInteractive = (file: string) => file.startsWith(INTERACTIVE_DIR);
+const RICH_CONTROLS = new Set(['Button', 'Checkbox', 'Input', 'NativeSelect.Root', 'Tabs.Trigger']);
+const QUIET_VARIANT = /^(outline|secondary|ghost)$/;
 
 // Every feature shows agent- or server-supplied text somewhere, so none may borrow the approval
 // look, unless listed here as the approval surface itself or the code that hosts it. A new
@@ -140,7 +149,7 @@ function templateRules(file: string, source: string): Violation[] {
 	const out: Violation[] = [];
 	const at = (start: number, rule: string) => out.push({ file, line: lineOf(source, start), rule });
 	const markdown = file === MARKDOWN;
-	const lookalike = LOOKALIKE.has(file) || isRich(file);
+	const lookalike = LOOKALIKE.has(file) || isRich(file) || isInteractive(file);
 	const ast = parse(source, { filename: file, modern: true });
 	visit(ast.fragment, (n) => {
 		if (n.type === 'HtmlTag') at(n.start, '{@html}');
@@ -149,6 +158,33 @@ function templateRules(file: string, source: string): Violation[] {
 			else if (!fixedTag(n.tag)) at(n.start, 'render: dynamic svelte:element');
 		}
 		if (lookalike && n.type === 'SpreadAttribute') at(n.start, 'markdown: spread attributes');
+		if (isInteractive(file) && n.type === 'Component' && RICH_CONTROLS.has(String(n.name))) {
+			const attrs = (
+				(n as { attributes?: { type: string; name?: string; value?: unknown }[] }).attributes ?? []
+			).filter((a) => a.type === 'Attribute');
+			if (!attrs.some((a) => a.name === 'data-rich-control')) {
+				at(n.start, 'interactive: control without data-rich-control');
+			}
+			if (n.name === 'Button') {
+				const variant = attrs.find((a) => a.name === 'variant');
+				const literal = Array.isArray(variant?.value)
+					? (variant.value as { type: string; data?: string }[]).map((v) => v.data ?? '').join('')
+					: null;
+				const expr =
+					!Array.isArray(variant?.value) && variant?.value
+						? source.slice(
+								(variant.value as { start: number }).start,
+								(variant.value as { end: number }).end
+							)
+						: '';
+				const quoted = [...expr.matchAll(/'([^']*)'/g)].map((m) => m[1]);
+				const ok =
+					literal !== null
+						? QUIET_VARIANT.test(literal)
+						: quoted.length > 0 && quoted.every((q) => QUIET_VARIANT.test(q));
+				if (!ok) at(n.start, 'interactive: Button variant must be outline, secondary or ghost');
+			}
+		}
 		if ((markdown || isRich(file)) && n.type === 'OnDirective')
 			at(n.start, 'markdown: event handler');
 		if ((markdown || isRich(file)) && n.type === 'Attribute' && /^on/i.test(String(n.name))) {
@@ -165,7 +201,7 @@ function templateRules(file: string, source: string): Violation[] {
 
 export function checkSource(file: string, source: string): Violation[] {
 	const out: Violation[] = file.endsWith('.svelte') ? templateRules(file, source) : [];
-	const lookalike = LOOKALIKE.has(file) || isRich(file);
+	const lookalike = LOOKALIKE.has(file) || isRich(file) || isInteractive(file);
 	source.split('\n').forEach((text, i) => {
 		const add = (rule: string) => out.push({ file, line: i + 1, rule });
 		for (const [re, rule] of SINKS) if (re.test(text)) add(rule);
