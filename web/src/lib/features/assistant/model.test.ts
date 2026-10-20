@@ -52,21 +52,16 @@ test('Home groups only runs linked to a running task, without mutating sources',
 	expect(groups.running).toHaveLength(2);
 	expect(homeWork([{ ...task, status: 'done' }], groups).runs).toHaveLength(2);
 });
-test('Continue uses visits, removes missing and archived records, and includes a visited document', () => {
-	const doc = {
-		id: 'doc',
-		title: 'Report',
-		createdAt: '',
-		updatedAt: '',
-		conversationId: 'main',
-		version: 1
-	};
+test('Continue uses chat visits and removes missing and archived records', () => {
 	const channels = [
 		channelFixture('a', 'Alpha'),
-		channelFixture('b', 'Beta', { state: 'archived' })
+		channelFixture('b', 'Beta', { state: 'archived' }),
+		channelFixture('c', 'Gamma'),
+		channelFixture('d', 'Delta')
 	];
-	expect(continueItems(channels, [], [doc], [])).toEqual([]);
-	expect(
-		continueItems(channels, ['missing', 'b', 'a'], [doc], ['missing', 'doc']).map((i) => i.href)
-	).toEqual(['/chats/a', '/artifacts/doc']);
+	expect(continueItems(channels, [])).toEqual([]);
+	expect(continueItems(channels, ['missing', 'b', 'a', 'c', 'd']).map((i) => i.href)).toEqual([
+		'/chats/a',
+		'/chats/c'
+	]);
 });

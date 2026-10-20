@@ -12,7 +12,7 @@ const document = {
 };
 
 for (const width of [320, 1440]) {
-	test(`Home shows live work, resumes documents, and reviews an exact approval at ${width}px`, async ({
+	test(`Home shows live work without documents and reviews an exact approval at ${width}px`, async ({
 		page,
 		context
 	}) => {
@@ -56,7 +56,8 @@ for (const width of [320, 1440]) {
 		await expect(page.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
 		const overview = page.getByRole('tabpanel', { name: 'Overview', exact: true });
 		await expect(overview.getByRole('heading', { name: 'Needs you', exact: false })).toBeVisible();
-		await expect(overview.getByRole('link', { name: /Cupertino voter guide/ })).toBeVisible();
+		await expect(overview.getByRole('button', { name: /Approve calendar_update/ })).toBeVisible();
+		await expect(overview.getByRole('link', { name: /Cupertino voter guide/ })).toHaveCount(0);
 		await overview.getByRole('button', { name: /Approve calendar_update/ }).click();
 		const review = width >= 1280 ? page.locator('[data-home-inspector]') : page.getByRole('dialog');
 		await expect(review).toContainText('Friday show');
@@ -74,10 +75,11 @@ for (const width of [320, 1440]) {
 
 		await page.goBack();
 		await expect(review).not.toBeVisible();
-		await overview.getByRole('link', { name: /Cupertino voter guide/ }).click();
+		await page.goto(`/artifacts/${id}`);
 		await expect(page.getByRole('heading', { name: 'Findings' })).toBeVisible();
 		await page.goBack();
-		await expect(overview.getByRole('heading', { name: 'Continue', exact: true })).toBeVisible();
+		await expect(overview.getByRole('heading', { name: 'Needs you', exact: false })).toBeVisible();
+		await expect(overview.getByRole('link', { name: /Cupertino voter guide/ })).toHaveCount(0);
 		await page.getByRole('tab', { name: 'Tasks', exact: true }).click();
 		await expect(page.getByRole('heading', { name: 'Your ongoing work' })).toBeVisible();
 		await expect(page).toHaveURL(/view=following/);
@@ -108,36 +110,6 @@ for (const width of [320, 1440]) {
 	});
 }
 
-test('Home keeps tasks visible when documents fail and retries the failed source', async ({
-	page,
-	context
-}) => {
-	await fixtureApp(context);
-	let failing = true;
-	await context.route('**/api/artifacts**', (route) =>
-		failing
-			? route.fulfill({ status: 503, json: { error: 'offline' } })
-			: route.fulfill({ json: { artifacts: [document], truncated: false } })
-	);
-	await page.goto('/assistant');
-	await expect(
-		page.getByRole('tabpanel', { name: 'Overview' }).getByText("Couldn't load documents.")
-	).toBeVisible();
-	await expect(
-		page.getByRole('link', { name: /Review the deployment notes/ }).first()
-	).toBeVisible();
-	failing = false;
-	await page
-		.getByRole('alert')
-		.filter({ hasText: "Couldn't load documents." })
-		.getByRole('button', { name: 'Try again' })
-		.click();
-	await expect(page.getByRole('link', { name: /Cupertino voter guide/ })).toBeVisible();
-	await expect(
-		page.getByRole('tabpanel', { name: 'Overview' }).getByText("Couldn't load documents.")
-	).not.toBeVisible();
-});
-
 for (const width of [320, 1440]) {
 	test(`review has a durable mobile-style navigation stack at ${width}px`, async ({
 		page,
@@ -145,9 +117,6 @@ for (const width of [320, 1440]) {
 	}) => {
 		await fixtureApp(context);
 		await page.setViewportSize({ width, height: 915 });
-		await context.route('**/api/artifacts**', (route) =>
-			route.fulfill({ json: { artifacts: [], truncated: false } })
-		);
 		await page.goto('/assistant');
 		const overview = page.getByRole('tabpanel', { name: 'Overview' });
 		const row = overview.getByRole('button', { name: /Draft the quarterly expenses summary/ });
@@ -184,9 +153,6 @@ for (const width of [320, 1440]) {
 
 test('direct review link reloads and Back falls back to Home', async ({ page, context }) => {
 	await fixtureApp(context);
-	await context.route('**/api/artifacts**', (route) =>
-		route.fulfill({ json: { artifacts: [], truncated: false } })
-	);
 	await page.goto('/assistant?item=job%3Anightly-sync');
 	const review = page.getByRole('dialog');
 	await expect(review.getByRole('heading', { name: 'nightly-sync failed' })).toBeVisible();

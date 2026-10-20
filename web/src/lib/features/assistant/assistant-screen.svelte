@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
-	import FileText from '@lucide/svelte/icons/file-text';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Check from '@lucide/svelte/icons/check';
 	import { Button } from '$lib/ui/button';
@@ -10,7 +9,6 @@
 	import { Skeleton } from '$lib/ui/skeleton';
 	import { HomeRow, type HomeGroups } from '$lib/features/home';
 	import type { TaskRecord } from '$lib/features/tasks';
-	import type { ArtifactSummary } from '$lib/features/artifacts';
 	import type { Channel } from '$lib/features/channels';
 	import { channelHref } from '$lib/features/channels';
 	import { ago } from '$lib/ui/format/time';
@@ -20,7 +18,6 @@
 		tab = $bindable('overview'),
 		groups,
 		tasks,
-		documents,
 		recent,
 		channels,
 		now,
@@ -38,7 +35,6 @@
 		tab?: string;
 		groups: HomeGroups;
 		tasks: TaskRecord[];
-		documents: ArtifactSummary[];
 		recent: ContinueItem[];
 		channels: Channel[];
 		now: number;
@@ -60,14 +56,10 @@
 	);
 	const attention = $derived([...groups.waiting, ...groups.failed]);
 	const attentionCount = $derived(attention.length + channelWaiting.length + taskWaiting.length);
-	const ready = $derived(
-		[...documents].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4)
-	);
 	const running = $derived(work.running);
 	const noWork = $derived(
 		!attentionCount &&
 			!recent.length &&
-			!ready.length &&
 			!groups.review.length &&
 			!running.length &&
 			!work.runs.length
@@ -168,9 +160,7 @@
 									variant="outline"
 									class="h-auto justify-start gap-3 py-3 text-left whitespace-normal"
 								>
-									{#if item.kind === 'document'}<FileText class="shrink-0" />{:else}<MessageSquare
-											class="shrink-0"
-										/>{/if}
+									<MessageSquare class="shrink-0" />
 									<span class="line-clamp-2 min-w-0 flex-1 [overflow-wrap:anywhere]"
 										>{item.title}</span
 									><ChevronRight class="shrink-0 text-muted-foreground" />
@@ -179,26 +169,9 @@
 						</div>
 					</Section>
 				{/if}
-				{#if ready.length || groups.review.length}
+				{#if groups.review.length}
 					<Section title="Ready for you">
-						{#snippet aside()}<Button href="/artifacts" variant="ghost">All documents</Button
-							>{/snippet}
 						<div class="divide-y rounded-xl border px-2">
-							{#each ready as document (document.id)}
-								<Button
-									href={`/artifacts/${encodeURIComponent(document.id)}`}
-									variant="ghost"
-									class="h-auto w-full justify-start gap-3 py-3 text-left whitespace-normal"
-								>
-									<FileText class="shrink-0 text-muted-foreground" /><span class="min-w-0 flex-1"
-										><span class="block text-sm font-medium [overflow-wrap:anywhere]"
-											>{document.title}</span
-										><span class="mt-1 block text-xs font-normal text-muted-foreground"
-											>Document · Updated {ago(document.updatedAt, now)}</span
-										></span
-									><ChevronRight class="shrink-0 text-muted-foreground" />
-								</Button>
-							{/each}
 							{#each groups.review.slice(0, 4) as item (item.id)}<HomeRow
 									dialog={false}
 									{item}
@@ -227,7 +200,7 @@
 				{#if noWork && !loading && !notices.length}
 					<Section
 						title="A place to pick up where you left off"
-						description="Your recent conversations, documents, and the agent’s work will appear here."
+						description="Your recent conversations and the agent’s work will appear here."
 						><div><Button href="/chat"><MessageSquare />Start a conversation</Button></div></Section
 					>
 				{/if}

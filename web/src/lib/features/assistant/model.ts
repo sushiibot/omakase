@@ -1,49 +1,23 @@
 import { channelHref, type Channel } from '$lib/features/channels';
 import type { TaskRecord } from '$lib/features/tasks';
 import type { HomeGroups } from '$lib/features/home';
-import type { ArtifactSummary } from '$lib/features/artifacts';
 
 export interface ContinueItem {
 	id: string;
 	title: string;
 	href: string;
-	kind: 'chat' | 'document';
 }
 
 /** Only explicit visits belong in Continue; incoming activity does not imply a visit. */
-export function continueItems(
-	channels: Channel[],
-	channelIds: string[],
-	artifacts: ArtifactSummary[],
-	artifactIds: string[]
-): ContinueItem[] {
-	const chats = channelIds.flatMap((id) => {
-		const channel = channels.find((c) => c.id === id && c.state !== 'archived');
-		return channel
-			? [
-					{
-						id: `chat:${id}`,
-						title: channel.title,
-						href: channelHref(channel),
-						kind: 'chat' as const
-					}
-				]
-			: [];
-	});
-	const documents = artifactIds.flatMap((id) => {
-		const document = artifacts.find((a) => a.id === id);
-		return document
-			? [
-					{
-						id: `document:${id}`,
-						title: document.title,
-						href: `/artifacts/${encodeURIComponent(id)}`,
-						kind: 'document' as const
-					}
-				]
-			: [];
-	});
-	return [...chats.slice(0, documents.length ? 1 : 2), ...documents.slice(0, chats.length ? 1 : 2)];
+export function continueItems(channels: Channel[], channelIds: string[]): ContinueItem[] {
+	return channelIds
+		.flatMap((id) => {
+			const channel = channels.find((c) => c.id === id && c.state !== 'archived');
+			return channel
+				? [{ id: `chat:${id}`, title: channel.title, href: channelHref(channel) }]
+				: [];
+		})
+		.slice(0, 2);
 }
 
 /** Group by persisted task/run identities. Similar titles are not evidence of shared work. */

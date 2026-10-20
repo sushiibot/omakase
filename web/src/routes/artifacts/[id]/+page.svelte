@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { Remote } from '$lib/core/remote.svelte';
-	import { artifactsApi, ArtifactScreen, artifactVisits } from '$lib/features/artifacts';
+	import { artifactsApi, ArtifactScreen } from '$lib/features/artifacts';
 	const remote = $derived.by(() => {
 		const id = page.params.id ?? '';
 		return new Remote(() => artifactsApi.get(id), { refetchOnFocus: true });
@@ -11,9 +11,6 @@
 		const current = remote;
 		untrack(() => void current.ensure());
 		return current.watch();
-	});
-	$effect(() => {
-		if (remote.data) artifactVisits().visit(remote.data.id);
 	});
 </script>
 

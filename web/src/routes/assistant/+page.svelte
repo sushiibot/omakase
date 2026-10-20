@@ -4,9 +4,7 @@
 	import { page } from '$app/state';
 	import SplitScreen from '$lib/ui/screen/split-screen.svelte';
 	import { onMount } from 'svelte';
-	import { Remote } from '$lib/core/remote.svelte';
 	import { AssistantScreen, continueItems } from '$lib/features/assistant';
-	import { artifactsApi, artifactVisits } from '$lib/features/artifacts';
 	import { channelsStore } from '$lib/features/channels';
 	import { tasksStore } from '$lib/features/tasks';
 	import { threadsStore } from '$lib/features/threads';
@@ -25,29 +23,13 @@
 	const channels = channelsStore();
 	const tasks = tasksStore();
 	const threads = threadsStore();
-	const visits = artifactVisits();
-	const documents = new Remote(() => artifactsApi.list(), { refetchOnFocus: true });
-	const recent = $derived(
-		continueItems(
-			channels.list.data?.channels ?? [],
-			channels.recentIds,
-			documents.data?.artifacts ?? [],
-			visits.ids
-		)
-	);
+	const recent = $derived(continueItems(channels.list.data?.channels ?? [], channels.recentIds));
 	const notices = $derived.by(() => {
 		const result: { label: string; retry: () => void }[] = [];
 		if (maintenance.remote.error)
 			result.push({
 				label: 'Couldn’t load calendar maintenance.',
 				retry: () => void maintenance.remote.refetch()
-			});
-		if (documents.error)
-			result.push({ label: "Couldn't load documents.", retry: () => void documents.refetch() });
-		if (documents.data?.truncated)
-			result.push({
-				label: 'The document list is limited. Search the library to find older documents.',
-				retry: () => void documents.refetch()
 			});
 		if (tasks.error)
 			result.push({ label: "Couldn't refresh tasks.", retry: () => void tasks.refresh(true) });
@@ -64,19 +46,16 @@
 		return result;
 	});
 	onMount(() => {
-		void documents.ensure();
 		void maintenance.remote.refetch();
 		void threads.list.ensure();
 		const stops = [
 			maintenance.remote.watch(),
-			documents.watch(),
 			channels.watch(),
 			tasks.watch(),
 			threads.list.watch()
 		];
 		const timer = setInterval(() => {
 			if (!document.hidden && !maintenance.busy) void maintenance.remote.refetch();
-			if (!document.hidden && documents.status !== 'loading') void documents.refetch();
 		}, 30_000);
 		return () => {
 			stops.forEach((stop) => stop());
@@ -112,15 +91,12 @@
 		{maintenanceWatching}
 		groups={inbox.home.groups}
 		tasks={tasks.tasks}
-		documents={documents.data?.artifacts ?? []}
 		{recent}
 		channels={channels.list.data?.channels ?? []}
 		now={inbox.now}
 		selected={inbox.peek?.id}
 		{notices}
-		loading={inbox.remote.status === 'loading' ||
-			(tasks.loading && !tasks.tasks.length) ||
-			((documents.status === 'idle' || documents.status === 'loading') && !documents.data)}
+		loading={inbox.remote.status === 'loading' || (tasks.loading && !tasks.tasks.length)}
 		onopen={(id) => {
 			inbox.home.clearResult(id);
 			inbox.sheet.openWith(id);
