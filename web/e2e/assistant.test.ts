@@ -328,6 +328,10 @@ test('a quiet Home says all clear, lists recent finished work and keeps the quic
 			? route.fulfill({ json: { tasks: [done] } })
 			: route.fallback()
 	);
+	// Nothing in use either: a pinned list or running timer keeps Home from being quiet.
+	await context.route('**/api/saved**', (route) =>
+		route.request().method() === 'GET' ? route.fulfill({ json: { items: [] } }) : route.fallback()
+	);
 	await page.goto('/assistant');
 	const home = page.locator('[data-assistant-home]');
 	await expect(home.locator('[data-home-status]')).toContainText('All clear');
