@@ -69,9 +69,13 @@ export function pushFor(event: PushEvent): PushPayload {
   }
 }
 
-// Same addresses as the app's conversationHref.
-const conversationUrl = (id: string) =>
-  id === "main" ? "/chat" : id.startsWith("task-t-") ? `/tasks/${encodeURIComponent(id.slice(5))}?view=conversation` : `/chats/${encodeURIComponent(id)}`;
+// Same addresses as the app's conversationHref (web/src/lib/core/nav/conversation.ts), including
+// the `m` message param from web/docs/message-links.md.
+export const conversationUrl = (id: string, target: { message?: string; turn?: string } = {}) => {
+  const path = id === "main" ? "/chat" : id.startsWith("task-t-") ? `/tasks/${encodeURIComponent(id.slice(5))}?view=conversation` : `/chats/${encodeURIComponent(id)}`;
+  const params = [...(target.message ? [`m=${encodeURIComponent(target.message)}`] : []), ...(target.turn ? [`turn=${encodeURIComponent(target.turn)}`] : [])];
+  return params.length ? `${path}${path.includes("?") ? "&" : "?"}${params.join("&")}` : path;
+};
 /** Opens that agent from its conversation: in the side panel on desktop, as its own page on phones. */
 const agentUrl = (conversationId: string, agentId: string) => {
   const url = conversationUrl(conversationId);
