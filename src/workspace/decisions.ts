@@ -46,16 +46,28 @@ export function describeAttempts(attempts: DecisionAttempt[]): string {
   return attempts.map(a => `${a.model} ${a.errorClass}`).join(", ") || "no attempts";
 }
 
+const noulAnswer = z.object({ type: z.literal("noul"), noul: z.number().finite().min(0).max(1) });
+const choiceAnswer = z.object({
+  type: z.literal("choice"), choice: z.string(),
+  probabilities: z.record(z.number().finite().min(0).max(1)).optional(), confidence: z.number().finite().optional(),
+});
+export type NoulAnswer = z.infer<typeof noulAnswer>;
+export type ChoiceAnswer = z.infer<typeof choiceAnswer>;
+/** `criteria` names a choice question's options (option → what it means). */
+export type DecisionQuestion = { type: "noul"; instructions: string } | { type: "choice"; instructions: string; criteria: Record<string, string> };
+type AnswerFor<Q> = Q extends { type: "choice" } ? ChoiceAnswer : NoulAnswer;
+
 const responseSchema = z.object({
   model: z.string().min(1),
-  answers: z.record(z.object({ type: z.literal("noul"), noul: z.number().finite().min(0).max(1) })),
+  answers: z.record(z.discriminatedUnion("type", [noulAnswer, choiceAnswer])),
   usage: z.object({
     input_tokens: z.number().int().nonnegative(),
     output_tokens: z.number().int().nonnegative(),
     cost: z.number().finite().nonnegative().optional(),
   }).optional(),
 });
-export type DecisionResult = z.infer<typeof responseSchema> & { attempts: DecisionAttempt[] };
+export type DecisionResult<Q extends Record<string, DecisionQuestion> = Record<string, DecisionQuestion>> =
+  Omit<z.infer<typeof responseSchema>, "answers"> & { answers: { [K in keyof Q]: AnswerFor<Q[K]> }; attempts: DecisionAttempt[] };
 
 class AttemptError extends Error {
   constructor(readonly errorClass: DecisionErrorClass) { super(errorClass); }
@@ -76,15 +88,16 @@ export type DecisionOptions = { request?: DecisionRequest; sleep?: (ms: number) 
 /**
  * POSTs `{model, state, questions}` to OpenRouter's Decisions route and walks the model chain until one returns
  * a complete typed answer set: a retired model (404), a provider error or a malformed answer moves to the next.
- * Only `noul` questions are supported, and only the host-assigned failure class is ever recorded.
+ * `noul` and `choice` questions are supported; an answer of the wrong type, or a choice outside the question's
+ * options, is a schema mismatch. Only the host-assigned failure class is ever recorded.
  */
-export async function requestDecisions(
+export async function requestDecisions<Q extends Record<string, DecisionQuestion>>(
   config: { apiKey: string; baseUrl: string },
   models: readonly string[],
   state: unknown,
-  questions: Record<string, { type: "noul"; instructions: string }>,
+  questions: Q,
   opts: DecisionOptions = {},
-): Promise<DecisionResult> {
+): Promise<DecisionResult<Q>> {
   const request = opts.request ?? fetch;
   const sleep = opts.sleep ?? (ms => new Promise<void>(resolve => setTimeout(resolve, ms)));
   const now = opts.now ?? Date.now;
@@ -101,7 +114,7 @@ export async function requestDecisions(
       try {
         const result = await attempt(request, endpoint, config.apiKey, model, state, questions, Math.min(ATTEMPT_TIMEOUT_MS, remaining));
         if (attempts.length) log.warn({ model, failed: describeAttempts(attempts) }, "decisions answered by a fallback model");
-        return { ...result, attempts };
+        return { ...result, attempts } as DecisionResult<Q>;
       } catch (error) {
         const errorClass = error instanceof AttemptError ? error.errorClass : abortClass(error) ?? "internal";
         attempts.push({ model, errorClass });
@@ -116,7 +129,7 @@ export async function requestDecisions(
 }
 
 async function attempt(request: DecisionRequest, endpoint: URL, apiKey: string, model: string, state: unknown,
-  questions: Record<string, unknown>, timeoutMs: number): Promise<z.infer<typeof responseSchema>> {
+  questions: Record<string, DecisionQuestion>, timeoutMs: number): Promise<z.infer<typeof responseSchema>> {
   let response: Response;
   try {
     response = await request(endpoint, {
@@ -140,6 +153,11 @@ async function attempt(request: DecisionRequest, endpoint: URL, apiKey: string, 
   if (!parsed.success) throw new AttemptError("schema_mismatch");
   const keys = Object.keys(parsed.data.answers);
   if (keys.length !== Object.keys(questions).length || keys.some(key => !Object.hasOwn(questions, key))) throw new AttemptError("missing_answers");
+  for (const [key, answer] of Object.entries(parsed.data.answers)) {
+    const question = questions[key]!;
+    if (answer.type !== question.type) throw new AttemptError("schema_mismatch");
+    if (answer.type === "choice" && question.type === "choice" && !Object.hasOwn(question.criteria, answer.choice)) throw new AttemptError("schema_mismatch");
+  }
   return parsed.data;
 }
 

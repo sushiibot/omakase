@@ -32,6 +32,7 @@ import {
 } from "./contextEconomy.ts";
 import type { ModelChoice } from "./modelChoice.ts";
 import { createAutoModeExtension, judgeCompletion, judgeForBackend, registerJudgeModel } from "./autoMode.ts";
+import { restrictionCheck } from "./toolRestrictionDecisions.ts";
 import { homeAgentsFilesOverride } from "./home.ts";
 import { createSecretGuardExtension } from "./secretGuard.ts";
 import { createMemoryGuardExtension } from "./memoryGuard.ts";
@@ -332,6 +333,7 @@ export function createPiChatSessionFactory(
                   complete: judgeCompletion(modelRuntime, { selector, openrouter: openrouterJudge, log: autoModeLog }),
                   agentDir: config.agentDir,
                   integrationsOnly: !config.autoMode,
+                  restrictions: restrictionCheck(config),
                   reviewPolicy: stubs ? () => stubs.reviewPolicy() : undefined,
                   describeCall: async (input, tool) => {
                     if (tool === "mail_save_draft" && stubs) return stubs.reviewMailAccount(input.accountId);

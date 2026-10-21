@@ -1,4 +1,5 @@
 import { createAutoModeExtension, registerJudgeModel, judgeCompletion } from "./autoMode.ts";
+import { restrictionCheck } from "./toolRestrictionDecisions.ts";
 import { DEFAULT_JUDGE_MODEL } from "./config.ts";
 import { autoCompactionSettings } from "./contextEconomy.ts";
 import { readFileSync } from "node:fs";
@@ -153,6 +154,7 @@ export async function runToolFreeJob(config: WorkspaceConfig, input: ToolFreeJob
       ...(integrationJudge ? [{ name: "sushii-integration-review", factory: createAutoModeExtension({
         judge: async () => integrationJudge, complete: judgeCompletion(modelRuntime),
         agentDir: config.agentDir, integrationsOnly: true, log,
+        restrictions: restrictionCheck(config),
         reviewPolicy: async () => { if (!stubs) throw new Error("Tool policy unavailable"); return stubs.reviewPolicy(); },
         describeCall: async (args) => { if (!input.describeMcpCall) throw new Error("MCP metadata unavailable"); return input.describeMcpCall(args); },
       }) }] : []),
