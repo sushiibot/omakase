@@ -236,6 +236,9 @@ async function decide(
   const integration = ["mcp_call_tool", "mail_save_draft"].includes(call.toolName);
   const rules = integration && opts.reviewPolicy ? await opts.reviewPolicy() : "";
   const description = integration && opts.describeCall ? await opts.describeCall(call.input, call.toolName) : undefined;
+  // A tool declared or classified read-only once (connectors.eligible) needs no per-call judge; owner restrictions still do.
+  if (call.toolName === "mcp_call_tool" && !rules.trim() && (description as { readOnly?: unknown } | undefined)?.readOnly === true)
+    return { verdict: "allow", source: "rule", reason: "MCP tool declared or classified read-only" };
   // The transcript formatter abbreviates tool inputs. Review the complete integration call,
   // or ask the owner when it cannot fit; never classify only its beginning and end.
   const reviewInput = call.toolName === "mail_save_draft"

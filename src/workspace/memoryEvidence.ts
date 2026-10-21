@@ -248,6 +248,12 @@ export class MemoryEvidence {
     return { records, cursor: records.at(-1)?.seq ?? after };
   }
 
+  /** Owner turns (user records carrying a message tag) after `after`, and the newest pending record's time. */
+  activity(after: number): { ownerTurns: number; lastAt: string | null } {
+    const row = this.db.query("SELECT count(CASE WHEN role='user' AND tag IS NOT NULL THEN 1 END) AS ownerTurns, max(nullif(at,'')) AS lastAt FROM evidence WHERE seq>? AND source LIKE 'sessions/%' AND source NOT LIKE 'sessions/job-sessions/%'").get(after) as { ownerTurns: number; lastAt: string | null };
+    return { ownerTurns: row.ownerTurns, lastAt: row.lastAt };
+  }
+
   latestSequence(): number {
     return (this.db.query("SELECT coalesce(max(seq),0) AS seq FROM evidence WHERE source LIKE 'sessions/%' AND source NOT LIKE 'sessions/job-sessions/%'").get() as { seq: number }).seq;
   }

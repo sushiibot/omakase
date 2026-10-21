@@ -43,6 +43,8 @@ export interface ConsolidationLimits {
   /** How long an apply waits for the live chat session to go idle before deferring. */
   idleWaitMs: number;
   idlePollMs: number;
+  /** Capture waits until the newest conversation record is this old, so one conversation is one pass. */
+  captureQuietMs: number;
 }
 
 export const DEFAULT_LIMITS: ConsolidationLimits = {
@@ -56,6 +58,7 @@ export const DEFAULT_LIMITS: ConsolidationLimits = {
   keepRejected: 7,
   idleWaitMs: 10 * 60_000,
   idlePollMs: 5_000,
+  captureQuietMs: 20 * 60_000,
 };
 
 const CURATED = [
@@ -647,7 +650,17 @@ export async function runConsolidation(deps: ConsolidationDeps, opts: { force?: 
   };
   const pending = pendingNotes(deps.home, state.notes, limits.maxNoteBytes);
   await deps.evidence?.refresh();
-  const batch = deps.evidence?.pending(state.evidenceGeneration === deps.evidence.generation ? state.evidenceCursor ?? 0 : 0, limits.maxNoteBytes);
+  const cursor = state.evidenceGeneration === deps.evidence?.generation ? state.evidenceCursor ?? 0 : 0;
+  const batch = deps.evidence?.pending(cursor, limits.maxNoteBytes);
+  // Capture runs only for a new owner conversation that has gone quiet; tool-only, subagent or wake-up activity
+  // waits for the nightly run.
+  if (opts.capture && !opts.force && deps.evidence) {
+    const activity = deps.evidence.activity(cursor);
+    if (!pending.newBytes && !activity.ownerTurns) return { status: "skipped", summary: "skipped: no new conversation since the last capture" };
+    const lastAt = Date.parse(activity.lastAt ?? "");
+    if (Number.isFinite(lastAt) && started.getTime() - lastAt < limits.captureQuietMs)
+      return { status: "skipped", summary: `deferred: conversation active in the last ${Math.round(limits.captureQuietMs / 60_000)} min` };
+  }
   const documentsBefore = snapshotDocuments(deps.home);
   const reads = new Map<string, Evidence>((batch?.records ?? []).map(e => [e.id, e]));
 

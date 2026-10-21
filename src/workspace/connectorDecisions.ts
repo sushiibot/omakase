@@ -39,7 +39,8 @@ export class ConnectorDecisions {
   private async scan(server: { id: string; url: string }, tools: Tool[]): Promise<Set<string>> {
     const models = decisionModels(this.config.memoryReviewModel);
     const now = Date.now();
-    this.cache = Object.fromEntries(Object.entries(this.cache).filter(([, v]) => now - v.at < 30 * 86400_000).slice(-2000));
+    // A verdict holds for the tool's exact definition, which is the key: only a new or changed tool is scanned again.
+    this.cache = Object.fromEntries(Object.entries(this.cache).slice(-2000));
     const items = tools.filter(t => t.annotations?.readOnlyHint === undefined).map(tool => ({
       tool, key: createHash("sha256").update(JSON.stringify([POLICY, server, tool])).digest("hex"),
     }));

@@ -511,7 +511,8 @@ export class ConnectorManager {
   async reviewDescription(input: Record<string, unknown>): Promise<unknown> {
     if (typeof input.serverId !== "string" || typeof input.tool !== "string") throw new ConnectorError("Invalid MCP call.");
     const { s, tool } = await this.selected(input.serverId, input.tool);
-    return { server: s.name, url: s.url, name: tool.name, description: tool.description, inputSchema: tool.inputSchema, annotations: tool.annotations };
+    const readOnly = (await this.eligible(s, [tool])).has(tool.name);
+    return { server: s.name, url: s.url, name: tool.name, description: tool.description, inputSchema: tool.inputSchema, annotations: tool.annotations, readOnly };
   }
 
   extensionFor(currentRunId: () => string | null = () => null, readOnly = false): ExtensionFactory {

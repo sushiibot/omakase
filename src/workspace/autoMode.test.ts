@@ -352,6 +352,22 @@ test("draft review includes the gateway account identity and purpose", async () 
   expect(h.prompts[0]?.system).toContain("Oak Street maintenance");
 });
 
+test("an MCP tool classified read-only skips the per-call judge unless the owner set restrictions", async () => {
+  const readOnly = async () => ({ name: "search_email", description: "Search mail", readOnly: true });
+  const h = harness({ integrationsOnly: true, describeCall: readOnly, reviewPolicy: async () => "" });
+  expect(await h.call("mcp_call_tool", { serverId: "s", tool: "search_email", arguments: { q: "lease" } })).toBeUndefined();
+  expect(h.prompts).toHaveLength(0);
+  expect(h.logs[0]?.obj).toMatchObject({ verdict: "allow", source: "rule" });
+
+  const restricted = harness({ integrationsOnly: true, describeCall: readOnly, reviewPolicy: async () => "Never read bank email", completions: [verdict("allow")] });
+  await restricted.call("mcp_call_tool", { serverId: "s", tool: "search_email", arguments: { q: "lease" } });
+  expect(restricted.prompts[0]?.system).toContain("Never read bank email");
+
+  const write = harness({ integrationsOnly: true, describeCall: async () => ({ name: "send_email", readOnly: false }), reviewPolicy: async () => "", completions: [verdict("allow")] });
+  await write.call("mcp_call_tool", { serverId: "s", tool: "send_email", arguments: {} });
+  expect(write.prompts).toHaveLength(1);
+});
+
 test("the classifier receives tool semantics without treating descriptions as authorization", async () => {
   const h = harness({ description: "List configured integrations; action=remove disconnects one.", completions: [verdict("allow")] });
   await h.call("custom_reader", { action: "list" });

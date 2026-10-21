@@ -106,6 +106,21 @@ test("capture skips busy conversations and does not repeatedly curate a full pro
   expect(calls).toBe(1);
 });
 
+test("capture waits for a new owner conversation to go quiet", async () => {
+  let calls = 0;
+  const d = deps(async () => { calls++; return { text: proposal(index.search("cannellini").results[0]!.id), model: "fake" }; });
+  d.now = () => new Date("2026-10-12T10:10:00Z");
+  expect((await runConsolidation(d, { capture: true })).summary).toContain("conversation active");
+  d.now = () => new Date("2026-10-12T12:00:00Z");
+  expect((await runConsolidation(d, { capture: true })).status).toBe("applied");
+  // Tool-only activity (a subagent or a wake-up, no owner turn) waits for the nightly run.
+  writeFileSync(join(agent, "chat/other.jsonl"), [{ type: "session" },
+    { type: "message", timestamp: "2026-10-12T10:30:00Z", message: { role: "toolResult", toolName: "browser", content: "Order shipped." } },
+  ].map(e => JSON.stringify(e)).join("\n") + "\n");
+  expect((await runConsolidation(d, { capture: true })).summary).toContain("no new conversation");
+  expect(calls).toBe(1);
+});
+
 test("an index rebuild does not strand new evidence behind an old cursor", async () => {
   const d = deps(async () => ({ text: proposal(index.search("cannellini").results[0]!.id), model: "fake" }));
   expect((await runConsolidation(d)).status).toBe("applied");
