@@ -13,6 +13,13 @@ The workspace persists across conversations, so the agent can build on previous 
 
 Chat, tasks, and memory on mobile. These screenshots use fictional data from the development preview.
 
+<p>
+  <img src="docs/screenshots/mobile-compare-dark.png" width="250" alt="Mobile chat reply comparing three Kyoto hotels in a table, with Gion House marked as the pick" />
+  <img src="docs/screenshots/mobile-compare-scrolled-dark.png" width="250" alt="The same hotel comparison scrolled sideways to show the third hotel" />
+</p>
+
+Replies can include rich blocks such as comparisons. On a phone, a wide table scrolls sideways as a whole.
+
 Omakase stores conversations, files, and memory on your infrastructure.
 You can inspect that data and change how the agent uses it.
 It still uses external LLM providers, including through OpenRouter, which receive the prompts and context sent to their models.

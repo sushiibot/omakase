@@ -143,6 +143,37 @@ function history(now: number, id: string, title: string): WebHistoryItem[] {
 				files: []
 			},
 			{
+				type: 'user',
+				id: 'trip-u2',
+				at: iso(now, 50),
+				text: 'Which of the three hotels for the Kyoto nights?',
+				attachments: []
+			},
+			{
+				type: 'assistant',
+				id: 'trip-a3',
+				at: iso(now, 46),
+				text: [
+					'The ryokan, if the onsen matters. Gion House is the pick for walking everywhere.',
+					'',
+					'```compare',
+					'title: Kyoto, Oct 9–12',
+					'options:',
+					'  - { name: Ryokan Hanaya, note: "¥38,000/night" }',
+					'  - { name: Gion House, note: "¥24,000/night", pick: true }',
+					'  - { name: Hotel Kawaramachi, note: "¥19,000/night" }',
+					'rows:',
+					'  - { label: Free cancel until, values: [Oct 6, Oct 7, Oct 8] }',
+					'  - { label: Breakfast, values: [Kaiseki in room, true, false] }',
+					'  - { label: Onsen, values: [true, false, false] }',
+					'  - { label: Walk to Gion, values: [25 min, 3 min, 10 min] }',
+					'  - { label: Nearest station, values: [Kurama-guchi, Gion-Shijō, Kawaramachi] }',
+					'```'
+				].join('\n'),
+				tools: [{ name: 'read_page', summary: 'Compared the three booking pages', ok: true }],
+				files: []
+			},
+			{
 				type: 'assistant',
 				id: 'trip-a2',
 				at: iso(now, 38),
