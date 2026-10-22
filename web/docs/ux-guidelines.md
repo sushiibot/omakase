@@ -258,7 +258,7 @@ A link to a message is `<conversation path>?m=<message id>`; [docs/message-links
 - **No horizontal page scroll at 320px, whatever the content.** Why: WCAG 1.4.10 Reflow. Check: `pw` reflow assertion at 320 and 412.
 - **Code blocks scroll horizontally inside their own box, keep a Copy button (`icon-sm` with the coarse-pointer hit area) in view, and never wrap code silently.** `CodeBlock` shows Copy on hover or focus with a fine pointer and always on touch. Why: wrapped code is wrong code; page-level overflow breaks the layout. Check: `shot` with a 200-column line.
 - **Long URLs, paths, message-ids and hashes use `break-all` or `overflow-wrap: anywhere`.** Why: one long token otherwise widens the page. Check: `pw` reflow with the long-content fixture.
-- **Tables in replies scroll inside a wrapper, with the first column sticky if it's wider than the screen.** Why: tables can't reflow. Check: `shot`.
+- **Tables in replies scroll inside a wrapper; the first column is sticky only when the wrapper is at least `@2xl` wide.** Why: tables can't reflow, and on a phone a pinned column takes the width the other columns need. Check: `shot`.
 - **Messages over about 40 lines collapse with "Show all (N lines)".** Why: one giant reply shouldn't push the conversation off-screen. Check: `shot`.
 - **Diffs use `--add`/`--del` backgrounds plus a `+`/`−` gutter, not color alone.** Why: WCAG 1.4.1 Use of Color. Check: `shot` in dark.
 

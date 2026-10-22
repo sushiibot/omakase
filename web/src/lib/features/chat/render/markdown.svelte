@@ -235,7 +235,7 @@
 				</ul>
 			{/if}
 		{:else if node.kind === 'table'}
-			<div class="max-w-full overflow-x-auto rounded-lg border">
+			<div class="@container/table max-w-full overflow-x-auto rounded-lg border">
 				<table class="w-max min-w-full border-collapse text-sm">
 					<thead>
 						<tr>
@@ -244,7 +244,7 @@
 									class={[
 										'border-b bg-muted px-2.5 py-1.5 font-semibold',
 										alignClass[node.align[j] ?? 'left'],
-										j === 0 && 'sticky left-0'
+										j === 0 && '@2xl/table:sticky @2xl/table:left-0'
 									]}
 									>{@render inlines(cell)}{#if cell === caretAt}{@render caret()}{/if}</th
 								>
@@ -259,7 +259,7 @@
 										class={[
 											'border-b px-2.5 py-1.5 align-top',
 											alignClass[node.align[j] ?? 'left'],
-											j === 0 && 'sticky left-0 bg-background'
+											j === 0 && 'bg-background @2xl/table:sticky @2xl/table:left-0'
 										]}
 										>{@render inlines(cell)}{#if cell === caretAt}{@render caret()}{/if}</td
 									>

@@ -5,16 +5,20 @@
 	import type { RichData } from './blocks';
 	import Frame from './frame.svelte';
 
-	// Options side by side. Scrolls inside its box like a markdown table; the label column stays put.
+	// Options side by side. Scrolls inside its box like a markdown table; the label column stays put only
+	// when the box is wide, since on a phone a pinned column eats the room the values need. The shadow
+	// covers the box's bleed padding so scrolled values don't show to the left of the pinned label.
 	let { data }: { data: RichData<'compare'> } = $props();
+	const pinned =
+		'bg-card @2xl/table:sticky @2xl/table:left-0 @2xl/table:shadow-[-1rem_0_var(--color-card)]';
 </script>
 
 <Frame title={data.title}>
-	<div class="-mx-4 max-w-none overflow-x-auto px-4">
+	<div class="@container/table -mx-4 max-w-none overflow-x-auto px-4">
 		<table class="w-full min-w-max border-collapse text-sm">
 			<thead>
 				<tr>
-					<th class="sticky left-0 bg-card"><span class="sr-only">Attribute</span></th>
+					<th class={pinned}><span class="sr-only">Attribute</span></th>
 					{#each data.options as option, i (i)}
 						<th
 							scope="col"
@@ -39,7 +43,7 @@
 					<tr class="border-t">
 						<th
 							scope="row"
-							class="sticky left-0 bg-card py-2 pr-3 text-left text-xs font-normal text-muted-foreground"
+							class={[pinned, 'py-2 pr-3 text-left text-xs font-normal text-muted-foreground']}
 							>{row.label}</th
 						>
 						{#each row.values as value, i (i)}
