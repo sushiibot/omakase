@@ -228,6 +228,7 @@ export function deliveryView(p: ChatDeliverParams, toolCount: number | null = nu
       ...(p.files?.length ? { files: p.files } : {}),
       ...(p.job ? { job: p.job } : {}),
       ...(p.job && p.items?.length ? { items: p.items } : {}),
+      ...(p.maintenance ? { maintenance: p.maintenance } : {}),
     },
   };
 }

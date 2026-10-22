@@ -11,6 +11,8 @@ export type PushEvent =
   | { kind: "auth" }
   /** `key` is the message's outbox id, which its link lands on. */
   | { kind: "reply" | "proactive"; text: string; key?: string }
+  /** A new calendar proposal; the push opens its review. */
+  | { kind: "maintenance"; id: string; title: string }
   | { kind: "inbox"; key: string; text: string }
   | { kind: "alert"; alert: Pick<JobAlert, "job" | "error"> & { kind: "failed" | "stuck" } }
   /** Replaces the job's failure notification in the tray, silently. */
@@ -44,6 +46,8 @@ export function pushFor(event: PushEvent, conversationId = "main"): PushPayload 
       return { title: TITLE, body: plainPushBody(event.text) || "Sent a file", url: messageUrl(conversationId, event.key), tag: "chat", renotify: false };
     case "proactive":
       return { title: TITLE, body: plainPushBody(event.text) || "Sent a file", url: messageUrl(conversationId, event.key), tag: "chat" };
+    case "maintenance":
+      return { title: "Calendar update ready", body: literalPushBody(event.title), url: `/assistant/updates/${event.id}`, tag: `maintenance:${event.id}`, renotify: false };
     case "inbox":
       return { title: TITLE, body: plainPushBody(event.text), url: `/inbox?item=${encodeURIComponent(`msg:${event.key}`)}`, tag: `msg:${event.key}` };
     case "alert": {

@@ -2936,6 +2936,18 @@ describe("history markers", () => {
     expect(markers(sessions[0]!).length).toBe(1);
   });
 
+  test("maintenance delivery retains its stable identity and review reference on resend", async () => {
+    const { host, transport } = setup();
+    await host.start();
+    const id = "00000000-0000-4000-8000-000000000001";
+    host.deliverMaintenance({ id, eventTitle: "Friday show" });
+    await sleep(10);
+    host.resendUnacked();
+    await sleep(10);
+    expect(transport.delivered()).toHaveLength(2);
+    for (const entry of transport.delivered()) expect(entry).toMatchObject({ outboxId: `maintenance-${id}`, maintenance: { id, title: "Friday show" }, kind: "proactive" });
+  });
+
   test("a job message carries its job, unless the name is outside the contract", async () => {
     const { host, transport } = setup();
     await host.start();

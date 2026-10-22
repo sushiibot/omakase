@@ -1544,6 +1544,18 @@ export class PersonalSession {
     this.delivery.send(entry);
   }
 
+  /** Stable delivery identity lets a proposal replay safely across a crash between the two stores. */
+  deliverMaintenance(proposal: { id: string; eventTitle: string }): void {
+    const entry: ChatDeliverParams = {
+      outboxId: `maintenance-${proposal.id}`, principalId: this.opts.principalId,
+      kind: "proactive", text: `A calendar update is ready to review. [Review update](/assistant/updates/${proposal.id})`,
+      maintenance: { id: proposal.id, title: proposal.eventTitle.slice(0, 2000) },
+    };
+    this.outbox.append(entry);
+    this.markDelivery(entry, false);
+    this.delivery.send(entry);
+  }
+
   /** A scheduled job's alert: structured when the bot accepts `alert`, else its text as a proactive message. */
   deliverAlert(alert: JobAlertWire, text: string): void {
     const entry: ChatDeliverParams = { outboxId: this.newId(), principalId: this.opts.principalId, kind: "alert", text, alert };

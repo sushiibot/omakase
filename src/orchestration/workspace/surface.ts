@@ -63,6 +63,8 @@ export interface ReplyView {
   job?: DeliverJob;
   /** On a job's message: its items, each with replies to tap; `text` already renders them. */
   items?: JobItem[];
+  /** On a new calendar proposal: its review page, which the push opens instead of the chat. */
+  maintenance?: { id: string; title: string };
 }
 
 export interface ToolConfirmation {

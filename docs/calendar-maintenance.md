@@ -43,3 +43,5 @@ Current limits:
 Tests cover provider argument construction, source verification, participants, duplicate decisions, stale edits, pause races, restart recovery, and conditional Undo.
 Browser tests cover the full owner flow, native history, phone and desktop layouts, and accessibility.
 Live validation reads connector metadata only. Test writes use fake providers, never personal calendar events.
+
+New pending proposals enqueue a PWA notification through the workspace delivery outbox. The proposal ID supplies a stable delivery ID and notification tag, so an interrupted enqueue or delivery can replay without creating a second notification. Pending, unexpired proposals whose enqueue failed are retried on restart and subsequent reviews. The gateway uses the existing presence suppression and push subscriptions. Opening the review page clears that device’s notification. Provider push failures retain the existing best-effort push behavior; the proposal and chat review link remain available.

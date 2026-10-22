@@ -713,10 +713,12 @@ export const chatDeliverParams = z
     job: deliverJob.optional(),
     // kind "proactive" with job: the message as separate items with replies to tap; `text` renders them all.
     items: z.array(jobItem).min(1).max(JOB_ITEMS_MAX).optional(),
+    maintenance: z.object({ id: z.string().uuid(), title: z.string().max(2000) }).optional(),
   })
   .refine((p) => (p.kind === "session") === (p.session !== undefined), { message: 'kind "session" needs session, and only it may carry one', path: ["session"] })
   .refine((p) => (p.kind === "ask_resolved") === (p.askResolution !== undefined), { message: 'kind "ask_resolved" needs askResolution, and only it may carry one', path: ["askResolution"] })
   .refine((p) => (p.kind === "alert") === (p.alert !== undefined), { message: 'kind "alert" needs alert, and only it may carry one', path: ["alert"] })
+  .refine((p) => p.maintenance === undefined || (p.kind === "proactive" && p.job === undefined), { message: "maintenance must be a standalone proactive delivery", path: ["maintenance"] })
   .refine((p) => p.job === undefined || p.kind === "proactive", { message: 'only kind "proactive" may carry job', path: ["job"] })
   .refine((p) => p.items === undefined || p.job !== undefined, { message: "only a job's message may carry items", path: ["items"] });
 export type ChatDeliverParams = z.infer<typeof chatDeliverParams>;

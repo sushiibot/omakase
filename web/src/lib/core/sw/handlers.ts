@@ -72,6 +72,13 @@ const ROUTES: Route[] = [
 		query: { ...conversationQuery, view: (v) => v === 'conversation' },
 		alongside: 'view'
 	},
+	// A calendar proposal's review, opened from its notification.
+	{
+		path: (p) =>
+			/^\/assistant\/updates\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+				p
+			)
+	},
 	{ path: at('/more') },
 	{ path: at('/settings') },
 	{ path: at('/runs') },

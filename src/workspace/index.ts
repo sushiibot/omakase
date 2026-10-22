@@ -254,6 +254,7 @@ async function main(): Promise<void> {
   });
   reauth = new ReauthNotifier({ stateDir: config.stateDir, deliver: (d) => personal.deliverOutOfBand(d), suppressed: () => authLogin.isPending });
   await personal.start();
+  maintenance.setNotifier(proposal => personal.deliverMaintenance(proposal));
   personalRef = personal;
   const commands = commandHandlers({
     principalId: config.principalId,
