@@ -304,8 +304,19 @@ test('on Home a drag that starts on a row reveals channels, and a tap still open
 }) => {
 	await fixtureApp(context);
 	await page.goto('/assistant');
-	const row = page.locator('[data-assistant-home] a[href]').first();
-	await expect(row).toBeVisible();
+	const rows = page.locator('[data-assistant-home] a[href]');
+	await expect(rows.first()).toBeVisible();
+	// Home fills in from more than one feed and re-sorts its rows as each lands.
+	const order = async () =>
+		(await rows.evaluateAll((els) => els.map((a) => a.getAttribute('href')))).join();
+	await expect
+		.poll(async () => {
+			const before = await order();
+			await page.waitForTimeout(250);
+			return before === (await order());
+		})
+		.toBe(true);
+	const row = rows.first();
 	const box = (await row.boundingBox())!;
 	const y = box.y + box.height / 2;
 	const menu = page.getByRole('dialog', { name: 'Menu', exact: true });
