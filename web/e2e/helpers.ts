@@ -187,6 +187,14 @@ export async function horizontalOverflow(page: Page) {
 		const describe = (el: Element) =>
 			`${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}.${[...el.classList].slice(0, 4).join('.')}`;
 		const offenders: string[] = [];
+		// Text cut off with an ellipsis is clipped by its truncating ancestor on purpose.
+		const truncated = (el: Element) => {
+			for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+				const s = getComputedStyle(a);
+				if (s.textOverflow === 'ellipsis' && s.overflowX !== 'visible') return true;
+			}
+			return false;
+		};
 		const scroller = document.scrollingElement;
 		if (scroller && scroller.scrollWidth > scroller.clientWidth) offenders.push('document scrolls');
 		for (const el of document.body.querySelectorAll('*')) {
@@ -199,18 +207,20 @@ export async function horizontalOverflow(page: Page) {
 				el.closest('[data-tab-strip]') ||
 				el.closest(
 					'[data-shell][data-workspace-pane]:not([data-workspace-pane="chat"]) [data-chat-surface]'
-				)
+				) ||
+				// Tables scroll sideways inside their own box on purpose, which clips what they hold.
+				el.parentElement?.closest('[data-scroll-x]')
 			)
 				continue;
 			const style = getComputedStyle(el);
 			const r = el.getBoundingClientRect();
 			// Visually hidden text is clipped to 1px on purpose.
 			if (r.width <= 1 && style.overflowX !== 'visible') continue;
-			if (r.width > 0 && (r.right > width + 0.5 || r.left < -0.5)) {
+			if (r.width > 0 && (r.right > width + 0.5 || r.left < -0.5) && !truncated(el)) {
 				offenders.push(`${describe(el)} spans ${Math.round(r.left)}..${Math.round(r.right)}`);
 			}
 			const scrollsX = style.overflowX === 'auto' || style.overflowX === 'scroll';
-			if (scrollsX && el.scrollWidth > el.clientWidth) {
+			if (scrollsX && el.scrollWidth > el.clientWidth && !el.matches('[data-scroll-x]')) {
 				offenders.push(`${describe(el)} scrolls ${el.scrollWidth}/${el.clientWidth}`);
 			}
 		}

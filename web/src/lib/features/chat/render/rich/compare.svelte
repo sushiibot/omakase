@@ -14,7 +14,15 @@
 </script>
 
 <Frame title={data.title}>
-	<div class="@container/table -mx-4 max-w-none overflow-x-auto px-4">
+	<!-- tabindex: the options scroll sideways inside the box, so keyboard users need to reach it. -->
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+	<div
+		data-scroll-x
+		tabindex="0"
+		role="group"
+		aria-label={data.title ?? 'Comparison'}
+		class="@container/table -mx-4 max-w-none overflow-x-auto px-4 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+	>
 		<table class="w-full min-w-max border-collapse text-sm">
 			<thead>
 				<tr>

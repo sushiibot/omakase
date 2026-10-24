@@ -235,7 +235,15 @@
 				</ul>
 			{/if}
 		{:else if node.kind === 'table'}
-			<div class="@container/table max-w-full overflow-x-auto rounded-lg border">
+			<!-- tabindex: a wide table scrolls sideways inside its box, so keyboard users need to reach it. -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<div
+				data-scroll-x
+				tabindex="0"
+				role="group"
+				aria-label="Table"
+				class="@container/table max-w-full overflow-x-auto rounded-lg border outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+			>
 				<table class="w-max min-w-full border-collapse text-sm">
 					<thead>
 						<tr>
