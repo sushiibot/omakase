@@ -1,10 +1,10 @@
 import { createDecipheriv, createECDH, hkdfSync, randomBytes, randomUUID } from "node:crypto";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, nonce, stack, test, type CapturedPush } from "../lib/harness.ts";
 
 /** RFC 8291 aes128gcm, decrypted with the subscription's own keys. */
-function decrypt(push: CapturedPush, ua: ReturnType<typeof createECDH>, auth: Buffer): unknown {
+function decrypt(push: CapturedPush, ua: ReturnType<typeof createECDH>, auth: Buffer): { tag?: string; url?: string } {
   const body = Buffer.from(push.body, "base64");
   const salt = body.subarray(0, 16);
   const idlen = body[20]!;
@@ -35,22 +35,33 @@ test("a durable proposal delivery pushes its review link once across workspace r
   expect((await request.post("/api/push/subscribe", { headers, data: { endpoint, keys } })).status()).toBe(200);
   const id = randomUUID();
   const entry = { outboxId: `maintenance-${id}`, principalId: "owner", kind: "proactive", text: `Review update: /assistant/updates/${id}`, maintenance: { id, title: "Friday show" } };
-  const enqueue = () => appendFileSync(join(stack.wsState, "outbox.jsonl"), JSON.stringify({ type: "entry", entry }) + "\n");
-  const ours = async () => (await stack.pushes()).filter(p => p.endpoint === endpoint);
+  const outbox = join(stack.wsState, "outbox.jsonl");
+  const enqueue = () => appendFileSync(outbox, JSON.stringify({ type: "entry", entry }) + "\n");
+  const acknowledged = () => readFileSync(outbox, "utf8").trim().split("\n").filter(Boolean)
+    .map(line => JSON.parse(line)).some(line => line.type === "ack" && line.outboxId === entry.outboxId);
+  const expected = { title: "Calendar update ready", body: "Friday show", url: `/assistant/updates/${id}`, tag: `maintenance:${id}`, renotify: false };
+  // The stack is shared: earlier chat replies can finish their read-receipt wait after we subscribe.
+  // Count every push for this proposal, including one with an incorrect tag or review URL.
+  const ours = async () => (await stack.pushes()).filter(p => p.endpoint === endpoint)
+    .map(push => decrypt(push, ua, auth)).filter(push => push.tag === expected.tag || push.url === expected.url);
   try {
     // Seed the durable queue, then exercise the real workspace, gateway, and encrypted web push.
     enqueue();
     await stack.restartWorkspace({ crash: true });
-    await expect.poll(async () => (await ours()).length).toBe(1);
-    expect(decrypt((await ours())[0]!, ua, auth)).toMatchObject({ title: "Calendar update ready", url: `/assistant/updates/${id}`, tag: `maintenance:${id}`, renotify: false });
+    await expect.poll(ours).toEqual([expected]);
+    await expect.poll(acknowledged).toBe(true);
     // Simulate a crash after gateway acceptance but before the proposal recorded enqueue success.
     enqueue();
     await stack.restartWorkspace({ crash: true });
+    // Startup compacts the old acknowledgement away; this one proves the replay was handled.
+    await expect.poll(acknowledged).toBe(true);
     const rows = await stack.query("select seq from web_events where type = 'proactive' and json_extract(data, '$.key') = ?", entry.outboxId);
     expect(rows).toHaveLength(1);
-    expect(await ours()).toHaveLength(1);
+    // Cover the gateway's eight-second read-receipt window before ruling out a delayed duplicate.
+    await new Promise(resolve => setTimeout(resolve, 10_000));
+    expect(await ours()).toEqual([expected]);
     expect(await watch.violations()).toEqual([]);
   } finally {
-    await request.post("/api/push/unsubscribe", { headers, data: { endpoint } });
+    expect((await request.delete("/api/push/subscribe", { headers, data: { endpoint } })).status()).toBe(200);
   }
 });
