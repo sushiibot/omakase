@@ -220,7 +220,7 @@ Recent proactive messages remain in its context for 24 hours to help prevent rep
 Connectors must already be connected in the owner app.
 
 The default schedule runs every 120 minutes, from 08:00 to 22:00 in the workspace timezone, independently of chat activity.
-`WORKSPACE_HEARTBEAT_EVERY` controls the interval; `off` disables heartbeat. `WORKSPACE_HEARTBEAT_ACTIVE` controls active hours.
+`WORKSPACE_HEARTBEAT_EVERY` controls the interval; `off` disables heartbeat. `WORKSPACE_HEARTBEAT_ACTIVE` controls active hours. While the owner is idle, each heartbeat that sends nothing doubles the gap to the next one, up to 8 hours; an owner message or a sent heartbeat resets it.
 The shared default limit is six proactive messages per day. Runs stop when that limit is reached.
 A run with nothing useful to report returns `NO_REPLY` and sends no message.
 

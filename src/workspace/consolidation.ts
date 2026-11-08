@@ -96,6 +96,16 @@ interface ConsolidationState {
   lastRejected?: { fingerprint: string; at: string; count: number; outcome?: "rejected" | "over_cap" };
   /** An open reviewer outage: consecutive failed review calls, whatever the inputs. A successful review clears it. */
   reviewOutage?: ReviewOutage;
+  /** What the last capture attempt saw, so a backlog or a failed run doesn't re-trigger capture on every tick. */
+  capture?: CaptureMark;
+}
+
+interface CaptureMark {
+  generation: string;
+  /** The newest evidence sequence at the attempt. */
+  seq: number;
+  /** The daily-note sizes pending at the attempt. */
+  notes: string;
 }
 
 interface ReviewOutage {
@@ -149,6 +159,8 @@ function readState(stateDir: string): ConsolidationState {
       ? { reviewOutage: { since: outage.since, lastAt: outage.lastAt, failures: outage.failures, alertedAt: String(outage.alertedAt ?? outage.since), error: String(outage.error ?? "unknown"),
         ...(typeof outage.reviewer === "string" ? { reviewer: outage.reviewer } : {}) } }
       : {}),
+    ...(s?.capture && typeof s.capture.generation === "string" && Number.isInteger(s.capture.seq) && typeof s.capture.notes === "string"
+      ? { capture: { generation: s.capture.generation, seq: s.capture.seq, notes: s.capture.notes } } : {}),
   };
 }
 
@@ -655,11 +667,23 @@ export async function runConsolidation(deps: ConsolidationDeps, opts: { force?: 
   // Capture runs only for a new owner conversation that has gone quiet; tool-only, subagent or wake-up activity
   // waits for the nightly run.
   if (opts.capture && !opts.force && deps.evidence) {
-    const activity = deps.evidence.activity(cursor);
-    if (!pending.newBytes && !activity.ownerTurns) return { status: "skipped", summary: "skipped: no new conversation since the last capture" };
+    const mark: CaptureMark = { generation: deps.evidence.generation, seq: deps.evidence.latestSequence(), notes: JSON.stringify(pending.chunks.map((c) => [c.file, c.endOffset])) };
+    const seen = state.capture?.generation === mark.generation ? state.capture : undefined;
+    // A first run or a rebuilt index counts everything already indexed as seen; the nightly run drains that backlog.
+    if (!seen) {
+      state.capture = mark;
+      writeState(deps.stateDir, state);
+      return { status: "skipped", summary: "skipped: capture baseline recorded; the nightly run handles older evidence" };
+    }
+    const activity = deps.evidence.activity(Math.max(cursor, seen.seq));
+    const newNotes = pending.newBytes > 0 && mark.notes !== seen.notes;
+    if (!newNotes && !activity.ownerTurns) return { status: "skipped", summary: "skipped: no new conversation since the last capture" };
     const lastAt = Date.parse(activity.lastAt ?? "");
     if (Number.isFinite(lastAt) && started.getTime() - lastAt < limits.captureQuietMs)
       return { status: "skipped", summary: `deferred: conversation active in the last ${Math.round(limits.captureQuietMs / 60_000)} min` };
+    // Marked before the model call: a failed run waits for new conversation or the nightly run, not the next tick.
+    state.capture = mark;
+    writeState(deps.stateDir, state);
   }
   const documentsBefore = snapshotDocuments(deps.home);
   const reads = new Map<string, Evidence>((batch?.records ?? []).map(e => [e.id, e]));

@@ -250,6 +250,8 @@ export interface PromptJobDeps {
   now?: () => Date;
   /** The heartbeat's daily TASKS.md stale review, run before its prompt. */
   review?: () => Promise<unknown>;
+  /** When the owner last wrote; without it the heartbeat never backs off. */
+  ownerActiveAt?: () => Promise<string | null>;
 }
 
 /**
@@ -314,15 +316,55 @@ export function createPromptJob(spec: PromptJobSpec, deps: PromptJobDeps): Sched
   };
 }
 
+/** The longest gap an idle heartbeat backs off to; it never stops, so connected sources are still checked. */
+export const HEARTBEAT_MAX_BACKOFF_MINUTES = 480;
+
+interface HeartbeatBackoff {
+  lastRunAt: string;
+  /** Consecutive model runs that sent nothing, with no owner turn since the previous one. */
+  quiet: number;
+}
+
+/** The base interval doubled per quiet run, capped at HEARTBEAT_MAX_BACKOFF_MINUTES (or the base, if longer). */
+export function heartbeatGapMs(baseMinutes: number, quiet: number): number {
+  return Math.min(baseMinutes * 2 ** Math.min(quiet, 16), Math.max(baseMinutes, HEARTBEAT_MAX_BACKOFF_MINUTES)) * 60_000;
+}
+
+function readBackoff(stateDir: string): HeartbeatBackoff | null {
+  const s = readJson<Partial<HeartbeatBackoff>>(join(stateDir, "heartbeat-backoff.json"));
+  return s && typeof s.lastRunAt === "string" && Number.isInteger(s.quiet) ? { lastRunAt: s.lastRunAt, quiet: s.quiet! } : null;
+}
+
 export function createHeartbeatJob(schedule: JobSchedule, deps: PromptJobDeps): ScheduledJob {
   // Built per run, so a name changed in the app reaches the next heartbeat.
   const job = () => createPromptJob({ name: HEARTBEAT_JOB, prompt: heartbeatPrompt(deps.config.ownerName), schedule }, deps);
   const review = deps.review;
+  const baseMinutes = schedule.when.kind === "every" ? schedule.when.minutes : null;
+  const path = join(deps.config.stateDir, "heartbeat-backoff.json");
   return {
     ...job(),
     run: async (ctx) => {
       if (review) await review().catch((err) => log.warn({ err }, "the TASKS.md stale review failed"));
-      return job().run(ctx);
+      if (baseMinutes === null || !deps.ownerActiveAt) return job().run(ctx);
+      const now = deps.now?.() ?? new Date();
+      const last = readBackoff(deps.config.stateDir);
+      const ownerAt = Date.parse((await deps.ownerActiveAt().catch(() => null)) ?? "");
+      const quiet = last && !(ownerAt > Date.parse(last.lastRunAt)) ? last.quiet : 0;
+      if (!ctx.force && last && quiet > 0) {
+        const nextAt = Date.parse(last.lastRunAt) + heartbeatGapMs(baseMinutes, quiet);
+        if (now.getTime() < nextAt) return { status: "skipped", summary: `idle backoff after ${quiet} quiet run(s); next check after ${new Date(nextAt).toISOString()}` };
+      }
+      const record = (sent: boolean) => writeFileAtomic(path, `${JSON.stringify({ lastRunAt: now.toISOString(), quiet: sent ? 0 : quiet + 1 } satisfies HeartbeatBackoff)}\n`);
+      let outcome: JobOutcome;
+      try {
+        outcome = await job().run(ctx);
+      } catch (err) {
+        record(false);
+        throw err;
+      }
+      // A rate-limited run that never reached the model is not a check.
+      if (outcome.status !== "rate_limited" || outcome.runId) record(outcome.status === "sent");
+      return outcome;
     },
   };
 }
@@ -360,6 +402,7 @@ export interface ProactiveWiring {
   onScheduleChange?: () => void;
   /** Builds the heartbeat's daily stale review from the shared proactive limiter. */
   review?: (limiter: ProactiveLimiter) => () => Promise<unknown>;
+  ownerActiveAt?: () => Promise<string | null>;
   /** Test seams. */
   runner?: PromptJobDeps["runner"];
   now?: () => Date;
@@ -386,7 +429,7 @@ export function wireProactiveJobs(scheduler: Scheduler, w: ProactiveWiring): voi
     ...(w.runner ? { runner: w.runner } : {}),
     ...(w.now ? { now: w.now } : {}),
   };
-  if (w.config.heartbeat) scheduler.register(createHeartbeatJob(w.config.heartbeat, { ...deps, ...(w.review ? { review: w.review(limiter) } : {}) }));
+  if (w.config.heartbeat) scheduler.register(createHeartbeatJob(w.config.heartbeat, { ...deps, ...(w.review ? { review: w.review(limiter) } : {}), ...(w.ownerActiveAt ? { ownerActiveAt: w.ownerActiveAt } : {}) }));
   const file = new ScheduleFile(join(w.config.home, "schedule.md"), {
     reserved: RESERVED_JOB_NAMES,
     warn: (error) => log.warn({ error }, "skipped a schedule.md entry"),

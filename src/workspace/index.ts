@@ -318,6 +318,7 @@ async function main(): Promise<void> {
   scheduler.register({ name: "memory-capture", schedule: { when: { kind: "every", minutes: 5 } }, maxRunMs: 60 * 60_000, run: runMemory });
   wireProactiveJobs(scheduler, {
     maintenance,
+    ownerActiveAt: async () => { await evidence.refresh(); return evidence.lastOwnerTurnAt(); },
     evidenceTools: () => connectors.readOnlyTools(),
     describeMcpCall: (input) => connectors.reviewDescription(input),
     connectedSources: async () => JSON.stringify(await connectors.discoverReadOnly()),

@@ -13,6 +13,7 @@ import {
   heartbeatPrompt,
   ProactiveLimiter,
   createHeartbeatJob,
+  heartbeatGapMs,
   createPromptJob,
   isNoReply,
   parseJobItems,
@@ -22,7 +23,7 @@ import {
   type PromptJobDeps,
 } from "./proactive.ts";
 import { RunLog } from "./runLog.ts";
-import { Scheduler, readJobIndex, readSchedulerState, requestRun, type JobSchedule } from "./scheduler.ts";
+import { Scheduler, readJobIndex, readSchedulerState, requestRun, type JobContext, type JobSchedule } from "./scheduler.ts";
 
 let root: string;
 let clock: Date;
@@ -298,9 +299,9 @@ describe("rate limits", () => {
     const job = createHeartbeatJob(HEARTBEAT, deps({ config: config({ proactiveDailyCap: 2 }) }));
     await job.run(scheduled);
     clock = new Date("2026-09-29T12:10:00Z");
-    expect((await job.run({ trigger: "manual", force: true })).status).toBe("sent");
+    expect((await job.run({ trigger: "manual" as const, force: true })).status).toBe("sent");
     clock = new Date("2026-09-29T12:20:00Z");
-    expect(await job.run({ trigger: "manual", force: true })).toEqual({ status: "rate_limited", summary: "daily_cap" });
+    expect(await job.run({ trigger: "manual" as const, force: true })).toEqual({ status: "rate_limited", summary: "daily_cap" });
     expect(delivered).toHaveLength(2);
   });
 
@@ -448,4 +449,62 @@ test("calendar observation continues when notification budget is capped, with pr
   expect(runnerCalls[0]!.prompt).toContain("Keep upcoming plans accurate");
   expect(delivered).toHaveLength(0);
   expect(maintenance.view().responsibility.lastReviewAt).not.toBeNull();
+});
+
+describe("heartbeat idle backoff", () => {
+  const H = 60 * 60_000;
+  let ownerAt: string | null;
+  const backoffDeps = () => deps({ ownerActiveAt: async () => ownerAt });
+  const tick = async (hours: number, ctx: JobContext = scheduled) => {
+    clock = new Date(clock.getTime() + hours * H);
+    return createHeartbeatJob(HEARTBEAT, backoffDeps()).run(ctx);
+  };
+  beforeEach(() => { ownerAt = null; clock = new Date("2026-09-29T08:00:00Z"); });
+
+  test("quiet runs double the gap up to the 8 h cap, without calling the model in between", async () => {
+    expect(heartbeatGapMs(120, 1)).toBe(4 * H);
+    expect(heartbeatGapMs(120, 5)).toBe(8 * H);
+    expect(heartbeatGapMs(600, 3)).toBe(10 * H);
+    expect((await tick(0)).status).toBe("no_reply");
+    expect((await tick(2)).status).toBe("skipped");
+    expect((await tick(2)).status).toBe("no_reply");
+    expect((await tick(4)).status).toBe("skipped");
+    expect((await tick(4)).status).toBe("no_reply");
+    expect((await tick(6)).status).toBe("skipped");
+    expect((await tick(2)).status).toBe("no_reply");
+    expect(runnerCalls).toHaveLength(4);
+  });
+
+  test("an owner turn since the last check resets to the base interval", async () => {
+    await tick(0);
+    expect((await tick(2)).status).toBe("skipped");
+    ownerAt = new Date(clock.getTime() - 60_000).toISOString();
+    expect((await tick(0)).status).toBe("no_reply");
+    ownerAt = null;
+    expect((await tick(2)).status).toBe("skipped");
+    expect(runnerCalls).toHaveLength(2);
+  });
+
+  test("a sent message resets the backoff; a failed run counts as quiet", async () => {
+    await tick(0);
+    reply = "Your parcel needs collection.";
+    expect((await tick(4)).status).toBe("sent");
+    reply = "NO_REPLY";
+    expect((await tick(2)).status).toBe("no_reply");
+    const failing = deps({ ownerActiveAt: async () => null, runner: async () => { throw new Error("402"); } });
+    clock = new Date(clock.getTime() + 4 * H);
+    await expect(createHeartbeatJob(HEARTBEAT, failing).run(scheduled)).rejects.toThrow("402");
+    expect((await tick(4)).status).toBe("skipped");
+  });
+
+  test("a manual run bypasses the backoff", async () => {
+    await tick(0);
+    await tick(2);
+    expect((await tick(1, { trigger: "manual" as const, force: true })).status).toBe("no_reply");
+  });
+
+  test("without an owner-activity source the heartbeat keeps its fixed interval", async () => {
+    for (let i = 0; i < 3; i++) await createHeartbeatJob(HEARTBEAT, deps()).run(scheduled);
+    expect(runnerCalls).toHaveLength(3);
+  });
 });

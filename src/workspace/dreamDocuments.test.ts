@@ -32,6 +32,12 @@ function proposal(id: string, curated = user, path = "memory/topics/groceries.md
     ]), DOCUMENTS_END, MARKERS.summaryBegin, "promoted: sourced grocery snapshot", MARKERS.summaryEnd].join("\n");
 }
 
+/** The capture baseline as it stood before the fixture conversation, so that conversation counts as new. */
+function captureBaseline(): void {
+  mkdirSync(join(root, "state"), { recursive: true });
+  writeFileSync(join(root, "state", "consolidation.json"), JSON.stringify({ notes: {}, capture: { generation: index.generation, seq: 0, notes: "[]" } }));
+}
+
 function deps(propose: ConsolidationDeps["propose"]): ConsolidationDeps {
   return { home, stateDir: join(root, "state"), evidence: index, propose, commit: async () => ({ committed: false }), now: () => new Date("2026-10-12T12:00:00Z") };
 }
@@ -94,6 +100,7 @@ test("an unsafe new destination cannot redirect host writes", () => {
 });
 
 test("capture skips busy conversations and does not repeatedly curate a full profile without new activity", async () => {
+  captureBaseline();
   let calls = 0;
   const d = deps(async () => { calls++; return { text: proposal(index.search("cannellini").results[0]!.id), model: "fake" }; });
   d.live = { isIdle: () => false, requestContextReload() {} };
@@ -106,7 +113,9 @@ test("capture skips busy conversations and does not repeatedly curate a full pro
   expect(calls).toBe(1);
 });
 
-test("capture waits for a new owner conversation to go quiet", async () => {
+test("capture records a baseline for existing history, then waits for a new owner conversation to go quiet", async () => {
+  expect((await runConsolidation(deps(async () => { throw new Error("no model call"); }), { capture: true })).summary).toContain("baseline");
+  captureBaseline();
   let calls = 0;
   const d = deps(async () => { calls++; return { text: proposal(index.search("cannellini").results[0]!.id), model: "fake" }; });
   d.now = () => new Date("2026-10-12T10:10:00Z");
