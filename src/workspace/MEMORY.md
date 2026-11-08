@@ -26,7 +26,7 @@ JSONL lines larger than 16 MiB exceed the parser limit. Other records remain sea
 
 ## Background capture and dreaming
 
-`memory-capture` checks for new evidence every five minutes. It runs only after a new owner turn (or new daily notes), once the newest conversation record is 20 minutes old, so one conversation is one pass. Tool-only, subagent and wake-up activity waits for the nightly run. It also skips busy conversations and unchanged inputs. "New" means after the last capture attempt, not after the evidence cursor: an older backlog (including the whole index after a rebuild) and a failed attempt wait for the nightly run instead of re-triggering every tick.
+`memory-capture` checks for new evidence every five minutes. It runs only after a new owner turn (or new daily notes), once the newest conversation record is 20 minutes old, so one conversation is one pass. Tool-only, subagent and wake-up activity waits for the nightly run. It also skips busy conversations and unchanged inputs. "New" means after the last capture attempt, not after the evidence cursor: an older backlog (including the whole index after a rebuild) and a failed attempt wait for the nightly run instead of re-triggering every tick. A session file that is replaced rather than appended to (a rewind, a rewrite, a moved volume) is re-read, but its unchanged records keep their sequence number and evidence ID, so only genuinely new turns become pending and existing citations stay valid.
 `consolidation` also runs at the configured nightly time. Both jobs share one execution lock and review cursor.
 Capture does not repeat nightly task upkeep or run only because a profile approaches its size cap.
 

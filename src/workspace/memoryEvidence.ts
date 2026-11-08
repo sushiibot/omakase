@@ -25,6 +25,7 @@ const MAX_LINE = 16 * 1024 * 1024;
 const hash = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 24);
 export const MEMORY_TOOL_NAMES = ["memory_search", "memory_read"];
 /** Owner-conversation evidence: job sessions (consolidation, heartbeat) never count as activity or backlog. */
+const contentKey = (role: string, at: string, part: number, text: string) => hash(`${role}\0${at}\0${part}\0${text}`);
 const CONVERSATION = "source LIKE 'sessions/%' AND source NOT LIKE 'sessions/job-sessions/%'";
 const OWNER_TURN = "role='user' AND tag IS NOT NULL";
 
@@ -104,7 +105,17 @@ export class MemoryEvidence {
     return this.refreshing;
   }
 
-  private insert(source: string, key: string, role: string, at: string, tag: string | null, raw: string): void {
+  /** Old rows of `source` by content, so a rewritten file's unchanged records keep their seq (consumed or not) and cited id. */
+  private retained(source: string): Map<string, { seq: number; id: string }[]> {
+    const kept = new Map<string, { seq: number; id: string }[]>();
+    for (const r of this.db.query("SELECT seq, id, role, at, part, text FROM evidence WHERE source=? ORDER BY seq").all(source) as { seq: number; id: string; role: string; at: string; part: number; text: string }[]) {
+      const k = contentKey(r.role, r.at, r.part, r.text);
+      kept.set(k, [...(kept.get(k) ?? []), { seq: r.seq, id: r.id }]);
+    }
+    return kept;
+  }
+
+  private insert(source: string, key: string, role: string, at: string, tag: string | null, raw: string, kept?: Map<string, { seq: number; id: string }[]>): void {
     // Redact the complete record before splitting: secrets cannot straddle returned chunks.
     const text = safeText(raw, raw.length + 1);
     if (!text.trim()) return;
@@ -121,6 +132,12 @@ export class MemoryEvidence {
     const parts = chunks.length;
     for (let part = 0; part < parts; part++) {
       const body = chunks[part]!;
+      const prior = kept?.get(contentKey(role, at, part + 1, body))?.shift();
+      if (prior) {
+        this.db.query("INSERT OR IGNORE INTO evidence(seq,id,source,role,at,tag,text,part,parts) VALUES(?,?,?,?,?,?,?,?,?)")
+          .run(prior.seq, prior.id, source, role, at, tag, body, part + 1, parts);
+        continue;
+      }
       this.db.query("INSERT OR IGNORE INTO evidence(id,source,role,at,tag,text,part,parts) VALUES(?,?,?,?,?,?,?,?)")
         .run(hash(`${source}:${key}:${part}:${body}`), source, role, at, tag, body, part + 1, parts);
     }
@@ -153,6 +170,8 @@ export class MemoryEvidence {
         if (offset === opened.size) continue;
         this.db.exec("BEGIN");
         try {
+          // A replaced file (rewind, rewrite, moved volume) is re-read from the start; unchanged records are not new evidence.
+          const kept = offset ? undefined : this.retained(source);
           if (!offset) this.db.query("DELETE FROM evidence WHERE source=?").run(source);
           let carry = Buffer.alloc(0);
           let dropping = false;
@@ -181,7 +200,7 @@ export class MemoryEvidence {
                     const stamp = m.role === "user" ? /^\[([a-z][a-z0-9_-]*:[A-Za-z0-9_.-]+) (\d{4}-\d{2}-\d{2})[^\]]*\]/.exec(text) : null;
                     const tag = stamp ? `(src: ${stamp[2]}, ${stamp[1]})` : null;
                     const role = m.role === "toolResult" ? `tool:${m.toolName ?? "unknown"}` : m.role!;
-                    this.insert(source, String(position), role, entry.timestamp ?? "", tag, text);
+                    this.insert(source, String(position), role, entry.timestamp ?? "", tag, text, kept);
                   }
                 }
               }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { MemoryEvidence, readMemoryDocument } from "./memoryEvidence.ts";
@@ -102,4 +102,32 @@ test("dream investigations do not turn repeated copies of old facts into new evi
   appendFileSync(job, entry("assistant", "Repeated butter beans claim"));
   await index.refresh();
   expect(index.search("butter").results).toEqual([]);
+});
+
+test("a rewritten session file keeps its unchanged records' seq and id, so only real changes are new evidence", async () => {
+  const turn = (id: string, at: string, text: string) => JSON.stringify({ type: "message", timestamp: at, message: { role: "user", content: `[web:${id} 2026-10-12 10:00 UTC]\n${text}` } }) + "\n";
+  const header = '{"type":"session"}\n';
+  const a = turn("a", "2026-10-12T10:00:00Z", "I like cannellini beans.");
+  const b = turn("b", "2026-10-12T10:05:00Z", "Same text twice.");
+  const c = turn("c", "2026-10-12T10:06:00Z", "Same text twice.");
+  writeFileSync(session, header + a + b + c);
+  await index.refresh();
+  const before = index.pending(0).records;
+  const cursor = before.at(-1)!.seq;
+
+  // Replaced, not appended (a new inode), with the first turn rewound away and a new turn added.
+  const tmp = `${session}.tmp`;
+  writeFileSync(tmp, header + b + c + turn("d", "2026-10-12T11:00:00Z", "Actually I prefer chickpeas."));
+  renameSync(tmp, session);
+  await index.refresh();
+
+  const after = index.pending(0).records;
+  expect(after.map(r => r.text)).not.toContain(before[0]!.text);
+  for (const old of before.slice(1)) expect(after.find(r => r.seq === old.seq)).toMatchObject({ id: old.id, text: old.text });
+  const fresh = index.pending(cursor).records;
+  expect(fresh).toHaveLength(1);
+  expect(fresh[0]!.text).toContain("chickpeas");
+  expect(index.activity(cursor).ownerTurns).toBe(1);
+  expect(index.search("chickpeas").results).toHaveLength(1);
+  expect(index.search("twice").results).toHaveLength(2);
 });
